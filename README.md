@@ -35,6 +35,19 @@ A second player for testing, from another terminal (use the door code shown in t
 cd server && npm run bot -- --base http://localhost:3000 --code ABCDEF
 ```
 
+The deployed server is https://the-dungeon-door.vercel.app (Vercel project `the-dungeon-door`:
+Neon Postgres, Vercel Blob, AI Gateway). It requires the shared app key, which builds read from
+`ios/Config/Secrets.xcconfig` (gitignored: `DD_APP_KEY = …`, ask the owner).
+
+## Ship to TestFlight
+
+```bash
+cd ios && ./ship.sh "What's new in this build"
+```
+
+Builds a clean copy of HEAD and uploads it with fastlane (certificates via match). Needs the
+gitignored credentials in `ios/fastlane/` and `ios/Config/Secrets.xcconfig`.
+
 ## MVP shape
 
 - **No sign-in.** Each device makes a random player id; heroes belong to it.
