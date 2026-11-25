@@ -1,0 +1,5 @@
+# https://docs.fastlane.tools/advanced/Appfile/
+app_identifier ENV["APP_IDENTIFIER"] || "com.jmm.the-dungeon-door"
+apple_id ENV["APPLE_ID"]
+itc_team_id ENV["ITC_TEAM_ID"]
+team_id ENV["TEAM_ID"] || "2BRYAM5Q52"

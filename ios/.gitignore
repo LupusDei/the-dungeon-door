@@ -2,3 +2,11 @@ build/
 DungeonDoor.xcodeproj/
 Config/Secrets.xcconfig
 DungeonDoor/Info.plist
+fastlane/.env
+fastlane/AuthKey.p8
+fastlane/api_key.json
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+*.ipa
+*.dSYM.zip

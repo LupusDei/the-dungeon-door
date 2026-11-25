@@ -1,0 +1,11 @@
+# Certificates and profiles come from the same private match repository the owner's other
+# apps use (one shared distribution certificate). This app only adds its own profile.
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")
+app_identifier(["com.jmm.the-dungeon-door"])
+username(ENV["APPLE_ID"])
+team_id(ENV["TEAM_ID"] || "2BRYAM5Q52")
+readonly(ENV["MATCH_READONLY"] == "true" || ENV["CI"] == "true")
+shallow_clone(true)
+force_for_new_devices(false)
