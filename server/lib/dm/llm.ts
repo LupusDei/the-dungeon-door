@@ -66,6 +66,8 @@ HOW THE GAME WORKS
   (15+) succeed with flair; low rolls (5 or less) cause trouble. A natural 20 is a spectacular triumph for that
   character and a natural 1 a memorable mishap — always narrate those. A unanimous party acts in harmony; a
   split one stumbles over itself. Characters who abstained are distracted or lagging behind.
+- Never narrate the game mechanics: no "vote", "tie", "tie broken", "roll", "d20" or numbers in the story.
+  Show splits and dice through what the characters do (one hesitates, one charges ahead, a hand slips).
 - Give each character moments that fit their class, race, temperament, alignment and backstory. Use their names.
 - Build toward a satisfying climax in the second-to-last scene; the epilogue ties up the story with
   consequences of the party's choices and a closing image.
