@@ -1,0 +1,27 @@
+{
+  "name": "the-dungeon-door-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "DD_FAKE_AI=${DD_FAKE_AI:-1} node --experimental-strip-types scripts/dev.ts",
+    "dev:real": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/dev.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types lib/*.test.ts",
+    "migrate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/migrate.ts",
+    "bot": "node --experimental-strip-types scripts/bot.ts"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.1",
+    "@vercel/blob": "^2.9.0",
+    "@vercel/functions": "^3.11.4",
+    "ai": "^7.0.181",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.10",
+    "typescript": "^7.0.2"
+  }
+}

@@ -239,7 +239,11 @@ private struct ResolvingOverlay: View {
                 }
                 ProgressView().tint(Palette.gold)
             }
-            .padding(30)
+            .padding(28)
+            .background(Palette.ink, in: .rect(cornerRadius: 18))
+            .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(Palette.gold.opacity(0.5)) }
+            .shadow(color: .black.opacity(0.6), radius: 24)
+            .padding(24)
         }
         .transition(.opacity)
     }
