@@ -1,0 +1,4 @@
+build/
+DungeonDoor.xcodeproj/
+Config/Secrets.xcconfig
+DungeonDoor/Info.plist

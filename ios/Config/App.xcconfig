@@ -1,0 +1,6 @@
+// Shared build settings. DD_API_BASE is the deployed server; run.sh can point a debug run at a
+// local dev server with the -apiBase launch argument instead. The app key lives in
+// Secrets.xcconfig (gitignored).
+DD_API_BASE = https:/$()/the-dungeon-door.vercel.app
+DD_APP_KEY =
+#include? "Secrets.xcconfig"
