@@ -103,6 +103,28 @@ struct GildedButtonStyle: ButtonStyle {
     }
 }
 
+/// A secondary button made of smoked glass, for use over artwork.
+struct GlassButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.display(17))
+            .tracking(0.6)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .padding(.horizontal, 16)
+            .foregroundStyle(Palette.gold)
+            .glassCard(cornerRadius: 12)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == GlassButtonStyle {
+    static var glass: GlassButtonStyle { GlassButtonStyle() }
+}
+
 extension ButtonStyle where Self == GildedButtonStyle {
     static var gilded: GildedButtonStyle { GildedButtonStyle() }
     static var gildedOutline: GildedButtonStyle { GildedButtonStyle(prominent: false) }
