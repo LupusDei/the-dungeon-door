@@ -25,3 +25,11 @@ test('a sheet cannot have more hit points than its maximum', () => {
 test('a sheet with an ability score out of range is refused', () => {
   assert.throws(() => parseCharacterSheet({ ...SAMPLE, abilityScores: { ...SAMPLE.abilityScores, str: 31 } }), /abilityScores\.str/);
 });
+
+test('a sheet has a level from 1 to 20 and one hit die roll per level', () => {
+  assert.equal(parseCharacterSheet({ ...SAMPLE, level: 20, hpRolls: Array(20).fill(5), hp: 1 }).level, 20);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 21, hpRolls: Array(21).fill(5) }), /level: /);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 0, hpRolls: [] }), /level: /);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 2 }), /hpRolls: one hit die roll per level/);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, xp: -1 }), /xp: /);
+});
