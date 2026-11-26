@@ -4,6 +4,7 @@ import { beforeEach, test } from 'node:test';
 import * as catalogApi from '../api/catalog.ts';
 import * as reviveApi from '../api/character-revive.ts';
 import * as charactersApi from '../api/characters.ts';
+import * as sheetApi from '../api/sheet.ts';
 import * as gamesApi from '../api/games.ts';
 import { call, makeCharacter } from './api.fixture.ts';
 import { heroSheet, upgradeCharacter } from './characters.ts';
@@ -31,6 +32,24 @@ test('a new hero gets a level-1 SRD 5.2 sheet of its species and class, the same
   await call(charactersApi.DELETE, `/api/characters?id=${hero.id}`, { player: me, method: 'DELETE' });
   const again = await put(me, { ...hero, sheet: undefined });
   assert.deepEqual(again.body.sheet, sheet);
+});
+
+const greater = (sheet: Character['sheet']) => sheet.equipment.filter((e) => e.id === 'potion-of-greater-healing');
+
+test('a new hero is forged with one Potion of Greater Healing; a saved hero is left as it is', async () => {
+  const me = randomUUID();
+  const hero = await makeCharacter(me, 'Dara', { characterClass: 'wizard' });
+  assert.deepEqual(greater(hero.sheet), [{ id: 'potion-of-greater-healing', name: 'Potion of Greater Healing', count: 1 }]);
+  const preview = await call<{ sheet: Character['sheet'] }>(sheetApi.POST, '/api/sheet', { player: me, method: 'POST', body: { id: randomUUID(), name: 'Eli', race: 'human', characterClass: 'fighter' } });
+  assert.equal(greater(preview.body.sheet).length, 1, 'the forge shows it');
+  assert.equal(greater((await put(me, { ...hero, characterClass: 'rogue' })).body.sheet).length, 1, 'rebuilt in the forge (level 1): still forged with it');
+  const stored = await getStore().getCharacter(hero.id);
+  const without = { ...stored!.sheet!, equipment: stored!.sheet!.equipment.filter((e) => e.id !== 'potion-of-greater-healing') };
+  await getStore().saveCharacter({ ...stored!, sheet: without });
+  assert.deepEqual(greater((await put(me, { ...hero, characterClass: 'rogue', name: 'Dara the Bold' })).body.sheet), [], 'a saved hero gets none');
+  assert.deepEqual(greater(heroSheet({ id: randomUUID(), name: 'x', race: 'human', characterClass: 'fighter' })), [], 'the engine sheet itself is unchanged');
+  const { sheet: _, ...old } = { ...hero, sheet: undefined };
+  assert.deepEqual(greater(upgradeCharacter(old as never).sheet), [], 'a hero stored before sheets gets none on read');
 });
 
 test('the seed is pinned: a hero not yet saved with a sheet keeps the same numbers on every read and every release', () => {

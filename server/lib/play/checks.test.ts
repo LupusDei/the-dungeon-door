@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import { scriptedRng } from '../rules/rng.ts';
 import { SAMPLE } from '../rules/sheet.fixture.ts';
 import { groupRoll } from './checks.ts';
+import { startDungeon } from './delve.ts';
 import { hookLabel, parseHook } from './hooks.ts';
+import { wayLabel } from './ways.ts';
 
 const bryn = { playerId: 'p1', sheet: SAMPLE };
 const cleo = { playerId: 'p2', sheet: { ...SAMPLE, name: 'Cleo', abilityScores: { ...SAMPLE.abilityScores, str: 8 }, skills: [], skillBonuses: {}, saveBonuses: { ...SAMPLE.saveBonuses, dex: -1 } } };
@@ -91,7 +93,11 @@ test('each hook has a short label for the app', () => {
   assert.equal(hookLabel({ kind: 'run' }), 'Run');
   assert.equal(hookLabel({ kind: 'rest', rest: 'short' }), 'Short rest');
   assert.equal(hookLabel({ kind: 'rest', rest: 'long' }), 'Long rest');
-  assert.equal(hookLabel({ kind: 'move', exit: 'r2' }), 'Go on (r2)');
+  assert.equal(hookLabel({ kind: 'move', exit: 'r2' }), 'Go on', 'with no dungeon to name it by, never the exit id');
+  const d = startDungeon('fixed', 3, [1], 4);
+  const exit = d.map.nodes[d.at].exits[0];
+  assert.equal(hookLabel({ kind: 'move', exit: exit.id }, d), wayLabel(d, exit.id));
+  assert.doesNotMatch(hookLabel({ kind: 'move', exit: exit.id }, d), new RegExp(exit.id));
 });
 
 const vex = { playerId: 'p3', sheet: { ...cleo.sheet, name: 'Vex', skills: ['stealth'], skillBonuses: { stealth: 5 }, otherProficiencies: ['tool-thieves-tools'] } };

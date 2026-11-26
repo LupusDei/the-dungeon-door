@@ -241,7 +241,9 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
   spellcasting modifier. Magic Missile's darts (read from its text: three of 1d4 + 1 force, one more per
   slot level above 1st) never miss: each rolls its own damage, and darts may share a target. In a
   fight the hero's Cast sends one at each foe it would drop on average, most wounded first, and the rest
-  at the most wounded (`splitDarts`). A new wizard or sorcerer prepares it first. A spell with no
+  at the most wounded (`splitDarts`). Darts and beams strike in turn: one whose foe has already fallen
+  in the cast goes on to the most wounded foe still up, or nowhere if none is (it is not listed). A
+  monster dies at 0 HP and never makes death saves; damage to the dead does nothing. A new wizard or sorcerer prepares it first. A spell with no
   attack, save, darts or healing (Bless) changes nothing; the DM
   narrates it. Targets are passed in; `targetsInRadius` picks them for spheres, cylinders and
   emanations on a 5-foot grid (diagonals 5 ft). Cones, cubes and lines are placed by whoever casts.

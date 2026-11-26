@@ -414,11 +414,8 @@ struct CombatView: View {
         // The caller's own choices say what their third action is; a vote's label says it too.
         let chosen = scene.choices.first { $0.id == vote.choiceId }
         let kind = CombatAction(choiceId: vote.choiceId, label: chosen?.label ?? vote.label)
-        // A spell the target saves against says so in its detail ("Dexterity save DC 12 for half").
-        let saved = chosen?.detail.contains(" save DC") ?? false
-        let note = kind.rollNote
-            ?? (saved ? "Rolled with your vote. The target saves against this spell, so there is no roll to hit."
-                      : "Your roll to hit this round, before your bonus.")
+        let note = kind.rollNote ?? Self.castNote(chosen?.detail ?? "")
+            ?? "Your roll to hit this round, before your bonus."
         return HStack(spacing: 12) {
             D20Badge(roll: vote.roll, size: 44)
             VStack(alignment: .leading, spacing: 2) {
@@ -434,6 +431,24 @@ struct CombatView: View {
         .card()
         .transition(.scale(scale: 0.9).combined(with: .opacity))
         .accessibilityElement(children: .combine)
+    }
+
+    /// Why the d20 isn't the roll of a cast that makes none; nil when the hero does roll to hit. Read
+    /// from the words the server gives the choice, as the choice's own action is.
+    static func castNote(_ detail: String) -> String? {
+        if detail.contains(" save DC") {
+            // "3d6 fire, Dexterity save DC 12 for half, at …"
+            return "Rolled with your vote. The target saves against this spell, so there is no roll to hit."
+        }
+        if detail.contains("never miss") {
+            // "3 darts of 1d4+1 force that never miss, at …"
+            return "Rolled with your vote. This spell never misses, so there is no roll to hit."
+        }
+        if detail.hasPrefix("Heals ") {
+            // "Heals Bryn, who is dying: 2d8+3 hit points."
+            return "Rolled with your vote. Healing needs no roll."
+        }
+        return nil
     }
 
     // MARK: The table

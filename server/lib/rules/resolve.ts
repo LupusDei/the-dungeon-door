@@ -68,10 +68,17 @@ function failDeathSaves(c: Combatant, failures: number): Combatant {
   return total >= 3 ? dead(c) : { ...c, status: 'dying', deathSaves: { ...c.deathSaves, failures: total } };
 }
 
-/** Applies damage already adjusted for defenses: monsters die at 0 HP, heroes fall and make death saves. */
+/** Damage to a dying hero is a failed death save (two on a critical hit), or death if it is as much as its maximum HP. */
+const struckAtZero = (target: Combatant, amount: number, critical: boolean): Combatant =>
+  (amount >= target.maxHp || target.side === 'foes' ? dead(target) : failDeathSaves(target, critical ? 2 : 1));
+
+/**
+ * Applies damage already adjusted for defenses: monsters die at 0 HP, heroes fall and make death saves. The dead
+ * stay dead; a monster is never dying (one left so by an older rule dies at the next blow).
+ */
 export function takeDamage(target: Combatant, amount: number, critical: boolean): Combatant {
-  if (amount <= 0) return target;
-  if (target.hp === 0) return amount >= target.maxHp ? dead(target) : failDeathSaves(target, critical ? 2 : 1);
+  if (amount <= 0 || target.status === 'dead') return target;
+  if (target.hp === 0) return struckAtZero(target, amount, critical);
   const hp = target.hp - amount;
   if (hp > 0) return { ...target, hp };
   if (target.side === 'foes' || -hp >= target.maxHp) return dead(target);

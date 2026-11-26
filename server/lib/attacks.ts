@@ -1,7 +1,8 @@
 /**
  * What a hero can attack with, worked out from its sheet for the app (docs/api.md, Attack): its weapons
  * with the engine's own to-hit and damage, then every cantrip and prepared spell that deals damage in a
- * way a fight can resolve (an attack roll or a saving throw). Derived on every read; never stored.
+ * way a fight can resolve (an attack roll, a saving throw, or darts that never miss). Derived on every
+ * read; never stored.
  */
 import { heroCombatant } from './rules/combatant.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
@@ -10,7 +11,7 @@ import { type SrdSpell, srd } from './rules/srd.ts';
 
 export interface AttackView {
   name: string;
-  /** Added to the d20 to hit; 0 for a spell the target saves against. */
+  /** Added to the d20 to hit; 0 for a spell the target saves against, and for one that never misses. */
   bonus: number;
   /** "2d6+3 slashing", "2 × 1d10 force". */
   damage: string;
@@ -18,6 +19,8 @@ export interface AttackView {
   kind: 'weapon' | 'spell';
   /** Spells only: the save the target makes instead of the hero rolling to hit. */
   save: string | null;
+  /** Spells only: no roll to hit and no save, every strike lands (Magic Missile's darts). */
+  neverMisses: boolean;
 }
 
 /** A spell a fight can resolve: it deals damage, by a spell attack, a save, or darts that never miss. */
@@ -43,12 +46,14 @@ function spellAttacks(sheet: CharacterSheet): AttackView[] {
       ranged: spell.attack !== 'melee',
       kind: 'spell' as const,
       save: spell.attack ? null : spell.save,
+      // The order the engine resolves a cast in (resolveSpell): an attack roll first, then darts.
+      neverMisses: !spell.attack && spell.darts !== null,
     }));
 }
 
 export function heroAttacks(sheet: CharacterSheet): AttackView[] {
   const weapons = heroCombatant('hero', sheet).attacks.map((a): AttackView => ({
-    name: a.name, bonus: a.bonus, damage: a.damage.map((d) => `${d.dice} ${d.type}`).join(' + '), ranged: a.ranged, kind: 'weapon', save: null,
+    name: a.name, bonus: a.bonus, damage: a.damage.map((d) => `${d.dice} ${d.type}`).join(' + '), ranged: a.ranged, kind: 'weapon', save: null, neverMisses: false,
   }));
   return [...weapons, ...spellAttacks(sheet)];
 }

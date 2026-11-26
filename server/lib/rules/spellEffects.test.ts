@@ -113,3 +113,38 @@ test('Magic Missile’s darts never miss and allow no save: each deals its own 1
   const ghost = { ...goblin('g3'), immunities: ['force'] };
   assert.deepEqual(resolveSpell(scriptedRng([4]), caster, cast('magic-missile', { slotLevel: 1, damageDice: '1d4+1', beams: 1 }), [ghost]).outcomes[0].damage, 0, 'defenses still apply');
 });
+
+const missile = cast('magic-missile', { slotLevel: 1, damageDice: '1d4+1', beams: 3 });
+
+test('three darts at a 3 hp goblin leave it dead: no death save, and no strike listed on it once it has fallen (q-mwxx6wwz)', () => {
+  const weak = { ...goblin(), hp: 3 };
+  const { outcomes, targets } = resolveSpell(scriptedRng([1, 1, 4]), caster, missile, [weak, weak, weak]);
+  assert.deepEqual(outcomes.map((o) => [o.target, o.damage]), [['g1', 2], ['g1', 2]], 'the second dart drops it; the third has no foe left to go to');
+  assert.deepEqual([targets[0].hp, targets[0].status, targets[0].deathSaves.failures], [0, 'dead', 0]);
+});
+
+test('a dart whose foe has fallen goes on to the most wounded foe still up, among those aimed at and the spare foes', () => {
+  const weak = { ...goblin('g1'), hp: 2 };
+  const { outcomes, targets } = resolveSpell(scriptedRng([1, 3, 2]), caster, missile, [weak, weak, weak], { spare: [goblin('g2'), { ...goblin('g3'), hp: 7 }] });
+  assert.deepEqual(outcomes.map((o) => [o.target, o.damage]), [['g1', 2], ['g3', 4], ['g3', 3]]);
+  assert.deepEqual(targets.map((t) => [t.id, t.hp, t.status]), [['g1', 0, 'dead'], ['g2', 10, 'up'], ['g3', 0, 'dead']]);
+  const split = resolveSpell(scriptedRng([4, 4, 1]), caster, missile, [{ ...goblin('g1'), hp: 4 }, goblin('g2'), goblin('g2')]);
+  assert.deepEqual(split.outcomes.map((o) => o.target), ['g1', 'g2', 'g2'], 'darts at foes still up go where they were aimed');
+});
+
+test('a dart is never a critical hit: at a dying hero it is one failed death save', () => {
+  const dying = { ...bryn, hp: 0, status: 'dying' as const };
+  const { targets } = resolveSpell(scriptedRng([1]), caster, cast('magic-missile', { slotLevel: 1, damageDice: '1d4+1', beams: 1 }), [dying]);
+  assert.deepEqual([targets[0].status, targets[0].deathSaves.failures], ['dying', 1]);
+});
+
+test('Eldritch Blast with both beams at a 1 hp foe does not throw: the second goes on to a foe still up, or nowhere', () => {
+  const blast = cast('eldritch-blast', { damageDice: '1d10', beams: 2 });
+  const weak = { ...goblin('g1'), hp: 1 };
+  const alone = resolveSpell(scriptedRng([15, 5]), caster, blast, [weak, weak]);
+  assert.deepEqual(alone.outcomes.map((o) => [o.target, o.damage]), [['g1', 5]]);
+  assert.equal(alone.targets[0].status, 'dead');
+  const on = resolveSpell(scriptedRng([15, 5, 15, 6]), caster, blast, [weak, weak], { spare: [goblin('g2')] });
+  assert.deepEqual(on.outcomes.map((o) => [o.target, o.damage]), [['g1', 5], ['g2', 6]]);
+  assert.deepEqual(on.targets.map((t) => [t.id, t.hp]), [['g1', 0], ['g2', 4]]);
+});

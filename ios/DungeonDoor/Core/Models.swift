@@ -379,7 +379,7 @@ extension CharacterSheet {
 /// Worked out by the server from the sheet.
 struct Attack: Codable, Hashable {
     var name: String
-    /// Added to the d20 to hit; 0 for a spell the target saves against.
+    /// Added to the d20 to hit; 0 for a spell the target saves against, and for one that never misses.
     var bonus: Int
     /// "2d6+3 slashing".
     var damage: String
@@ -388,6 +388,8 @@ struct Attack: Codable, Hashable {
     var kind: String
     /// Spells only: the save the target makes instead ("dex"), against the hero's spell save DC.
     var save: String?
+    /// Spells only: no roll to hit and no save, every strike lands (Magic Missile's darts).
+    var neverMisses = false
 
     var isSpell: Bool { kind == "spell" }
 }
@@ -401,6 +403,7 @@ extension Attack {
         ranged = try c.value(.ranged, or: false)
         kind = try c.value(.kind, or: "weapon")
         save = try c.decodeIfPresent(String.self, forKey: .save).flatMap { $0.isEmpty ? nil : $0 }
+        neverMisses = try c.value(.neverMisses, or: false)
     }
 }
 

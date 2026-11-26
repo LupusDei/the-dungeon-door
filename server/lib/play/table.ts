@@ -14,7 +14,7 @@ import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } 
 import { startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
-import type { LevelUp, PartyState } from './state.ts';
+import type { DungeonState, LevelUp, PartyState } from './state.ts';
 import { pickChoice, playTurn, type FightNews, type RulesState } from './turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
@@ -48,10 +48,20 @@ const openPacks = (party: PartyState): PartyState =>
 export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | null =>
   party && { party: openPacks(party), combat, dungeon: dungeon && { ...dungeon, map: currentTraps(dungeon.map) } };
 
-export const storedChoice = (choice: Choice, hook: unknown): StoredChoice => ({ ...choice, hook: parseHook(hook) });
+/** A choice with its hook, if it holds up, and the hook's label from where the party is now. */
+export function storedChoice(choice: Choice, hook: unknown, dungeon: DungeonState | null = null): StoredChoice {
+  const parsed = parseHook(hook);
+  return { ...choice, hook: parsed, rules: parsed && hookLabel(parsed, dungeon) };
+}
 
-export const choiceView = ({ hook, ...choice }: StoredChoice, levels?: readonly number[]): ChoiceView =>
-  ({ ...choice, rules: hook ? hookLabel(hook, levels) : null });
+/**
+ * The choice as the app shows it. A way on keeps the name stored when it was offered. A fight or an
+ * engage is rated against the party now (`levels`). Anything else uses the stored label, or the hook.
+ */
+export function choiceView({ hook, rules, ...choice }: StoredChoice, levels?: readonly number[]): ChoiceView {
+  const rated = hook && (hook.kind === 'fight' || hook.kind === 'engage') ? hookLabel(hook, levels) : null;
+  return { ...choice, rules: rated ?? rules ?? (hook ? hookLabel(hook) : null) };
+}
 
 export interface EngineStep {
   state: RulesState;

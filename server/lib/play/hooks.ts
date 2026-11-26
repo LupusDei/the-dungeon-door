@@ -12,6 +12,8 @@ import type { HazardKind } from '../rules/hazards.ts';
 import { modeOf } from '../rules/resolve.ts';
 import { isTrap } from '../rules/traps.ts';
 import { srd } from '../rules/srd.ts';
+import type { DungeonState } from './state.ts';
+import { wayLabel } from './ways.ts';
 
 export type RulesHook =
   | {
@@ -157,14 +159,17 @@ function fightText(ids: readonly string[], levels: readonly number[] | undefined
   return `Fight: ${parts.join(', ')}${rated ? ` — ${rated.band}` : ''}`;
 }
 
-const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>, levels?: readonly number[]) => string } = {
+/** What a label may be told: the party's levels (a fight's rating) or the dungeon (a way's name). */
+interface LabelContext { levels?: readonly number[]; dungeon?: DungeonState | null }
+
+const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>, ctx: LabelContext) => string } = {
   check: (h) => `${rollName(h)} check${target(h)}${h.mode === 'best' ? ', one hero with help' : ''}${edgeLabel(h)}`,
   save: (h) => `${rollName(h)}, DC ${h.dc}${edgeLabel(h)}`,
-  fight: (h, levels) => fightText(h.monsters, levels, true),
-  engage: (h, levels) => fightText(h.monsters, levels, false),
+  fight: (h, ctx) => fightText(h.monsters, ctx.levels, true),
+  engage: (h, ctx) => fightText(h.monsters, ctx.levels, false),
   run: () => 'Run',
   rest: (h) => (h.rest === 'short' ? 'Short rest' : 'Long rest'),
-  move: (h) => `Go on (${h.exit})`,
+  move: (h, ctx) => wayLabel(ctx.dungeon, h.exit),
   buy: (h) => `Buy ${countedList(h.items, itemName, times)}`,
   sell: (h) => `Sell ${countedList(h.items, itemName, times)}`,
   use: (h) => `Drink a ${itemName(h.item)}`,
@@ -174,6 +179,15 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   revive: () => 'Raise the dead',
 };
 
-/** What the app shows under the choice. `levels` rates a fight against that party. */
-export const hookLabel = (hook: RulesHook, levels?: readonly number[]): string =>
-  (LABELS[hook.kind] as (h: RulesHook, levels?: readonly number[]) => string)(hook, levels);
+function labelContext(context?: readonly number[] | DungeonState | null): LabelContext {
+  // A level list is the only array this is ever given; a dungeon is an object (or null).
+  if (Array.isArray(context)) return { levels: context };
+  return { dungeon: (context ?? null) as DungeonState | null };
+}
+
+/**
+ * What the app shows under the choice. A number array rates a fight against that party. A dungeon names
+ * a way on from where the party is (play/ways.ts). Passed neither, a way on is "Go on" and a fight is unrated.
+ */
+export const hookLabel = (hook: RulesHook, context?: readonly number[] | DungeonState | null): string =>
+  (LABELS[hook.kind] as (h: RulesHook, ctx: LabelContext) => string)(hook, labelContext(context));

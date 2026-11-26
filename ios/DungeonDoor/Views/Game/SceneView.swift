@@ -567,10 +567,10 @@ struct RuleTag: Equatable {
     init?(label: String?, dungeon: DungeonMap? = nil) {
         guard let label = label?.trimmingCharacters(in: .whitespaces), !label.isEmpty else { return nil }
         let lower = label.lowercased()
-        if lower.hasPrefix("go on") {
-            // The server names the exit by its id ("Go on (r2)"): say what kind of way it is instead.
+        if lower.hasPrefix("go on") || lower.hasPrefix("back to ") {
+            // A way on, named by the server: "Go on (locked door)", "Back to Narthex (open passage)".
             text = Self.wayOn(label, in: dungeon)
-            symbol = "door.left.hand.open"
+            symbol = lower.hasPrefix("back to ") ? "arrow.uturn.backward" : "door.left.hand.open"
             tint = Palette.gold
         } else if lower.hasPrefix("fight") {
             (text, symbol, tint) = (label, "flame.fill", Palette.ember)
@@ -599,11 +599,12 @@ struct RuleTag: Equatable {
         return lower.contains(" check") || lower.contains(" save")
     }
 
-    /// "Go on (r2)" → "Way on · Stairs", and where it leads once the party has been there.
+    /// The way as the server names it. An older server named the exit by its id instead
+    /// ("Go on (r2)"): that one is told from the map, "Way on · Stairs, unexplored".
     private static func wayOn(_ label: String, in dungeon: DungeonMap?) -> String {
-        guard let open = label.firstIndex(of: "("), let close = label.lastIndex(of: ")"), open < close else { return "Way on" }
-        let exitId = String(label[label.index(after: open)..<close])
-        guard let dungeon, let exit = dungeon.here?.exits.first(where: { $0.id == exitId }) else { return "Way on" }
+        guard let open = label.firstIndex(of: "("), let close = label.lastIndex(of: ")"), open < close else { return label }
+        let named = String(label[label.index(after: open)..<close])
+        guard let dungeon, let exit = dungeon.here?.exits.first(where: { $0.id == named }) else { return label }
         let way = SRD.phrase(exit.connection)
         if let known = dungeon.area(exit.to) { return "Way back · \(way) to \(DungeonNames.label(known))" }
         return "Way on · \(way), unexplored"

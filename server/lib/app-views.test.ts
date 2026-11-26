@@ -80,6 +80,7 @@ test('attacks: a hero’s weapons with the engine’s numbers, or an unarmed str
   for (const a of attacks) {
     assert.equal(a.kind, 'weapon');
     assert.equal(a.save, null);
+    assert.equal(a.neverMisses, false, 'a weapon rolls to hit');
     assert.match(a.damage, /^\d+(d\d+)?([+-]\d+)? [a-z]+$/, a.damage);
   }
   const bare = heroAttacks({ ...fighter, equipment: [] });
@@ -90,10 +91,10 @@ test('attacks: then every cantrip and prepared spell that deals damage, by attac
   const wizard = withSpells(sheetOf('wizard'), ['fire-bolt', 'light'], ['burning-hands', 'shield', 'magic-missile']);
   const spells = heroAttacks(wizard).filter((a) => a.kind === 'spell');
   assert.deepEqual(spells, [
-    { name: 'Fire Bolt', bonus: wizard.spellcasting!.attackBonus, damage: '1d10 fire', ranged: true, kind: 'spell', save: null },
-    { name: 'Burning Hands', bonus: 0, damage: '3d6 fire', ranged: true, kind: 'spell', save: 'dex' },
-    { name: 'Magic Missile', bonus: 0, damage: '3 × 1d4+1 force', ranged: true, kind: 'spell', save: null },
-  ], 'Light and Shield deal no damage; Magic Missile’s darts never miss (no roll, no save)');
+    { name: 'Fire Bolt', bonus: wizard.spellcasting!.attackBonus, damage: '1d10 fire', ranged: true, kind: 'spell', save: null, neverMisses: false },
+    { name: 'Burning Hands', bonus: 0, damage: '3d6 fire', ranged: true, kind: 'spell', save: 'dex', neverMisses: false },
+    { name: 'Magic Missile', bonus: 0, damage: '3 × 1d4+1 force', ranged: true, kind: 'spell', save: null, neverMisses: true },
+  ], 'Light and Shield deal no damage; Magic Missile’s darts never miss (no roll, no save), and the view says so');
   assert.deepEqual(heroAttacks(sheetOf('fighter')).filter((a) => a.kind === 'spell'), []);
 });
 

@@ -107,8 +107,14 @@ function withEvent(state: CombatState, event: CombatEvent, ...changed: Combatant
   return { ...state, combatants, log: [...state.log, event], outcome: outcomeOf(combatants) };
 }
 
+/** A dying hero's death save; a monster makes none (one left dying by an older rule is dead, unlogged). */
 function afterDeathSave(state: CombatState, id: string, rng: Rng): CombatState {
-  const c = deathSave(rng, state.combatants[id]);
+  const dying = state.combatants[id];
+  if (dying.side === 'foes') {
+    const combatants = { ...state.combatants, [id]: { ...dying, status: 'dead' as const } };
+    return { ...state, combatants, outcome: outcomeOf(combatants) };
+  }
+  const c = deathSave(rng, dying);
   return withEvent(state, { kind: 'deathSave', round: state.round, actor: id, status: c.status }, c);
 }
 
@@ -171,7 +177,8 @@ function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Act
 function resolveCast(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'spell' }>, rng: Rng): CombatState {
   const byId = new Map(Object.entries(state.combatants));
   const targets = action.targets.map((id) => lookup(byId, id, 'combatant'));
-  const resolved = resolveSpell(rng, { ...action.caster, combatant: actor }, action.cast, targets, { attack: { natural: action.natural } });
+  const spare = upAgainst(state, actor.side).filter((c) => !action.targets.includes(c.id)); // where a dart goes on to once its foe falls
+  const resolved = resolveSpell(rng, { ...action.caster, combatant: actor }, action.cast, targets, { attack: { natural: action.natural }, spare });
   return withEvent(state, { kind: 'spell', round: state.round, actor: actor.id, spellId: action.cast.spellId, outcomes: resolved.outcomes }, ...resolved.targets);
 }
 
@@ -283,8 +290,28 @@ export function monsterAction(state: CombatState): Action | null {
 export function playRound(state: CombatState, votes: Readonly<Record<string, Action>>): CombatState {
   let s = state;
   const round = s.round;
-  while (s.outcome === 'ongoing' && s.round === round) s = act(s, monsterAction(s) ?? votes[currentActor(s)] ?? { kind: 'dodge' });
+  while (s.outcome === 'ongoing' && s.round === round) s = act(s, monsterAction(s) ?? aimAgain(s, currentActor(s), votes[currentActor(s)] ?? { kind: 'dodge' }));
   return s;
+}
+
+const fallenFoe = (state: CombatState, side: Combatant['side'], id: string) => state.combatants[id]?.status === 'dead' && state.combatants[id].side !== side;
+
+/**
+ * A vote cast before the round, aimed again as the hero acts: a foe that has fallen since is replaced by the
+ * most wounded foe still up (every beam goes to it; a one-beam spell catches each foe once). No foe left, a
+ * Dodge. Any other vote stands.
+ */
+export function aimAgain(state: CombatState, actorId: string, action: Action): Action {
+  if (action.kind !== 'attack' && action.kind !== 'spell') return action;
+  const side = state.combatants[actorId].side;
+  const targets = action.kind === 'attack' ? [action.target] : action.targets;
+  if (!targets.some((id) => fallenFoe(state, side, id))) return action;
+  const foes = upAgainst(state, side);
+  if (!foes.length) return { kind: 'dodge' };
+  const to = fewestHp(foes).id;
+  if (action.kind === 'attack') return { ...action, target: to };
+  const aimed = action.targets.map((id) => (fallenFoe(state, side, id) ? to : id));
+  return { ...action, targets: action.cast.beams > 1 ? aimed : [...new Set(aimed)] };
 }
 
 /** XP for the foes defeated so far. */

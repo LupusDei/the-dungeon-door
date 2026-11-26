@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from './combatant.ts';
 import { monster } from './monsters.ts';
-import { act, choicesFor, currentActor, drinkPotion, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
+import { act, aimAgain, choicesFor, currentActor, drinkPotion, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
+import { heroSheet } from '../characters.ts';
 import { SAMPLE } from './sheet.fixture.ts';
 import type { CombatState } from './scene.ts';
 
@@ -305,4 +306,53 @@ test('a monster with no attack and no power Dodges on its turn, using its own ac
   const after = act({ ...s, turn: s.order.indexOf('m') }, { kind: 'dodge', as: 'Shriek' });
   assert.ok(after.dodging.includes('m'));
   assert.deepEqual(after.log.at(-1), { kind: 'dodge', round: s.round, actor: 'm', as: 'Shriek' });
+});
+
+test('a vote at a foe that fell earlier in the round lands on a living foe instead of throwing (q-mwx1ub52)', () => {
+  const fighter = (id: string) => heroCombatant(id, heroSheet({ id, name: id, race: 'human', characterClass: 'fighter' }));
+  const rat = { ...monsterCombatant('rat', monster('rat')), hp: 1 };
+  const strike = (id: string) => ({ kind: 'attack' as const, attack: fighter(id).attacks[0].name, target: 'rat', natural: 19 });
+  const after = playRound(startCombat(1, [fighter('h1'), fighter('h2'), rat, monsterCombatant('gob', monster('goblin-warrior'))]), { h1: strike('h1'), h2: strike('h2') });
+  const heroAttacks = after.log.flatMap((e) => (e.kind === 'attack' && e.actor.startsWith('h') ? [e.result.target] : []));
+  assert.deepEqual(heroAttacks, ['rat', 'gob'], 'the first drops the rat; the second hero\u2019s attack lands on the goblin');
+  assert.equal(after.combatants.rat.status, 'dead');
+});
+
+test('a spell vote at fallen foes goes to the most wounded living foe: every beam, but an area catches each foe once', () => {
+  const s = heroFirst([hero('bryn'), goblin('g1', { hp: 0, status: 'dead' }), goblin('g2', { hp: 3, attacks: harmless }), goblin('g3', { attacks: harmless })]);
+  const spellAt = (st: CombatState) => st.log.flatMap((e) => (e.kind === 'spell' ? e.outcomes.map((o) => o.target) : []));
+  const blast = { ...fireBolt, spellId: 'eldritch-blast', beams: 2 };
+  assert.deepEqual(aimAgain(s, 'bryn', { kind: 'spell', caster, cast: blast, targets: ['g1', 'g1'], natural: 2 }), { kind: 'spell', caster, cast: blast, targets: ['g2', 'g2'], natural: 2 });
+  assert.deepEqual(aimAgain(s, 'bryn', { kind: 'spell', caster, cast: sacredFlame, targets: ['g1', 'g2'] }), { kind: 'spell', caster, cast: sacredFlame, targets: ['g2'] });
+  assert.deepEqual(spellAt(playRound(s, { bryn: { kind: 'spell', caster, cast: fireBolt, targets: ['g1'], natural: 2 } })), ['g2']);
+});
+
+test('a vote at a living foe, or not at a foe, stands; with no foe left it becomes a Dodge', () => {
+  const s = heroFirst([hero('bryn'), hero('ash', { hp: 0, status: 'dying' }), goblin('g1', { hp: 0, status: 'dead' }), goblin('g2')]);
+  const atG2 = { kind: 'attack' as const, attack: 'Unarmed Strike', target: 'g2', natural: 12 };
+  assert.equal(aimAgain(s, 'bryn', atG2), atG2);
+  const heal = { kind: 'spell' as const, caster, cast: { ...fireBolt, damageDice: null, healingDice: '1d8' }, targets: ['ash'] };
+  assert.equal(aimAgain(s, 'bryn', heal), heal, 'a heal at a dying friend is not redirected');
+  const none = { ...s, combatants: { ...s.combatants, g2: { ...s.combatants.g2, hp: 0, status: 'dead' as const } } };
+  assert.deepEqual(aimAgain(none, 'bryn', { ...atG2, target: 'g1' }), { kind: 'dodge' });
+  assert.deepEqual(aimAgain(none, 'bryn', { kind: 'spell', caster, cast: fireBolt, targets: ['g1'] }), { kind: 'dodge' });
+  assert.deepEqual(aimAgain(none, 'bryn', { kind: 'dodge' }), { kind: 'dodge' });
+});
+
+test('Magic Missile at a foe that drops goes on to the other foes in the fight; the slain one is dead, not dying (q-mwxx6wwz)', () => {
+  const missile = { spellId: 'magic-missile', slotLevel: 1, damageDice: '1d4+1', beams: 3, healingDice: null, endedConcentration: null };
+  const s = heroFirst([hero('bryn'), goblin('g1', { hp: 2, attacks: harmless }), goblin('g2', { attacks: harmless })]);
+  const after = act(s, { kind: 'spell', caster, cast: missile, targets: ['g1', 'g1', 'g1'] });
+  const event = after.log.find((e) => e.kind === 'spell')!;
+  assert.deepEqual(event.kind === 'spell' && event.outcomes.map((o) => o.target), ['g1', 'g2', 'g2']);
+  assert.deepEqual([after.combatants.g1.status, after.combatants.g1.deathSaves.failures], ['dead', 0]);
+  assert.ok(!after.log.some((e) => e.kind === 'deathSave'));
+});
+
+test('a foe left dying by the old rule makes no death save: on its turn it is dead, and the fight is won', () => {
+  const s = heroFirst([hero('bryn'), goblin('g1', { hp: 0, status: 'dying', conditions: ['unconscious'] })]);
+  const after = act(s, { kind: 'dodge' });
+  assert.equal(after.combatants.g1.status, 'dead');
+  assert.equal(after.outcome, 'victory');
+  assert.ok(!after.log.some((e) => e.kind === 'deathSave'));
 });

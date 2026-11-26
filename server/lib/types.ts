@@ -55,6 +55,8 @@ export interface VoteView extends Vote {
 /** A choice as stored: with the rules hook the engine checked (rules-engine games). */
 export interface StoredChoice extends Choice {
   hook?: RulesHook | null;
+  /** The hook's label, made where the choice was offered (a way on is named from there); absent on choices from before. */
+  rules?: string | null;
 }
 
 /** A choice as the API shows it: the hook as a label ("Athletics check, DC 12"). */

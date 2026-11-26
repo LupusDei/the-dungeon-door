@@ -70,6 +70,8 @@ Attack {
   ranged: boolean
   kind: "weapon" | "spell"
   save: string | null             // spells only: the save the target makes instead ("dex"), with the hero's spell save DC
+  neverMisses: boolean            // spells only: no roll to hit and no save, every strike lands (Magic Missile).
+                                  // Show this instead of the bonus, which is 0 and means nothing here
 }
 
 CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see server/lib/rules/sheet.ts
@@ -113,7 +115,9 @@ are explained by `GET /api/reference`.
   ownerId is taken from `x-dd-player`) → `Character`. Upsert by id; only the owner can update.
   - A new hero gets a level-1 sheet from the engine: its species (`race`), class and background
     (`backgroundId`, or one picked for it), standard array scores best-first to the class's saving
-    throws, the background's +2/+1, starting gear and spells. The same id always builds the same hero.
+    throws, the background's +2/+1, starting gear and spells, plus one Potion of Greater Healing
+    (`potion-of-greater-healing`) that every new hero is forged with (also on a level-1 rebuild and in
+    `POST /api/sheet`; heroes already saved are not given one). The same id always builds the same hero.
   - Saving again keeps the sheet (level, XP, HP…). Renaming renames the sheet. Changing race, class or
     background rebuilds it, but only at level 1: a levelled hero gets 400.
   - Old ids still accepted and mapped: `half-orc` → `orc`, `half-elf` → `elf` (SRD 5.2 has neither).
@@ -323,9 +327,11 @@ Games started after the engine shipped carry `rules`. The DM proposes and narrat
 numbers (see docs/rules-design.md and docs/dungeon-master.md).
 
 - **Choices with `rules`.** A choice may be a check ("Athletics check, DC 12"), a saving throw ("Dexterity
-  save, DC 13"), a fight ("Fight: Goblin Warrior (weak) — low": each kind's toughness, then the fight's
-  band, low / moderate / high / deadly), a rest ("Short rest", "Long rest") or, in a
-  dungeon, a way on ("Through the locked door"). The party still goes with the most-voted choice. Ties go
+  save, DC 13"), a fight ("Fight: Goblin Warrior (weak) — low" or "Fight: Rat (puny) — low": each kind's
+  toughness, then the fight's band, low / moderate / high / deadly), a rest ("Short rest", "Long rest") or, in a
+  dungeon, a way on, named by how it is closed and, once the party has been there, where it leads ("Go on
+  (locked door)", "Back to Narthex (open passage)"; ways alike are told apart: "Go on (second open
+  passage)"). It never shows an exit id, and it is fixed when the choice is offered. The party still goes with the most-voted choice. Ties go
   to the choice whose voters rolled highest. Every hero makes the check or save with their vote's d20
   (or a fresh one if they didn't vote) plus their own bonus. In 5.2 a natural 20 or 1 is not automatic on
   a check or save. The party succeeds if at least half the heroes do (5.2 group check). A failed save
