@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The home screen's living background: the old dragon flies in and lands on his summit once per
 /// launch ("dragon-return"), then sits watching in a seamless loop ("dragon-watcher"). Poke him and
-/// a reaction clip plays over the loop (see `DragonDirector`).
+/// a reaction clip plays over the loop, or he flies off and leaves the summit empty for a while
+/// (see `DragonDirector`).
 /// With Reduce Motion on, it's a still painting of the same frame.
 struct DragonBackdrop: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -83,8 +84,12 @@ private struct DragonVideoView: UIViewRepresentable {
 }
 
 /// Stacked video layers: the watcher loop underneath; the one-time arrival on top, which fades away
-/// when it ends to reveal the loop already sitting on the same frame; and, when he's poked, a
-/// reaction clip that starts and ends on that same frame so it can fade in and out over the loop.
+/// when it ends to reveal the loop already sitting on the same frame; and, when he's poked, a clip
+/// that fades in over whatever is showing and hands back with a fade when it ends.
+///
+/// A reaction starts and ends on the loop's first frame. A flight is three pieces: the departure
+/// ends on the empty summit, where a second loop ("dragon-empty") takes over while he's away; the
+/// return starts on that same empty summit and ends on the watcher loop's first frame.
 final class DragonPlayerView: UIView {
     /// The arrival plays once per app launch, not every time the home screen reappears.
     private static var arrivalShown = false
@@ -93,6 +98,8 @@ final class DragonPlayerView: UIView {
     var onArrivalEnded: (() -> Void)?
     /// True once he's on his perch and the loop is what's showing.
     var isSettled: Bool { arrivalPlayer == nil }
+    /// True while the empty summit is what's showing.
+    private(set) var isAway = false
 
     private let loopPlayer = AVQueuePlayer()
     private var looper: AVPlayerLooper?
@@ -103,11 +110,17 @@ final class DragonPlayerView: UIView {
     private var arrivalObserver: NSObjectProtocol?
     private var arrivalAnnounced = false
 
-    private var reactionPlayer: AVPlayer?
-    private var reactionLayer: AVPlayerLayer?
-    private var reactionObserver: NSObjectProtocol?
-    private var reactionReady: NSKeyValueObservation?
-    private var reactionEnded: (() -> Void)?
+    private var clipPlayer: AVPlayer?
+    private var clipLayer: AVPlayerLayer?
+    private var clipObserver: NSObjectProtocol?
+    private var clipReady: NSKeyValueObservation?
+    private var clipEnded: (() -> Void)?
+    private var clipLeavesSummitEmpty = false
+
+    /// The summit without him. Built as he leaves, dropped once his return covers it.
+    private var emptyPlayer: AVQueuePlayer?
+    private var emptyLooper: AVPlayerLooper?
+    private var emptyLayer: AVPlayerLayer?
 
     private var wantsPlayback = false
 
@@ -147,7 +160,7 @@ final class DragonPlayerView: UIView {
 
     deinit {
         if let arrivalObserver { NotificationCenter.default.removeObserver(arrivalObserver) }
-        if let reactionObserver { NotificationCenter.default.removeObserver(reactionObserver) }
+        if let clipObserver { NotificationCenter.default.removeObserver(clipObserver) }
     }
 
     override func layoutSubviews() {
@@ -155,8 +168,9 @@ final class DragonPlayerView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         loopLayer.frame = bounds
+        emptyLayer?.frame = bounds
         arrivalLayer?.frame = bounds
-        reactionLayer?.frame = bounds
+        clipLayer?.frame = bounds
         CATransaction.commit()
     }
 
@@ -164,8 +178,9 @@ final class DragonPlayerView: UIView {
         wantsPlayback = playing
         guard playing else {
             loopPlayer.pause()
+            emptyPlayer?.pause()
             arrivalPlayer?.pause()
-            reactionPlayer?.pause()
+            clipPlayer?.pause()
             return
         }
         if let arrivalPlayer {
@@ -174,18 +189,24 @@ final class DragonPlayerView: UIView {
                 arrivalAnnounced = true
                 onArrivalBegan?()
             }
-        } else if let reactionPlayer, reactionReady == nil {
-            reactionPlayer.play()
+        } else if let clipPlayer, clipReady == nil {
+            clipPlayer.play()
+        } else if isAway {
+            emptyPlayer?.play()
         } else {
             loopPlayer.play()
         }
     }
 
-    /// Plays "dragon-react-<name>" over the loop. Returns false when he can't react right now
-    /// (still arriving, already reacting, or paused). `onStart` fires when its first frame shows.
-    func playReaction(_ name: String, onStart: @escaping () -> Void, onEnd: @escaping () -> Void) -> Bool {
-        guard wantsPlayback, arrivalPlayer == nil, reactionPlayer == nil,
-              let url = Bundle.main.url(forResource: "dragon-react-\(name)", withExtension: "mp4") else { return false }
+    /// Plays the clip called `name` over whatever is showing. Returns false when he can't right now
+    /// (still arriving, already in a clip, or paused). `onStart` fires when its first frame shows.
+    /// With `leavingSummitEmpty` the clip hands over to the empty summit instead of the watcher
+    /// loop; `isAway` says whether it did.
+    func play(_ name: String, leavingSummitEmpty: Bool = false,
+              onStart: @escaping () -> Void, onEnd: @escaping () -> Void) -> Bool {
+        guard wantsPlayback, arrivalPlayer == nil, clipPlayer == nil,
+              let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return false }
+        if leavingSummitEmpty, !prepareEmptySummit() { return false }
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
         configure(player)
@@ -195,20 +216,33 @@ final class DragonPlayerView: UIView {
         top.frame = bounds
         top.opacity = 0
         layer.addSublayer(top)
-        reactionPlayer = player
-        reactionLayer = top
-        reactionEnded = onEnd
-        reactionObserver = NotificationCenter.default.addObserver(
+        clipPlayer = player
+        clipLayer = top
+        clipEnded = onEnd
+        clipLeavesSummitEmpty = leavingSummitEmpty
+        clipObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
         ) { [weak self] _ in
-            self?.finishReaction()
+            self?.finishClip()
         }
         // Wait for the first decoded frame before fading in, so there's never a blank flash.
-        reactionReady = top.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] layer, _ in
+        clipReady = top.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] layer, _ in
             guard layer.isReadyForDisplay else { return }
-            DispatchQueue.main.async { self?.beginReaction(onStart) }
+            DispatchQueue.main.async { self?.beginClip(onStart) }
         }
         return true
+    }
+
+    /// Puts him straight back on his perch, whatever was playing, without calling anything back.
+    /// For when the home screen is covered, and for a clip that never finished.
+    func reset() {
+        guard clipPlayer != nil || emptyLayer != nil else { return }
+        clipPlayer?.pause()
+        let leaving = releaseClip()
+        clipEnded = nil
+        dropEmptySummit(over: 0.45)
+        resumeLoop()
+        fade(leaving, to: 0, over: 0.45) { leaving?.removeFromSuperlayer() }
     }
 
     private func configure(_ player: AVPlayer) {
@@ -228,31 +262,95 @@ final class DragonPlayerView: UIView {
         onArrivalEnded?()
     }
 
-    private func beginReaction(_ onStart: () -> Void) {
-        guard reactionReady != nil, let player = reactionPlayer else { return }
-        reactionReady = nil
+    private func beginClip(_ onStart: () -> Void) {
+        guard clipReady != nil, let player = clipPlayer else { return }
+        clipReady = nil
         if wantsPlayback { player.play() }
-        fade(reactionLayer, to: 1, over: 0.3) { [weak self] in
-            // The loop is hidden now; let it rest until the reaction hands back.
-            if self?.reactionPlayer != nil { self?.loopPlayer.pause() }
+        // The empty summit may be anywhere in its loop when he returns, so that fade is longer.
+        fade(clipLayer, to: 1, over: isAway ? 0.5 : 0.3) { [weak self] in
+            // What was showing is hidden now; let it rest until the clip hands back.
+            guard let self, self.clipPlayer === player else { return }
+            self.loopPlayer.pause()
+            if !self.clipLeavesSummitEmpty { self.dropEmptySummit() }
         }
         onStart()
     }
 
-    private func finishReaction() {
-        // Every reaction ends on the loop's first frame, so restart the loop there and fade across.
+    private func finishClip() {
+        let leaving = releaseClip()
+        if clipLeavesSummitEmpty, let emptyPlayer, let emptyLayer, emptyLayer.isReadyForDisplay {
+            // He's gone. The clip ends on the empty summit's first frame: start that loop and fade across.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            emptyLayer.opacity = 1
+            CATransaction.commit()
+            emptyPlayer.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+            if wantsPlayback { emptyPlayer.play() }
+            isAway = true
+        } else {
+            // Every other clip ends on the watcher loop's first frame: restart it there and fade across.
+            dropEmptySummit()
+            resumeLoop()
+        }
+        fade(leaving, to: 0, over: 0.45) { leaving?.removeFromSuperlayer() }
+        let ended = clipEnded
+        clipEnded = nil
+        ended?()
+    }
+
+    /// Lets go of the clip and returns its layer, still on screen, for the caller to fade away.
+    private func releaseClip() -> CALayer? {
+        if let clipObserver { NotificationCenter.default.removeObserver(clipObserver) }
+        clipObserver = nil
+        clipReady = nil
+        clipPlayer = nil
+        defer { clipLayer = nil }
+        return clipLayer
+    }
+
+    private func resumeLoop() {
         loopPlayer.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         if wantsPlayback { loopPlayer.play() }
-        let leaving = reactionLayer
-        if let reactionObserver { NotificationCenter.default.removeObserver(reactionObserver) }
-        reactionObserver = nil
-        reactionReady = nil
-        reactionPlayer = nil
-        reactionLayer = nil
-        fade(leaving, to: 0, over: 0.45) { leaving?.removeFromSuperlayer() }
-        let ended = reactionEnded
-        reactionEnded = nil
-        ended?()
+    }
+
+    /// Readies the empty summit, hidden just above the watcher loop, for a departure to end on.
+    private func prepareEmptySummit() -> Bool {
+        guard let url = Bundle.main.url(forResource: "dragon-empty", withExtension: "mp4") else { return false }
+        dropEmptySummit()
+        let player = AVQueuePlayer()
+        configure(player)
+        let under = AVPlayerLayer(player: player)
+        under.videoGravity = .resizeAspectFill
+        under.frame = bounds
+        under.opacity = 0
+        if loopLayer.superlayer === layer {
+            layer.insertSublayer(under, above: loopLayer)
+        } else {
+            layer.insertSublayer(under, at: 0)
+        }
+        emptyLooper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
+        emptyPlayer = player
+        emptyLayer = under
+        return true
+    }
+
+    private func dropEmptySummit(over seconds: CFTimeInterval = 0) {
+        guard let leaving = emptyLayer else { return }
+        let player = emptyPlayer
+        emptyLooper?.disableLooping()
+        emptyLooper = nil
+        emptyPlayer = nil
+        emptyLayer = nil
+        isAway = false
+        if seconds > 0, leaving.opacity > 0 {
+            fade(leaving, to: 0, over: seconds) {
+                player?.pause()
+                leaving.removeFromSuperlayer()
+            }
+        } else {
+            player?.pause()
+            leaving.removeFromSuperlayer()
+        }
     }
 
     private func fade(_ layer: CALayer?, to opacity: Float, over seconds: CFTimeInterval, then: @escaping () -> Void) {
@@ -403,6 +501,11 @@ struct GlintingTitle: View {
                         .frame(width: geo.size.width * 0.28)
                         .rotationEffect(.degrees(18))
                         .offset(x: sweep ? geo.size.width * 1.2 : -geo.size.width * 0.5)
+                        // The repeat belongs to the glint alone. Started with withAnimation it also caught
+                        // whatever else moved in that update (the title settling into place), and replayed
+                        // that slide for ever.
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 2.4).delay(1.5).repeatForever(autoreverses: false),
+                                   value: sweep)
                         .blendMode(.plusLighter)
                 }
                 .mask(label)
@@ -412,9 +515,7 @@ struct GlintingTitle: View {
             .shadow(color: .black.opacity(0.9), radius: 3, y: 2)
             .onAppear {
                 guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 2.4).delay(1.5).repeatForever(autoreverses: false)) {
-                    sweep = true
-                }
+                sweep = true
             }
     }
 }
@@ -428,9 +529,13 @@ struct BreathingGlow: ViewModifier {
     func body(content: Content) -> some View {
         content
             .shadow(color: color.opacity(bright ? 0.75 : 0.25), radius: bright ? 22 : 10)
-            .onAppear {
+            // Scoped to this view and its glow, and begun once the screen has settled, so the repeat
+            // cannot pick up a layout change and replay it.
+            .animation(reduceMotion ? nil : .easeInOut(duration: 2.2).repeatForever(autoreverses: true), value: bright)
+            .task {
                 guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { bright = true }
+                try? await Task.sleep(for: .milliseconds(400))
+                bright = true
             }
     }
 }

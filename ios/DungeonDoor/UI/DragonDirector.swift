@@ -5,12 +5,29 @@ import UIKit
 
 /// Runs the dragon on the home screen: what he does when poked, what he says, and what you hear.
 ///
-/// Each poke throws sparks and a thump of haptics. If he's settled and not already busy, he takes
-/// the next reaction in his repertoire: a clip over the loop (`DragonPlayerView`), its sound, and a
-/// spoken line shown as a caption, so it still works with the phone on silent.
+/// Each poke throws sparks and a thump of haptics. If he's on his perch and not already busy, he
+/// takes the next turn in his repertoire: a clip over the loop (`DragonPlayerView`), its sound, and
+/// a spoken line shown as a caption, so it still works with the phone on silent. Once in a while the
+/// turn is a flight: he leaves, the summit stands empty for a time, and he comes back carrying
+/// something he looks over and drops off the cliff. Poke the empty summit and he comes back sooner.
 @MainActor @Observable
 final class DragonDirector {
-    enum Reaction: String { case speak, fire, roar }
+    enum Reaction: String, CaseIterable { case speak, ponder, skygaze, fire, roar, yawn, smoke, flight }
+
+    /// What he carries home from a flight.
+    enum Trophy: String, CaseIterable {
+        case helm, chest, orb
+
+        /// In "dragon-return-<trophy>": when his feet hit the rock, and when the thing has gone
+        /// over the edge and he has something to say about it.
+        var cues: (lands: TimeInterval, speaks: TimeInterval) {
+            switch self {
+            case .helm: (4.0, 8.6)
+            case .chest: (3.6, 8.8)
+            case .orb: (3.4, 8.8)
+            }
+        }
+    }
 
     struct Burst: Identifiable {
         let id = UUID()
@@ -23,6 +40,12 @@ final class DragonDirector {
         let file: String
         let text: String
     }
+
+    /// The sets his lines are drawn from. Wisdom is shared by the speak and skygaze clips.
+    private enum Bag: Hashable { case speak, wisdom, ask, fire, roar, yawn, smoke, leave }
+
+    /// Where he is in a turn. Only `perched` takes a new one; `away` is the empty summit.
+    private enum Phase { case perched, reacting, leaving, away, returning }
 
     /// Sparks for the ember field to draw.
     private(set) var bursts: [Burst] = []
@@ -47,20 +70,27 @@ final class DragonDirector {
     @ObservationIgnored private weak var stage: DragonPlayerView?
     @ObservationIgnored private let sound = DragonSound()
     @ObservationIgnored private var active = false
-    @ObservationIgnored private var clipPlaying = false
+    @ObservationIgnored private var phase = Phase.perched
+    /// Counts phases, so a safety net or a timer set in one can't act on a later one.
+    @ObservationIgnored private var phaseCount = 0
     @ObservationIgnored private var voicePending = false
     /// Counts spoken lines, so an interrupted line's clean-up can't wipe the caption of its successor.
     @ObservationIgnored private var speech = 0
     @ObservationIgnored private var turn = 0
-    @ObservationIgnored private var bags: [Reaction: [Line]] = [:]
+    @ObservationIgnored private var repertoire = DragonRepertoire()
+    @ObservationIgnored private var bags: [Bag: [Line]] = [:]
+    /// The speak clip takes its own lines and words of wisdom by turns.
+    @ObservationIgnored private var speaksWisdom = false
+    @ObservationIgnored private var trophies: [Trophy] = []
+    @ObservationIgnored private var trophy = Trophy.helm
+    /// Whether a poke has already called him home from this flight.
+    @ObservationIgnored private var calledBack = false
+    @ObservationIgnored private var autoPoked = false
     @ObservationIgnored private var scheduled: [Task<Void, Never>] = []
-
-    /// Mostly he talks; every so often he shows what he is.
-    private static let repertoire: [Reaction] = [.speak, .fire, .speak, .roar, .speak]
 
     private static let greeting = Line(file: "dragon-voice-greet", text: "So… another seeker, at my door.")
 
-    private static let lines: [Reaction: [Line]] = [
+    private static let lines: [Bag: [Line]] = [
         .speak: [
             Line(file: "dragon-voice-speak-1", text: "You dare to wake me, little one?"),
             Line(file: "dragon-voice-speak-2", text: "I have watched a thousand heroes walk through that door. Few walked back."),
@@ -71,6 +101,26 @@ final class DragonDirector {
             Line(file: "dragon-voice-speak-7", text: "Mmm. I smell courage. Or is it fear? They are so very alike."),
             Line(file: "dragon-voice-speak-8", text: "Go on, then. Open the door. I am watching."),
         ],
+        .wisdom: [
+            Line(file: "dragon-voice-wisdom-1", text: "A map shows you the road. It does not show you who waits on it."),
+            Line(file: "dragon-voice-wisdom-2", text: "Gold is heavy. Ask any hero I have fished out of a river."),
+            Line(file: "dragon-voice-wisdom-3", text: "The brave die once. The careless die on the first stair."),
+            Line(file: "dragon-voice-wisdom-4", text: "Never split the party. I have dined well on those who did."),
+            Line(file: "dragon-voice-wisdom-5", text: "A locked door is a question. A broken one is an answer you may regret."),
+            Line(file: "dragon-voice-wisdom-6", text: "Listen to the quiet one in your party. They have been counting the exits."),
+            Line(file: "dragon-voice-wisdom-7", text: "Every dungeon was once somebody's home. Wipe your feet."),
+            Line(file: "dragon-voice-wisdom-8", text: "Rest when you can. The dark keeps better hours than you do."),
+            Line(file: "dragon-voice-wisdom-9", text: "Luck is a fine servant. Do not make it your captain."),
+        ],
+        .ask: [
+            Line(file: "dragon-voice-ask-1", text: "Tell me, little one. What is it you seek behind my door?"),
+            Line(file: "dragon-voice-ask-2", text: "Who do you trust at your back, when the torches fail?"),
+            Line(file: "dragon-voice-ask-3", text: "What would you give for a second chance? Think carefully. I collect."),
+            Line(file: "dragon-voice-ask-4", text: "Are you the hero of this tale… or the warning in someone else's?"),
+            Line(file: "dragon-voice-ask-5", text: "What is your name worth, I wonder, when no one is left to speak it?"),
+            Line(file: "dragon-voice-ask-6", text: "Would you rather be feared, or remembered? You may not have both."),
+            Line(file: "dragon-voice-ask-7", text: "How many doors have you walked past, wishing you had knocked?"),
+        ],
         .fire: [
             Line(file: "dragon-voice-fire-1", text: "Mind your fingers."),
             Line(file: "dragon-voice-fire-2", text: "That… was only a breath."),
@@ -79,6 +129,26 @@ final class DragonDirector {
             Line(file: "dragon-voice-roar-1", text: "Now… you have my attention."),
             Line(file: "dragon-voice-roar-2", text: "Do not make me rise again."),
         ],
+        .yawn: [
+            Line(file: "dragon-voice-yawn-1", text: "Forgive me. Eternity is long, and you poke often."),
+            Line(file: "dragon-voice-yawn-2", text: "Wake me when the heroes get interesting."),
+        ],
+        .smoke: [
+            Line(file: "dragon-voice-smoke-1", text: "A trick I learned from a wizard. A generous man. Very filling."),
+            Line(file: "dragon-voice-smoke-2", text: "There. Now make a wish. No? Wise."),
+        ],
+        .leave: [
+            Line(file: "dragon-voice-leave-1", text: "Wait here. I smell something… interesting."),
+            Line(file: "dragon-voice-leave-2", text: "Do not touch anything. I will know."),
+            Line(file: "dragon-voice-leave-3", text: "Something stirs in the valley. Hold my place."),
+        ],
+    ]
+
+    /// What he says of each thing once it has gone over the cliff.
+    private static let verdicts: [Trophy: Line] = [
+        .helm: Line(file: "dragon-voice-return-helm", text: "He would not tell me a story. A pity."),
+        .chest: Line(file: "dragon-voice-return-chest", text: "Gold. Always gold. As if I had room for more."),
+        .orb: Line(file: "dragon-voice-return-orb", text: "A wizard's toy. It tried to tell me my future. Presumptuous."),
     ]
 
     init() {
@@ -89,6 +159,7 @@ final class DragonDirector {
 
     func attach(_ stage: DragonPlayerView) {
         self.stage = stage
+        enter(.perched)
         isSettled = stage.isSettled
         stage.onArrivalBegan = { [weak self] in self?.arrivalBegan() }
         stage.onArrivalEnded = { [weak self] in
@@ -104,11 +175,20 @@ final class DragonDirector {
         active = nowActive
         if nowActive {
             sound.startAmbience()
+            #if DEBUG
+            // With Reduce Motion there's no stage to say he has settled, so the scripted pokes start here.
+            after(0.5) { [weak self] in
+                if self?.stage == nil { self?.autoPokeIfAsked() }
+            }
+            #endif
         } else {
             cancelScheduled()
             sound.silence()
             caption = nil
             voicePending = false
+            // Whatever he was in the middle of, he's on his perch when the home screen comes back.
+            stage?.reset()
+            enter(.perched)
         }
     }
 
@@ -117,28 +197,45 @@ final class DragonDirector {
     func poke(at point: CGPoint) {
         throwSparks(at: point)
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        guard active, isSettled, !clipPlaying, !voicePending else { return }
+        guard active, isSettled else { return }
+        if phase == .away {
+            callBack()
+            return
+        }
+        guard phase == .perched, !voicePending else { return }
 
         if !hasBeenPoked {
             hasBeenPoked = true
             UserDefaults.standard.set(true, forKey: "dd.dragonPoked")
         }
-        let reaction = Self.repertoire[turn % Self.repertoire.count]
-        turn += 1
+        let (reaction, scripted) = nextTurn()
+        if reaction == .flight {
+            leave(bringing: scripted)
+        } else {
+            react(reaction)
+        }
+    }
+
+    /// What he does next, and what he brings back from it when a debug script says.
+    private func nextTurn() -> (Reaction, Trophy?) {
+        defer { turn += 1 }
+        let dealt = repertoire.next(showing: stage != nil)
+        #if DEBUG
+        if stage != nil, let step = Self.script(at: turn) { return step }
+        #endif
+        return (dealt, nil)
+    }
+
+    private func react(_ reaction: Reaction) {
         let line = nextLine(for: reaction)
         voicePending = true
-
-        let started = stage?.playReaction(
-            reaction.rawValue,
+        let started = stage?.play(
+            "dragon-react-\(reaction.rawValue)",
             onStart: { [weak self] in self?.perform(reaction, line: line) },
-            onEnd: { [weak self] in self?.clipPlaying = false }) ?? false
+            onEnd: { [weak self] in self?.land(from: .reacting) }) ?? false
         if started {
-            clipPlaying = true
-            // If a clip ever failed to start or finish, don't leave him deaf to the next poke.
-            after(14) { [weak self] in
-                self?.clipPlaying = false
-                self?.voicePending = false
-            }
+            enter(.reacting)
+            catchFall(after: 14)
         } else {
             // No video (Reduce Motion): he simply answers.
             speak(line, after: 0.15)
@@ -150,6 +247,9 @@ final class DragonDirector {
         case .speak:
             // His head is down by your face about a second in.
             speak(line, after: 1.2)
+        case .ponder, .skygaze:
+            // His eye is on you, or on the storm, by two seconds in; he starts as he gets there.
+            speak(line, after: 1.6)
         case .fire:
             sound.playEffect("dragon-sfx-fire", volume: 0.9)
             after(1.5) { [weak self] in self?.rumble(pulses: 9) }
@@ -158,6 +258,16 @@ final class DragonDirector {
             sound.playEffect("dragon-sfx-roar", volume: 0.9)
             after(1.6) { [weak self] in self?.rumble(pulses: 8) }
             speak(line, after: 4.8)
+        case .yawn:
+            // The yawn and the stretch come first; he excuses himself as his wings fold.
+            sound.playEffect("dragon-sfx-yawn", volume: 0.85)
+            speak(line, after: 5.6)
+        case .smoke:
+            // The ring has passed you and his face is clear of it again.
+            sound.playEffect("dragon-sfx-smoke", volume: 0.8)
+            speak(line, after: 4.6)
+        case .flight:
+            break
         }
     }
 
@@ -179,12 +289,27 @@ final class DragonDirector {
         }
     }
 
-    /// A shuffled bag per reaction, so lines don't repeat until he has said them all.
     private func nextLine(for reaction: Reaction) -> Line {
-        if bags[reaction, default: []].isEmpty {
-            bags[reaction] = (Self.lines[reaction] ?? []).shuffled()
+        switch reaction {
+        case .speak:
+            defer { speaksWisdom.toggle() }
+            return nextLine(from: speaksWisdom ? .wisdom : .speak)
+        case .ponder: return nextLine(from: .ask)
+        case .skygaze: return nextLine(from: .wisdom)
+        case .fire: return nextLine(from: .fire)
+        case .roar: return nextLine(from: .roar)
+        case .yawn: return nextLine(from: .yawn)
+        case .smoke: return nextLine(from: .smoke)
+        case .flight: return nextLine(from: .leave)
         }
-        return bags[reaction]!.removeLast()
+    }
+
+    /// A shuffled bag per set, so lines don't repeat until he has said them all.
+    private func nextLine(from bag: Bag) -> Line {
+        if bags[bag, default: []].isEmpty {
+            bags[bag] = (Self.lines[bag] ?? []).shuffled()
+        }
+        return bags[bag]!.removeLast()
     }
 
     private func arrivalBegan() {
@@ -192,6 +317,110 @@ final class DragonDirector {
         sound.playEffect("dragon-sfx-arrival", volume: 0.8)
         // He turns to look at you just before the arrival clip ends.
         speak(Self.greeting, after: 6.3, blocking: false)
+    }
+
+    // MARK: Flights
+
+    /// He takes off ("dragon-depart" ends on the empty summit), is gone for a while, and returns
+    /// with the next trophy in the bag.
+    private func leave(bringing scripted: Trophy?) {
+        if trophies.isEmpty { trophies = Trophy.allCases.shuffled() }
+        trophy = scripted ?? trophies.removeLast()
+        calledBack = false
+        let line = nextLine(from: .leave)
+        voicePending = true
+        let started = stage?.play(
+            "dragon-depart", leavingSummitEmpty: true,
+            onStart: { [weak self] in
+                guard let self else { return }
+                self.sound.playEffect("dragon-sfx-depart", volume: 0.85)
+                // He says it before he crouches; the wings open at 1.5 s and he's off the rock at 4.
+                self.speak(line, after: 0.3)
+                self.after(3.9) { [weak self] in self?.rumble(pulses: 5) }
+            },
+            onEnd: { [weak self] in self?.left() }) ?? false
+        if started {
+            enter(.leaving)
+            catchFall(after: 14)
+        } else {
+            // He can't leave without the picture, so he stays and says something worth hearing.
+            speak(nextLine(from: .wisdom), after: 0.15)
+        }
+    }
+
+    /// The departure has played out and the summit is empty: time his return.
+    private func left() {
+        guard phase == .leaving else { return }
+        guard stage?.isAway == true else {
+            // The empty summit never loaded, so the stage put him straight back.
+            land(from: .leaving)
+            return
+        }
+        enter(.away)
+        var wait = TimeInterval.random(in: 6...16)
+        #if DEBUG
+        wait = AppConfig.dragonAwayArgument ?? wait
+        #endif
+        whileStillHere(after: wait) { $0.comeBack() }
+    }
+
+    /// A poke at the empty summit. He hears it, wherever he is, answers, and turns for home.
+    private func callBack() {
+        guard !calledBack else { return }
+        calledBack = true
+        sound.playEffect("dragon-sfx-distant-roar", volume: 0.9)
+        whileStillHere(after: 1.8) { $0.comeBack() }
+    }
+
+    private func comeBack() {
+        guard phase == .away else { return }
+        let trophy = self.trophy
+        let started = stage?.play(
+            "dragon-return-\(trophy.rawValue)",
+            onStart: { [weak self] in
+                guard let self else { return }
+                self.sound.playEffect("dragon-sfx-return-\(trophy.rawValue)", volume: 0.85)
+                self.after(trophy.cues.lands) { [weak self] in self?.rumble(pulses: 6) }
+                if let verdict = Self.verdicts[trophy] { self.speak(verdict, after: trophy.cues.speaks) }
+            },
+            onEnd: { [weak self] in self?.land(from: .returning) }) ?? false
+        if started {
+            enter(.returning)
+            catchFall(after: 17)
+        } else {
+            // The return can't play: better he is simply back than gone for good.
+            stage?.reset()
+            enter(.perched)
+        }
+    }
+
+    /// A clip has handed back to the loop.
+    private func land(from finished: Phase) {
+        if phase == finished { enter(.perched) }
+    }
+
+    private func enter(_ next: Phase) {
+        phase = next
+        phaseCount += 1
+    }
+
+    /// Runs `work` later, unless he has moved on to another phase by then.
+    private func whileStillHere(after seconds: TimeInterval, _ work: @escaping @MainActor (DragonDirector) -> Void) {
+        let here = phaseCount
+        after(seconds) { [weak self] in
+            guard let self, self.phaseCount == here else { return }
+            work(self)
+        }
+    }
+
+    /// The safety net under each clip. If one ever failed to start or finish, don't leave him deaf
+    /// to the next poke, or gone from his summit: put him back on his perch.
+    private func catchFall(after seconds: TimeInterval) {
+        whileStillHere(after: seconds) { director in
+            director.stage?.reset()
+            director.voicePending = false
+            director.enter(.perched)
+        }
     }
 
     // MARK: Effects
@@ -233,18 +462,88 @@ final class DragonDirector {
         scheduled.removeAll()
     }
 
+    // MARK: Scripted pokes (debug)
+
     /// Debug builds only: `-dragonAutoPoke 3` pokes him three times once he's settled, so the
-    /// reactions can be checked from a script without touching the screen.
+    /// reactions can be checked from a script without touching the screen. See `AppConfig` for
+    /// the arguments that choose what he does and how long he stays away.
     private func autoPokeIfAsked() {
         #if DEBUG
-        let count = UserDefaults.standard.integer(forKey: "dragonAutoPoke")
-        guard count > 0 else { return }
+        let count = AppConfig.dragonAutoPokeArgument
+        guard count > 0, !autoPoked else { return }
+        autoPoked = true
+        let gap = AppConfig.dragonPokeEveryArgument ?? 9
         for i in 0..<count {
-            after(1.5 + Double(i) * 9) { [weak self] in
+            // Not through `after`: these keep their appointments when the home screen is covered
+            // and comes back, so that can be scripted too.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(1.5 + Double(i) * gap))
                 self?.poke(at: CGPoint(x: 200, y: 420))
             }
         }
         #endif
+    }
+
+    #if DEBUG
+    /// The turn `-dragonAct` asks for on the nth poke: a reaction's name, or `flight-chest` to
+    /// choose what he brings back. The list repeats once it runs out.
+    private static func script(at turn: Int) -> (Reaction, Trophy?)? {
+        let steps = (AppConfig.dragonActArgument ?? "").split(separator: ",")
+        guard !steps.isEmpty else { return nil }
+        let parts = steps[turn % steps.count].split(separator: "-").map(String.init)
+        guard let name = parts.first, let reaction = Reaction(rawValue: name) else { return nil }
+        return (reaction, parts.count > 1 ? Trophy(rawValue: parts[1]) : nil)
+    }
+    #endif
+}
+
+/// The order of his turns. Each hand of ten is six of talk (the speak, ponder and skygaze clips,
+/// twice each), three shows of what he is (fire, roar, yawn and smoke take it in turns to sit one
+/// out) and one flight, shuffled so that nothing comes twice running. Flights are long, so they're
+/// kept apart: never in the first three turns of the first hand or the first four of a later one.
+struct DragonRepertoire {
+    typealias Reaction = DragonDirector.Reaction
+
+    static let talk: [Reaction] = [.speak, .ponder, .skygaze]
+    static let shows: [Reaction] = [.fire, .roar, .yawn, .smoke]
+
+    private var hand: [Reaction] = []
+    private var last: Reaction?
+    private var dealt = 0
+    private let showOrder = DragonRepertoire.shows.shuffled()
+
+    /// His next turn. Without the picture (`showing` false) only his words make sense, so he talks.
+    mutating func next(showing: Bool = true) -> Reaction {
+        guard showing else {
+            let pick = Self.talk.filter { $0 != last }.randomElement() ?? .speak
+            last = pick
+            return pick
+        }
+        // A dealt hand never repeats a turn back to back, nor opens on the last turn of the hand
+        // before. Skipping a match here also covers turns taken without the picture in between.
+        if !hand.contains(where: { $0 != last }) { hand = deal() }
+        let pick = hand.remove(at: hand.firstIndex { $0 != last } ?? 0)
+        last = pick
+        return pick
+    }
+
+    private mutating func deal() -> [Reaction] {
+        let first = dealt == 0
+        let resting = showOrder[dealt % showOrder.count]
+        dealt += 1
+        // The very first turn is plain talk; the rest of that hand is shuffled behind it.
+        let opening: [Reaction] = first ? [.speak] : []
+        var rest: [Reaction] = [.speak, .ponder, .ponder, .skygaze, .skygaze, .flight] + Self.shows.filter { $0 != resting }
+        if !first { rest.append(.speak) }
+        let earliestFlight = first ? 3 : 4
+        var cards = opening + rest
+        for _ in 0..<1000 {
+            cards = opening + rest.shuffled()
+            let flightAt = cards.firstIndex(of: .flight) ?? 0
+            let repeats = zip(cards, cards.dropFirst()).contains { $0 == $1 } || cards.first == last
+            if !repeats, flightAt >= earliestFlight, !first || flightAt <= 6 { break }
+        }
+        return cards
     }
 }
 

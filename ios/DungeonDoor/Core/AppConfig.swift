@@ -26,6 +26,15 @@ import SwiftUI
 /// - `-newGame YES` opens the "A New Adventure" sheet (the hero picker) from the home screen.
 /// - `-scrollTo <choices|combat|bottom>` scrolls an open scene down to its choices, its fight or
 ///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end.
+///
+/// For the home-screen dragon, in debug builds only:
+/// - `-dragonAutoPoke <n>` pokes him n times once he has landed, `-dragonPokeEvery <seconds>` apart
+///   (9 unless given).
+/// - `-dragonAct <list>` scripts what he does on each poke in turn, comma-separated and repeating:
+///   `speak`, `ponder`, `skygaze`, `fire`, `roar`, `yawn`, `smoke`, `flight`, or `flight-helm`,
+///   `flight-chest`, `flight-orb` to choose what he brings back. Without it he follows his own
+///   rotation.
+/// - `-dragonAway <seconds>` fixes how long he stays away on a flight (otherwise 6 to 16 s).
 enum AppConfig {
     static var apiBase: URL {
         let defaults = UserDefaults.standard
@@ -80,8 +89,18 @@ enum AppConfig {
     /// Where a page's scroll view starts: the top, unless `-scrollTo bottom` asks for the end.
     static var launchScrollAnchor: UnitPoint { scrollToArgument == "bottom" ? .bottom : .top }
 
+    static var dragonAutoPokeArgument: Int { UserDefaults.standard.integer(forKey: "dragonAutoPoke") }
+    static var dragonPokeEveryArgument: Double? { seconds("dragonPokeEvery") }
+    static var dragonActArgument: String? { argument("dragonAct")?.lowercased() }
+    static var dragonAwayArgument: Double? { seconds("dragonAway") }
+
     private static func argument(_ key: String) -> String? {
         let value = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespaces)
         return value.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    private static func seconds(_ key: String) -> Double? {
+        let value = UserDefaults.standard.double(forKey: key)
+        return value > 0 ? value : nil
     }
 }
