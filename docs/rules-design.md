@@ -261,7 +261,7 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
   Each die heals its roll plus the CON modifier, at least 1, and HP never goes above the maximum.
   Features recharge as above, and a warlock gets its pact slots back. Arcane Recovery and Magical
   Cunning are separate calls made after it, each once per Long Rest.
-- **Long Rest:** full HP, every spent hit die back (SRD 5.2; `{ hitDice: 'half' }` is the 2014 rule),
+- **Long Rest:** full HP, every spent hit die back (SRD 5.2; the 2014 "half" rule is not offered),
   every slot back, concentration ends, every feature recharges, and exhaustion goes down by 1.
 - **Exhaustion:** levels 0 to 6, stored on the sheet. Each level gives -2 on every d20 test and -5 feet
   of speed, and level 6 is death. `exhaustionEffects` reports these numbers; the callers apply them.

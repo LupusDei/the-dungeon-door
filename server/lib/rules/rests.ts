@@ -43,17 +43,13 @@ export function shortRest(sheet: CharacterSheet, rng: Rng, { hitDice = 0 } = {},
   return { sheet: isPactCaster(sheet, data) ? withCasting(rested, { expended: NO_SLOTS_SPENT }) : rested, rolls, healed };
 }
 
-/**
- * A Long Rest. SRD 5.2 gives back all spent hit dice; `{ hitDice: 'half' }` is the 2014 rule (half the
- * hero's level, at least 1).
- */
-export function longRest(sheet: CharacterSheet, { hitDice = 'all' }: { hitDice?: 'all' | 'half' } = {}, data: Srd = bundledSrd()): CharacterSheet {
+/** A Long Rest (SRD 5.2): every spent hit die comes back, not half of them as in 2014. */
+export function longRest(sheet: CharacterSheet, data: Srd = bundledSrd()): CharacterSheet {
   requireConscious(sheet);
-  const regained = hitDice === 'all' ? sheet.level : Math.max(1, Math.floor(sheet.level / 2));
   const rested = rechargeResources({
     ...sheet,
     hp: sheet.maxHp,
-    hitDiceSpent: Math.max(0, sheet.hitDiceSpent - regained),
+    hitDiceSpent: 0,
     exhaustion: Math.max(0, sheet.exhaustion - 1),
   }, 'long', data);
   return withCasting(rested, { expended: NO_SLOTS_SPENT, concentratingOn: null });

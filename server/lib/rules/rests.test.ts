@@ -63,13 +63,6 @@ test('a Long Rest restores hit points, all hit dice, slots and features, ends co
   assert.equal(longRest(fighter()).spellcasting, null);
 });
 
-test('the 2014 rule, as an option: a Long Rest gives back half the hit dice (at least 1)', () => {
-  const tired = { ...hero('fighter', 5), hitDiceSpent: 5 };
-  assert.equal(longRest(tired, { hitDice: 'half' }).hitDiceSpent, 3);
-  assert.equal(longRest({ ...tired, hitDiceSpent: 1 }, { hitDice: 'half' }).hitDiceSpent, 0);
-  assert.equal(longRest({ ...fighter(), level: 1, hpRolls: [10], hitDiceSpent: 1 }, { hitDice: 'half' }).hitDiceSpent, 0, 'level 1: at least 1 die');
-});
-
 test('exhaustion stacks to 6; each level is -2 on d20 tests and -5 feet of speed; at 6 the hero dies', () => {
   const tired = gainExhaustion(fighter(), 2);
   assert.equal(tired.exhaustion, 2);
