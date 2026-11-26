@@ -26,6 +26,8 @@ export interface ProficiencyChoice { choose: number; from: string[] }
 
 export interface SrdClass {
   id: string; name: string; hitDie: number; saves: Ability[];
+  /** The class's primary abilities (a fighter's first option, Strength, where the SRD offers a choice). */
+  primary: Ability[];
   /** e.g. "light-armor", "all-armor", "shields", "simple-weapons", "scimitars". */
   proficiencies: string[];
   choices: ProficiencyChoice[];
@@ -148,8 +150,15 @@ function shortRestOf(description: string): ShortRestRecharge {
   return SHORT_REST_ALL.test(description) ? 'all' : 'none';
 }
 
+type PrimaryAbility = { abilityScores?: { index: Ability }[]; abilityScoreOptions?: { from: { options: { item: { index: Ability } }[] } } };
+const primaryOf = (p: PrimaryAbility): Ability[] => p.abilityScores?.map((a) => a.index) ?? [p.abilityScoreOptions!.from.options[0].item.index];
+
 const classSchema = z.object({
   index: z.string(), name: z.string(), hitDie: z.number(), savingThrows: z.array(z.enum(ABILITIES)),
+  primaryAbility: z.object({
+    abilityScores: z.array(z.object({ index: z.enum(ABILITIES) })).optional(),
+    abilityScoreOptions: z.object({ from: z.object({ options: z.array(z.object({ item: z.object({ index: z.enum(ABILITIES) }) })) }) }).optional(),
+  }),
   proficiencies: z.array(ref), proficiencyChoices: z.array(proficiencyChoice), startingEquipmentOptions: equipmentOptions,
   subclasses: z.array(ref),
   levels: z.array(z.object({
@@ -157,7 +166,7 @@ const classSchema = z.object({
     classSpecific: z.record(z.string(), z.unknown()).nullable(),
   })).length(20),
 }).transform((c): SrdClass => ({
-  id: c.index, name: c.name, hitDie: c.hitDie, saves: c.savingThrows, proficiencies: c.proficiencies.map((p) => p.index),
+  id: c.index, name: c.name, hitDie: c.hitDie, saves: c.savingThrows, primary: primaryOf(c.primaryAbility), proficiencies: c.proficiencies.map((p) => p.index),
   choices: c.proficiencyChoices, equipment: c.startingEquipmentOptions,
   levels: c.levels.map((l) => ({
     level: l.level,

@@ -5,8 +5,8 @@ import { scriptedRng } from '../rules/rng.ts';
 import { parley, rollAttitude } from './parley.ts';
 import type { PartyState } from './state.ts';
 
-const bard = heroSheet({ id: 'b', name: 'Lyra', race: 'human', characterClass: 'bard' });
-const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
+const bard = heroSheet({ id: 'b', name: 'Lyra', race: 'human', characterClass: 'bard' }, 'classic');
+const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' }, 'classic');
 const party = (rng = 3): PartyState => ({ version: 1, rng, sheets: { p1: fighter, p2: bard } });
 
 test('attitude: 2d6, 2–5 Hostile, 6–9 Indifferent, 10–12 Friendly; undead, constructs and oozes always Hostile', () => {

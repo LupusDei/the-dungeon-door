@@ -216,27 +216,55 @@ export function buildCharacter(choices: CharacterChoices, rng: Rng, data: Srd = 
 /** What to fill in: anything left out is chosen at random. */
 export interface QuickRequest { name: string; classId?: string; speciesId?: string; backgroundId?: string }
 
+/**
+ * How a quick hero is built. `primary` (new heroes): the standard array best-first to the class's primary
+ * abilities, then Constitution, then the rest at random; the background's +2 and +1 to those where it
+ * allows; a healer prepares its best healing spell. `classic` (heroes stored before Phase 5 without a
+ * sheet, so their numbers never change): best-first to the class's saves, boosts and spells at random.
+ */
+export type BuildStyle = 'primary' | 'classic';
+
 const spellsOf = (data: Srd, classId: string, level: number) =>
   [...data.spells.values()].filter((s) => s.level === level && s.classes.includes(classId)).map((s) => s.id);
 
-/**
- * A full, legal set of choices, chosen by the rng: "roll me a hero", or an NPC for the DM. The standard
- * array goes best-first to the class's saving throws, then the rest at random; the gear options are taken.
- */
-export function quickChoices(rng: Rng, request: QuickRequest, data: Srd = bundledSrd()): CharacterChoices {
+interface Style {
+  first: (cls: SrdClass) => Ability[];
+  boost: (rng: Rng, allowed: readonly Ability[], first: readonly Ability[]) => { kind: 'twoOne'; plusTwo: Ability; plusOne: Ability };
+  healing: readonly string[];
+}
+
+/** The healing spells a healer prepares first, best first. */
+const HEALING = ['cure-wounds', 'healing-word'];
+
+const STYLES: Record<BuildStyle, Style> = {
+  primary: { first: (cls) => [...new Set<Ability>([...cls.primary, 'con'])], boost: boostFor, healing: HEALING },
+  classic: { first: (cls) => cls.saves, boost: (rng, allowed) => boostFor(rng, allowed, []), healing: [] },
+};
+
+/** A full, legal set of choices, chosen by the rng: "roll me a hero", or an NPC for the DM (see BuildStyle); the gear options are taken. */
+export function quickChoices(rng: Rng, request: QuickRequest, data: Srd = bundledSrd(), style: BuildStyle = 'primary'): CharacterChoices {
   const cls = lookup(data.classes, request.classId ?? pick(rng, [...data.classes.keys()]), 'class');
   const species = lookup(data.species, request.speciesId ?? pick(rng, [...data.species.keys()]), 'species');
   const background = lookup(data.backgrounds, request.backgroundId ?? pick(rng, [...data.backgrounds.keys()]), 'background');
-  const rest = ABILITIES.filter((a) => !cls.saves.includes(a));
-  const [plusTwo, plusOne] = sample(rng, background.abilities, 2);
+  const how = STYLES[style];
+  const first = how.first(cls);
+  const rest = ABILITIES.filter((a) => !first.includes(a));
+  const boost = how.boost(rng, background.abilities, first);
   return {
     name: request.name, classId: cls.id, speciesId: species.id, backgroundId: background.id,
     size: pick(rng, species.sizes),
-    abilities: { kind: 'standardArray', order: [...cls.saves, ...sample(rng, rest, rest.length)] },
-    boost: { kind: 'twoOne', plusTwo, plusOne },
+    abilities: { kind: 'standardArray', order: [...first, ...sample(rng, rest, rest.length)] },
+    boost,
     classChoices: pickClassChoices(rng, cls, background), classEquipment: 0, backgroundEquipment: 0,
-    ...pickSpells(rng, cls.id, data),
+    ...pickSpells(rng, cls.id, data, how.healing),
   };
+}
+
+/** The background's +2 and +1 to the first of `wanted` it allows, in order; what is left, at random. */
+function boostFor(rng: Rng, allowed: readonly Ability[], wanted: readonly Ability[]): { kind: 'twoOne'; plusTwo: Ability; plusOne: Ability } {
+  const liked = wanted.filter((a) => allowed.includes(a));
+  const [plusTwo, plusOne] = [...liked, ...sample(rng, allowed.filter((a) => !liked.includes(a)), Math.max(0, 2 - liked.length))];
+  return { kind: 'twoOne', plusTwo, plusOne };
 }
 
 function pickClassChoices(rng: Rng, cls: SrdClass, background: SrdBackground): string[][] {
@@ -248,10 +276,13 @@ function pickClassChoices(rng: Rng, cls: SrdClass, background: SrdBackground): s
   });
 }
 
-function pickSpells(rng: Rng, classId: string, data: Srd): { cantrips: string[]; prepared: string[] } {
+/** Cantrips at random; a healer's first prepared spell is its best healing spell (of `healing`), the rest at random. */
+function pickSpells(rng: Rng, classId: string, data: Srd, healing: readonly string[]): { cantrips: string[]; prepared: string[] } {
   const casting = data.spellcasting.get(classId)?.byLevel[0] ?? { cantrips: 0, prepared: 0 };
+  const known = spellsOf(data, classId, 1);
+  const healer = healing.filter((id) => known.includes(id)).slice(0, 1);
   return {
     cantrips: sample(rng, spellsOf(data, classId, 0), casting.cantrips),
-    prepared: sample(rng, spellsOf(data, classId, 1), casting.prepared),
+    prepared: [...healer, ...sample(rng, known.filter((id) => !healer.includes(id)), casting.prepared - healer.length)],
   };
 }

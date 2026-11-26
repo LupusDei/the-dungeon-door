@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { heroAttacks } from './attacks.ts';
 import { isValid } from './catalog.ts';
 import { badRequest, conflict, forbidden, isUUID, notFound } from './http.ts';
-import { buildCharacter, quickChoices } from './rules/character.ts';
+import { type BuildStyle, buildCharacter, quickChoices } from './rules/character.ts';
 import { revive, TEMPLE_RAISE_DEAD } from './rules/revive.ts';
 import { derivedRng } from './rules/rng.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
@@ -18,17 +18,17 @@ interface Build { id: string; name: string; race: string; characterClass: string
 
 /**
  * A level-1 sheet from the engine, seeded by the character's id, so the same hero always comes out the same.
- * Keep the seed: a hero saved before the engine is rebuilt from it on every read until it is saved.
+ * Keep the seed: a hero stored without a sheet is rebuilt from it, the classic way, on every read until it is saved.
  */
-export function heroSheet({ id, name, race, characterClass, backgroundId }: Build): CharacterSheet {
+export function heroSheet({ id, name, race, characterClass, backgroundId }: Build, style: BuildStyle = 'primary'): CharacterSheet {
   const rng = derivedRng(0, `hero/${id}`);
-  return buildCharacter(quickChoices(rng, { name, classId: characterClass, speciesId: race, backgroundId }), rng);
+  return buildCharacter(quickChoices(rng, { name, classId: characterClass, speciesId: race, backgroundId }, undefined, style), rng);
 }
 
 /** A stored hero as the API shows it: on its SRD 5.2 species, with a sheet. Not saved until the hero is next saved. */
 export function upgradeCharacter(stored: StoredCharacter): Character {
   const race = currentRace(stored.race) as string;
-  const { sheet = heroSheet({ ...stored, race }) } = stored;
+  const { sheet = heroSheet({ ...stored, race }, 'classic') } = stored;
   return { ...stored, race, sheet, attacks: heroAttacks(sheet) };
 }
 

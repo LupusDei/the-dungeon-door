@@ -228,5 +228,36 @@ test('quick choices fill in what was left out, the same way for the same seed', 
   assert.notDeepEqual(quickChoices(seededRng(9), { name: 'Pip' }), a);
   assert.ok(srd().classes.has(a.classId));
   const sheet = buildCharacter(a, rng());
-  assert.equal(sheet.abilityScores[srd().classes.get(a.classId)!.saves[0]] >= 15, true, 'the best score goes to a class save');
+  assert.equal(sheet.abilityScores[srd().classes.get(a.classId)!.primary[0]] >= 15, true, 'the best score goes to the class’s primary ability');
+});
+
+test('a class’s primary abilities come from the SRD: Strength for a fighter, Dexterity and Wisdom for a monk', () => {
+  const primary = (id: string) => srd().classes.get(id)!.primary;
+  assert.deepEqual([primary('fighter'), primary('monk'), primary('wizard'), primary('paladin')], [['str'], ['dex', 'wis'], ['int'], ['str', 'cha']]);
+});
+
+test('quick choices put the best scores in the class’s primary abilities, then Constitution, and the +2 where the background allows', () => {
+  for (const cls of srd().classes.values()) {
+    for (let seed = 0; seed < 12; seed++) {
+      const choices = quickChoices(seededRng(seed), { name: 'Test', classId: cls.id });
+      assert.equal(choices.abilities.kind, 'standardArray');
+      const order = (choices.abilities as { order: string[] }).order;
+      assert.deepEqual(order.slice(0, cls.primary.length + 1), [...cls.primary, 'con'], cls.id);
+      const background = srd().backgrounds.get(choices.backgroundId)!;
+      const boost = choices.boost as { plusTwo: string; plusOne: string };
+      if (background.abilities.includes(cls.primary[0])) assert.equal(boost.plusTwo, cls.primary[0], `${cls.id} ${background.id}`);
+      if (background.abilities.includes('con') && boost.plusTwo !== 'con') assert.equal(boost.plusOne, 'con', `${cls.id} ${background.id}`);
+    }
+  }
+});
+
+test('a hero who can cast a healing spell at level 1 has one prepared: Cure Wounds, else Healing Word', () => {
+  for (const classId of ['cleric', 'bard', 'druid', 'paladin', 'ranger']) {
+    for (let seed = 0; seed < 12; seed++) {
+      const prepared = quickChoices(seededRng(seed), { name: 'Test', classId }).prepared;
+      assert.ok(prepared!.includes('cure-wounds'), `${classId}: ${prepared!.join()}`);
+      assert.equal(new Set(prepared).size, prepared!.length);
+    }
+  }
+  assert.ok(!quickChoices(seededRng(1), { name: 'Test', classId: 'wizard' }).prepared!.some((p) => p === 'cure-wounds' || p === 'healing-word'));
 });

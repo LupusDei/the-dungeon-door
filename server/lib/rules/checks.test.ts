@@ -7,8 +7,8 @@ import { SAMPLE } from './sheet.fixture.ts';
 import { monster } from './monsters.ts';
 import { scriptedRng } from './rng.ts';
 
-const rogue = heroSheet({ id: 'r', name: 'Vex', race: 'halfling', characterClass: 'rogue', backgroundId: 'criminal' });
-const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
+const rogue = heroSheet({ id: 'r', name: 'Vex', race: 'halfling', characterClass: 'rogue', backgroundId: 'criminal' }, 'classic');
+const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' }, 'classic');
 const pb = rogue.proficiencyBonus;
 const dex = abilityModifier(rogue.abilityScores.dex);
 

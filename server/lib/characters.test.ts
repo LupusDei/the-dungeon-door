@@ -6,7 +6,7 @@ import * as reviveApi from '../api/character-revive.ts';
 import * as charactersApi from '../api/characters.ts';
 import * as gamesApi from '../api/games.ts';
 import { call, makeCharacter } from './api.fixture.ts';
-import { heroSheet } from './characters.ts';
+import { heroSheet, upgradeCharacter } from './characters.ts';
 import { srd } from './rules/srd.ts';
 import { getStore, setStore } from './store/index.ts';
 import { MemoryStore } from './store/memory.ts';
@@ -34,8 +34,13 @@ test('a new hero gets a level-1 SRD 5.2 sheet of its species and class, the same
 });
 
 test('the seed is pinned: a hero not yet saved with a sheet keeps the same numbers on every read and every release', () => {
-  const sheet = heroSheet({ id: 'pinned-hero', name: 'Pin', race: 'human', characterClass: 'fighter' });
+  const build = { id: 'pinned-hero', name: 'Pin', race: 'human', characterClass: 'fighter' };
+  const sheet = heroSheet(build, 'classic');
   assert.deepEqual([sheet.backgroundId, sheet.abilityScores], PINNED);
+  const stored = { ...build, gender: 'male', temperament: 'kind', alignment: 'true-neutral', backstory: '', description: '', appearance: null, portraitUrl: null, createdAt: '', updatedAt: '' };
+  assert.deepEqual(upgradeCharacter(stored as Parameters<typeof upgradeCharacter>[0]).sheet, sheet, 'a stored hero without a sheet reads the classic way');
+  const fresh = heroSheet(build);
+  assert.equal(Math.max(...Object.values(fresh.abilityScores)), fresh.abilityScores.str, 'a new fighter’s best score is Strength');
 });
 
 test('the player may pick the background; an unknown one is refused', async () => {
