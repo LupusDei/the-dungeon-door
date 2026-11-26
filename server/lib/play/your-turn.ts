@@ -1,19 +1,20 @@
 /**
  * A combat round as one player sees it (docs/api.md, "Written for you"): the same three choices, saying
  * what that player's own hero will do with them. The words follow play/fight.ts, which decides the action:
- * the best weapon, the best damaging spell, the most wounded foe (several of them for an area spell), and
- * Second Wind or a healing potion first for a hero at half its hit points or less.
+ * the best weapon, the best damaging spell (a healer's healing spell while a friend is dying), the most
+ * wounded foe (several of them for an area spell), and Second Wind or a healing potion first for a hero at
+ * half its hit points or less.
  */
 import { spellDamage } from '../attacks.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import { item } from '../rules/items.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
-import { slotsLeft } from '../rules/spells.ts';
+import { slotsLeft, spellHealingDice } from '../rules/spells.ts';
 import type { SrdSpell } from '../rules/srd.ts';
 import { CHOICE_IDS, type ChoiceView } from '../types.ts';
 import { thirdChoice, thirdWords } from './actions.ts';
-import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, mostWounded, weaponType } from './fight.ts';
+import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, healingSpell, mostWounded, weaponType } from './fight.ts';
 import { ABILITY_NAMES } from './hooks.ts';
 import type { CombatState } from './state.ts';
 
@@ -64,6 +65,16 @@ function cast(spell: SrdSpell, sheet: CharacterSheet, foes: string) {
   return { label: `Cast ${spell.name}`, detail: `${how}, at ${foes}.${slotNote(spell, sheet)}` };
 }
 
+/** Cast with a friend dying: the healer's healing spell on them (play/fight.ts, healAction), or null when Cast attacks. */
+function heal(combat: CombatState, sheet: CharacterSheet, me: Combatant) {
+  const dying = Object.values(combat.combatants).find((c) => c.side === me.side && c.status === 'dying');
+  const spell = dying ? healingSpell(sheet) : null;
+  if (!dying || !spell) return null;
+  const slot = slotsLeft(sheet).findIndex((n, i) => n > 0 && i + 1 >= spell.level) + 1;
+  const { attackBonus } = sheet.spellcasting!;
+  return { label: `Cast ${spell.name}`, detail: `Heals ${dying.name}, who is dying: ${spellHealingDice(spell, slot)}${signed(attackBonus - sheet.proficiencyBonus)} hit points.${slotNote(spell, sheet)}` };
+}
+
 /** " First uses Second Wind." or " First drinks a Potion of Healing." when the engine will do that before the hero acts. */
 function bonusNote(me: Combatant, sheet: CharacterSheet): string {
   const bonus = bonusHeal(me, sheet);
@@ -78,5 +89,6 @@ export function yourChoices(combat: CombatState, sheet: CharacterSheet, playerId
   const spell = bestSpell(sheet);
   const bonus = bonusNote(me, sheet);
   const third = thirdWords(thirdChoice(combat, sheet, playerId), combat, sheet, COMBAT_CHOICES[2]);
-  return view([attack, spell ? cast(spell, sheet, aim(spell, combat, me)) : attack, third].map((c) => ({ ...c, detail: c.detail + bonus })));
+  const second = heal(combat, sheet, me) ?? (spell ? cast(spell, sheet, aim(spell, combat, me)) : attack);
+  return view([attack, second, third].map((c) => ({ ...c, detail: c.detail + bonus })));
 }

@@ -328,7 +328,7 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   are always Hostile. A parley that works leaves the room to the party (their treasure stays theirs); one
   that fails sours them a step, and Hostile foes attack.
 - **Combat rounds** (`scene.combat`). The choices are always: (a) Attack: your best weapon against the
-  most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none); (c) the third
+  most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none), or, while a friend is dying, a healer's healing spell on them ("Cast Cure Wounds", "Heals Corin, who is dying: 2d8+3 hit points."); (c) the third
   choice, which depends on the moment: **Break Free** (a hero Restrained or Grappled spends the action on
   its escape check), **Help _name_** (stabilize a dying friend: a Healer's Kit, or DC 10 Medicine), or
   **Dodge**. The id is always `c`; read its `label` and `detail`.
