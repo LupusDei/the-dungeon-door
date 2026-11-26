@@ -24,6 +24,6 @@ export function canCast(sheet: CharacterSheet, spellId: string): boolean {
 /** The dead hero lives again with 1 HP; Raise Dead leaves its ordeal, -4 on D20 Tests. */
 export function revive(sheet: CharacterSheet, how: Revival): CharacterSheet {
   require(sheet.dead === true, `${sheet.name} is not dead`);
-  const { dead: _, ...alive } = sheet;
+  const { dead: _, diedAt: __, ...alive } = sheet;
   return { ...alive, hp: 1, ...(how === 'raise-dead' ? { revivalPenalty: REVIVAL_PENALTY } : {}) };
 }

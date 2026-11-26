@@ -2,6 +2,7 @@
  * One turn of play through the rules engine: the party's choice (and its hook), or a combat round. Pure:
  * the game (lib/game.ts) loads the state, calls playTurn, and stores what comes back.
  */
+import type { CharacterSheet } from '../rules/sheet.ts';
 import type { HazardSpec } from '../rules/hazards.ts';
 import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
@@ -213,10 +214,22 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
 export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[]): RulesTurn {
+  return withDeathTimes(clockOf(s.party), turnPlayed(s, hook, ballots));
+}
+
+function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[]): RulesTurn {
   if (s.combat) return wander(elapse(combatRound(s, s.combat, ballots), ROUND_SECONDS), ROUND_SECONDS);
   const played = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(s, hook, ballots) : done(s);
   if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' ? 0 : secondsFor(hook), true);
   return wander(elapse(played, secondsFor(hook)), secondsFor(hook));
+}
+
+/** Each hero who died this turn is marked with the clock at its start (for Raise Dead's 10 days). */
+function withDeathTimes(started: number, t: RulesTurn): RulesTurn {
+  const unmarked = (sh: CharacterSheet) => sh.dead === true && sh.diedAt === undefined;
+  if (!Object.values(t.party.sheets).some(unmarked)) return t;
+  const sheets = Object.fromEntries(Object.entries(t.party.sheets).map(([id, sh]) => [id, unmarked(sh) ? { ...sh, diedAt: started } : sh]));
+  return { ...t, party: { ...t.party, sheets } };
 }
 
 const ROUND_SECONDS = 6;

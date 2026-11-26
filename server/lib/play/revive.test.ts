@@ -59,3 +59,18 @@ test('raising the dead: a party caster (500 gp diamond) or the temple (2,500 gp)
   const both = raiseTheDead(party({ p1: dead(fighter), p3: dead(rogue), p2: { ...priest(5000), spellcasting: { ...priest(0).spellcasting!, prepared: [] } } }));
   assert.deepEqual([both.lines.length, both.party.sheets.p2.gp], [2, 0], 'the temple raises both while the gold lasts');
 });
+
+test('Raise Dead reaches back 10 days by the game clock, to the second; a raised hero loses its time of death', () => {
+  const day = 86_400;
+  const at = (clock: number) => raiseTheDead({ ...party({ p1: { ...dead(fighter), diedAt: 100 }, p2: priest(600) }), clock });
+  const raised = at(100 + 10 * day);
+  assert.equal(raised.party.sheets.p1.dead, undefined, raised.lines.join(' | '));
+  assert.equal(raised.party.sheets.p1.diedAt, undefined);
+  const late = at(101 + 10 * day);
+  assert.deepEqual(late.lines, ['Bryn has been dead more than 10 days: Raise Dead cannot reach them.']);
+  assert.equal(late.party.sheets.p1.dead, true);
+  assert.equal(late.party.sheets.p2.gp, 600, 'nobody pays for it');
+  assert.equal(raiseTheDead(party({ p1: dead(fighter), p2: priest(600) })).party.sheets.p1.dead, undefined, 'no time of death: within reach');
+  const first = raiseTheDead({ ...party({ p1: { ...dead(fighter), diedAt: 0 }, p2: priest(600) }), clock: 1 + 10 * day });
+  assert.equal(first.party.sheets.p1.dead, true, 'died in the first second of the game');
+});

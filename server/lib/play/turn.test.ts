@@ -173,7 +173,7 @@ test('a trapped room springs its SRD 5.2 trap (or the 5.2 counterpart of an old 
 const settledOrDead = (h: CharacterSheet) => h.dead === true || h.hp === 1;
 
 test('the dead roll nothing; a hero the harm leaves at 0 HP is settled at once: stable and up with 1 HP, or dead', () => {
-  const ghost = { ...rogue, hp: 0, dead: true };
+  const ghost = { ...rogue, hp: 0, dead: true, diedAt: 0 };
   const alone = playTurn(state({ party: party({ p1: fighter, p2: ghost }) }), { kind: 'check', ability: 'str', dc: 5 }, ballots(15, 15));
   assert.equal(alone.lines.length, 1);
   assert.deepEqual(alone.party.sheets.p2, ghost);
@@ -310,4 +310,13 @@ test('every turn outside a fight a netted hero tries to break free, and timed co
   assert.ok(t.lines.includes('Bryn is no longer Poisoned.'));
   const rested = playTurn(state({ party: party({ p1: netted, p2: rogue }) }), { kind: 'rest', rest: 'short' }, []);
   assert.ok(!rested.lines.some((l) => l.includes('Athletics')), 'no tries during a rest');
+});
+
+test('a hero who dies in a turn is marked with the clock at its start; one already marked keeps its time', () => {
+  const frail = party({ p1: { ...fighter, hp: 1, maxHp: 1 }, p2: { ...rogue, hp: 0, dead: true, diedAt: 5 } });
+  const later = { ...frail, clock: 7200 };
+  const fall = playTurn(state({ party: later }), { kind: 'hazard', hazard: 'falling', feet: 60 }, ballots(1, 1));
+  assert.equal(fall.party.sheets.p1.dead, true, fall.lines.join(' | '));
+  assert.equal(fall.party.sheets.p1.diedAt, 7200);
+  assert.equal(fall.party.sheets.p2.diedAt, 5);
 });

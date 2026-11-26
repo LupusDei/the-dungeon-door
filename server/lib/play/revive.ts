@@ -1,14 +1,15 @@
 /**
  * Bringing the dead back in play (SRD 5.2). A hero who dies is Revivified on the spot (within the minute) if a
  * standing party caster can cast Revivify and the party has a 300 GP diamond's worth of gold. A revive hook
- * (a temple, a shrine) raises every dead hero: Raise Dead by a party caster (500 GP diamond) or the temple's
- * service (2,500 GP with the diamond). The richest hero who can pays. Between games, reviveCharacter
+ * (a temple, a shrine) raises every dead hero dead no longer than 10 days (by the game clock): Raise Dead by a
+ * party caster (500 GP diamond) or the temple's service (2,500 GP with the diamond). The richest hero who can pays. Between games, reviveCharacter
  * (lib/characters.ts) buys the temple's Raise Dead.
  */
 import { canCast, DIAMOND, type Revival, revive, TEMPLE_RAISE_DEAD } from '../rules/revive.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { castSpell } from '../rules/spells.ts';
 import type { PartyState } from './state.ts';
+import { clockOf } from './time.ts';
 
 export interface Revived { party: PartyState; lines: string[] }
 type Sheets = Record<string, CharacterSheet>;
@@ -43,9 +44,14 @@ export function revivify(party: PartyState, slain: readonly string[]): Revived {
   return { party: { ...party, sheets }, lines };
 }
 
-/** One dead hero raised by a party caster or the temple, if someone can pay. */
-function raiseOne(sheets: Sheets, id: string): { sheets: Sheets; line: string } {
+/** Raise Dead reaches a creature dead no longer than 10 days (5.2). */
+export const RAISE_DEAD_DAYS = 10;
+const DAY = 86_400;
+
+/** One dead hero raised by a party caster or the temple, if it has not been dead too long and someone can pay. */
+function raiseOne(sheets: Sheets, id: string, now: number): { sheets: Sheets; line: string } {
   const name = sheets[id].name;
+  if (now - (sheets[id].diedAt ?? now) > RAISE_DEAD_DAYS * DAY) return { sheets, line: `${name} has been dead more than ${RAISE_DEAD_DAYS} days: Raise Dead cannot reach them.` };
   const caster = casterOf(sheets, 'raise-dead');
   const cost = caster === undefined ? TEMPLE_RAISE_DEAD : DIAMOND['raise-dead'];
   const purse = payer(sheets, cost);
@@ -62,7 +68,7 @@ export function raiseTheDead(party: PartyState): Revived {
   let sheets = party.sheets;
   const lines: string[] = [];
   for (const id of dead) {
-    const raised = raiseOne(sheets, id);
+    const raised = raiseOne(sheets, id, clockOf(party));
     sheets = raised.sheets;
     lines.push(raised.line);
   }
