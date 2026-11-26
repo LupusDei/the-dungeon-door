@@ -86,6 +86,9 @@ struct DiceLineStyle: Equatable {
             }
         } else if has(" casts ") {
             pick = (has("damage") ? good : .quiet, "wand.and.stars")
+        } else if Self.tellsAWound(text) {
+            // A foe's wounds look different after the round: its hit points are not shown.
+            pick = (byHero ? .bad : .good, "drop.fill")
         } else if has(" dodges") {
             pick = (.quiet, "shield.lefthalf.filled")
         } else if has("death save") {
@@ -125,6 +128,19 @@ struct DiceLineStyle: Equatable {
         }
         tone = pick.0
         symbol = pick.1
+    }
+
+    /// "Goblin Warrior is bleeding.": the engine's words for how hurt a foe looks, by its kind of body.
+    private static let wounds: Set<String> = [
+        "unhurt", "scratched", "bleeding", "bloodied", "staggering", "gasping",
+        "whole", "torn", "gouged", "rent", "crumbling", "falling apart", "coming undone",
+        "intact", "scuffed", "dented", "cracked", "breaking", "failing",
+        "rippling", "seeping", "shrinking", "sloughing", "dissolving",
+    ]
+
+    private static func tellsAWound(_ lowercased: String) -> Bool {
+        guard lowercased.hasSuffix("."), let range = lowercased.range(of: " is ", options: .backwards) else { return false }
+        return wounds.contains(String(lowercased[range.upperBound...].dropLast()))
     }
 
     var tint: Color {
