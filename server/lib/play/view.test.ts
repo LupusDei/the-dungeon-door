@@ -21,10 +21,12 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
     exhaustion: 0, hitDiceLeft: 0, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0],
     resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true, dead: false,
     passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight,
-    gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0, resistances: [], conditions: [],
+    gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0, resistances: [], conditions: [], concentratingOn: null,
   });
   assert.deepEqual([view.party[1].sight, view.party[1].darkvision], ['dim', 60], 'an elf sees the dark room dimly');
   assert.deepEqual(rulesView({ party: { ...party, sheets: { p1: { ...fighter, traits: ['dwarven-resilience'] } } }, combat: null, dungeon: null }, []).party[0].resistances, ['poison']);
+  const caster = { ...fighter, spellcasting: { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: [], prepared: ['bless'], concentratingOn: 'bless' } } as typeof fighter;
+  assert.equal(rulesView({ party: { ...party, sheets: { p1: caster } }, combat: null, dungeon: null }, []).party[0].concentratingOn, 'Bless', 'the spell held, by name');
   assert.deepEqual([view.time, view.light], [{ seconds: 0, label: 'Day 1, 08:00' }, { level: 'dark', source: null }]);
   const lit = rulesView({ party: { ...party, clock: 2460, lit: { source: 'torch', holder: 'p1', left: 1190 } }, combat: null, dungeon: d }, []);
   assert.deepEqual([lit.time, lit.light, lit.party[0].sight], [{ seconds: 2460, label: 'Day 1, 08:41' }, { level: 'bright', source: { name: 'Torch', holder: 'Bryn', minutesLeft: 20 } }, 'clear']);

@@ -211,6 +211,10 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // Perception and Investigation fail and in a fight the hero is Blinded
     darkvision: number                // feet, from the species; 0 without
     resistances: string[]             // damage types the hero takes half of, from species traits: ["poison"]
+    conditions: [{ condition: string; ends: string }]   // carried between scenes, each with how it ends:
+                                      // { "poisoned", "40 minutes" }, { "restrained", "DC 13 Athletics to break free" },
+                                      // "until a long rest", "DC 12 CON save to end"
+    concentratingOn: string | null    // the spell the hero holds by concentration, by name ("Bless")
   }]
   combat: null | {
     round: number
@@ -302,12 +306,28 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   are always Hostile. A parley that works leaves the room to the party (their treasure stays theirs); one
   that fails sours them a step, and Hostile foes attack.
 - **Combat rounds** (`scene.combat`). The choices are always: (a) Attack: your best weapon against the
-  most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none); (c) Dodge.
+  most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none); (c) the third
+  choice, which depends on the moment: **Break Free** (a hero Restrained or Grappled spends the action on
+  its escape check), **Help _name_** (stabilize a dying friend: a Healer's Kit, or DC 10 Medicine), or
+  **Dodge**. The id is always `c`; read its `label` and `detail`.
   Each player's vote is their own hero's action, and the vote's d20 is their attack roll. Monsters act
   by simple rules. Each round is a scene, so `sceneCount` grows by one for each round. When the foes all
   fall, the living heroes split the XP and level up on the spot (average hit points; 5.2 thresholds). If
   every hero is down, the next scene is the epilogue. A fight still going after 10 rounds ends with the
   foes fleeing.
+  - **Monsters fight by their stat blocks.** Multiattack makes each listed attack (a hydra one per head);
+    heroes with Extra Attack swing twice (three or four times at higher Fighter levels), later swings
+    at the most wounded foe still up. A monster's save abilities (a dragon's breath, a gaze) are used
+    when ready: Recharge 5–6 is rolled at the start of its turn ("Recharge" line), "1/Day" means once per
+    fight; each caught hero saves, half on a success where the text says so, and a lasting effect
+    (Poisoned, Paralyzed, Restrained…) sticks with its own way to end. Attack riders (a ghoul's paralyzing
+    claws, a spider's web, a grapple) work the same way. A monster that can Disengage as a Bonus Action
+    flees without Opportunity Attacks. Monsters prefer a hero who isn't Dodging.
+  - **Conditions and concentration.** Conditions from saves, traps and riders stay on the hero after the
+    fight (`party[].conditions`) until they end: by time, at a long rest, by a save at the end of each of
+    the hero's turns, or by breaking free. A concentrating hero makes a CON save each time it is hit
+    (DC 10 or half the damage) and loses the spell on a failure, at 0 HP or when Incapacitated; the spell
+    ends with the fight. Species resistances halve damage of their types.
   - **Area spells** catch several foes, the most wounded first: 1 + radius/5 for a sphere, cylinder or
     emanation, 1 + size/10 for a cone or cube, 1 + length/30 for a line. Each makes its own save.
   - **Potions.** A hero at half HP or less who carries a healing potion drinks the least of them first,
@@ -319,7 +339,8 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   - **Death.** When the fight ends, a hero at 0 HP is stabilized by a friend (Spare the Dying, a Healer's
     Kit, or a DC 10 Medicine check) or rolls death saves. A slain hero is dead (`dead: true`) unless a
     standing party caster can cast Revivify and someone has 300 gp for the diamond. The same happens
-    when a save, trap or hazard drops a hero outside a fight.
+    when a save, trap or hazard drops a hero outside a fight. Raise Dead (the `revive` choice) reaches
+    only heroes dead 10 days or less by the game clock.
   - **Written for you.** In a combat round each caller gets their own `choices`: the same three ids, with
     `label` and `detail` saying what their hero will do ("Attack with Greatsword" / "+5 to hit, 2d6+3
     slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them. An area spell names
@@ -331,6 +352,10 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     If no hero can act the round resolves at once. The host can still `advance` with no votes in.
   - **One picture per fight.** The round that begins a fight is painted; later rounds of the same fight
     carry the same `imageUrl` (it may still be null for a moment while that painting finishes).
+- **Food, water and gear.** Each morning on the clock (every 24 hours) every hero eats a Ration; without
+  one they go hungry (5.2 malnutrition: exhaustion after a few days), and without a Waterskin they suffer
+  dehydration. Starting packs (Dungeoneer's, Explorer's, …) are opened into their contents, so torches,
+  oil and rations show in `inventory` and are used.
 - **Rests.** Short rest: heroes spend hit dice until healed or out of dice, features recharge, and
   warlocks get pact slots back. Long rest: full HP, all hit dice, slots and features, and 1 exhaustion
   removed. A hero at 0 HP regains 1 HP first.

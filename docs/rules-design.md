@@ -331,10 +331,67 @@ All SRD 5.2 unless marked **original** (our own rules, CC0, for what 5.2 leaves 
   temple (2,000 gp service + diamond) through the revive hook, or between games through
   `POST /api/characters/revive`.
 
-Simplifications, for later: resistances and immunities are not on the hero's sheet (so heat and cold
-resistance don't spare a hero); Poisoned and other conditions are not tracked outside combat; fleeing
-foes don't Disengage; the 1-minute and 10-day revival windows are not timed (the game has no clock);
-diamonds are paid in gold rather than carried.
+Phase 3's simplifications (no resistances, no conditions outside combat, no Disengage, no clock for the
+revival windows) are lifted in Phase 4. Diamonds are still paid in gold rather than carried.
+
+## Phase 4: time, light, corridors, conditions, the rest of combat
+
+All SRD 5.2 unless marked **original**. Every new piece of state is an optional JSON field on the party or
+the sheet, so games and characters stored before Phase 4 load unchanged (no migration).
+
+- **The clock** (`play/time.ts`, `party.clock`, seconds from 08:00 on day 1). A choice takes ten minutes
+  (**original**), a short rest an hour, a long rest eight, a fight six seconds a round. Time ends timed
+  conditions, burns the light and brings the mornings.
+- **Light and sight** (`rules/light.ts`). Torch (1 hour), lamp and lantern (6 hours of oil), candle, the
+  Light cantrip. Where the party's place is not bright, the standing hero with the best light lights it
+  before the turn's action, and the next when it burns out. A dungeon's entrance is dim, its rooms and
+  corridors dark (**original** placement); outdoors follows the hour. Each hero's sight follows from the
+  light and darkvision: dim gives Disadvantage on Perception; none fails Perception and Investigation and
+  Blinds the hero in a fight. Monsters see by their own senses (darkvision, blindsight…) and are Blinded
+  when they can't.
+- **Packs** (`rules/inventory.ts unpacked`). Starting packs are opened into their contents (on new parties,
+  on stored games as they are read, and when a pack is bought), so torches, oil and rations are usable.
+- **Corridors** (`rules/corridors.ts`, **original** tables). Some ways between rooms become a passage,
+  winding passage, junction or short stair (d12). Corridors are areas, not rooms: they don't count against
+  the room total, hold no encounter or treasure, may hold a trap or hazard or a wanderer's spoor (d20),
+  and are passed in the same move. They are rolled from the seed and the two rooms, so the rooms come out
+  as they would without corridors. Explore mode rolls them as doors open.
+- **Wandering monsters** (`play/wandering.ts`, **original** odds on the 5.2 encounter budget). In a
+  dungeon, a d6 every half hour of the clock (a 1), and at once after noise (a fight, a sprung trap: 1–2).
+  Wanderers roll an attitude like any foes.
+- **Food and water** (`play/provisions.ts`). Each morning every hero eats a Ration or goes hungry (5.2
+  malnutrition), and without a Waterskin suffers dehydration. A Waterskin is never emptied (simplified).
+- **Conditions with durations** (`rules/conditions.ts`, `sheet.conditions`). A condition carries how it
+  ends: after a time, at a long rest, by a save at the end of each of the hero's turns, or by an escape
+  check (Restrained by a web, Grappled). Outside a fight an escape is tried free each turn; in a fight it
+  is the hero's action (Break Free).
+- **Resistances** (`rules/defenses.ts`). Species traits (dwarven poison resilience and the like) halve
+  damage of their types, from attacks, spells, traps and hazards.
+- **Concentration** (`play/concentration.ts`). A CON save each time the hero is hit (DC 10 or half the
+  damage); the spell ends on a failure, at 0 HP, when Incapacitated, or when the fight ends.
+- **Multiattack and Extra Attack** (`rules/monsters.ts multiattackOf`). A monster makes each attack its
+  Multiattack lists, padded to the count its text states with its first attack (some SRD entries list
+  fewer than the text says); a hydra attacks once per head. Extra Attack, Two and Three Extra Attacks give
+  heroes their swings. Follow-up attacks go to the most wounded foe still up.
+- **Save abilities** (`rules/powers.ts`). Breath weapons, gazes and the like: Recharge X–6 rolled at the
+  start of the monster's turn, "X/Day" as once per fight (simplified), at-will ones only for monsters with
+  no attacks. The area catches heroes like an area spell; each saves, half on success where the text says,
+  and a lasting effect becomes a timed condition.
+- **Attack riders** (`riderOf`). A hit that forces a save or grapples ("DC 10 CON save or Paralyzed")
+  applies its condition the same way. Creature-type and size limits are ignored; Grappled has no
+  mechanical effect beyond needing to Break Free (simplified).
+- **The third choice** (`play/actions.ts`, **original** for a three-slot vote): Break Free when held,
+  Help to stabilize a dying friend (a Healer's Kit, or DC 10 Medicine), else Dodge.
+- **Fleeing and targeting.** A monster with Disengage as a Bonus Action (goblins) flees without
+  Opportunity Attacks. Monsters prefer heroes who aren't Dodging.
+- **Revival windows.** Revivify is always within its minute (a fight lasts at most ten rounds). Raise Dead
+  reaches only heroes dead 10 days or less by the clock (`sheet.diedAt`); the between-games temple keeps no
+  clock, so it has no window.
+- **Stored 5.1 trap ids** in old dungeons are mapped to their 5.2 ids when a game is loaded.
+
+Still simplified: legendary actions and legendary resistance; Hide, Dash, Ready and Search as combat
+actions; rider creature-type and size limits; subspecies resistances (tiefling legacies, dragonborn
+ancestry) until the sheet records the subspecies; overland travel pace.
 
 ## For the app (the game layer on top)
 

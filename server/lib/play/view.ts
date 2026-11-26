@@ -10,6 +10,7 @@ import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } 
 import { encounterBudget, monsters } from '../rules/monsters.ts';
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
+import { srd } from '../rules/srd.ts';
 import { waitingFoes } from './delve.ts';
 import { foesNamed } from './hooks.ts';
 import type { Attitude } from './parley.ts';
@@ -42,6 +43,8 @@ export interface HeroView {
   resistances: string[];
   /** Conditions carried outside a fight, each with how it ends: "1 hour", "until a long rest", "DC 10 Athletics to break free". */
   conditions: { condition: string; ends: string }[];
+  /** The spell the hero holds by concentration ("Bless"), or null. */
+  concentratingOn: string | null;
 }
 
 const WHEN: { [K in TimedCondition['until']['kind']]: (u: Extract<TimedCondition['until'], { kind: K }>) => string } = {
@@ -87,7 +90,13 @@ const heroView = (playerId: string, s: CharacterSheet, light: LightLevel): HeroV
   resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
   ...passives(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
   ...load(s), sight: sightOf(s, light), darkvision: darkvision(s), resistances: heroResistances(s), conditions: conditionViews(s),
+  concentratingOn: held(s),
 });
+
+const held = (s: CharacterSheet) => {
+  const id = s.spellcasting?.concentratingOn;
+  return id ? srd().spells.get(id)!.name : null;
+};
 
 const passives = (s: CharacterSheet) => ({
   passivePerception: passiveScore(s, { ability: 'wis', skill: 'perception' }), passiveInsight: passiveScore(s, { ability: 'wis', skill: 'insight' }),

@@ -59,7 +59,11 @@ The engine owns the numbers; you propose and narrate. For a game from before the
 `resolution.rules` are null and nothing below applies.
 
 - **`ctx.rules`** (`RulesContext`):
-  - `party`: each hero's level, HP, AC, exhaustion and slots left, and whether they are dead.
+  - `party`: each hero's level, HP, AC, exhaustion and slots left, whether they are dead, what they can
+    see here (`sees`: clear, dim or none) and the conditions they carry with how each ends
+    ("restrained (DC 13 Athletics to break free)").
+  - `time` and `light`: the clock ("Day 1, 08:40") and the light the party carries. Describe only what
+    the heroes can see.
   - `combat`: the round and every combatant's HP and status, or null.
   - `dungeon`: the area the party is in (its purpose, what is there, its exits by id, any foes waiting
     there and their attitude), or null.
@@ -90,8 +94,12 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `success` for a check or save, and `fight` ('started' | 'victory' | 'defeat' | 'fled' | null).
   - Your `outcome` and narration must match these results: color them, never change them, and still
     use no numbers in the story.
+- **Corridors and wanderers.** Exits may lead through corridors (areas with no purpose, passed on the way
+  and not counted as rooms). The engine rolls for wandering monsters by the clock and after noise; its lines
+  say who comes. Don't invent wandering monsters yourself.
 - **Combat rounds.** While `ctx.rules.combat` is set, the engine replaces your choices with Attack, Cast
-  and Dodge. Narrate the round from `resolution.rules.lines` and set up the next one. Still return
+  and a third choice (Break Free, Help a dying friend, or Dodge). Monsters use their Multiattack, their
+  save abilities when recharged and their attack riders; the lines say what happened. Narrate the round from `resolution.rules.lines` and set up the next one. Still return
   three choices; they are ignored.
 
 ## Rules the engine enforces (so you don't have to)
