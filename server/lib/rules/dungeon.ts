@@ -8,7 +8,7 @@ import { parseDice, rollDice } from './dice.ts';
 import { type Amount, dungeonTables, type MapSize, rollOn, type StockKind } from './dungeonTables.ts';
 import { buildEncounter, type Encounter } from './encounter.ts';
 import type { Difficulty } from './monsters.ts';
-import { type Rng, pick, seededRng } from './rng.ts';
+import { type Rng, pick, sample, seededRng } from './rng.ts';
 import { once, parseTable } from './srd.ts';
 
 export interface Treasure { sp: number; gp: number; gems: number; jewellery: number; magicItem: string | null }
@@ -53,6 +53,8 @@ export interface StockingContext { levels: number[]; depth: number; difficulty: 
 
 const magicItems = once(() => parseTable('magicItems', z.object({ name: z.string(), rarity: z.string() }), magicItemsJson));
 const RARE_FROM_DEPTH = 4;
+/** A fixed map is one level deep. */
+const FIXED_DEPTH = 1;
 
 /** Magic items fit for a dungeon level: common and uncommon, and rare ones from level 4. */
 export function magicItemPool(depth: number): string[] {
@@ -118,20 +120,26 @@ function connect(rng: Rng, nodes: Record<string, DungeonNode>, a: string, b: str
   nodes[b].exits.push({ id: a, connection, to: a });
 }
 
-/** The fixed map's shape: room ids in order (entrance, path, goal, branches) and its edges. */
-function layout(rng: Rng, size: MapSize): { ids: string[]; goal: string; edges: [string, string][] } {
+/** Pairs of distinct rooms with no way between them yet: where a loop may go. */
+function loopCandidates(ids: string[], edges: [string, string][]): [string, string][] {
+  const linked = new Set(edges.flatMap(([a, b]) => [`${a}|${b}`, `${b}|${a}`]));
+  return ids.flatMap((a, i) => ids.slice(i + 1).filter((b) => !linked.has(`${a}|${b}`)).map((b): [string, string] => [a, b]));
+}
+
+/**
+ * The fixed map's shape: room ids (entrance r0, the path, the goal, then branches) and its edges: the
+ * path, each branch off a path room (off the entrance too on a short map, never off the goal), then loops.
+ */
+export function layout(rng: Rng, size: MapSize): { ids: string[]; goal: string; edges: [string, string][] } {
   const plan = dungeonTables().sizes[size];
   const ids = Array.from({ length: plan.rooms }, (_, i) => `r${i}`);
   const path = ids.slice(0, plan.path + 2);
-  const edges: [string, string][] = path.slice(1).map((id, i) => [path[i], id]);
   const anchors = size === 'short' ? path.slice(0, -1) : path.slice(1, -1);
-  for (const id of ids.slice(path.length)) edges.push([pick(rng, anchors), id]);
-  const adjacent = (a: string, b: string) => a === b || edges.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
-  for (let loops = 0, tries = 0; loops < plan.loops && tries < 100; tries++) {
-    const [a, b] = [pick(rng, ids), pick(rng, ids)];
-    if (!adjacent(a, b)) edges.push([a, b]), loops++;
-  }
-  return { ids, goal: path[path.length - 1], edges };
+  const tree: [string, string][] = [
+    ...path.slice(1).map((id, i): [string, string] => [path[i], id]),
+    ...ids.slice(path.length).map((id): [string, string] => [pick(rng, anchors), id]),
+  ];
+  return { ids, goal: path[path.length - 1], edges: [...tree, ...sample(rng, loopCandidates(ids, tree), plan.loops)] };
 }
 
 /** A whole map at once, from the seed: 5, 7 or 9 rooms, the same every time for the same seed. */
@@ -141,12 +149,12 @@ export function generateDungeon(seed: number, size: MapSize, levels: number[]): 
   const kind = rollOn(rng, tables.kinds);
   const purposes = tables.purposes[kind.id];
   const { ids, goal, edges } = layout(rng, size);
-  const context = { levels, depth: 1, difficulty: 'moderate' as const };
+  const context = { levels, depth: FIXED_DEPTH, difficulty: 'moderate' as const };
   const nodes: Record<string, DungeonNode> = {};
   for (const id of ids) {
-    if (id === 'r0') nodes[id] = newRoom(rng, id, 1, 'Threshold', emptyContents(rng));
-    else if (id === goal) nodes[id] = newRoom(rng, id, 1, purposes[purposes.length - 1], goalContents(rng, context));
-    else nodes[id] = newRoom(rng, id, 1, pick(rng, purposes.slice(0, -1)), stockRoom(rng, context));
+    if (id === 'r0') nodes[id] = newRoom(rng, id, FIXED_DEPTH, 'Threshold', emptyContents(rng));
+    else if (id === goal) nodes[id] = newRoom(rng, id, FIXED_DEPTH, purposes[purposes.length - 1], goalContents(rng, context));
+    else nodes[id] = newRoom(rng, id, FIXED_DEPTH, pick(rng, purposes.slice(0, -1)), stockRoom(rng, context));
   }
   for (const [a, b] of edges) connect(rng, nodes, a, b);
   return { version: 1, mode: 'fixed', seed, kind: kind.name, levels, entrance: 'r0', goal, nodes };
