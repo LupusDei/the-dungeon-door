@@ -2,11 +2,12 @@ import { randomInt } from 'node:crypto';
 import { renderImage, SCENE_STYLE } from './ai.ts';
 import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
-import { ownCharacter } from './characters.ts';
+import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
-import { choiceView, dungeonMode, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import { choiceView, dungeonMode, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
 import type { RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
+import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { badRequest, conflict, forbidden, notFound } from './http.ts';
@@ -29,7 +30,8 @@ const clip = (text: string, max = 500) => (text.length > max ? `${text.slice(0, 
 
 /** The game's dice: each vote's d20, and the seed of a rules game's dice. Tests may set their own. */
 export interface Dice { d20(): number; seed(): number }
-const RANDOM_DICE: Dice = { d20: () => randomInt(1, 21), seed: () => randomInt(2 ** 31) };
+/** DD_SEED fixes a rules game's dice (local dev: the same map and the same fights every time). */
+const RANDOM_DICE: Dice = { d20: () => randomInt(1, 21), seed: () => Number(process.env.DD_SEED) || randomInt(2 ** 31) };
 let dice = RANDOM_DICE;
 export function setDice(next: Dice = RANDOM_DICE): void {
   dice = next;
@@ -38,14 +40,21 @@ export function setDice(next: Dice = RANDOM_DICE): void {
 // ---------------------------------------------------------------------------------------------------------
 // Views
 
+/** A combat round's choices are written for the caller's own hero (play/your-turn.ts); a resolved scene keeps what was stored. */
+function choicesFor(game: Game, current: StoredScene, playerId: string): SceneView['choices'] {
+  if (!game.combat || !game.party || current.outcome !== null || current.isFinale) return current.choices.map(choiceView);
+  return canAct(game.combat, playerId) ? yourChoices(game.combat, game.party.sheets[playerId], playerId) : anyonesChoices();
+}
+
 function sceneView(game: Game, current: StoredScene, playerId: string): SceneView {
   return {
     index: current.index,
     title: current.title,
     narration: current.narration,
     imageUrl: current.imageUrl,
-    choices: current.choices.map(choiceView),
+    choices: choicesFor(game, current, playerId),
     combat: game.combat !== null,
+    canAct: canAct(game.combat, playerId),
     isFinale: current.isFinale,
     votes: current.votes,
     myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
@@ -60,6 +69,12 @@ function rulesOf(game: Game): RulesView | null {
   return rulesView(state, results);
 }
 
+/** The player's character as it stands in this game: its live sheet once the rules engine holds one. */
+function heroInGame(game: Game, { playerId, character }: GamePlayer): Character {
+  const live = game.party && Object.hasOwn(game.party.sheets, playerId) ? game.party.sheets[playerId] : character.sheet;
+  return upgradeCharacter({ ...character, sheet: live });
+}
+
 export function toState(game: Game, playerId: string, messages: Message[]): GameState {
   const current = game.scenes.find((s) => s.index === game.sceneIndex) ?? null;
   return {
@@ -69,7 +84,7 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
     dungeonMaster: game.dungeonMaster,
     title: game.title,
     sceneCount: game.sceneCount,
-    players: game.players.map((p) => ({ playerId: p.playerId, character: p.character, isHost: p.playerId === game.hostId, joinedAt: p.joinedAt })),
+    players: game.players.map((p) => ({ playerId: p.playerId, character: heroInGame(game, p), isHost: p.playerId === game.hostId, joinedAt: p.joinedAt })),
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
       .filter((s) => s.outcome !== null)
@@ -138,7 +153,7 @@ export async function createGame(playerId: string, characterId: unknown, dungeon
   }
   const character = await livingCharacter(playerId, characterId);
   const store = getStore();
-  const host: GamePlayer = { playerId, character, joinedAt: new Date().toISOString() };
+  const host: GamePlayer = { playerId, character: storable(character), joinedAt: new Date().toISOString() };
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = newCode();
     const created = await store.createGame({
@@ -170,7 +185,7 @@ export async function joinGame(code: string, playerId: string, characterId: unkn
   if (existing?.character.id === character.id && existing.character.updatedAt === character.updatedAt) {
     return viewGame(code, playerId);
   }
-  const joined = await getStore().upsertPlayer(code, { playerId, character, joinedAt: new Date().toISOString() }, MAX_PLAYERS);
+  const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString() }, MAX_PLAYERS);
   if (!joined) throw conflict('could not join: the game started or the party is full');
   if (!existing) await system(code, `${character.name} joined the party.`);
   else if (existing.character.id !== character.id) await system(code, `${character.name} takes ${existing.character.name}'s place.`);
@@ -247,6 +262,7 @@ export async function castVote(code: string, playerId: string, sceneIndex: unkno
   member(game, playerId);
   if (game.status !== 'voting') throw conflict(`can't vote: the game is ${game.status}`);
   if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
+  if (!canAct(game.combat, playerId)) return viewGame(code, playerId); // a fallen hero has no action: nothing to record
   const vote = await getStore().castVote(code, sceneIndex, playerId, choiceId as ChoiceId, dice.d20());
   if (!vote) throw conflict('voting on that scene has closed');
   await resolveIfAllVoted(code, sceneIndex, origin);
@@ -259,7 +275,8 @@ export async function advanceGame(code: string, playerId: string, origin: string
   requireHost(game, playerId);
   if (game.status !== 'voting') throw conflict(`can't advance: the game is ${game.status}`);
   const scene = game.scenes.find((s) => s.index === game.sceneIndex);
-  if (!scene?.votes.length) throw conflict('nobody has voted yet');
+  // A combat round needs no votes: a hero without one dodges.
+  if (!game.combat && !scene?.votes.length) throw conflict('nobody has voted yet');
   await beginResolve(code, game.sceneIndex, origin);
   return viewGame(code, playerId);
 }
@@ -270,7 +287,9 @@ async function resolveIfAllVoted(code: string, sceneIndex: number, origin: strin
   const scene = game.scenes.find((s) => s.index === sceneIndex);
   if (!scene) return;
   const voted = new Set(scene.votes.map((v) => v.playerId));
-  if (game.players.every((p) => voted.has(p.playerId))) await beginResolve(code, sceneIndex, origin);
+  // A combat round waits only for the heroes that can act.
+  const awaited = game.players.filter((p) => canAct(game.combat, p.playerId));
+  if (awaited.every((p) => voted.has(p.playerId))) await beginResolve(code, sceneIndex, origin);
 }
 
 /** voting → resolving, exactly once per scene (compare-and-set); the winner kicks off the DM. */
@@ -406,17 +425,46 @@ interface Plan {
   patch: GamePatch;
   /** The engine's dice lines, posted to the chat. */
   lines: string[];
+  /** The next scene is a later round of a fight already under way: it carries the fight's picture instead of a new one. */
+  sharesPicture: boolean;
+}
+
+/**
+ * The engine threw. A table must never be stranded by a rules error (the game would sit in "resolving" for
+ * good), so the scene resolves without the engine: a fight under way breaks off, a choice is settled
+ * without dice, the chat says so, and the error is logged for whoever maintains the engine.
+ */
+function withoutTheEngine(state: RulesState, resolution: Resolution, error: unknown): EngineStep {
+  console.error('rules engine failed; resolving the scene without it:', error);
+  const inFight = state.combat !== null;
+  const lines = [inFight ? 'The rules engine stumbled: the fight breaks off.' : 'The rules engine stumbled: this choice is settled without dice.'];
+  const chosen = inFight ? null : (resolution.leaders[0] ?? null);
+  return {
+    state: { party: { ...state.party, results: lines }, combat: null, dungeon: state.dungeon },
+    resolution: { ...resolution, leaders: chosen ? [chosen] : [], rules: { chosen, lines, success: null, fight: null } },
+    fight: null,
+    round: inFight,
+  };
+}
+
+function safeStep(state: RulesState, scene: StoredScene, resolution: Resolution): EngineStep {
+  try {
+    return engineStep(state, scene, resolution);
+  } catch (error) {
+    return withoutTheEngine(state, resolution, error);
+  }
 }
 
 function planOf(game: Game, scene: StoredScene): Plan {
   const resolution = resolutionOf(game, scene);
   const next = scene.index + 1;
   const state = rulesStateOf(game);
-  if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [] };
-  const step = engineStep(state, scene, resolution);
+  if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [], sharesPicture: false };
+  const step = safeStep(state, scene, resolution);
   const sceneCount = sceneCountAfter(step, next, game.sceneCount);
   const { party } = step.state;
-  return { resolution: step.resolution, next, isFinale: next >= sceneCount - 1, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results! };
+  const sharesPicture = step.round && step.state.combat !== null;
+  return { resolution: step.resolution, next, isFinale: next >= sceneCount - 1, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, sharesPicture };
 }
 
 /** The next scene's choices: a fight's Attack, Cast and Dodge, or the DM's. */
@@ -437,8 +485,8 @@ async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
     index: plan.next,
     title: sceneTitle(draft, plan.isFinale ? 'Epilogue' : `Scene ${plan.next + 1}`),
     narration: draft.narration.trim(),
-    imagePrompt: draft.imagePrompt,
-    imageUrl: null,
+    imagePrompt: plan.sharesPicture ? SHARED_PICTURE : draft.imagePrompt,
+    imageUrl: plan.sharesPicture ? scene.imageUrl : null,
     choices: plan.isFinale ? [] : nextChoices(plan, draft as NextScene),
     isFinale: plan.isFinale,
   });
@@ -471,7 +519,34 @@ async function resolveScene(code: string, sceneIndex: number, origin: string): P
   const status = plan.isFinale ? 'ended' : 'voting';
   if (!(await store.updateGame(code, { status: 'resolving', sceneIndex }, { status, sceneIndex: plan.next, ...plan.patch }))) return;
   await announce(game, plan, draft);
-  await paintScene(code, plan.next, draft, origin);
+  if (plan.sharesPicture) await catchUpPicture(code, sceneIndex, plan.next);
+  else await paintScene(code, plan.next, draft, origin);
+}
+
+/**
+ * One picture per fight: paintings are most of what a game costs, and a fight is one place. The round that
+ * begins it is painted; each later round is stored with this in place of an image prompt and carries the
+ * same picture.
+ */
+const SHARED_PICTURE = '';
+
+/** Sets a scene's picture and hands it on to the later rounds of the same fight that are waiting for it. */
+export async function shareSceneImage(code: string, index: number, url: string): Promise<void> {
+  const store = getStore();
+  await store.setSceneImage(code, index, url);
+  const later = ((await store.getGame(code))?.scenes ?? []).filter((s) => s.index > index).sort((a, b) => a.index - b.index);
+  for (const s of later) {
+    if (s.imagePrompt !== SHARED_PICTURE || s.isFinale) return;
+    if (s.imageUrl === null) await store.setSceneImage(code, s.index, url);
+  }
+}
+
+/** The fight's picture landed between reading the last round and writing this one: take it now. */
+async function catchUpPicture(code: string, from: number, to: number): Promise<void> {
+  const store = getStore();
+  const scenes = (await store.getGame(code))?.scenes ?? [];
+  const url = scenes.find((s) => s.index === from)?.imageUrl;
+  if (url && scenes.find((s) => s.index === to)?.imageUrl === null) await store.setSceneImage(code, to, url);
 }
 
 /** The DM threw: votes reopen (once) and the table hears about it. */
@@ -518,7 +593,7 @@ async function paintScene(code: string, index: number, text: SceneText, origin: 
       `The characters who appear:\n${cast}`;
     const image = await renderImage({ prompt, references, aspectRatio: '3:2', seed: `${code}#${index}:${text.title}` });
     const url = await images.save(image, 'scenes', origin);
-    await store.setSceneImage(code, index, url);
+    await shareSceneImage(code, index, url);
   } catch (error) {
     console.error(`painting ${code}#${index} failed:`, error);
   }

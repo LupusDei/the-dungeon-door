@@ -118,7 +118,7 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   assert.equal(seen.at(-1)!.resolution!.rules!.fight, 'started');
   assert.ok(seen.at(-1)!.ctx.rules!.combat, 'the DM sees the fight');
   assert.equal(state.scene!.combat, true);
-  assert.deepEqual(state.scene!.choices.map((c) => c.label), ['Attack', 'Cast', 'Dodge']);
+  assert.match(state.scene!.choices.map((c) => c.label).join(' | '), /^Attack with .+ \| (Attack with|Cast) .+ \| Dodge$/, 'written for the caller’s hero');
   assert.equal(state.rules!.combat!.round, 1);
   assert.equal(state.sceneCount, 3, 'scene 1 is a round; the epilogue is still to come');
   assert.match(state.messages.filter((m) => m.kind === 'system').at(-1)!.text, /^A fight begins: Rat\. Initiative: /);

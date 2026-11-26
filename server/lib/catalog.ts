@@ -176,6 +176,21 @@ export const DUNGEON_MASTERS: DungeonMasterArchetype[] = [
 
 export const DEFAULT_DUNGEON_MASTER = 'chronicler';
 
+/** What the forge says about each SRD 5.2 background. One without a line here still shows, by name alone. */
+const BACKGROUND_BLURBS: Readonly<Record<string, string>> = {
+  acolyte: 'Raised in a temple among rites and old books. You know the gods\' business, and how to keep a vigil.',
+  criminal: 'You made your living in back alleys: quick hands, quiet feet, and a nose for trouble before it arrives.',
+  sage: 'Years among scrolls and strange lore. If it was ever written down, you have read it or know who did.',
+  soldier: 'Trained for war and tested in it. You know drill, discipline, and what a shield wall is worth.',
+};
+
+/** The kinds of game a host can start, by the `dungeon` of POST …/start (lib/play/table.ts DUNGEON_MODES). */
+export const DUNGEONS: (Option & { symbol: string })[] = [
+  { id: 'none', name: 'A tale told', symbol: 'book.pages.fill', blurb: 'The dungeon master spins a short adventure, scene by scene. Your skills decide how each choice goes.' },
+  { id: 'fixed', name: 'Delve a dungeon', symbol: 'map.fill', blurb: 'A mapped dungeon of rooms and doors, with monsters, traps and treasure behind them. Longer adventures get bigger maps.' },
+  { id: 'explore', name: 'Explore the deep', symbol: 'flashlight.on.fill', blurb: 'A dungeon that grows where you go: each door opens on a room nobody has seen, the dungeon master included.' },
+];
+
 export function publicCatalog() {
   return {
     races: RACES,
@@ -183,7 +198,8 @@ export function publicCatalog() {
     temperaments: TEMPERAMENTS,
     genders: GENDERS,
     alignments: ALIGNMENTS,
-    backgrounds: [...srd().backgrounds.values()].map(({ id, name }) => ({ id, name })),
+    backgrounds: [...srd().backgrounds.values()].map(({ id, name, abilities }) => ({ id, name, blurb: BACKGROUND_BLURBS[id] ?? '', abilities })),
+    dungeons: DUNGEONS,
     dungeonMasters: DUNGEON_MASTERS.map(({ id, name, tagline, description, symbol, accent }) => ({
       id, name, tagline, description, symbol, accent,
     })),

@@ -51,6 +51,9 @@ curl -s -X POST localhost:3000/api/games -H "x-dd-player: $P" -H 'content-type: 
 ```bash
 npm run typecheck
 npm test            # node --test: full games on the in-memory store with fake AI
+npm run playtest    # bots play whole games through the API handlers: scenes, fights, deaths, anything that broke
+npm run fights      # the fights a mapped dungeon rolls, for typical parties: won, fled, lost, heroes dead
+npm run dm:check    # REAL model, text only (~5 cents): the DM accepts the schema and writes hooks the engine takes
 ```
 
 ## Configuration
@@ -65,6 +68,8 @@ npm test            # node --test: full games on the in-memory store with fake A
 | `DD_IMAGE_API` | Force `text` (generateText with image output) or `image` (generateImage) if auto-detection is wrong. |
 | `DD_FAKE_AI=1` | No AI calls at all: deterministic fake DM, appearances and placeholder PNGs. |
 | `DD_FAKE_DELAY_MS` | Fake latency per fake AI call. |
+| `DD_SEED` | Local dev: fixes a rules game's dice, so the same party gets the same map and fights every time. |
+| `DD_FAKE_FIGHT` | Local dev, with the fake DM: monster ids (comma-separated) for a fight offered as the first choice of every story scene, e.g. `goblin-warrior,goblin-warrior`. |
 | `VERCEL_OIDC_TOKEN` / `AI_GATEWAY_API_KEY` | AI Gateway auth (automatic on Vercel deployments). |
 
 ## Layout

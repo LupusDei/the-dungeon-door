@@ -55,7 +55,8 @@ export function startFight(party: PartyState, monsterIds: readonly string[]): { 
 
 const living = (c: Combatant) => c.status !== 'dead';
 
-function mostWounded(combat: CombatState, side: Combatant['side']): Combatant {
+/** The living combatant on the other side with the fewest hit points. */
+export function mostWounded(combat: CombatState, side: Combatant['side']): Combatant {
   return Object.values(combat.combatants).filter((c) => c.side !== side && living(c)).reduce((low, c) => (c.hp < low.hp ? c : low));
 }
 
@@ -74,9 +75,11 @@ export function bestSpell(sheet: CharacterSheet): SrdSpell | null {
   return damaging.reduce<SrdSpell | null>((best, s) => (best === null || spellScore(s, sheet) > spellScore(best, sheet) ? s : best), null);
 }
 
+/** The attack with the best bonus to hit. */
+export const bestWeapon = (me: Combatant) => me.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best));
+
 function attackAction(combat: CombatState, me: Combatant, natural: number): Action {
-  const weapon = me.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best));
-  return { kind: 'attack', attack: weapon.name, target: mostWounded(combat, me.side).id, natural };
+  return { kind: 'attack', attack: bestWeapon(me).name, target: mostWounded(combat, me.side).id, natural };
 }
 
 /** What a hero does on its turn for its vote. A spell spends its slot on the returned sheet. */

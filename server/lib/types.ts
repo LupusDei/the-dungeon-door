@@ -1,4 +1,5 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
+import type { AttackView } from './attacks.ts';
 import type { RulesHook } from './play/hooks.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { RulesView } from './play/view.ts';
@@ -19,12 +20,14 @@ export interface Character {
   portraitUrl: string | null;
   /** The rules engine's numbers (SRD 5.2), built and kept by the server. */
   sheet: CharacterSheet;
+  /** What the hero can attack with, worked out from the sheet on every read (lib/attacks.ts). */
+  attacks: AttackView[];
   createdAt: string;
   updatedAt: string;
 }
 
 /** A character as stored: heroes saved before the rules engine have no sheet (and may be a half-orc or half-elf). */
-export type StoredCharacter = Omit<Character, 'sheet'> & { sheet?: CharacterSheet };
+export type StoredCharacter = Omit<Character, 'sheet' | 'attacks'> & { sheet?: CharacterSheet };
 
 export type GameStatus = 'lobby' | 'preparing' | 'voting' | 'resolving' | 'ended';
 export type ChoiceId = 'a' | 'b' | 'c';
@@ -114,8 +117,10 @@ export interface SceneView {
   narration: string;
   imageUrl: string | null;
   choices: ChoiceView[];
-  /** A combat round: each vote is that player's own hero's action. */
+  /** A combat round: each vote is that player's own hero's action, and the choices are written for the caller's hero. */
   combat: boolean;
+  /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
+  canAct: boolean;
   isFinale: boolean;
   votes: Vote[];
   myVote: ChoiceId | null;
@@ -137,7 +142,8 @@ export interface GameState {
   dungeonMaster: string;
   title: string | null;
   sceneCount: number;
-  players: { playerId: string; character: StoredCharacter; isHost: boolean; joinedAt: string }[];
+  /** In a rules game each character is the hero as it stands in the game (live sheet). */
+  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string }[];
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];

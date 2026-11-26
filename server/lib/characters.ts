@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { heroAttacks } from './attacks.ts';
 import { isValid } from './catalog.ts';
 import { badRequest, forbidden, isUUID, notFound } from './http.ts';
 import { buildCharacter, quickChoices } from './rules/character.ts';
@@ -27,7 +28,12 @@ export function heroSheet({ id, name, race, characterClass, backgroundId }: Buil
 export function upgradeCharacter(stored: StoredCharacter): Character {
   const race = currentRace(stored.race) as string;
   const { sheet = heroSheet({ ...stored, race }) } = stored;
-  return { ...stored, race, sheet };
+  return { ...stored, race, sheet, attacks: heroAttacks(sheet) };
+}
+
+/** What the store keeps of a character: everything but what is worked out on read. */
+export function storable({ attacks: _, ...stored }: Character | (StoredCharacter & { attacks?: unknown })): StoredCharacter {
+  return stored;
 }
 
 const sameBuild = (sheet: CharacterSheet, b: Build) =>
@@ -56,12 +62,18 @@ export const CharacterLookInput = z.object({
   description: z.string().max(600).default(''),
 });
 
+const heroId = z.string().refine(isUUID, { message: 'id must be a UUID' });
+const backgroundId = z.string().refine((id) => srd().backgrounds.has(id), { message: 'unknown background' }).optional();
+
 const CharacterInput = CharacterLookInput.extend({
-  id: z.string().refine(isUUID, { message: 'id must be a UUID' }),
+  id: heroId,
   appearance: z.string().max(2000).nullable().default(null),
   portraitUrl: z.url({ protocol: /^https?$/ }).max(2000).nullable().default(null),
-  backgroundId: z.string().refine((id) => srd().backgrounds.has(id), { message: 'unknown background' }).optional(),
+  backgroundId,
 });
+
+/** What a sheet is built from (POST /api/sheet): the same checks as a save. */
+const BuildInput = CharacterLookInput.pick({ name: true, race: true, characterClass: true }).extend({ id: heroId, backgroundId });
 
 /** Formats the first zod issue as a short 400 message, e.g. "race: unknown race". */
 export function zodMessage(error: z.ZodError): string {
@@ -97,6 +109,14 @@ export async function saveCharacter(playerId: string, body: unknown): Promise<Ch
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   }));
+}
+
+/** POST /api/sheet — the level-1 sheet a save would build for this hero; nothing is stored. */
+export function previewSheet(body: unknown): Pick<Character, 'sheet' | 'attacks'> {
+  const parsed = BuildInput.safeParse(body);
+  if (!parsed.success) throw badRequest(zodMessage(parsed.error));
+  const sheet = heroSheet(parsed.data);
+  return { sheet, attacks: heroAttacks(sheet) };
 }
 
 export async function listCharacters(playerId: string): Promise<Character[]> {

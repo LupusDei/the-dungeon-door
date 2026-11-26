@@ -12,12 +12,19 @@ const PLACES = ['a drowned chapel', 'a goblin market under the bridge', 'the clo
  * In a rules-engine game: go on (in a dungeon) or force the way, look around, talk. It never picks a fight
  * itself (tests that want one register a DM that does), so a fake game keeps the length it was given.
  */
+const STORY_HOOKS = [
+  { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 },
+  { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
+];
+
 function hooksFor(rules: RulesContext) {
   const exit = rules.dungeon?.exits[0];
+  // Local dev only: DD_FAKE_FIGHT=goblin-warrior,goblin-warrior makes the first choice that fight.
+  const brawl = process.env.DD_FAKE_FIGHT?.split(',').filter((id) => id);
+  if (brawl?.length && !exit) return [{ kind: 'fight' as const, monsters: brawl }, ...STORY_HOOKS];
   return [
     exit ? { kind: 'move' as const, exit: exit.id } : { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', dc: 10 },
-    { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 },
-    { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
+    ...STORY_HOOKS,
   ];
 }
 

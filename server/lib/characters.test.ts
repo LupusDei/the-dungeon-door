@@ -101,5 +101,5 @@ test('the old race ids are still accepted on save, as their SRD 5.2 species', as
 
 test('the catalog lists the SRD 5.2 backgrounds', async () => {
   const { body } = await call(catalogApi.GET, '/api/catalog');
-  assert.deepEqual(body.backgrounds, [...srd().backgrounds.values()].map((b) => ({ id: b.id, name: b.name })));
+  assert.deepEqual(body.backgrounds.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name })), [...srd().backgrounds.values()].map((b) => ({ id: b.id, name: b.name })));
 });

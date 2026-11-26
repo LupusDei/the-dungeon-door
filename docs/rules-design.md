@@ -283,7 +283,39 @@ Wired in after Justin merged the engine PRs (see docs/api.md and docs/dungeon-ma
 4. The API shows `GameState.rules`, `Choice.rules` and `Scene.combat`.
 
 Still to come: area spells hit one target; the trap names come from the SRD 5.1 table (the numbers use
-the 5.2 scaling); a fallen hero is not kept dead.
+the 5.2 scaling).
+
+## For the app (the game layer on top)
+
+What the game adds around the engine so the app can show it (Justin's side; `docs/api.md` has the shapes):
+
+- **Attacks** (`lib/attacks.ts`): every character comes with `attacks`, worked out from its sheet with
+  the engine's own numbers: its weapons, then each cantrip and prepared spell a fight can resolve (an
+  attack roll or a save). The forge previews a hero with `POST /api/sheet`; `GET /api/reference` serves
+  the SRD text behind a sheet's spells, traits, feats, class features, skills and conditions.
+- **The hero in a game**: `players[].character` carries the live sheet from the game's party state, so
+  the sheet screen shows current HP, slots, level and gear during play.
+- **A round written for each player** (`lib/play/your-turn.ts`): the three combat choices say what the
+  caller's own hero will do ("Attack with Greatsword", "+5 to hit, 2d6+3 slashing, at Goblin Warrior 2"),
+  using the same picks as `play/fight.ts`. A hero that is down or dead has no action (`scene.canAct`),
+  and a round waits only for the heroes that can act.
+- **One picture per fight**: the round that begins a fight is painted; later rounds carry the same
+  picture. Paintings are most of what a game costs.
+- **A rules error never strands a table** (`lib/game.ts`, `withoutTheEngine`): if the engine throws, the
+  scene resolves without it, the chat says so, and the error is logged.
+
+## Measuring it
+
+Two scripts play the engine with bots, for nothing (`server/`):
+
+- `npm run fights` plays the fights a mapped dungeon rolls, straight through `play/fight.ts`, and
+  reports won / foes fled / lost and how many heroes died.
+- `npm run playtest` plays whole games through the API handlers with the fake DM and reports scenes,
+  fights, deaths, levels gained and anything that broke. `--dungeon none --fights 2` makes the DM offer
+  a fight of two monsters in every scene.
+
+Open problems found this way are on the quest log as issues (bugs and balance), each with a brief:
+https://the-dungeon-door.vercel.app/quest-log (filter: Issues), or `quest_list_issues` over MCP.
 
 ## Glossary
 

@@ -27,7 +27,8 @@ DM team can add archetypes without an app release.
   "temperaments": [{ "id": "brave", "name": "Brave", "blurb": "…" }],
   "genders":      [{ "id": "female", "name": "Female" }],
   "alignments":   [{ "id": "chaotic-good", "name": "Chaotic Good" }],
-  "backgrounds":  [{ "id": "sage", "name": "Sage" }],
+  "backgrounds":  [{ "id": "sage", "name": "Sage", "blurb": "…", "abilities": ["con", "int", "wis"] }],
+  "dungeons":     [{ "id": "none", "name": "A tale told", "blurb": "…", "symbol": "book.pages.fill" }],
   "dungeonMasters": [{
     "id": "chronicler", "name": "The Chronicler", "tagline": "…", "description": "…",
     "symbol": "book.closed", "accent": "#C9A227"
@@ -36,6 +37,9 @@ DM team can add archetypes without an app release.
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
 `races`, `classes` and `backgrounds` are exactly the SRD 5.2 (2024) species, classes and backgrounds.
+A background's `abilities` are the three scores it can raise (the builder puts +2 and +1 on two of them).
+`dungeons` are the kinds of game a host can start (the `dungeon` of `POST …/start`): `none`, `fixed`
+and `explore`, in the order to show them.
 
 ## Characters
 
@@ -50,7 +54,17 @@ Character {
   appearance: string | null   // DM-embellished visual description, reused in scene art
   portraitUrl: string | null
   sheet: CharacterSheet           // the rules engine's numbers; always set in responses (see below)
+  attacks: Attack[]               // what the hero can attack with, worked out from the sheet; always set
   createdAt: string; updatedAt: string
+}
+
+Attack {
+  name: string                    // "Greatsword", "Fire Bolt"
+  bonus: number                   // added to the d20 to hit; 0 for a spell the target saves against
+  damage: string                  // "2d6+3 slashing"
+  ranged: boolean
+  kind: "weapon" | "spell"
+  save: string | null             // spells only: the save the target makes instead ("dex"), with the hero's spell save DC
 }
 
 CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see server/lib/rules/sheet.ts
@@ -68,6 +82,7 @@ CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see ser
   equipment: [{ id, name, count }]; gp: number
   traits: string[]; feat: string; feats: string[]; features: string[]
   resourcesUsed: { [resourceId]: number }     // Rage, Second Wind, … spent since their rest
+  dead?: boolean                  // the hero died and stays dead: it cannot create or join a game (409)
   spellcasting: null | {
     ability: string; saveDc: number; attackBonus: number
     slots: number[9]; expended: number[9]; cantrips: string[]; prepared: string[]
@@ -77,7 +92,10 @@ CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see ser
 }
 ```
 
-The app never sends the sheet: the server builds it with the rules engine and keeps it.
+The app never sends the sheet or the attacks: the server builds them with the rules engine and keeps
+the sheet. `attacks` lists the hero's weapons (an Unarmed Strike if it carries none), then every cantrip
+and prepared spell that deals damage. The ids on a sheet (`skills`, `traits`, `feat`, `feats`, spell ids)
+are explained by `GET /api/reference`.
 
 - `POST /api/portrait` body `{ character: Character-ish (no ids needed), previousAppearance?: string, note?: string }`
   → `{ appearance: string, portraitUrl: string }`. Embellishes the player's description with the
@@ -92,10 +110,34 @@ The app never sends the sheet: the server builds it with the rules engine and ke
   - Saving again keeps the sheet (level, XP, HP…). Renaming renames the sheet. Changing race, class or
     background rebuilds it, but only at level 1: a levelled hero gets 400.
   - Old ids still accepted and mapped: `half-orc` → `orc`, `half-elf` → `elf` (SRD 5.2 has neither).
+- `POST /api/sheet` body `{ id, name, race, characterClass, backgroundId? }` → `{ sheet, attacks }`: the
+  level-1 sheet `PUT /api/characters` would build for that hero, without saving anything. The forge shows
+  it while the player picks a background. Same validation as the save; `id` seeds the build, so the
+  preview is the hero that will be saved.
 - `GET /api/characters` → `{ characters: Character[] }` (mine, newest first). Heroes saved before the
   rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
   the upgrade is stored the next time the hero is saved.
 - `DELETE /api/characters?id=…` → `{ ok: true }`.
+
+## Rules reference
+
+`GET /api/reference` → the SRD 5.2 text behind the ids on a sheet, so the app can name a thing and
+explain it on a tap. Static (it changes only with a deploy); the app fetches it once and caches it. Needs
+the app key, not a player id.
+
+```ts
+Reference {
+  spells:     { [id]: { name, description, level /* 0 = cantrip */, school, castingTime, range, duration,
+                        components /* "V, S, M" */, concentration: boolean, ritual: boolean } }
+  traits:     { [id]: { name, description } }      // species traits
+  feats:      { [id]: { name, description } }      // sheet.feat is a feat's name: match on `name`
+  features:   { [classId]: { [featureName]: { name, description } } }   // class and subclass features,
+                                                   // by the names in sheet.features
+  skills:     { [id]: { name, description, ability /* "dex" */ } }
+  conditions: { [id]: { name, description } }
+  attribution: string                              // the SRD's CC-BY-4.0 notice; show it with the text
+}
+```
 
 ## Games
 
@@ -110,6 +152,8 @@ GameState {
   title: string | null               // DM-named adventure title, set when the game starts
   sceneCount: number                 // scenes planned (default 4, including the finale)
   players: [{ playerId, character: Character, isHost: boolean, joinedAt }]
+                                     // in a rules game `character.sheet` and `.attacks` are the hero as it
+                                     // stands in this game: live HP, level, slots, gear
   scene: Scene | null                // the current scene (null in lobby)
   chronicle: ChronicleEntry[]        // resolved scenes, oldest first (the story so far)
   messages: Message[]                // newest last; only those after `since` when given
@@ -124,7 +168,10 @@ Scene {
   imageUrl: string | null            // null while the art is still painting
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
               rules: string | null }]  // e.g. "Athletics check, DC 12"; exactly 3; empty for the epilogue
-  combat: boolean                    // true for a combat round: each vote is that player's own hero's action
+  combat: boolean                    // true for a combat round: each vote is that player's own hero's action,
+                                     // and `choices` are written for the caller's hero (see below)
+  canAct: boolean                    // false when the caller's hero cannot act this round (down or dead):
+                                     // nothing to choose, and the round does not wait for them
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
   votes: [{ playerId, choiceId, roll: number /* d20 */ }]
   myVote: string | null              // choiceId of the caller
@@ -146,12 +193,19 @@ RulesView {                          // SRD 5.2 (2024 rules)
     slotsLeft: number[]               // 9 entries, spell levels 1–9; all 0 for non-casters
     resources: [{ id: string; name: string; left: number; max: number }]   // Rage, Second Wind, …
     down: boolean                     // at 0 HP
+    dead: boolean                     // slain: stays dead after the adventure
+    passivePerception: number; passiveInsight: number
+    gp: number                        // coins, as gold (can be fractional)
+    inventory: [{ id: string; name: string; count: number }]
+    carried: number; capacity: number; dragLimit: number   // pounds; over capacity the hero is dragging
+    dragging: boolean                 // Speed 5 ft
   }]
   combat: null | {
     round: number
     outcome: "ongoing"                // a settled fight is gone (combat: null); its end is in results
     combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
-                   status: "up" | "dying" | "stable" | "dead"; conditions: string[] }]   // initiative order
+                   status: "up" | "dying" | "stable" | "dead"; conditions: string[] }]   // initiative order;
+                                      // a hero's id is its playerId
   }
   dungeon: null | {
     mode: "fixed" | "explore"; kind: string
@@ -212,6 +266,14 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   fall, the living heroes split the XP and level up on the spot (average hit points; 5.2 thresholds). If
   every hero is down, the next scene is the epilogue. A fight still going after 10 rounds ends with the
   foes fleeing (no XP).
+  - **Written for you.** In a combat round each caller gets their own `choices`: the same three ids, with
+    `label` and `detail` saying what their hero will do ("Attack with Greatsword" / "+5 to hit, 2d6+3
+    slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them.
+  - **Who must act.** A hero that is down or dead has no action: `scene.canAct` is false for its player,
+    a vote from them is accepted and changes nothing, and the round resolves when every hero that can act has voted.
+    If no hero can act the round resolves at once. The host can still `advance` with no votes in.
+  - **One picture per fight.** The round that begins a fight is painted; later rounds of the same fight
+    carry the same `imageUrl` (it may still be null for a moment while that painting finishes).
 - **Rests.** Short rest: heroes spend hit dice until healed or out of dice, features recharge, and
   warlocks get pact slots back. Long rest: full HP, all hit dice, slots and features, and 1 exhaustion
   removed. A hero at 0 HP regains 1 HP first.
@@ -224,16 +286,14 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   null` and `combat: false`, and plays as it always did (the DM breaks ties). The current app decodes
   `GameState` and ignores the new keys, so it keeps working; dice show up as system messages.
 
-### iOS follow-ups (not in this change)
+### In the app
 
-- Decode `GameState.rules`, `Choice.rules` and `Scene.combat` (all optional to the decoder).
-- A sheet screen for each hero (`Character.sheet`, live numbers from `rules.party`).
-- A combat HUD in combat rounds: combatants in initiative order with HP and status, and the three
-  fixed actions labelled as "your hero's action".
-- A dungeon map from `rules.dungeon.areas` (visited areas and their exits).
-- The rules label under each choice ("Athletics check, DC 12").
-- A background picker in the forge (`backgroundId`, from `catalog.backgrounds`).
-- A dungeon-mode picker on the start screen (`dungeon`: none, fixed or explore).
+The app (1.1 and later) shows all of the above: the hero's sheet (`Character.sheet`, `attacks`, the
+reference text) on the hero page and during a game with live numbers from `rules.party`; the rules label
+under each choice; the fight (combatants in initiative order, the round's dice from `rules.results`, your
+hero's three actions); the dungeon map from `rules.dungeon.areas`; a background picker with a sheet
+preview in the forge; and the kind of game on the start screen. Every new key is optional to the app's
+decoder, so it also runs against a server from before them.
 
 Images may arrive after their text: a scene can be `voting` with `imageUrl: null`; keep polling.
 
@@ -241,3 +301,7 @@ Images may arrive after their text: a scene can be `voting` with `imageUrl: null
 
 Long DM/image work runs after the response (`waitUntil`). If the DM call fails, the game drops back
 to the previous status and a `system` message explains; the host can retry (`start` / `advance`).
+
+If the rules engine itself throws while resolving a scene, the table is not left in `resolving`: the
+scene resolves without it (a fight under way breaks off, a choice is settled without dice), a `system`
+line says "The rules engine stumbled: …", and the error is logged on the server.
