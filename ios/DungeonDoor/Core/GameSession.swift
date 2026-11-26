@@ -158,7 +158,7 @@ final class GameSession {
     /// destination. `dash` and `disengage` are the optional flags on that square.
     func vote(actionId: String, targets: [String] = [], square: GridPoint? = nil, dash: Bool = false, disengage: Bool = false) async {
         guard let scene = state.scene else { return }
-        let move = square.map { VoteMove(x: $0.x, y: $0.y, dash: dash ? true : nil, disengage: disengage ? true : nil) }
+        let move = square.map { VoteMove(dash: dash ? true : nil, disengage: disengage ? true : nil, x: $0.x, y: $0.y) }
         await run {
             self.absorb(try await self.api.vote(self.code, sceneIndex: scene.index, choiceId: nil,
                                                 actionId: actionId, targets: targets, move: move))
