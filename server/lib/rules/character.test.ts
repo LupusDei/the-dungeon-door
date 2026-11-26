@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RACES } from '../catalog.ts';
-import { armorClass, buildCharacter, type CharacterChoices, quickChoices } from './character.ts';
+import { abilityModifier } from './abilities.ts';
+import { armorClass, buildCharacter, type CharacterChoices, quickChoices, rederive } from './character.ts';
 import { seededRng } from './rng.ts';
 import { srd } from './srd.ts';
 import { RuleViolation } from './violation.ts';
@@ -45,6 +46,43 @@ test('a dwarf fighter soldier gets the level-1 numbers the SRD gives', () => {
   assert.ok(s.traits.includes('darkvision-120'));
 });
 
+test('a new hero starts at level 1 with no XP, its level-1 class features and its hit die as level 1 HP', () => {
+  const s = buildCharacter(BRYN, rng());
+  assert.deepEqual([s.level, s.xp, s.subclassId, s.feats, s.hpRolls], [1, 0, null, [], [10]]);
+  assert.deepEqual([s.hitDiceSpent, s.exhaustion, s.resourcesUsed], [0, 0, {}]);
+  assert.deepEqual(s.features, ['Fighting Style', 'Second Wind', 'Weapon Mastery']);
+});
+
+test('rederive recomputes every number from level, scores and hit die rolls', () => {
+  const mira = buildCharacter(MIRA, rng());
+  const scores = { ...mira.abilityScores, wis: mira.abilityScores.wis + 2, con: 15, dex: 14 };
+  const s = rederive({ ...mira, level: 5, hpRolls: [8, 5, 1, 8, 4], abilityScores: scores }, srd());
+  assert.equal(s.proficiencyBonus, 3);
+  assert.equal(s.maxHp, 8 + 5 + 1 + 8 + 4 + 5 * 2, 'each level adds its roll + CON 2');
+  assert.equal(s.saveBonuses.wis, abilityModifier(scores.wis) + 3);
+  assert.equal(s.saveBonuses.str, abilityModifier(scores.str), 'not proficient: no bonus');
+  assert.equal(s.skillBonuses.medicine, abilityModifier(scores.wis) + 3);
+  assert.equal(s.passivePerception, 10 + abilityModifier(scores.wis));
+  assert.equal(s.armorClass, mira.armorClass + 1, 'DEX 14 in chain shirt (max +2) or scale mail');
+  assert.deepEqual(s.spellcasting, { ...mira.spellcasting!, saveDc: 8 + 3 + abilityModifier(scores.wis), attackBonus: 3 + abilityModifier(scores.wis), slots: [4, 3, 2, 0, 0, 0, 0, 0, 0] });
+});
+
+test('rederive keeps spent slots; a warlock\'s spent pact slots rise with the pact slot level', () => {
+  const mira = buildCharacter(MIRA, rng());
+  const spent = rederive({ ...mira, level: 3, hpRolls: [8, 5, 5], spellcasting: { ...mira.spellcasting!, expended: [2, 0, 0, 0, 0, 0, 0, 0, 0] } }, srd());
+  assert.deepEqual(spent.spellcasting!.expended, [2, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const warlock = { ...mira, classId: 'warlock', level: 2, hpRolls: [8, 5], spellcasting: { ...mira.spellcasting!, ability: 'cha' as const, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], expended: [1, 0, 0, 0, 0, 0, 0, 0, 0] } };
+  assert.deepEqual(rederive({ ...warlock, level: 3, hpRolls: [8, 5, 5] }, srd()).spellcasting!.expended, [0, 1, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(rederive({ ...warlock, spellcasting: { ...warlock.spellcasting, expended: [2, 0, 0, 0, 0, 0, 0, 0, 0] }, level: 1, hpRolls: [8] }, srd()).spellcasting!.expended, [1, 0, 0, 0, 0, 0, 0, 0, 0], 'never more than the slots');
+});
+
+test('each level gives at least 1 hit point, and Dwarven Toughness adds 1 a level', () => {
+  const bryn = buildCharacter(BRYN, rng());
+  const frail = rederive({ ...bryn, level: 3, hpRolls: [10, 1, 1], abilityScores: { ...bryn.abilityScores, con: 3 }, traits: [] }, srd());
+  assert.equal(frail.maxHp, 10 - 4 + 1 + 1);
+  assert.equal(rederive({ ...bryn, level: 2, hpRolls: [10, 6] }, srd()).maxHp, 10 + 6 + 2 * (2 + 1));
+});
+
 test('equipment from the class and background options is pooled, with their gold', () => {
   const s = buildCharacter(BRYN, rng());
   assert.ok(s.equipment.some((i) => i.id === 'chain-mail'));
@@ -73,6 +111,7 @@ test('a cleric gets armor, shield and level-1 spellcasting', () => {
   assert.deepEqual(s.spellcasting, {
     ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0],
     cantrips: ['guidance', 'sacred-flame', 'light'], prepared: ['bless', 'cure-wounds', 'healing-word', 'shield-of-faith'],
+    expended: [0, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null,
   });
 });
 

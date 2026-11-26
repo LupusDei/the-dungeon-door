@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { type Combatant, heroCombatant, monsterCombatant } from './combatant.ts';
 import { monster } from './monsters.ts';
-import { act, choicesFor, currentActor, monsterAction, orderByInitiative, playRound, startCombat, xpEarned } from './scene.ts';
+import { act, choicesFor, currentActor, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
 import { SAMPLE } from './sheet.fixture.ts';
 
 const hero = (id: string, o: Partial<Combatant> = {}): Combatant => ({ ...heroCombatant(id, { ...SAMPLE, name: id }), ...o });
@@ -53,6 +53,29 @@ test('a vote’s d20 is the attack roll; the turn passes on and the log says wha
   assert.equal(next.combatants.g1.hp, 6);
   assert.equal(currentActor(next), 'g1');
   assert.equal(s.combatants.g1.hp, 10, 'the old state is untouched');
+});
+
+const fireBolt = { spellId: 'fire-bolt', slotLevel: 0, damageDice: '1d10', beams: 1, healingDice: null, endedConcentration: null };
+const sacredFlame = { spellId: 'sacred-flame', slotLevel: 0, damageDice: '1d8', beams: 1, healingDice: null, endedConcentration: null };
+const caster = { saveDc: 13, attackBonus: 5, modifier: 3 };
+
+test('a spell is an action: a spell attack uses the vote’s d20, a save spell the target’s save; both are logged', () => {
+  const s = heroFirst([hero('bryn'), goblin('g1', { attacks: harmless })]);
+  const hit = act(s, { kind: 'spell', caster, cast: fireBolt, targets: ['g1'], natural: 15 });
+  const event = hit.log.at(-1)!;
+  assert.equal(event.kind, 'spell');
+  assert.deepEqual(event.kind === 'spell' && [event.actor, event.spellId, event.outcomes[0].attack!.roll.total, event.outcomes[0].attack!.hit], ['bryn', 'fire-bolt', 20, true]);
+  assert.equal(hit.combatants.g1.hp, 10 - (event.kind === 'spell' ? event.outcomes[0].damage : 0));
+  assert.equal(currentActor(hit), 'g1');
+  const burned = act(s, { kind: 'spell', caster, cast: sacredFlame, targets: ['g1'] });
+  const saved = burned.log.at(-1)!;
+  assert.ok(saved.kind === 'spell' && saved.outcomes[0].save !== null);
+});
+
+test('a spell that drops the last foe wins the fight', () => {
+  const s = heroFirst([hero('bryn'), goblin('g1', { hp: 1 })]);
+  const won = act(s, { kind: 'spell', caster, cast: fireBolt, targets: ['g1'], natural: 19 });
+  assert.equal(won.outcome, 'victory');
 });
 
 test('the side that loses everyone loses: victory when the foes are dead', () => {
@@ -126,4 +149,14 @@ test('a stored combat resumes exactly: same seed and same choices, same fight', 
   const direct = playRound(playRound(start(), votes), votes);
   const stored = JSON.parse(JSON.stringify(playRound(start(), votes)));
   assert.deepEqual(playRound(stored, votes), direct);
+});
+
+test('a reaction attack (an Opportunity Attack) strikes outside the turn order and can end the fight', () => {
+  const s = startCombat(3, [hero('h1', { attacks: deadly }), goblin('g1')]);
+  const struck = reactionAttack(s, 'h1', 'Doom', 'g1');
+  assert.deepEqual([struck.turn, struck.round, struck.order], [s.turn, s.round, s.order], 'nobody\'s turn is used');
+  assert.equal(struck.combatants.g1.status, 'dead');
+  assert.equal(struck.outcome, 'victory');
+  assert.deepEqual(struck.log.slice(s.log.length).map((e) => [e.kind, e.actor, e.kind === 'attack' && e.reaction]), [['attack', 'h1', true]]);
+  assert.notEqual(struck.rng, s.rng, 'the dice move on');
 });

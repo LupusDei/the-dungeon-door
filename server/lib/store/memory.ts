@@ -1,4 +1,4 @@
-import type { Character, ChoiceId, Game, GamePlayer, Message, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Vote } from '../types.ts';
 import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
@@ -15,7 +15,7 @@ const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
  * synchronously, so it is atomic just like the single SQL statements in the Postgres store.
  */
 export class MemoryStore implements Store {
-  private characters = new Map<string, Character>();
+  private characters = new Map<string, StoredCharacter>();
   private games = new Map<string, GameData>();
 
   async getCharacter(id: string) {
@@ -24,7 +24,7 @@ export class MemoryStore implements Store {
     return c ? structuredClone(c) : null;
   }
 
-  async saveCharacter(character: Character) {
+  async saveCharacter(character: StoredCharacter) {
     await tick();
     this.characters.set(character.id, structuredClone(character));
     return structuredClone(character);
@@ -58,6 +58,9 @@ export class MemoryStore implements Store {
         sceneIndex: -1,
         players: [structuredClone(game.host)],
         scenes: [],
+        party: null,
+        combat: null,
+        dungeon: null,
         createdAt: t,
         updatedAt: t,
       },
@@ -79,7 +82,7 @@ export class MemoryStore implements Store {
     if (expect.status !== undefined && game.status !== expect.status) return false;
     if (expect.sceneIndex !== undefined && game.sceneIndex !== expect.sceneIndex) return false;
     for (const [key, value] of Object.entries(patch)) {
-      if (value !== undefined) (game as unknown as Record<string, unknown>)[key] = value;
+      if (value !== undefined) (game as unknown as Record<string, unknown>)[key] = structuredClone(value);
     }
     game.updatedAt = now();
     return true;

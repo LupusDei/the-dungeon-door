@@ -104,3 +104,82 @@ test('once runs its loader on the first call only', () => {
   const value = once(() => ++calls);
   assert.deepEqual([value(), value(), calls], [1, 1, 1]);
 });
+
+test('the advancement table: XP thresholds and proficiency bonus for levels 1 to 20', () => {
+  const { advancement } = srd();
+  assert.equal(advancement.length, 20);
+  assert.deepEqual(advancement[0], { level: 1, xp: 0, proficiencyBonus: 2 });
+  assert.deepEqual(advancement[4], { level: 5, xp: 6500, proficiencyBonus: 3 });
+  assert.deepEqual(advancement[19], { level: 20, xp: 355000, proficiencyBonus: 6 });
+});
+
+test('classes carry their features by level, their subclasses and the level a subclass is chosen', () => {
+  const fighter = srd().classes.get('fighter')!;
+  assert.equal(fighter.levels.length, 20);
+  assert.ok(fighter.levels[0].features.some((f) => f.name === 'Second Wind'));
+  assert.deepEqual(fighter.levels[3].features.map((f) => f.id), ['fighter-ability-score-improvement']);
+  assert.deepEqual(fighter.levels[8].counts, { secondWindUses: 3, weaponMastery: 4 });
+  assert.deepEqual(srd().classes.get('wizard')!.levels[0].counts, {}, 'a class with no numbers of its own');
+  assert.deepEqual(srd().classes.get('rogue')!.levels[0].counts, {}, 'Sneak Attack dice are not a count');
+  assert.deepEqual([fighter.subclasses, fighter.subclassLevel], [['champion'], 3]);
+  const champion = srd().subclasses.get('champion')!;
+  assert.deepEqual([champion.classId, champion.features[0]], ['fighter', { name: 'Improved Critical', level: 3 }]);
+});
+
+test('feats: type, level, ability prerequisite and the ability increase they grant', () => {
+  const { feats } = srd();
+  assert.deepEqual(feats.get('grappler'), {
+    id: 'grappler', name: 'Grappler', type: 'general', minLevel: 4,
+    prerequisite: { abilities: ['str', 'dex'], minimum: 13 }, increase: { from: ['str', 'dex'], max: 20 }, needsSpellcasting: false,
+  });
+  assert.deepEqual(feats.get('boon-of-fate')!.increase, { from: ['str', 'dex', 'con', 'int', 'wis', 'cha'], max: 30 });
+  assert.deepEqual(feats.get('boon-of-spell-recall')!.increase, { from: ['int', 'wis', 'cha'], max: 30 });
+  assert.equal(feats.get('boon-of-spell-recall')!.needsSpellcasting, true);
+  assert.deepEqual([feats.get('alert')!.minLevel, feats.get('alert')!.increase, feats.get('alert')!.prerequisite], [1, null, null]);
+});
+
+test('every epic boon and Grappler grant a +1 the engine can read', () => {
+  const granting = [...srd().feats.values()].filter((f) => f.type === 'epic-boon' || f.id === 'grappler');
+  assert.equal(granting.length, 8);
+  for (const feat of granting) assert.ok(feat.increase && feat.increase.from.length > 0 && feat.increase.from.every(Boolean), feat.id);
+  assert.deepEqual(srd().feats.get('boon-of-irresistible-offense')!.increase!.from, ['str', 'dex']);
+});
+
+test('spells carry their mechanics: attack or save, damage, upcasting, healing, area, concentration', () => {
+  const { spells } = srd();
+  assert.deepEqual(spells.get('fireball'), {
+    id: 'fireball', name: 'Fireball', level: 3, classes: ['sorcerer', 'wizard'], concentration: false,
+    attack: null, save: 'dex', halfOnSave: true, damage: { dice: '8d6', type: 'fire' }, upcastDice: '1d6',
+    healing: null, area: { shape: 'Sphere', feet: 20 },
+  });
+  const bolt = spells.get('fire-bolt')!;
+  assert.deepEqual([bolt.attack, bolt.save, bolt.damage, bolt.upcastDice, bolt.area], ['ranged', null, { dice: '1d10', type: 'fire' }, null, null]);
+  assert.deepEqual(spells.get('shatter')!.upcastDice, '1d8', 'read from the description when the higher-level field is empty');
+  assert.equal(spells.get('ice-knife')!.upcastDice, null, 'its extra d6s belong to a second, cold part');
+  assert.equal(spells.get('acid-arrow')!.upcastDice, '1d4', 'the damage (both initial and later) increases');
+  assert.equal(spells.get('flame-strike')!.upcastDice, '1d6', 'the Fire damage and the Radiant damage increase');
+  assert.deepEqual([spells.get('conjure-celestial')!.upcastDice, spells.get('conjure-celestial')!.healing!.upcastDice], ['1d12', '1d12'], 'the healing and damage increase');
+  assert.deepEqual(spells.get('cure-wounds')!.healing, { dice: '2d8', upcastDice: '2d8' });
+  assert.deepEqual([spells.get('bless')!.concentration, spells.get('bless')!.damage], [true, null]);
+  assert.equal(spells.get('hold-person')!.save, 'wis');
+  assert.equal(spells.get('hold-person')!.halfOnSave, false);
+});
+
+test('cantrips scale with character level: more dice, or more beams', () => {
+  const { cantripScaling } = srd();
+  assert.deepEqual(cantripScaling.get('fire-bolt'), [{ level: 5, dice: '2d10', beams: null }, { level: 11, dice: '3d10', beams: null }, { level: 17, dice: '4d10', beams: null }]);
+  assert.deepEqual(cantripScaling.get('eldritch-blast')!.map((s) => s.beams), [2, 3, 4]);
+  assert.deepEqual(cantripScaling.get('spare-the-dying'), [], 'non-damage upgrades are left to the DM');
+});
+
+test('each class feature says what a Short Rest gives back, read from its text', () => {
+  const feature = (classId: string, name: string) => srd().classes.get(classId)!.levels.flatMap((l) => l.features).find((f) => f.name === name)!;
+  assert.equal(feature('barbarian', 'Rage').shortRest, 'one');
+  assert.equal(feature('cleric', 'Channel Divinity').shortRest, 'one');
+  assert.equal(feature('fighter', 'Action Surge').shortRest, 'all');
+  assert.equal(feature('monk', "Monk's Focus").shortRest, 'all');
+  assert.equal(feature('bard', 'Font of Inspiration').shortRest, 'all');
+  assert.equal(feature('bard', 'Bardic Inspiration').shortRest, 'none');
+  assert.equal(feature('sorcerer', 'Font of Magic').shortRest, 'none');
+  assert.equal(feature('wizard', 'Arcane Recovery').shortRest, 'none');
+});

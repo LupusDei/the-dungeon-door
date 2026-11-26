@@ -28,7 +28,7 @@ test('the CC0 map tables load: kinds, ways between rooms, room sizes and purpose
   assert.equal(rollOn(scriptedRng([10]), t.connections), 'blocked-way');
   assert.equal(rollOn(scriptedRng([1]), t.roomSizes).id, 'cramped');
   assert.equal(t.purposes.crypt.at(-1), 'True sarcophagus (goal)');
-  assert.equal(rollOn(scriptedRng([4]), t.traps), 'pits');
+  assert.equal(rollOn(scriptedRng([4]), t.traps), 'hidden-pit', 'the SRD 5.2 example traps');
   assert.equal(typeof rollOn(scriptedRng([8]), t.dressing), 'string');
 });
 

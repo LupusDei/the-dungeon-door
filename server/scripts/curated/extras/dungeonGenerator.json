@@ -362,49 +362,49 @@
       },
       "trapsAndHazards": {
         "dice": "1d12",
-        "notes": "Points at SRD 5.1 sample traps and SRD 5.2 hazards already in this dataset. Damage and DCs should be scaled to the party's level (easy DC 10, medium 15, hard 20 is a fair default).",
+        "notes": "Points at the SRD 5.2 example traps (5.2/traps.json, scaled by their At Higher Levels tables) and SRD 5.2 hazards. Rolling Stone is a levels 11+ trap; below that the engine uses a Collapsing Roof instead.",
         "rows": [
           {
             "roll": 1,
             "index": "collapsing-roof",
             "name": "Collapsing Roof",
-            "source": "5.1/traps.json"
+            "source": "5.2/traps.json"
           },
           {
             "roll": 2,
             "index": "falling-net",
             "name": "Falling Net",
-            "source": "5.1/traps.json"
+            "source": "5.2/traps.json"
           },
           {
             "roll": 3,
-            "index": "fire-breathing-statue",
-            "name": "Fire-Breathing Statue",
-            "source": "5.1/traps.json"
+            "index": "fire-casting-statue",
+            "name": "Fire-Casting Statue",
+            "source": "5.2/traps.json"
           },
           {
             "roll": 4,
-            "index": "pits",
-            "name": "Pit",
-            "source": "5.1/traps.json"
+            "index": "hidden-pit",
+            "name": "Hidden Pit",
+            "source": "5.2/traps.json"
           },
           {
             "roll": 5,
-            "index": "poison-darts",
-            "name": "Poison Darts",
-            "source": "5.1/traps.json"
+            "index": "poisoned-darts",
+            "name": "Poisoned Darts",
+            "source": "5.2/traps.json"
           },
           {
             "roll": 6,
-            "index": "poison-needle",
-            "name": "Poison Needle",
-            "source": "5.1/traps.json"
+            "index": "poisoned-needle",
+            "name": "Poisoned Needle",
+            "source": "5.2/traps.json"
           },
           {
             "roll": 7,
-            "index": "rolling-sphere",
-            "name": "Rolling Sphere",
-            "source": "5.1/traps.json"
+            "index": "rolling-stone",
+            "name": "Rolling Stone",
+            "source": "5.2/traps.json"
           },
           {
             "roll": 8,
@@ -432,9 +432,9 @@
           },
           {
             "roll": 12,
-            "index": "sphere-of-annihilation",
-            "name": "Sphere of Annihilation",
-            "source": "5.1/traps.json",
+            "index": "spiked-pit",
+            "name": "Spiked Pit",
+            "source": "5.2/traps.json",
             "notes": "Rare and deadly; if the party is below 7th level, reroll or treat as a pit."
           }
         ]

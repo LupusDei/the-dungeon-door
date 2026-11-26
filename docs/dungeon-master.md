@@ -53,6 +53,37 @@ host advanced without them).
   `chosenChoiceId` and three new `choices`.
 - `finale`: `outcome` and `chosenChoiceId`, no choices.
 
+## The rules engine (games started after it shipped)
+
+The engine owns the numbers; you propose and narrate. For a game from before the engine, `ctx.rules` and
+`resolution.rules` are null and nothing below applies.
+
+- **`ctx.rules`** (`RulesContext`):
+  - `party`: each hero's level, HP, AC, exhaustion and slots left.
+  - `combat`: the round and every combatant's HP and status, or null.
+  - `dungeon`: the area the party is in (its purpose, what is there, its exits by id), or null.
+  - `monsters`: SRD 5.2 monster ids that suit the party's level, for fights you propose.
+- **Choices may carry `rules`** (a `RulesHook`):
+  - `{ kind: 'check', ability, skill?, dc }` or `{ kind: 'save', ability, dc, damage?, damageType? }`.
+    5.2 DCs: 5 very easy, 10 easy, 15 medium, 20 hard, 25 very hard, 30 nearly impossible.
+  - `{ kind: 'fight', monsters: [ids] }`, using ids from `ctx.rules.monsters` (unknown ids are dropped).
+  - `{ kind: 'rest', rest: 'short' | 'long' }`.
+  - `{ kind: 'move', exit }`, with an exit id from `ctx.rules.dungeon` (in a dungeon).
+  - A choice without `rules` is pure story, as before. So is one whose hook doesn't hold up (unknown
+    skill, DC outside 1–30, no known monster): the engine checks every hook where it enters.
+  - The LLM DM's schema takes a flat hook (every field nullable); the fake DM offers an Athletics check
+    (or the first exit), a Perception check and a Persuasion check, and never starts a fight itself.
+- **`resolution.rules`** (`RulesResults`):
+  - `chosen`: the choice the engine picked. Ties go to the higher-rolling voters. `leaders` is just
+    `[chosen]`, so return it as `chosenChoiceId`.
+  - `lines`: the dice, one line each ("Bryn: Athletics 14 + 5 = 19 vs DC 12, success").
+  - `success` for a check or save, and `fight` ('started' | 'victory' | 'defeat' | 'fled' | null).
+  - Your `outcome` and narration must match these results: color them, never change them, and still
+    use no numbers in the story.
+- **Combat rounds.** While `ctx.rules.combat` is set, the engine replaces your choices with Attack, Cast
+  and Dodge. Narrate the round from `resolution.rules.lines` and set up the next one. Still return
+  three choices; they are ignored.
+
 ## Rules the engine enforces (so you don't have to)
 
 - **The party goes with the most-voted choice.** `chosenChoiceId` is only your tie-break: if it isn't one

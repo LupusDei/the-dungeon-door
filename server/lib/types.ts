@@ -1,4 +1,8 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
+import type { RulesHook } from './play/hooks.ts';
+import type { CombatState, DungeonState, PartyState } from './play/state.ts';
+import type { RulesView } from './play/view.ts';
+import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
   id: string;
@@ -13,9 +17,14 @@ export interface Character {
   description: string;
   appearance: string | null;
   portraitUrl: string | null;
+  /** The rules engine's numbers (SRD 5.2), built and kept by the server. */
+  sheet: CharacterSheet;
   createdAt: string;
   updatedAt: string;
 }
+
+/** A character as stored: heroes saved before the rules engine have no sheet (and may be a half-orc or half-elf). */
+export type StoredCharacter = Omit<Character, 'sheet'> & { sheet?: CharacterSheet };
 
 export type GameStatus = 'lobby' | 'preparing' | 'voting' | 'resolving' | 'ended';
 export type ChoiceId = 'a' | 'b' | 'c';
@@ -35,13 +44,23 @@ export interface Vote {
 }
 
 /** A scene as stored. `imagePrompt` and `chosenChoiceId` are server-only. */
+/** A choice as stored: with the rules hook the engine checked (rules-engine games). */
+export interface StoredChoice extends Choice {
+  hook?: RulesHook | null;
+}
+
+/** A choice as the API shows it: the hook as a label ("Athletics check, DC 12"). */
+export interface ChoiceView extends Choice {
+  rules: string | null;
+}
+
 export interface StoredScene {
   index: number;
   title: string;
   narration: string;
   imagePrompt: string;
   imageUrl: string | null;
-  choices: Choice[];
+  choices: StoredChoice[];
   isFinale: boolean;
   votes: Vote[];
   outcome: string | null;
@@ -52,7 +71,7 @@ export interface StoredScene {
 
 export interface GamePlayer {
   playerId: string;
-  character: Character;
+  character: StoredCharacter;
   joinedAt: string;
 }
 
@@ -68,6 +87,10 @@ export interface Game {
   sceneIndex: number;
   players: GamePlayer[]; // oldest first
   scenes: StoredScene[]; // oldest first
+  /** Rules engine state; all null for games from before the engine. */
+  party: PartyState | null;
+  combat: CombatState | null;
+  dungeon: DungeonState | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,7 +113,9 @@ export interface SceneView {
   title: string;
   narration: string;
   imageUrl: string | null;
-  choices: Choice[];
+  choices: ChoiceView[];
+  /** A combat round: each vote is that player's own hero's action. */
+  combat: boolean;
   isFinale: boolean;
   votes: Vote[];
   myVote: ChoiceId | null;
@@ -112,9 +137,11 @@ export interface GameState {
   dungeonMaster: string;
   title: string | null;
   sceneCount: number;
-  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string }[];
+  players: { playerId: string; character: StoredCharacter; isHost: boolean; joinedAt: string }[];
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];
+  /** The rules engine's numbers; null for games started before it. */
+  rules: RulesView | null;
   updatedAt: string;
 }

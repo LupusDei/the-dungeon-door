@@ -5,13 +5,18 @@
 import type { Combatant, Status } from './combatant.ts';
 import { type AttackResult, type Cover, attackRoll, deathSave, rollD20 } from './resolve.ts';
 import { type Rng, seededRng } from './rng.ts';
+import { type Caster, resolveSpell, type SpellOutcome } from './spellEffects.ts';
+import type { Cast } from './spells.ts';
 import { lookup, require } from './violation.ts';
 
 export type Action =
   | { kind: 'attack'; attack: string; target: string; natural?: number; cover?: Cover; advantage?: boolean; disadvantage?: boolean }
-  | { kind: 'dodge' };
+  | { kind: 'dodge' }
+  /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
+  | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number };
 export type CombatEvent =
-  | { kind: 'attack'; round: number; actor: string; result: AttackResult }
+  | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true }
+  | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
   | { kind: 'dodge'; round: number; actor: string }
   | { kind: 'deathSave'; round: number; actor: string; status: Status }
   | { kind: 'skip'; round: number; actor: string };
@@ -65,8 +70,8 @@ function advance(state: CombatState, rng: Rng): CombatState {
   return s;
 }
 
-function withEvent(state: CombatState, event: CombatEvent, changed: Combatant): CombatState {
-  const combatants = { ...state.combatants, [changed.id]: changed };
+function withEvent(state: CombatState, event: CombatEvent, ...changed: Combatant[]): CombatState {
+  const combatants = { ...state.combatants, ...Object.fromEntries(changed.map((c) => [c.id, c])) };
   return { ...state, combatants, log: [...state.log, event], outcome: outcomeOf(combatants) };
 }
 
@@ -106,16 +111,38 @@ function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Act
   return withEvent(state, { kind: 'attack', round: state.round, actor: actor.id, result }, hurt);
 }
 
+function resolveCast(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'spell' }>, rng: Rng): CombatState {
+  const byId = new Map(Object.entries(state.combatants));
+  const targets = action.targets.map((id) => lookup(byId, id, 'combatant'));
+  const resolved = resolveSpell(rng, { ...action.caster, combatant: actor }, action.cast, targets, { attack: { natural: action.natural } });
+  return withEvent(state, { kind: 'spell', round: state.round, actor: actor.id, spellId: action.cast.spellId, outcomes: resolved.outcomes }, ...resolved.targets);
+}
+
+const dodge = (state: CombatState, actor: Combatant) =>
+  withEvent({ ...state, dodging: [...state.dodging, actor.id] }, { kind: 'dodge', round: state.round, actor: actor.id }, actor);
+
+const ACTIONS: { [K in Action['kind']]: (state: CombatState, actor: Combatant, action: Extract<Action, { kind: K }>, rng: Rng) => CombatState } = {
+  attack: resolveAttack,
+  spell: resolveCast,
+  dodge: (state, actor) => dodge(state, actor),
+};
+
 /** The current combatant takes `action`; then the turn passes on. */
 export function act(state: CombatState, action: Action): CombatState {
   require(state.outcome === 'ongoing', 'the combat is over');
   const rng = seededRng(state.rng);
   const actor = state.combatants[currentActor(state)];
-  const done = action.kind === 'attack'
-    ? resolveAttack(state, actor, action, rng)
-    : withEvent({ ...state, dodging: [...state.dodging, actor.id] }, { kind: 'dodge', round: state.round, actor: actor.id }, actor);
+  const done = (ACTIONS[action.kind] as (s: CombatState, a: Combatant, x: Action, r: Rng) => CombatState)(state, actor, action, rng);
   const next = advance(done, rng);
   return { ...next, rng: rng.state() };
+}
+
+/** A reaction attack outside the turn order (an Opportunity Attack on a fleeing foe): nobody's turn is spent. */
+export function reactionAttack(state: CombatState, actor: string, attack: string, target: string): CombatState {
+  const rng = seededRng(state.rng);
+  const done = resolveAttack(state, state.combatants[actor], { kind: 'attack', attack, target }, rng);
+  const event = { ...done.log[done.log.length - 1], reaction: true as const };
+  return { ...done, log: [...done.log.slice(0, -1), event], rng: rng.state() };
 }
 
 /** A monster's turn: its first melee attack (or first attack) on the up hero with the fewest HP. Null on a hero's turn. */

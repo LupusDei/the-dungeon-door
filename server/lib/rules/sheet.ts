@@ -7,6 +7,8 @@ import { ABILITIES } from './abilities.ts';
 import { RuleViolation } from './violation.ts';
 
 const int = z.number().int();
+export const MAX_LEVEL = 20;
+export const MAX_EXHAUSTION = 6;
 const ability = z.enum(ABILITIES);
 const score = int.min(1).max(30);
 const perAbility = <T extends z.ZodType>(value: T) => z.object({ str: value, dex: value, con: value, int: value, wis: value, cha: value });
@@ -14,16 +16,26 @@ const perAbility = <T extends z.ZodType>(value: T) => z.object({ str: value, dex
 export const CharacterSheetSchema = z.object({
   version: z.literal(1),
   name: z.string().trim().min(1).max(40),
-  level: z.literal(1),
+  level: int.min(1).max(MAX_LEVEL),
+  xp: int.min(0),
   classId: z.string(),
   speciesId: z.string(),
   backgroundId: z.string(),
+  subclassId: z.string().nullable(),
   size: z.enum(['Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan']),
   speed: int.positive(),
   abilityScores: perAbility(score),
   /** The six 4d6-drop-lowest results in roll order, when the scores were rolled. */
   abilityRolls: z.array(int).length(6).nullable(),
   proficiencyBonus: int,
+  /** The hit die result for each level, level 1's being the die's maximum; max HP is derived from them. */
+  hpRolls: z.array(int.positive()),
+  /** Hit Point Dice spent since they were last regained (the hero has one per level). */
+  hitDiceSpent: int.min(0),
+  /** SRD 5.2 Exhaustion level; the hero dies at 6. */
+  exhaustion: int.min(0).max(MAX_EXHAUSTION),
+  /** Uses spent of limited class features, by resource id ("rage", "second-wind"). */
+  resourcesUsed: z.record(z.string(), int.min(0)),
   maxHp: int.positive(),
   hp: int.min(0),
   armorClass: int,
@@ -33,6 +45,10 @@ export const CharacterSheetSchema = z.object({
   /** Armor, weapon and tool proficiencies by SRD id. */
   otherProficiencies: z.array(z.string()),
   saveBonuses: perAbility(int),
+  /** Skills with Expertise (twice the proficiency bonus); filled in by rederive as features grant it. */
+  expertise: z.array(z.string()).optional(),
+  /** The hero died (three failed death saves, massive damage or exhaustion 6) and stays dead until revived. */
+  dead: z.boolean().optional(),
   /** Every skill's check bonus, proficient or not. */
   skillBonuses: z.record(z.string(), int),
   passivePerception: int,
@@ -44,6 +60,10 @@ export const CharacterSheetSchema = z.object({
   traits: z.array(z.string()),
   /** The background's origin feat, by name (not modelled yet). */
   feat: z.string(),
+  /** Feats taken when leveling, by SRD id. */
+  feats: z.array(z.string()),
+  /** Class and subclass features gained so far, by name, in the order gained. */
+  features: z.array(z.string()),
   spellcasting: z.object({
     ability,
     saveDc: int,
@@ -52,8 +72,15 @@ export const CharacterSheetSchema = z.object({
     slots: z.array(int.min(0)).length(9),
     cantrips: z.array(z.string()),
     prepared: z.array(z.string()),
-  }).nullable(),
-}).refine((s) => s.hp <= s.maxHp, { path: ['hp'], message: 'hit points cannot exceed the maximum' });
+    /** Slots spent per spell level since they were last regained. */
+    expended: z.array(int.min(0)).length(9),
+    /** The spell the caster is concentrating on, if any. */
+    concentratingOn: z.string().nullable(),
+  }).refine((c) => c.expended.every((n, i) => n <= c.slots[i]), { path: ['expended'], message: 'no more slots can be spent than there are' }).nullable(),
+})
+  .refine((s) => s.hp <= s.maxHp, { path: ['hp'], message: 'hit points cannot exceed the maximum' })
+  .refine((s) => s.hpRolls.length === s.level, { path: ['hpRolls'], message: 'one hit die roll per level' })
+  .refine((s) => s.hitDiceSpent <= s.level, { path: ['hitDiceSpent'], message: "no more hit dice can be spent than the hero's level" });
 
 export type CharacterSheet = z.infer<typeof CharacterSheetSchema>;
 

@@ -18,7 +18,7 @@ test('a 1 on the treasure die finds treasure in an empty room', () => {
 
 test('a trap room names an SRD trap or hazard; a special room an OSE special, never with treasure', () => {
   const trap = stockRoom(scriptedRng([6, 4, 3, 1]), party);
-  assert.deepEqual([trap.kind, trap.trap, trap.treasure], ['trap', 'pits', null]);
+  assert.deepEqual([trap.kind, trap.trap, trap.treasure], ['trap', 'hidden-pit', null]);
   const special = stockRoom(scriptedRng([5, 1, 1]), party);
   assert.deepEqual([special.kind, special.special, special.treasure], ['special', 'Alarms', null]);
 });

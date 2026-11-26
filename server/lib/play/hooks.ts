@@ -1,0 +1,132 @@
+/**
+ * A rules hook: the mechanic a DM's choice carries (docs/dungeon-master.md). The DM's output is checked
+ * here, where it enters; a hook that doesn't hold up is dropped and its choice is pure story.
+ */
+import { z } from 'zod';
+import { ABILITIES, type Ability } from '../rules/abilities.ts';
+import { HEALING_POTIONS, items } from '../rules/items.ts';
+import { monsters } from '../rules/monsters.ts';
+import type { HazardKind } from '../rules/hazards.ts';
+import { modeOf } from '../rules/resolve.ts';
+import { isTrap } from '../rules/traps.ts';
+import { srd } from '../rules/srd.ts';
+
+export type RulesHook =
+  | {
+    kind: 'check'; ability: Ability; skill?: string | null; tool?: string | null;
+    /** The DC; may be left out when the check is against a monster (its passive score or Influence DC). */
+    dc?: number | null; against?: string | null;
+    /** group: every hero rolls, half must succeed; best: the best hero rolls, the others Help. */
+    mode?: 'group' | 'best' | null;
+  } & Edge
+  | { kind: 'save'; ability: Ability; dc: number; damage?: string | null; damageType?: string | null } & Edge
+  | { kind: 'fight'; monsters: string[] }
+  | { kind: 'rest'; rest: 'short' | 'long' }
+  | { kind: 'move'; exit: string }
+  /** Each item is bought by the richest hero who can pay (a shop scene). */
+  | { kind: 'buy'; items: string[] }
+  /** Every hero sells all they hold of each item. */
+  | { kind: 'sell'; items: string[] }
+  /** The most hurt hero drinks a Potion of Healing. */
+  | { kind: 'use'; item: string }
+  /** An SRD 5.2 example trap (by id) the party may run into. */
+  | { kind: 'trap'; trap: string }
+  /** An SRD 5.2 hazard that befalls every living hero; feet, minutes, hours or days as the hazard needs. */
+  | { kind: 'hazard'; hazard: HazardKind; feet?: number; minutes?: number; hours?: number; days?: number };
+
+interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
+
+export type RollHook = Extract<RulesHook, { kind: 'check' | 'save' }>;
+
+const MAX_DC = 30;
+const dc = z.number().int().min(1).max(MAX_DC);
+const ability = z.enum(ABILITIES);
+const DICE = /^\d+d\d+([+-]\d+)?$/;
+
+const edge = { advantage: z.boolean().nullish(), disadvantage: z.boolean().nullish() };
+const isMonster = (id: string) => monsters().has(id);
+const itemList = z.array(z.string()).transform((ids) => ids.filter((id) => items().has(id))).refine((ids) => ids.length > 0);
+
+const amount = (max: number) => z.number().positive().max(max);
+/** Each hazard with the amount it needs (and nothing else). */
+const hazardSchema = z.discriminatedUnion('hazard', [
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('falling'), feet: amount(1000) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('burning') }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('suffocation'), minutes: amount(60) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('extreme-cold'), hours: amount(24) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('extreme-heat'), hours: amount(24) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('dehydration') }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('malnutrition'), days: amount(60) }),
+]);
+
+const HookSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('check'), ability, skill: z.string().refine((s) => srd().skills.has(s)).nullish(),
+    tool: z.string().refine((t) => items().get(t)?.kind === 'tool').nullish(),
+    dc: dc.nullish(), against: z.string().refine(isMonster).nullish(), mode: z.enum(['group', 'best']).nullish(), ...edge,
+  }).refine((h) => typeof h.dc === 'number' || typeof h.against === 'string'),
+  z.object({ kind: z.literal('save'), ability, dc, damage: z.string().regex(DICE).nullish(), damageType: z.string().nullish(), ...edge }),
+  z.object({ kind: z.literal('fight'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).refine((ids) => ids.length > 0) }),
+  z.object({ kind: z.literal('rest'), rest: z.enum(['short', 'long']) }),
+  z.object({ kind: z.literal('move'), exit: z.string().min(1) }),
+  z.object({ kind: z.literal('buy'), items: itemList }),
+  z.object({ kind: z.literal('sell'), items: itemList }),
+  z.object({ kind: z.literal('use'), item: z.string().refine((id) => Object.hasOwn(HEALING_POTIONS, id)) }),
+  z.object({ kind: z.literal('trap'), trap: z.string().refine(isTrap) }),
+  hazardSchema,
+]);
+
+/** The hook, or null when there is none or it doesn't hold up (unknown skill or monster, DC out of 1–30…). */
+export function parseHook(json: unknown): RulesHook | null {
+  const parsed = HookSchema.safeParse(json);
+  return parsed.success ? parsed.data : null;
+}
+
+export const ABILITY_NAMES: Readonly<Record<Ability, string>> = {
+  str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma',
+};
+
+/** "sleight-of-hand" → "Sleight Of Hand". */
+export const titleCase = (id: string) => id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+
+/** "2 Goblin Warriors, Bugbear Warrior". */
+function countedList(ids: readonly string[], nameOf: (id: string) => string, many: (n: number, name: string) => string): string {
+  return [...new Set(ids)].map((id): [string, number] => [id, ids.filter((x) => x === id).length]).map(([id, n]) => (n > 1 ? many(n, nameOf(id)) : nameOf(id))).join(', ');
+}
+const monsterName = (id: string) => monsters().get(id)!.name;
+const itemName = (id: string) => items().get(id)!.name;
+const times = (n: number, name: string) => `${name} ×${n}`;
+
+/** "Sleight Of Hand with Thieves' Tools", "Thieves' Tools", "Athletics", "Dexterity save". */
+export function rollName(hook: RollHook): string {
+  if (hook.kind === 'save') return `${ABILITY_NAMES[hook.ability]} save`;
+  const tool = hook.tool ? items().get(hook.tool)!.name : null;
+  if (!hook.skill) return tool === null ? ABILITY_NAMES[hook.ability] : tool;
+  return tool ? `${titleCase(hook.skill)} with ${tool}` : titleCase(hook.skill);
+}
+
+const EDGE_LABELS = { normal: '', advantage: ', with Advantage', disadvantage: ', with Disadvantage' };
+const edgeLabel = (h: Edge) => EDGE_LABELS[modeOf(!!h.advantage, !!h.disadvantage)];
+const target = (h: Extract<RulesHook, { kind: 'check' }>) => (typeof h.dc === 'number' ? `, DC ${h.dc}` : ` vs ${monsters().get(h.against!)!.name}`);
+
+const UNITS = ['feet', 'minutes', 'hours', 'days'] as const;
+function hazardAmount(h: Extract<RulesHook, { kind: 'hazard' }>): string {
+  const unit = UNITS.find((u) => typeof h[u] === 'number');
+  return unit ? ` (${h[unit]} ${unit})` : '';
+}
+
+const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>) => string } = {
+  check: (h) => `${rollName(h)} check${target(h)}${h.mode === 'best' ? ', one hero with help' : ''}${edgeLabel(h)}`,
+  save: (h) => `${rollName(h)}, DC ${h.dc}${edgeLabel(h)}`,
+  fight: (h) => `Fight: ${countedList(h.monsters, monsterName, (n, name) => `${n} ${name}s`)}`,
+  rest: (h) => (h.rest === 'short' ? 'Short rest' : 'Long rest'),
+  move: (h) => `Go on (${h.exit})`,
+  buy: (h) => `Buy ${countedList(h.items, itemName, times)}`,
+  sell: (h) => `Sell ${countedList(h.items, itemName, times)}`,
+  use: (h) => `Drink a ${itemName(h.item)}`,
+  trap: () => 'Risk a trap',
+  hazard: (h) => `Hazard: ${titleCase(h.hazard)}${hazardAmount(h)}`,
+};
+
+/** What the app shows under the choice. */
+export const hookLabel = (hook: RulesHook): string => (LABELS[hook.kind] as (h: RulesHook) => string)(hook);

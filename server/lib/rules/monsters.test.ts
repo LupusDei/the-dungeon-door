@@ -47,3 +47,11 @@ test('the encounter budget adds up each character’s XP for the difficulty', ()
   assert.equal(encounterBudget([3], 'high'), 400);
   assert.throws(() => encounterBudget([21], 'low'), /no encounter budget for level 21/);
 });
+
+test('a monster carries its skills, passive Perception and alignment (for checks against it and its reactions)', () => {
+  const goblin = monster('goblin-warrior');
+  assert.deepEqual(goblin.skills, { stealth: 6 });
+  assert.equal(goblin.passivePerception, 9);
+  assert.equal(goblin.alignment, 'chaotic neutral');
+  assert.deepEqual(monster('animated-armor').skills, {});
+});

@@ -77,3 +77,8 @@ test('any generated hero can enter combat', () => {
     assert.ok(hero.attacks.length > 0);
   }
 });
+
+test('undead, constructs and oozes are fearless (no morale); the rest are not', () => {
+  assert.deepEqual(['skeleton', 'zombie', 'flesh-golem', 'black-pudding', 'goblin-warrior'].map((id) => monsterCombatant('m', monster(id)).fearless === true), [true, true, true, true, false]);
+  assert.equal(Object.hasOwn(monsterCombatant('m', monster('goblin-warrior')), 'fearless'), false, 'only the fearless carry the flag');
+});
