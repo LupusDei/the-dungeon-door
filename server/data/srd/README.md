@@ -69,8 +69,8 @@ This work includes material taken from the System Reference Document 5.1 ("SRD 5
 | `5.2/monsters.json` | 341 | SRD 5.2 | 5e-srd-api |
 | `5.2/magicItems.json` | 277 | SRD 5.2 | 5e-srd-api |
 | `5.2/poisons.json` | 14 | SRD 5.2 | 5e-srd-api |
-| `5.2/traps.json` | 1 | SRD 5.2 | official PDF |
-| `5.2/hazards.json` | 5 | SRD 5.2 | official PDF |
+| `5.2/traps.json` | 9 | SRD 5.2 | official PDF |
+| `5.2/hazards.json` | 7 | SRD 5.2 | official PDF |
 | `5.1/weapons.json` | 37 | SRD 5.1 | 5e-srd-api |
 | `5.1/armor.json` | 13 | SRD 5.1 | 5e-srd-api |
 | `5.1/weaponProperties.json` | 11 | SRD 5.1 | 5e-srd-api |
@@ -134,7 +134,7 @@ Open-licensed stand-ins for tables that are not in the SRD, plus original CC0 pr
 - **2014 encounter XP thresholds** (easy / medium / hard / deadly) are from the Dungeon Master's Guide, not SRD 5.1, and are not reproduced here. Open equivalent: `extras/encounterDifficultyA5e.json` (A5ESRD, CC-BY-4.0) uses total-CR ratios for the same four bands plus Impossible. Official 2024 budgets remain in `5.2/encounterBudgets.json`.
 - **2014 multiple-monster encounter multipliers** are also DMG-only and are not reproduced. A5E handles action economy by summing CRs (and doubling elites). Optional original band-shift rule: `extras/actionEconomyBands.json` (CC0).
 - **2014 starting-wealth (random GP) table** is not in the SRD and is not reproduced. Open stand-ins: `extras/startingWealthSrd52.json` (SRD 5.2 buyout gold), `extras/startingWealthA5e.json` (A5E fixed gold, CC-BY-4.0), `extras/startingWealthPathfinder.json` (PF1 random dice, OGL 1.0a), and an original fortune die around the SRD 5.2 amounts in `extras/startingWealthRandom.json` (CC0).
-- **DMG Appendix A random dungeon tables** (and the 1e AD&D Appendix A) are not open and were not copied. Open stocking: `extras/oseDungeonStocking.json` (OSE SRD, CC-BY-4.0 / OGL). Original 5e graph procedure for this game: `extras/dungeonGenerator.json` (CC0), which points at SRD 5.1 sample traps and SRD 5.2 hazards. Explore-as-you-go: `extras/exploreGenerator.json` (CC0), original tables that follow the classic roll-the-passage-ahead procedure but share no wording or numbers with any published table. The Basic Fantasy 'Dungeon Generator' supplement is OGL 1.0a but could not be fetched in full (HTTP 403). donjon's generator is CC-BY-NC and was skipped.
+- **DMG Appendix A random dungeon tables** (and the 1e AD&D Appendix A) are not open and were not copied. Open stocking: `extras/oseDungeonStocking.json` (OSE SRD, CC-BY-4.0 / OGL). Original 5e graph procedure for this game: `extras/dungeonGenerator.json` (CC0), which points at the SRD 5.2 example traps and hazards. Explore-as-you-go: `extras/exploreGenerator.json` (CC0), original tables that follow the classic roll-the-passage-ahead procedure but share no wording or numbers with any published table. The Basic Fantasy 'Dungeon Generator' supplement is OGL 1.0a but could not be fetched in full (HTTP 403). donjon's generator is CC-BY-NC and was skipped.
 - **2024 SRD has no creature named Goblin.** Use `goblin-warrior`, `goblin-minion`, or `goblin-boss`. The 2014 file has `goblin`.
 - **CR 11-13** in `5.2/crToXp.json` were filled from SRD 5.2 monster XP because those rows were not visible in the two-column PDF extract. The Archmage stat block lists 8,000 XP at CR 12 versus the table value 8,400.
 - Some 2014 monster stat blocks disagree with the standard CR-to-XP mapping; see notes in `5.1/crToXp.json`.

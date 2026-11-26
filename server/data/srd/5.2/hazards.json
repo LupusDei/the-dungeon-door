@@ -9,11 +9,11 @@
     "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
     "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
     "fetched": "2026-11-25",
-    "recordCount": 5,
+    "recordCount": 7,
     "additionalSources": [
       "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
     ],
-    "notes": "Falling, Suffocation, and Malnutrition wording is taken from the SRD 5.2 Rules Glossary.",
+    "notes": "Falling, Suffocation, and Malnutrition wording is taken from the SRD 5.2 Rules Glossary; Extreme Cold and Extreme Heat from Environmental Effects (Gameplay Toolbox).",
     "primarySource": "official-pdf"
   },
   "records": [
@@ -67,6 +67,16 @@
       "index": "malnutrition",
       "name": "Malnutrition",
       "description": "A creature that goes without food for a number of days equal to 3 plus its Constitution modifier (minimum 1) gains 1 Exhaustion level at the day's end, and it gains an additional Exhaustion level at the end of each subsequent day without food. Exhaustion caused by malnutrition can't be removed until the creature eats."
+    },
+    {
+      "index": "extreme-cold",
+      "name": "Extreme Cold",
+      "description": "When the temperature is 0 degrees Fahrenheit or lower, a creature exposed to the extreme cold must succeed on a DC 10 Constitution saving throw at the end of each hour or gain 1 Exhaustion level. Creatures that have Resistance or Immunity to Cold damage automatically succeed on the save."
+    },
+    {
+      "index": "extreme-heat",
+      "name": "Extreme Heat",
+      "description": "When the temperature is 100 degrees Fahrenheit or higher, a creature exposed to the extreme heat and without access to drinkable water must succeed on a Constitution saving throw at the end of each hour or gain 1 Exhaustion level. The DC is 5 for the first hour and increases by 1 for each additional hour. Creatures wearing Medium or Heavy armor have Disadvantage on the save. Creatures that have Resistance or Immunity to Fire damage automatically succeed on the save."
     }
   ]
 }

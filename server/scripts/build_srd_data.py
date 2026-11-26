@@ -587,12 +587,12 @@ def build_52():
     write_file("5.2/magicItems.json", "5.2", "Magic Items",
                [normalize_magic_item(i) for i in load_src("2024", "Magic-Items")])
     write_file("5.2/poisons.json", "5.2", "Poisons", convert(load_src("2024", "Poisons")))
-    write_file("5.2/traps.json", "5.2", "Traps (design guidance)",
-               load_curated("trapsGuidance.json"), extra_sources=[SOURCE_PDF_52], from_pdf=True,
-               notes="No random dungeon-generation tables. Named sample traps from SRD 5.1 are in 5.1/traps.json.")
+    write_file("5.2/traps.json", "5.2", "Traps",
+               load_curated("trapsGuidance.json") + load_curated("sampleTraps.json"), extra_sources=[SOURCE_PDF_52], from_pdf=True,
+               notes="Design guidance plus the eight example traps of the SRD 5.2 Gameplay Toolbox (pp. 199-201), with their detect/disarm DCs, effects and At Higher Levels scaling as structured fields. No random dungeon-generation tables.")
     write_file("5.2/hazards.json", "5.2", "Hazards",
                load_curated("hazards.json"), extra_sources=[SOURCE_PDF_52], from_pdf=True,
-               notes="Falling, Suffocation, and Malnutrition wording is taken from the SRD 5.2 Rules Glossary.")
+               notes="Falling, Suffocation, and Malnutrition wording is taken from the SRD 5.2 Rules Glossary; Extreme Cold and Extreme Heat from Environmental Effects (Gameplay Toolbox).")
 
 
 def build_51():
@@ -905,7 +905,7 @@ def write_readme(issues):
         "- **2014 encounter XP thresholds** (easy / medium / hard / deadly) are from the Dungeon Master's Guide, not SRD 5.1, and are not reproduced here. Open equivalent: `extras/encounterDifficultyA5e.json` (A5ESRD, CC-BY-4.0) uses total-CR ratios for the same four bands plus Impossible. Official 2024 budgets remain in `5.2/encounterBudgets.json`.",
         "- **2014 multiple-monster encounter multipliers** are also DMG-only and are not reproduced. A5E handles action economy by summing CRs (and doubling elites). Optional original band-shift rule: `extras/actionEconomyBands.json` (CC0).",
         "- **2014 starting-wealth (random GP) table** is not in the SRD and is not reproduced. Open stand-ins: `extras/startingWealthSrd52.json` (SRD 5.2 buyout gold), `extras/startingWealthA5e.json` (A5E fixed gold, CC-BY-4.0), `extras/startingWealthPathfinder.json` (PF1 random dice, OGL 1.0a), and an original fortune die around the SRD 5.2 amounts in `extras/startingWealthRandom.json` (CC0).",
-        "- **DMG Appendix A random dungeon tables** (and the 1e AD&D Appendix A) are not open and were not copied. Open stocking: `extras/oseDungeonStocking.json` (OSE SRD, CC-BY-4.0 / OGL). Original 5e graph procedure for this game: `extras/dungeonGenerator.json` (CC0), which points at SRD 5.1 sample traps and SRD 5.2 hazards. The Basic Fantasy 'Dungeon Generator' supplement is OGL 1.0a but could not be fetched in full (HTTP 403). donjon's generator is CC-BY-NC and was skipped.",
+        "- **DMG Appendix A random dungeon tables** (and the 1e AD&D Appendix A) are not open and were not copied. Open stocking: `extras/oseDungeonStocking.json` (OSE SRD, CC-BY-4.0 / OGL). Original 5e graph procedure for this game: `extras/dungeonGenerator.json` (CC0), which points at the SRD 5.2 example traps and hazards. The Basic Fantasy 'Dungeon Generator' supplement is OGL 1.0a but could not be fetched in full (HTTP 403). donjon's generator is CC-BY-NC and was skipped.",
         "- **2024 SRD has no creature named Goblin.** Use `goblin-warrior`, `goblin-minion`, or `goblin-boss`. The 2014 file has `goblin`.",
         "- **CR 11-13** in `5.2/crToXp.json` were filled from SRD 5.2 monster XP because those rows were not visible in the two-column PDF extract. The Archmage stat block lists 8,000 XP at CR 12 versus the table value 8,400.",
         "- Some 2014 monster stat blocks disagree with the standard CR-to-XP mapping; see notes in `5.1/crToXp.json`.",

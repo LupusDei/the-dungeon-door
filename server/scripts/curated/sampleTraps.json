@@ -1,0 +1,554 @@
+[
+  {
+    "index": "collapsing-roof",
+    "name": "Collapsing Roof",
+    "severity": "deadly",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature crosses a trip wire",
+    "duration": "Instantaneous",
+    "description": "A trip wire 3 inches off the ground topples two weak supports and brings down an unstable section of ceiling. Each creature beneath it makes a DC 13 Dexterity saving throw, taking 11 (2d10) Bludgeoning damage on a failed save or half as much on a successful one.",
+    "detect": {
+      "ability": "wis",
+      "skill": "perception",
+      "dc": 11
+    },
+    "disarm": null,
+    "avoid": "Once detected, the trip wire can be easily cut or avoided (no ability check required).",
+    "effect": {
+      "targets": "all",
+      "save": {
+        "ability": "dex",
+        "dc": 13
+      },
+      "damage": [
+        {
+          "dice": "2d10",
+          "type": "bludgeoning"
+        }
+      ],
+      "halfOnSave": true,
+      "condition": null
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "dc": 15,
+        "damage": [
+          {
+            "dice": "4d10",
+            "type": "bludgeoning"
+          }
+        ]
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "dc": 17,
+        "damage": [
+          {
+            "dice": "10d10",
+            "type": "bludgeoning"
+          }
+        ]
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "dc": 19,
+        "damage": [
+          {
+            "dice": "18d10",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "index": "falling-net",
+    "name": "Falling Net",
+    "severity": "nuisance",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature crosses a trip wire",
+    "duration": "Instantaneous",
+    "description": "A trip wire releases a weighted 10-foot-square Net on the first creature to cross it. The target must succeed on a DC 10 Dexterity saving throw or have the Restrained condition until it escapes (Huge or larger succeeds automatically); an action and a DC 10 Strength (Athletics) check frees a creature within reach.",
+    "detect": {
+      "ability": "wis",
+      "skill": "perception",
+      "dc": 11
+    },
+    "disarm": null,
+    "avoid": "Once detected, the trip wire can be easily cut or avoided (no ability check required).",
+    "effect": {
+      "targets": "one",
+      "save": {
+        "ability": "dex",
+        "dc": 10
+      },
+      "damage": [],
+      "halfOnSave": false,
+      "condition": "Restrained",
+      "escape": {
+        "ability": "str",
+        "skill": "athletics",
+        "dc": 10
+      }
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "dc": 12,
+        "escapeDc": 12
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "dc": 14,
+        "escapeDc": 14
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "dc": 16,
+        "escapeDc": 16
+      }
+    ]
+  },
+  {
+    "index": "fire-casting-statue",
+    "name": "Fire-Casting Statue",
+    "severity": "deadly",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature moves onto a pressure plate",
+    "duration": "Instantaneous, and the trap resets at the start of the next turn",
+    "description": "A nearby statue exhales a 15-foot Cone of magical flame. Each creature in the Cone makes a DC 15 Dexterity saving throw, taking 11 (2d10) Fire damage on a failed save or half as much on a successful one. A DC 10 Wisdom (Perception) check finds a glyph on the statue (defacing it disarms the trap); a DC 15 Wisdom (Perception) check finds the pressure plate (an Iron Spike under it stops the trap).",
+    "detect": {
+      "ability": "wis",
+      "skill": "perception",
+      "dc": 15
+    },
+    "disarm": null,
+    "avoid": "Wedging an Iron Spike or similar object under the pressure plate prevents the trap from triggering.",
+    "effect": {
+      "targets": "all",
+      "save": {
+        "ability": "dex",
+        "dc": 15
+      },
+      "damage": [
+        {
+          "dice": "2d10",
+          "type": "fire"
+        }
+      ],
+      "halfOnSave": true,
+      "condition": null
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "damage": [
+          {
+            "dice": "4d10",
+            "type": "fire"
+          }
+        ]
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "damage": [
+          {
+            "dice": "10d10",
+            "type": "fire"
+          }
+        ]
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "damage": [
+          {
+            "dice": "18d10",
+            "type": "fire"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "index": "hidden-pit",
+    "name": "Hidden Pit",
+    "severity": "nuisance",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature moves onto the pit's lid",
+    "duration": "Instantaneous",
+    "description": "A 10-foot-deep pit under a hinged lid that matches the floor. A creature that moves onto the lid falls in and takes 3 (1d6) Bludgeoning damage. A DC 15 Intelligence (Investigation) check detects it; an Iron Spike wedged under the lid makes it safe to cross.",
+    "detect": {
+      "ability": "int",
+      "skill": "investigation",
+      "dc": 15
+    },
+    "disarm": null,
+    "avoid": "An Iron Spike or similar object wedged between the lid and the floor keeps the lid from opening.",
+    "effect": {
+      "targets": "one",
+      "save": null,
+      "damage": [
+        {
+          "dice": "1d6",
+          "type": "bludgeoning"
+        }
+      ],
+      "halfOnSave": false,
+      "condition": null
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "damage": [
+          {
+            "dice": "3d6",
+            "type": "bludgeoning"
+          }
+        ]
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "damage": [
+          {
+            "dice": "6d6",
+            "type": "bludgeoning"
+          }
+        ]
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "damage": [
+          {
+            "dice": "12d6",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "index": "poisoned-darts",
+    "name": "Poisoned Darts",
+    "severity": "deadly",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature moves onto a pressure plate",
+    "duration": "Instantaneous, and the trap resets at the start of the next turn if it has activated fewer than three times",
+    "description": "Poisoned darts shoot from hidden tubes in the walls. Each creature in their path makes a DC 13 Dexterity saving throw or is struck by 1d3 darts, taking 3 (1d6) Poison damage per dart. A DC 15 Wisdom (Perception) check finds the holes or the pressure plate.",
+    "detect": {
+      "ability": "wis",
+      "skill": "perception",
+      "dc": 15
+    },
+    "disarm": null,
+    "avoid": "Plugging the holes, or wedging an Iron Spike under the pressure plate, prevents the darts from firing.",
+    "effect": {
+      "targets": "one",
+      "save": {
+        "ability": "dex",
+        "dc": 13
+      },
+      "damage": [
+        {
+          "dice": "1d6",
+          "type": "poison",
+          "times": "1d3"
+        }
+      ],
+      "halfOnSave": false,
+      "condition": null
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "damage": [
+          {
+            "dice": "2d6",
+            "type": "poison",
+            "times": "1d3"
+          }
+        ]
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "damage": [
+          {
+            "dice": "4d6",
+            "type": "poison",
+            "times": "1d3"
+          }
+        ]
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "damage": [
+          {
+            "dice": "7d6",
+            "type": "poison",
+            "times": "1d3"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "index": "poisoned-needle",
+    "name": "Poisoned Needle",
+    "severity": "nuisance",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature opens the trap's lock improperly or fails to disarm the trap",
+    "duration": "Instantaneous",
+    "description": "A needle hidden in a lock stabs whoever opens it without the proper key: DC 11 Constitution saving throw, 5 (1d10) Poison damage and the Poisoned condition for 1 hour on a failure, half damage only on a success. A DC 15 Wisdom (Perception) check finds the needle; a DC 15 Dexterity (Sleight of Hand) check disarms it, and a failed check triggers it.",
+    "detect": {
+      "ability": "wis",
+      "skill": "perception",
+      "dc": 15
+    },
+    "disarm": {
+      "ability": "dex",
+      "skill": "sleight-of-hand",
+      "dc": 15,
+      "failureTriggers": true
+    },
+    "avoid": "The trap doesn't trigger if the lock is opened with a Knock spell or similar magic.",
+    "effect": {
+      "targets": "one",
+      "save": {
+        "ability": "con",
+        "dc": 11
+      },
+      "damage": [
+        {
+          "dice": "1d10",
+          "type": "poison"
+        }
+      ],
+      "halfOnSave": true,
+      "condition": "Poisoned"
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "dc": 13,
+        "damage": [
+          {
+            "dice": "2d10",
+            "type": "poison"
+          }
+        ]
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "dc": 15,
+        "damage": [
+          {
+            "dice": "4d10",
+            "type": "poison"
+          }
+        ]
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "dc": 17,
+        "damage": [
+          {
+            "dice": "10d10",
+            "type": "poison"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "index": "rolling-stone",
+    "name": "Rolling Stone",
+    "severity": "deadly",
+    "levels": [
+      11,
+      16
+    ],
+    "trigger": "A creature moves onto a pressure plate",
+    "duration": "Until the stone stops rolling",
+    "description": "Deadly Trap (Levels 11-16) or Nuisance Trap (Levels 17-20). A 5-foot-radius orb of stone rolls 60 feet a turn; a creature whose space it enters makes a DC 15 Dexterity saving throw or takes 55 (10d10) Bludgeoning damage and has the Prone condition. A DC 15 Intelligence (Investigation) check deduces the pressure plate's function; an Iron Spike under it stops the trap.",
+    "detect": {
+      "ability": "int",
+      "skill": "investigation",
+      "dc": 15
+    },
+    "disarm": null,
+    "avoid": "Wedging an Iron Spike or a similar object under the pressure plate prevents the trap from triggering.",
+    "effect": {
+      "targets": "all",
+      "save": {
+        "ability": "dex",
+        "dc": 15
+      },
+      "damage": [
+        {
+          "dice": "10d10",
+          "type": "bludgeoning"
+        }
+      ],
+      "halfOnSave": false,
+      "condition": "Prone"
+    },
+    "scaling": []
+  },
+  {
+    "index": "spiked-pit",
+    "name": "Spiked Pit",
+    "severity": "deadly",
+    "levels": [
+      1,
+      4
+    ],
+    "trigger": "A creature moves onto the pit's lid",
+    "duration": "Instantaneous",
+    "description": "A 10-foot-deep pit with spikes at the bottom under a hinged lid. A creature that falls in takes 3 (1d6) Bludgeoning damage plus 9 (2d8) Piercing damage. A DC 15 Intelligence (Investigation) check detects it; an Iron Spike wedged under the lid makes it safe to cross.",
+    "detect": {
+      "ability": "int",
+      "skill": "investigation",
+      "dc": 15
+    },
+    "disarm": null,
+    "avoid": "An Iron Spike or similar object wedged between the lid and the floor keeps the lid from opening.",
+    "effect": {
+      "targets": "one",
+      "save": null,
+      "damage": [
+        {
+          "dice": "1d6",
+          "type": "bludgeoning"
+        },
+        {
+          "dice": "2d8",
+          "type": "piercing"
+        }
+      ],
+      "halfOnSave": false,
+      "condition": null
+    },
+    "scaling": [
+      {
+        "levels": [
+          5,
+          10
+        ],
+        "damage": [
+          {
+            "dice": "3d6",
+            "type": "bludgeoning"
+          },
+          {
+            "dice": "3d8",
+            "type": "piercing"
+          }
+        ]
+      },
+      {
+        "levels": [
+          11,
+          16
+        ],
+        "damage": [
+          {
+            "dice": "6d6",
+            "type": "bludgeoning"
+          },
+          {
+            "dice": "8d8",
+            "type": "piercing"
+          }
+        ]
+      },
+      {
+        "levels": [
+          17,
+          20
+        ],
+        "damage": [
+          {
+            "dice": "12d6",
+            "type": "bludgeoning"
+          },
+          {
+            "dice": "13d8",
+            "type": "piercing"
+          }
+        ]
+      }
+    ]
+  }
+]
