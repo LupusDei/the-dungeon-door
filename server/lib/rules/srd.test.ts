@@ -141,3 +141,27 @@ test('every epic boon and Grappler grant a +1 the engine can read', () => {
   for (const feat of granting) assert.ok(feat.increase && feat.increase.from.length > 0 && feat.increase.from.every(Boolean), feat.id);
   assert.deepEqual(srd().feats.get('boon-of-irresistible-offense')!.increase!.from, ['str', 'dex']);
 });
+
+test('spells carry their mechanics: attack or save, damage, upcasting, healing, area, concentration', () => {
+  const { spells } = srd();
+  assert.deepEqual(spells.get('fireball'), {
+    id: 'fireball', name: 'Fireball', level: 3, classes: ['sorcerer', 'wizard'], concentration: false,
+    attack: null, save: 'dex', halfOnSave: true, damage: { dice: '8d6', type: 'fire' }, upcastDice: '1d6',
+    healing: null, area: { shape: 'Sphere', feet: 20 },
+  });
+  const bolt = spells.get('fire-bolt')!;
+  assert.deepEqual([bolt.attack, bolt.save, bolt.damage, bolt.upcastDice, bolt.area], ['ranged', null, { dice: '1d10', type: 'fire' }, null, null]);
+  assert.deepEqual(spells.get('shatter')!.upcastDice, '1d8', 'read from the description when the higher-level field is empty');
+  assert.equal(spells.get('ice-knife')!.upcastDice, null, 'its extra d6s belong to a second, cold part');
+  assert.deepEqual(spells.get('cure-wounds')!.healing, { dice: '2d8', upcastDice: '2d8' });
+  assert.deepEqual([spells.get('bless')!.concentration, spells.get('bless')!.damage], [true, null]);
+  assert.equal(spells.get('hold-person')!.save, 'wis');
+  assert.equal(spells.get('hold-person')!.halfOnSave, false);
+});
+
+test('cantrips scale with character level: more dice, or more beams', () => {
+  const { cantripScaling } = srd();
+  assert.deepEqual(cantripScaling.get('fire-bolt'), [{ level: 5, dice: '2d10', beams: null }, { level: 11, dice: '3d10', beams: null }, { level: 17, dice: '4d10', beams: null }]);
+  assert.deepEqual(cantripScaling.get('eldritch-blast')!.map((s) => s.beams), [2, 3, 4]);
+  assert.deepEqual(cantripScaling.get('spare-the-dying'), [], 'non-damage upgrades are left to the DM');
+});
