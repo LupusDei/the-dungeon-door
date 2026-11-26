@@ -153,6 +153,9 @@ test('spells carry their mechanics: attack or save, damage, upcasting, healing, 
   assert.deepEqual([bolt.attack, bolt.save, bolt.damage, bolt.upcastDice, bolt.area], ['ranged', null, { dice: '1d10', type: 'fire' }, null, null]);
   assert.deepEqual(spells.get('shatter')!.upcastDice, '1d8', 'read from the description when the higher-level field is empty');
   assert.equal(spells.get('ice-knife')!.upcastDice, null, 'its extra d6s belong to a second, cold part');
+  assert.equal(spells.get('acid-arrow')!.upcastDice, '1d4', 'the damage (both initial and later) increases');
+  assert.equal(spells.get('flame-strike')!.upcastDice, '1d6', 'the Fire damage and the Radiant damage increase');
+  assert.deepEqual([spells.get('conjure-celestial')!.upcastDice, spells.get('conjure-celestial')!.healing!.upcastDice], ['1d12', '1d12'], 'the healing and damage increase');
   assert.deepEqual(spells.get('cure-wounds')!.healing, { dice: '2d8', upcastDice: '2d8' });
   assert.deepEqual([spells.get('bless')!.concentration, spells.get('bless')!.damage], [true, null]);
   assert.equal(spells.get('hold-person')!.save, 'wis');

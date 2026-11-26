@@ -223,9 +223,10 @@ const weaponSchema = z.object({
 const skillSchema = z.object({ index: z.string(), abilityScore: ability });
 const SAVE = /(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) saving throw/;
 const HALF_ON_SAVE = /half as much damage|half damage/i;
-const DAMAGE_UPCAST = /damage increases by (\d+d\d+) for each (?:spell )?slot level above/;
+/** "The damage increases by…", "The damage (both initial and later) increases…", "…Radiant damage increase by…". */
+const DAMAGE_UPCAST = /damage(?: \([^)]*\))? increases? by (\d+d\d+) for each (?:spell )?slot level above/;
 const HEALING = /Hit Points equal to (\d+d\d+) plus your spellcasting ability modifier/;
-const HEALING_UPCAST = /healing increases by (\d+d\d+) for each (?:spell )?slot level above/;
+const HEALING_UPCAST = /healing(?: and damage)? increases? by (\d+d\d+) for each (?:spell )?slot level above/;
 const AREA = /(\d+)-foot(?:-radius|-long|-wide|-tall|-high)?,? ?(?:\d+-foot[- ](?:wide|tall|high|radius),? ?)?(Sphere|Cone|Cube|Line|Cylinder|Emanation)/;
 
 const spellSchema = z.object({
