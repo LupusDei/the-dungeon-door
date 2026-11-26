@@ -7,7 +7,7 @@
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
 import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
-import { conditionsOf } from '../rules/conditions.ts';
+import { conditionsOf, withCondition } from '../rules/conditions.ts';
 import { type LightLevel, monsterSight, sightOf } from '../rules/light.ts';
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
 import { monster } from '../rules/monsters.ts';
@@ -126,6 +126,7 @@ export function caught(combat: CombatState, side: Combatant['side'], n: number):
 // ---- telling the round ----
 
 type Names = (id: string) => string;
+const titled = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names) => string } = {
   attack: ({ actor, result: r, reaction }, name) =>
@@ -136,6 +137,10 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
       `${name(o.target)} ${o.attack ? (o.attack.hit ? 'is hit' : 'is missed') : o.save!.success ? 'saves' : 'fails the save'}` +
       (o.damage > 0 ? `, ${o.damage} damage` : '')).join('; ') + '.',
   dodge: ({ actor }, name) => `${name(actor)} dodges.`,
+  power: ({ actor, power, dc, ability, outcomes }, name) =>
+    `${name(actor)} uses ${power} (DC ${dc} ${ability.toUpperCase()} save): ` + outcomes.map((o) =>
+      `${name(o.target)} ${o.success ? 'saves' : 'fails'}${o.damage > 0 ? `, ${o.damage} damage` : ''}${o.condition ? `, ${titled(o.condition)}` : ''}`).join('; ') + '.',
+  recharge: ({ actor, power, roll }, name) => `${name(actor)}: ${power} is ready again (d6: ${roll}).`,
   deathSave: ({ actor, status }, name) => `${name(actor)} makes a death save: ${status}.`,
   skip: ({ actor }, name) => `${name(actor)} cannot act.`,
   potion: ({ actor, item: id, healed }, name) => `${name(actor)} drinks a ${item(id).name} as a Bonus Action: ${healed} HP back.`,
@@ -258,6 +263,22 @@ function freedFrom(combat: CombatState, sheets: Record<string, CharacterSheet>):
   return { ...combat, combatants };
 }
 
+/** A condition a monster's power brought a hero goes on its sheet, with how it ends; its combatant carries it. */
+function lastingOnSheets(before: CombatState, after: CombatState, sheets: Record<string, CharacterSheet>): { combat: CombatState; sheets: Record<string, CharacterSheet> } {
+  const out = { ...sheets };
+  const combatants = { ...after.combatants };
+  for (const e of after.log.slice(before.log.length)) {
+    if (e.kind !== 'power') continue;
+    const lasting = after.combatants[e.actor].powers!.find((p) => p.name === e.power)!.lasting!;
+    for (const o of e.outcomes.filter((x) => x.condition && Object.hasOwn(out, x.target))) {
+      out[o.target] = withCondition(out[o.target], lasting);
+      const c = combatants[o.target];
+      combatants[o.target] = { ...c, carried: [...new Set([...(c.carried ?? []), lasting.condition])] };
+    }
+  }
+  return { combat: { ...after, combatants }, sheets: out };
+}
+
 /**
  * Plays one round: first each hero tries to end what a save or check ends (play/conditions.ts), then each
  * acts by its vote and the monsters by rule; the hurt keep concentrating or not; then the fight is settled if it ended.
@@ -273,7 +294,8 @@ export function fightRound(party: PartyState, combat: CombatState, votes: Combat
     state = act(turn.state, turn.action);
   }
   const shaken = morale(start, state);
-  const kept = keepConcentration(start, shaken.combat, sheets);
+  const marked = lastingOnSheets(start, shaken.combat, sheets);
+  const kept = keepConcentration(start, marked.combat, marked.sheets);
   const lines = [...freed.lines, ...tell(start, state), ...shaken.lines, ...tell(state, shaken.combat), ...kept.lines];
   return settleFight(synced({ ...freed.party, sheets: kept.sheets }, kept.combat), kept.combat, lines, shaken.broke);
 }

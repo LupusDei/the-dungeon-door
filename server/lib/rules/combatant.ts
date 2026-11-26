@@ -1,6 +1,7 @@
 /** Heroes and monsters in one shape for combat. A Combatant is plain JSON, stored inside the combat state. */
 import { type Ability, abilityModifier } from './abilities.ts';
 import type { DamageRoll, Monster } from './monsters.ts';
+import type { Power } from './powers.ts';
 import { heroResistances } from './defenses.ts';
 import { d20Modifier } from './rests.ts';
 import type { CharacterSheet } from './sheet.ts';
@@ -37,6 +38,9 @@ export interface Combatant {
   status: Status;
   /** What defeating it is worth (monsters); 0 for heroes. */
   xp: number;
+  /** A monster's save abilities (powers.ts), and the uses spent of those that recharge or run out. */
+  powers?: Power[];
+  spent?: Record<string, number>;
   /** A monster's Multiattack: the attacks it makes in a turn, by name. */
   multiattack?: string[];
   /** Undead, constructs and oozes: they never break (no morale check). Monsters only. */
@@ -99,5 +103,6 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     resistances: m.resistances, vulnerabilities: m.vulnerabilities, immunities: m.immunities, conditionImmunities: m.conditionImmunities,
     ...fresh(), xp: m.xp, ...(FEARLESS.test(m.type) ? { fearless: true as const } : {}),
     ...(m.multiattack.length ? { multiattack: m.multiattack } : {}),
+    ...(m.powers.length ? { powers: m.powers } : {}),
   };
 }

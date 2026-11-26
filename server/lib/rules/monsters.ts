@@ -7,6 +7,7 @@ import crToXpJson from '../../data/srd/5.2/crToXp.json' with { type: 'json' };
 import budgetsJson from '../../data/srd/5.2/encounterBudgets.json' with { type: 'json' };
 import monstersJson from '../../data/srd/5.2/monsters.json' with { type: 'json' };
 import { ABILITIES, type Ability, type AbilityScores, abilityModifier } from './abilities.ts';
+import { type Power, powersOf } from './powers.ts';
 import { once, parseTable } from './srd.ts';
 import { lookup, require } from './violation.ts';
 
@@ -30,8 +31,10 @@ export interface Monster {
   passivePerception: number;
   /** Feet of each special sense (0 without): darkvision sees darkness as dim light; blindsight and truesight see in it. */
   senses: { darkvision: number; blindsight: number; truesight: number };
-  /** Attack-roll actions only; save-based actions (breath weapons) are left to the DM for now. */
+  /** Its attack-roll actions. */
   attacks: MonsterAttack[];
+  /** Its save abilities: breath weapons, webs (powers.ts). */
+  powers: Power[];
   /** The attacks its Multiattack makes in a turn, by name (two or more); [] without one. */
   multiattack: string[];
 }
@@ -43,6 +46,8 @@ const headsOr = (count: string) => (/^\d+$/.test(count) ? Number(count) : 5);
 const action = z.object({
   name: z.string(), desc: z.string(), attackBonus: z.number().optional(),
   actions: z.array(z.object({ actionName: z.string(), count: z.string().transform(headsOr) })).optional(),
+  dc: z.object({ dcType: ref, dcValue: z.number(), successType: z.string() }).optional(),
+  usage: z.object({ type: z.string(), minValue: z.number().optional(), times: z.number().optional() }).optional(),
   damage: z.array(z.object({ damageDice: z.string(), damageType: ref })).optional(),
 });
 
@@ -118,7 +123,7 @@ const monsterSchema = z.object({
     skills: Object.fromEntries([...listed].filter(([id]) => id.startsWith(SKILL)).map(([id, value]) => [id.slice(SKILL.length), value])),
     passivePerception: m.senses.passivePerception,
     senses: { darkvision: feet(m.senses.darkvision), blindsight: feet(m.senses.blindsight), truesight: feet(m.senses.truesight) },
-    attacks, multiattack: multiattackOf(m.actions, attacks),
+    attacks, multiattack: multiattackOf(m.actions, attacks), powers: powersOf(m.actions),
   };
 });
 

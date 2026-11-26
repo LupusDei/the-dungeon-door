@@ -311,3 +311,16 @@ test('Attack with Extra Attack: the best weapon again for each extra attack; wit
   assert.deepEqual(heroAction(combat, veteran, 'p1', 'a', 12).action, { kind: 'attack', attack: best, target: 'foe-1', natural: 12, then: [best] });
   assert.equal('then' in heroAction(combat, fighter, 'p1', 'a', 12).action, false);
 });
+
+test('a monster power is told, and the condition it brings goes on the hero sheet, with how it ends', () => {
+  const start = startFight(party({ p1: fighter }), ['giant-spider']);
+  const clumsy = patch(start.combat, { p1: { saveBonuses: { ...start.combat.combatants.p1.saveBonuses, dex: -50 }, attacks: harmless, hp: 500, maxHp: 500 } });
+  const round = fightRound(start.party, clumsy, {});
+  assert.ok(round.lines.includes('Giant Spider uses Web (DC 13 DEX save): Bryn fails, Restrained.'), round.lines.join('\n'));
+  assert.deepEqual(round.party.sheets.p1.conditions, [{ condition: 'restrained', until: { kind: 'escape', ability: 'str', skill: 'athletics', dc: 13 } }]);
+  assert.deepEqual(round.combat.combatants.p1.carried, ['restrained']);
+  const wolf = startFight(party({ p1: fighter }), ['winter-wolf']);
+  const hard = fightRound(wolf.party, patch(wolf.combat, { p1: { attacks: harmless, hp: 500, maxHp: 500 } }), {});
+  assert.ok(hard.lines.some((l) => /^Winter Wolf uses Cold Breath \(DC 12 CON save\): Bryn (saves|fails), \d+ damage\.$/.test(l)), hard.lines.join('\n'));
+  assert.equal(hard.party.sheets.p1.conditions, undefined, 'no condition, nothing on the sheet');
+});

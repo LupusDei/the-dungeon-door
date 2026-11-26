@@ -2,11 +2,12 @@
  * A combat scene: initiative, turns and rounds over plain-JSON state, resumable from storage. Heroes act by
  * their players' votes (the vote's d20 is the roll); monsters act by simple rules. See docs/rules-design.md.
  */
-import type { Combatant, Status } from './combatant.ts';
+import type { Combatant, Condition, Status } from './combatant.ts';
+import type { Power } from './powers.ts';
 import { parseDice, rollDice } from './dice.ts';
-import { type AttackResult, type Cover, attackRoll, deathSave, heal, rollD20 } from './resolve.ts';
+import { addCondition, type AttackResult, type Cover, type D20, damageAfterDefenses, attackRoll, deathSave, heal, rollD20, savingThrow, takeDamage } from './resolve.ts';
 import { type Rng, seededRng } from './rng.ts';
-import { type Caster, resolveSpell, type SpellOutcome } from './spellEffects.ts';
+import { areaCatch, type Caster, resolveSpell, type SpellOutcome } from './spellEffects.ts';
 import type { Cast } from './spells.ts';
 import { lookup, require } from './violation.ts';
 
@@ -14,17 +15,24 @@ export type Action =
   /** `then`: the turn's further attacks (Multiattack, Extra Attack), each at the most wounded foe still up. */
   | { kind: 'attack'; attack: string; target: string; natural?: number; cover?: Cover; advantage?: boolean; disadvantage?: boolean; then?: string[] }
   | { kind: 'dodge' }
+  /** A monster's save ability (powers.ts) at these targets. */
+  | { kind: 'power'; power: string; targets: string[] }
   /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
   | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number };
 export type CombatEvent =
   | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true }
   | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
   | { kind: 'dodge'; round: number; actor: string }
+  | { kind: 'power'; round: number; actor: string; power: string; dc: number; ability: string; outcomes: PowerOutcome[] }
+  /** A spent power comes back on its d6 at the start of the monster's turn. */
+  | { kind: 'recharge'; round: number; actor: string; power: string; roll: number }
   | { kind: 'deathSave'; round: number; actor: string; status: Status }
   | { kind: 'skip'; round: number; actor: string }
   /** A healing potion drunk as a Bonus Action before the turn's action. */
   | { kind: 'potion'; round: number; actor: string; item: string; healed: number };
 export interface Choice { label: string; action: Action }
+/** `condition`: what the failed save brought (none if it is immune). */
+export interface PowerOutcome { target: string; roll: D20 | null; success: boolean; damage: number; condition: Condition | null }
 
 export interface CombatState {
   version: 1;
@@ -68,10 +76,22 @@ function advance(state: CombatState, rng: Rng): CombatState {
     const id = currentActor(s);
     s = { ...s, dodging: s.dodging.filter((d) => d !== id) };
     const c = s.combatants[id];
-    if (canAct(c)) return s;
+    if (canAct(c)) return recharged(s, c, rng);
     s = c.status === 'dying' ? afterDeathSave(s, id, rng) : withEvent(s, { kind: 'skip', round: s.round, actor: id }, c);
   }
   return s;
+}
+
+const rechargeOf = (p: Power) => (p.uses?.kind === 'recharge' ? p.uses.min : null);
+
+/** At the start of its turn a monster rolls a d6 for each spent power that recharges; on its number it is back. */
+function recharged(state: CombatState, c: Combatant, rng: Rng): CombatState {
+  return (c.powers ?? []).filter((p) => rechargeOf(p) !== null && (c.spent?.[p.name] ?? 0) > 0).reduce((s, p) => {
+    const roll = rng.die(6);
+    if (roll < rechargeOf(p)!) return s;
+    const me = s.combatants[c.id];
+    return withEvent(s, { kind: 'recharge', round: s.round, actor: c.id, power: p.name, roll }, { ...me, spent: { ...me.spent, [p.name]: 0 } });
+  }, state);
 }
 
 function withEvent(state: CombatState, event: CombatEvent, ...changed: Combatant[]): CombatState {
@@ -136,6 +156,28 @@ function resolveCast(state: CombatState, actor: Combatant, action: Extract<Actio
   return withEvent(state, { kind: 'spell', round: state.round, actor: actor.id, spellId: action.cast.spellId, outcomes: resolved.outcomes }, ...resolved.targets);
 }
 
+/** One target's save against a power: all the rolled damage, half or none, after its defenses; a failure may bring the condition. */
+function saveAgainst(rng: Rng, target: Combatant, power: Power, rolled: { type: string; amount: number }[]): { outcome: PowerOutcome; target: Combatant } {
+  const { roll, success } = savingThrow(rng, target, power.ability, power.dc, {});
+  const share = (amount: number) => (success ? (power.half ? Math.floor(amount / 2) : 0) : amount);
+  const taken = rolled.reduce((sum, d) => sum + damageAfterDefenses(target, share(d.amount), d.type), 0);
+  const hurt = takeDamage(target, taken, false);
+  const lasting = success || hurt.status === 'dead' ? null : power.lasting;
+  const after = lasting ? addCondition(hurt, lasting.condition) : hurt;
+  const condition = lasting && after.conditions.includes(lasting.condition) ? lasting.condition : null;
+  return { outcome: { target: target.id, roll, success, damage: taken, condition }, target: after };
+}
+
+/** The damage is rolled once for everyone; each target saves (saveAgainst); the use is spent. */
+function resolvePower(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'power' }>, rng: Rng): CombatState {
+  const power = actor.powers!.find((p) => p.name === action.power)!;
+  const rolled = power.damage.map((d) => ({ type: d.type, amount: rollDice(rng, parseDice(d.dice)).total }));
+  const hit = action.targets.map((id) => saveAgainst(rng, state.combatants[id], power, rolled));
+  const spent = { ...actor, spent: { ...actor.spent, [power.name]: (actor.spent?.[power.name] ?? 0) + 1 } };
+  const event: CombatEvent = { kind: 'power', round: state.round, actor: actor.id, power: power.name, dc: power.dc, ability: power.ability, outcomes: hit.map((h) => h.outcome) };
+  return withEvent(state, event, spent, ...hit.map((h) => h.target));
+}
+
 const dodge = (state: CombatState, actor: Combatant) =>
   withEvent({ ...state, dodging: [...state.dodging, actor.id] }, { kind: 'dodge', round: state.round, actor: actor.id }, actor);
 
@@ -143,6 +185,7 @@ const ACTIONS: { [K in Action['kind']]: (state: CombatState, actor: Combatant, a
   attack: resolveAttack,
   spell: resolveCast,
   dodge: (state, actor) => dodge(state, actor),
+  power: resolvePower,
 };
 
 /** The current combatant takes `action`; then the turn passes on. */
@@ -172,10 +215,34 @@ export function drinkPotion(state: CombatState, item: string, dice: string): Com
   return { ...withEvent(state, event, healed), rng: rng.state() };
 }
 
-/** A monster's turn: its Multiattack, or its first melee attack (or first attack), on the up hero with the fewest HP. Null on a hero's turn. */
+/** Whether a power can be used now: at will, not spent while it recharges, or with uses left. */
+function ready(me: Combatant, p: Power): boolean {
+  const spent = me.spent?.[p.name] ?? 0;
+  if (p.uses?.kind === 'per-day') return spent < p.uses.times;
+  return spent === 0;
+}
+
+/** Its best move now: a power that recharges or runs out when it is ready; an at-will power only when it has no attack. */
+function chosenPower(me: Combatant): Power | undefined {
+  const powers = me.powers ?? [];
+  return powers.find((p) => p.uses !== null && ready(me, p)) ?? (me.attacks.length ? undefined : powers[0]);
+}
+
+/** Those a power catches: the most wounded heroes up, as many as its area holds (areaCatch), or one. */
+function caughtBy(state: CombatState, me: Combatant, p: Power): string[] {
+  const up = upAgainst(state, me.side).sort((a, b) => a.hp - b.hp);
+  return up.slice(0, p.area ? areaCatch(p.area) : 1).map((c) => c.id);
+}
+
+/**
+ * A monster's turn: a ready power that recharges or runs out; else its Multiattack, or its first melee attack (or
+ * first attack), on the up hero with the fewest HP. Null on a hero's turn.
+ */
 export function monsterAction(state: CombatState): Action | null {
   const me = state.combatants[currentActor(state)];
   if (me.side === 'party') return null;
+  const power = chosenPower(me);
+  if (power) return { kind: 'power', power: power.name, targets: caughtBy(state, me, power) };
   const target = fewestHp(upAgainst(state, me.side));
   const [first, ...then] = me.multiattack ?? [(me.attacks.find((a) => !a.ranged) ?? me.attacks[0]).name];
   return { kind: 'attack', attack: first, target: target.id, ...(then.length ? { then } : {}) };

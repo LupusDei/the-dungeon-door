@@ -4,6 +4,7 @@ import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from '.
 import { monster } from './monsters.ts';
 import { act, choicesFor, currentActor, drinkPotion, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
 import { SAMPLE } from './sheet.fixture.ts';
+import type { CombatState } from './scene.ts';
 
 const hero = (id: string, o: Partial<Combatant> = {}): Combatant => ({ ...heroCombatant(id, { ...SAMPLE, name: id }), ...o });
 const goblin = (id: string, o: Partial<Combatant> = {}): Combatant => ({ ...monsterCombatant(id, monster('goblin-warrior')), name: id, ...o });
@@ -192,4 +193,62 @@ test('Extra Attack: a hero adds one attack; a Fighter two or three at levels 11 
   assert.equal(extraAttacks({ ...SAMPLE, features: ['Extra Attack'] }), 1);
   assert.equal(extraAttacks({ ...SAMPLE, features: ['Extra Attack', 'Two Extra Attacks'] }), 2);
   assert.equal(extraAttacks({ ...SAMPLE, features: ['Extra Attack', 'Two Extra Attacks', 'Three Extra Attacks'] }), 3);
+});
+
+const wolf = (o: Partial<Combatant> = {}): Combatant => ({ ...monsterCombatant('ww', monster('winter-wolf')), ...o });
+const onTurn = (s: CombatState, id: string): CombatState => ({ ...s, turn: s.order.indexOf(id) });
+
+test('a monster with a ready power uses it: the most wounded heroes up its area catches; then it is spent', () => {
+  const s = onTurn(startCombat(3, [hero('bryn', { hp: 30 }), hero('ash', { hp: 20 }), hero('cy', { hp: 25 }), hero('di', { hp: 0, status: 'stable' }), wolf()]), 'ww');
+  assert.deepEqual(monsterAction(s), { kind: 'power', power: 'Cold Breath', targets: ['ash', 'cy'] }, 'a 15-foot Cone catches two');
+  const done = act(s, monsterAction(s)!);
+  const e = done.log.find((x) => x.kind === 'power')!;
+  assert.ok(e.kind === 'power');
+  assert.deepEqual(e.outcomes.map((o) => o.target), ['ash', 'cy']);
+  for (const o of e.outcomes) assert.equal(done.combatants[o.target].hp, s.combatants[o.target].hp - o.damage);
+  assert.equal(done.combatants.ww.spent!['Cold Breath'], 1);
+  const again = onTurn({ ...done, combatants: { ...done.combatants, ww: { ...done.combatants.ww, spent: { 'Cold Breath': 1 } } } }, 'ww');
+  assert.equal(monsterAction(again)!.kind, 'attack', 'spent: it bites');
+});
+
+test('a power: one damage roll for all; a failure takes it all, a success half (or none), after defenses', () => {
+  const sure = (o: Partial<Combatant>) => hero('x', { hp: 90, maxHp: 90, saveBonuses: { ...hero('x').saveBonuses, con: 50 }, ...o });
+  const sorry = (o: Partial<Combatant>) => hero('y', { hp: 90, maxHp: 90, saveBonuses: { ...hero('y').saveBonuses, con: -50 }, ...o });
+  const s = onTurn(startCombat(4, [sure({}), sorry({}), wolf()]), 'ww');
+  const done = act(s, { kind: 'power', power: 'Cold Breath', targets: ['x', 'y'] });
+  const e = done.log.find((x) => x.kind === 'power')!;
+  assert.ok(e.kind === 'power');
+  const [saved, failed] = e.outcomes;
+  assert.deepEqual([saved.success, failed.success], [true, false]);
+  assert.equal(saved.damage, Math.floor(failed.damage / 2));
+  assert.ok(failed.damage >= 4);
+  const warm = act(onTurn(startCombat(4, [sorry({ resistances: ['cold'] }), wolf()]), 'ww'), { kind: 'power', power: 'Cold Breath', targets: ['y'] });
+  const w = warm.log.find((x) => x.kind === 'power')!;
+  assert.ok(w.kind === 'power' && w.outcomes[0].damage < failed.damage, 'resistance halves it');
+  const spider = monsterCombatant('sp', monster('giant-spider'));
+  const webbed = act(onTurn(startCombat(4, [sure({ saveBonuses: { ...hero('x').saveBonuses, dex: 50 } }), sorry({ saveBonuses: { ...hero('y').saveBonuses, dex: -50 } }), spider]), 'sp'), { kind: 'power', power: 'Web', targets: ['x', 'y'] });
+  const web = webbed.log.find((x) => x.kind === 'power')!;
+  assert.ok(web.kind === 'power');
+  assert.deepEqual(web.outcomes.map((o) => [o.success, o.damage, o.condition]), [[true, 0, null], [false, 0, 'restrained']]);
+  assert.deepEqual(webbed.combatants.y.conditions, ['restrained']);
+  const immune = act(onTurn(startCombat(4, [sorry({ saveBonuses: { ...hero('y').saveBonuses, dex: -50 }, conditionImmunities: ['restrained'] }), spider]), 'sp'), { kind: 'power', power: 'Web', targets: ['y'] });
+  const im = immune.log.find((x) => x.kind === 'power')!;
+  assert.ok(im.kind === 'power' && im.outcomes[0].condition === null, 'immune: nothing');
+});
+
+test('a spent power recharges on its d6 at the start of the monster turn; a power a day runs out; at will only without attacks', () => {
+  let seen = false;
+  for (let seed = 0; seed < 40 && !seen; seed++) {
+    const s = startCombat(seed, [hero('bryn', { attacks: harmless, hp: 500, maxHp: 500 }), wolf({ spent: { 'Cold Breath': 1 }, attacks: harmless })]);
+    const later = playRound(playRound(s, {}), {});
+    const r = later.log.find((e) => e.kind === 'recharge');
+    if (r && r.kind === 'recharge') { seen = true; assert.ok(r.roll >= 5); assert.equal(r.power, 'Cold Breath'); }
+  }
+  assert.ok(seen, 'some seed recharges it');
+  const dretch = (spent: number) => onTurn(startCombat(2, [hero('bryn'), { ...monsterCombatant('d', monster('dretch')), spent: { 'Fetid Cloud': spent } }]), 'd');
+  assert.equal(monsterAction(dretch(0))!.kind, 'power');
+  assert.equal(monsterAction(dretch(1))!.kind, 'attack', 'once a day, used');
+  const glad = monsterCombatant('g', monster('gladiator'));
+  assert.equal(monsterAction(onTurn(startCombat(2, [hero('bryn'), glad]), 'g'))!.kind, 'attack', 'at will, but it has attacks');
+  assert.deepEqual(monsterAction(onTurn(startCombat(2, [hero('bryn'), { ...glad, attacks: [] }]), 'g')), { kind: 'power', power: 'Shield Bash', targets: ['bryn'] });
 });
