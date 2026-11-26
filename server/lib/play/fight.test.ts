@@ -97,8 +97,8 @@ test('Cast: the caster’s best attack spell it can cast now; a leveled one spen
   assert.equal(bestSpell(spent)!.level, 0, 'no slots left: a cantrip');
 });
 
-test('a round where the heroes cannot miss: victory, the living heroes split the XP and level up', () => {
-  const { combat, party: p } = startFight(party(), ['goblin-warrior', 'goblin-warrior']);
+test('a round where the heroes cannot miss: victory, the living heroes split the XP (and level up only at the quest’s end)', () => {
+  const { combat, party: p } = startFight(party({ p1: { ...fighter, xp: 290 }, p2: wizard }), ['goblin-warrior', 'goblin-warrior']);
   const strong = patch(combat, { p1: { attacks: deadly }, p2: { attacks: deadly }, 'foe-1': { attacks: harmless }, 'foe-2': { attacks: harmless } });
   const votes = { p1: { choiceId: 'a' as const, roll: 10 }, p2: { choiceId: 'a' as const, roll: 10 } };
   let result = fightRound(p, strong, votes);
@@ -108,12 +108,13 @@ test('a round where the heroes cannot miss: victory, the living heroes split the
     lines.push(...result.lines);
   }
   assert.equal(result.ended, 'victory');
-  assert.deepEqual([result.party.sheets.p1.xp, result.party.sheets.p2.xp], [50, 50]);
+  assert.deepEqual([result.party.sheets.p1.xp, result.party.sheets.p2.xp], [340, 50]);
+  assert.equal(result.party.sheets.p1.level, 1, 'past 300 XP, still level 1 until the quest ends');
   assert.ok(lines.includes('Victory! 100 XP, 50 each.'));
   assert.deepEqual(lines.filter((l) => / falls\.$/.test(l)).sort(), ['Goblin Warrior 1 falls.', 'Goblin Warrior 2 falls.'], 'each foe falls once; no hero');
 });
 
-test('XP that reaches a new level levels the hero up on the spot (average hit points)', () => {
+test('XP that reaches a new level levels the hero up (at the quest’s end: average hit points)', () => {
   const ready = { ...fighter, xp: 300 };
   const up = autoLevelUp(ready);
   assert.deepEqual([up.sheet.level, up.sheet.maxHp - fighter.maxHp], [2, 6 + Math.floor((fighter.abilityScores.con - 10) / 2)]);

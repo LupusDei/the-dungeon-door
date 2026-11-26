@@ -12,8 +12,9 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
 import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } from '../types.ts';
 import { startDungeon } from './delve.ts';
+import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
-import type { PartyState } from './state.ts';
+import type { LevelUp, PartyState } from './state.ts';
 import { pickChoice, playTurn, type FightNews, type RulesState } from './turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
@@ -76,6 +77,25 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
     fight: turn.fight,
     round: inFight,
   };
+}
+
+/**
+ * The quest is over: each living hero levels up as far as its XP reaches (2024 thresholds, play/fight.ts
+ * autoLevelUp). The lines join the scene's, for the table and for the DM's epilogue.
+ */
+export function endQuest(step: EngineStep): EngineStep {
+  const { party } = step.state;
+  const levelUps: LevelUp[] = [];
+  const lines = [...(party.results ?? [])];
+  const sheets = { ...party.sheets };
+  for (const [playerId, sheet] of Object.entries(party.sheets).filter(([, s]) => !s.dead)) {
+    const up = autoLevelUp(sheet);
+    if (up.sheet.level > sheet.level) levelUps.push({ playerId, from: sheet.level, to: up.sheet.level });
+    sheets[playerId] = up.sheet;
+    lines.push(...up.lines);
+  }
+  const rules = step.resolution.rules && { ...step.resolution.rules, lines };
+  return { ...step, state: { ...step.state, party: { ...party, sheets, results: lines, levelUps } }, resolution: { ...step.resolution, rules } };
 }
 
 /**

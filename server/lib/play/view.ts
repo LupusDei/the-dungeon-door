@@ -80,6 +80,8 @@ export interface RulesView {
     waiting: Waiting | null;
   };
   results: string[];
+  /** Who levelled up at the quest's end (empty until then). */
+  levelUps: { playerId: string; name: string; from: number; to: number }[];
   /** Seconds since the adventure began, and the clock ("Day 1, 08:40"). */
   time: { seconds: number; label: string };
   /** What the party sees by here: the light level and the light it carries. */
@@ -128,6 +130,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
       waiting: waiting(dungeon),
     },
     results,
+    levelUps: (party.levelUps ?? []).map((u) => ({ ...u, name: party.sheets[u.playerId].name })),
     time: { seconds: clockOf(party), label: clockLabel(clockOf(party)) },
     light: { level: light, source: litView(state) },
   };

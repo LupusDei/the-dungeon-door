@@ -228,18 +228,12 @@ export function autoLevelUp(sheet: CharacterSheet): { sheet: CharacterSheet; lin
   return { sheet: s, lines };
 }
 
-/** The XP split among the living heroes, who level up on the spot. */
+/** The XP split among the living heroes; they level up with it at the quest's end (play/table.ts endQuest). */
 function award(party: PartyState, combat: CombatState, xp: number, headline: string): { party: PartyState; lines: string[] } {
   const alive = Object.keys(party.sheets).filter((id) => Object.hasOwn(combat.combatants, id) && living(combat.combatants[id]));
   const share = splitXp(xp, alive.length); // the hero who struck the last blow is alive
-  const lines = [xp === 0 ? headline : `${headline} ${xp} XP, ${share} each.`];
-  const sheets = { ...party.sheets };
-  for (const id of alive) {
-    const up = autoLevelUp(awardXp(sheets[id], share));
-    sheets[id] = up.sheet;
-    lines.push(...up.lines);
-  }
-  return { party: { ...party, sheets }, lines };
+  const sheets = { ...party.sheets, ...Object.fromEntries(alive.map((id) => [id, awardXp(party.sheets[id], share)])) };
+  return { party: { ...party, sheets }, lines: [xp === 0 ? headline : `${headline} ${xp} XP, ${share} each.`] };
 }
 
 function endOf(combat: CombatState, broke: Break | null): FightEnd | null {

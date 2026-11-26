@@ -7,7 +7,7 @@ import type { Game, GamePlayer, StoredScene } from '../types.ts';
 import { dungeonLevel } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
-import { choiceView, dungeonMode, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
+import { choiceView, dungeonMode, endQuest, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const player = (playerId: string, name: string, sheet?: typeof fighter): GamePlayer => ({
@@ -111,4 +111,20 @@ test('at the end the heroes go home: their sheets after a long rest (the fallen 
 test('the dead go home dead: no rest, no HP', () => {
   const ghost = { ...fighter, hp: 0, dead: true, hitDiceSpent: 1 };
   assert.deepEqual(writeBack({ version: 1, rng: 1, sheets: { p1: ghost } }, [player('p1', 'Bryn')])[0].sheet, ghost);
+});
+
+test('at the quest’s end the living heroes level up as far as their XP reaches; the dead do not; the lines go to the table and the DM', () => {
+  const party: PartyState = { version: 1, rng: 1, sheets: { p1: { ...fighter, xp: 300 }, p2: { ...fighter, name: 'Cleo', xp: 900, dead: true }, p3: { ...fighter, name: 'Dag', xp: 299 } } };
+  const story = engineStep({ party, combat: null, dungeon: null }, scene([{ id: 'a', label: '', detail: '' }]), resolution(['a'], [['p1', 'a', 2]]));
+  const ended = endQuest(story);
+  const gained = ended.state.party.sheets.p1.maxHp - fighter.maxHp;
+  assert.deepEqual([ended.state.party.sheets.p1.level, ended.state.party.sheets.p2.level, ended.state.party.sheets.p3.level], [2, 1, 1]);
+  assert.deepEqual(ended.state.party.levelUps, [{ playerId: 'p1', from: 1, to: 2 }]);
+  assert.deepEqual(ended.state.party.results, [...story.state.party.results!, `Bryn reaches level 2 (+${gained} max HP).`]);
+  assert.deepEqual(ended.resolution.rules!.lines, ended.state.party.results);
+  assert.deepEqual(endQuest({ ...story, resolution: { ...story.resolution, rules: null } }).resolution.rules, null);
+  const none = endQuest(engineStep({ party: { ...party, sheets: { p3: party.sheets.p3 } }, combat: null, dungeon: null }, scene([]), resolution([], [])));
+  assert.deepEqual(none.state.party.levelUps, []);
+  const fresh = endQuest({ ...story, state: { ...story.state, party } }); // a party with no lines yet
+  assert.deepEqual(fresh.state.party.results, [`Bryn reaches level 2 (+${gained} max HP).`]);
 });

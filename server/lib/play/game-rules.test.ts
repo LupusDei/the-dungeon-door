@@ -298,3 +298,24 @@ test('phase 4 in play: the clock, the torch from the pack, a web that holds, Bre
   state = await view(code, host);
   assert.ok(state.rules!.results.some((l) => /^Hero 1 (breaks free|strains against being Restrained)/.test(l)), state.rules!.results.join(' | '));
 });
+
+test('at the epilogue the heroes level up by their XP: the table, the DM and the API see it, and the hero goes home levelled', async () => {
+  const seen: { ctx: DMContext; resolution?: Resolution }[] = [];
+  registerDungeonMaster('chronicler', hookDM(null, 'Walk on', seen));
+  const { code, players, host, characters } = await table(2);
+  await start(code, host, { sceneCount: 2 });
+  await settle();
+  const game = (await getStore().getGame(code))!;
+  await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: { ...game.party!.sheets, [host]: { ...game.party!.sheets[host], xp: 300 } } } });
+  await voteAll(code, players, 0, 'b');
+  const state = await view(code, host);
+  assert.equal(state.status, 'ended');
+  assert.deepEqual(state.rules!.levelUps, [{ playerId: host, name: 'Hero 1', from: 1, to: 2 }]);
+  const line = state.rules!.results.find((l) => /^Hero 1 reaches level 2 \(\+\d+ max HP\)\.$/.test(l));
+  assert.ok(line, state.rules!.results.join(' | '));
+  assert.ok(state.messages.some((m) => m.kind === 'system' && m.text === line), 'told to the table');
+  assert.ok(seen.at(-1)!.resolution!.rules!.lines.includes(line!), 'and to the DM for the epilogue');
+  assert.equal(seen.at(-1)!.ctx.rules!.party[0].level, 2);
+  const { body } = await call<{ characters: Character[] }>(charactersApi.GET, '/api/characters', { player: host });
+  assert.deepEqual(body.characters.filter((c) => characters.some((x) => x.id === c.id)).map((c) => c.sheet.level), [2]);
+});

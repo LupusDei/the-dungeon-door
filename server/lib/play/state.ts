@@ -22,7 +22,12 @@ export interface PartyState {
   clock?: number;
   /** The light the party carries lit, if any (absent or null: none). */
   lit?: Lit | null;
+  /** Who levelled up at the quest's end (play/table.ts endQuest); absent before it ends. */
+  levelUps?: LevelUp[];
 }
+
+/** A hero's level before and after the quest's end. */
+export interface LevelUp { playerId: string; from: number; to: number }
 
 /** Where the party is in its dungeon, and what it has found and beaten there. */
 export interface DungeonState {

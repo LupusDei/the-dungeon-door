@@ -4,7 +4,7 @@ import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
-import { choiceView, dungeonMode, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
 import type { RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
@@ -552,11 +552,13 @@ function planOf(game: Game, scene: StoredScene): Plan {
   const next = scene.index + 1;
   const state = rulesStateOf(game);
   if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [], sharesPicture: false };
-  const step = safeStep(state, scene, resolution);
-  const sceneCount = sceneCountAfter(step, next, game.sceneCount);
+  const played = safeStep(state, scene, resolution);
+  const sceneCount = sceneCountAfter(played, next, game.sceneCount);
+  const isFinale = next >= sceneCount - 1;
+  const step = isFinale ? endQuest(played) : played; // the heroes level up for the epilogue
   const { party } = step.state;
   const sharesPicture = step.round && step.state.combat !== null;
-  return { resolution: step.resolution, next, isFinale: next >= sceneCount - 1, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, sharesPicture };
+  return { resolution: step.resolution, next, isFinale, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, sharesPicture };
 }
 
 /** The next scene's choices: a fight's Attack, Cast and Dodge, or the DM's. */
