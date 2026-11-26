@@ -386,7 +386,7 @@ private struct DashboardScenePanel: View {
                     .font(.system(size: 10, weight: .semibold, design: .serif))
                     .foregroundStyle(out ? Palette.muted : Danger.tint(toughness))
             }
-            Text(out ? statusWord(combatant) : "\(combatant.hp)")
+            Text(out ? statusWord(combatant) : combatant.wound ?? "\(combatant.hp)")
                 .font(.system(size: 11, design: .serif))
                 .monospacedDigit()
                 .foregroundStyle(out ? Palette.ember : Palette.muted)

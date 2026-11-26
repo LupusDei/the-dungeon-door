@@ -185,14 +185,14 @@ struct CombatView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.verdigris)
                     }
-                    Text(out ? statusWord(combatant) : "\(combatant.hp)/\(combatant.maxHp)")
+                    Text(out ? statusWord(combatant) : combatant.healthText)
                         .font(.system(size: 11, weight: out ? .semibold : .regular, design: .serif))
                         .monospacedDigit()
                         .foregroundStyle(out ? Palette.ember : Palette.muted)
                         .lineLimit(1)
                         .fixedSize()
                 }
-                HPBar(hp: out ? 0 : combatant.hp, maxHp: combatant.maxHp,
+                HPBar(hp: out ? 0 : combatant.gauge.now, maxHp: combatant.gauge.most,
                       tint: foe ? Palette.ember : Health.tint(hp: combatant.hp, maxHp: combatant.maxHp, standing: !out),
                       height: 4)
                 if !combatant.conditions.isEmpty {
@@ -276,12 +276,12 @@ struct CombatView: View {
                     }
                     if mine { Text("you").font(.caption2).foregroundStyle(Palette.muted) }
                     Spacer(minLength: 4)
-                    Text(combatant.isDead ? "\u{2014}" : "\(combatant.hp)/\(combatant.maxHp)")
+                    Text(combatant.isDead ? "\u{2014}" : combatant.healthText)
                         .font(.system(size: 12.5, design: .serif))
                         .monospacedDigit()
                         .foregroundStyle(Palette.muted)
                 }
-                HPBar(hp: combatant.isDead ? 0 : combatant.hp, maxHp: combatant.maxHp,
+                HPBar(hp: combatant.isDead ? 0 : combatant.gauge.now, maxHp: combatant.gauge.most,
                       tint: foe ? Palette.ember : Health.tint(hp: combatant.hp, maxHp: combatant.maxHp, standing: !out),
                       height: 5)
                 if out || !combatant.conditions.isEmpty || acted {
@@ -320,7 +320,7 @@ struct CombatView: View {
     private func summary(_ combatant: Combatant, place: Int, acted: Bool) -> String {
         var parts = ["\(place): \(combatant.name), \(combatant.isFoe ? "foe" : "hero")"]
         if let toughness = combatant.toughness { parts.append(titled(toughness)) }
-        parts.append(combatant.isUp ? "\(combatant.hp) of \(combatant.maxHp) hit points" : statusWord(combatant))
+        parts.append(combatant.isUp ? combatant.healthSpoken : statusWord(combatant))
         parts += combatant.conditions.map(SRD.name)
         if acted { parts.append("has chosen an action") }
         return parts.joined(separator: ", ")

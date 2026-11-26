@@ -805,6 +805,19 @@ struct Combatant: Codable, Hashable, Identifiable {
     /// "puny", "weak", "even", "strong" or "deadly" for a foe, against this party. Nil for a hero, and from a
     /// server older than toughness ratings.
     var toughness: String? = nil
+    /// How hurt a foe looks ("Bleeding", "Bloodied", "Gasping"): its hit points are hidden, so a foe's `hp` and
+    /// `maxHp` are not sent. Nil for a hero, and from a server older than wounds.
+    var wound: String? = nil
+    /// A foe's vigor, 6 (unhurt) down to 0, for its gauge. Nil for a hero, and from a server older than wounds.
+    var vigor: Int? = nil
+
+    /// What its health reads: a foe's wound, or hit points ("7/20").
+    var healthText: String { wound ?? "\(hp)/\(maxHp)" }
+    /// The same, spoken.
+    var healthSpoken: String { wound ?? "\(hp) of \(maxHp) hit points" }
+    /// The bar's fill: a foe's vigor out of 6, or hit points.
+    var gauge: (now: Int, most: Int) { vigor.map { ($0, Combatant.vigorRungs) } ?? (hp, maxHp) }
+    static let vigorRungs = 6
 
     var isFoe: Bool { side == "foes" }
     var isDead: Bool { status == "dead" }
@@ -825,6 +838,8 @@ extension Combatant {
         status = try c.value(.status, or: points > 0 ? "up" : "dead")
         conditions = try c.value(.conditions, or: [])
         toughness = try c.decodeIfPresent(String.self, forKey: .toughness)
+        wound = try c.decodeIfPresent(String.self, forKey: .wound)
+        vigor = c.contains(.vigor) ? try c.whole(.vigor) : nil
     }
 }
 
