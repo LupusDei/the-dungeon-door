@@ -38,3 +38,11 @@ test('a caster cannot have spent more slots than it has', () => {
   const casting = { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: [], prepared: [], expended: [3, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null };
   assert.throws(() => parseCharacterSheet({ ...SAMPLE, spellcasting: casting }), /spellcasting\.expended: no more slots can be spent than there are/);
 });
+
+test('a sheet tracks spent hit dice (no more than its level), exhaustion 0 to 6, and spent class resources', () => {
+  const tired = parseCharacterSheet({ ...SAMPLE, hitDiceSpent: 1, exhaustion: 6, resourcesUsed: { 'second-wind': 1 } });
+  assert.deepEqual([tired.hitDiceSpent, tired.exhaustion, tired.resourcesUsed], [1, 6, { 'second-wind': 1 }]);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, hitDiceSpent: 2 }), /hitDiceSpent: no more hit dice can be spent than the hero's level/);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, exhaustion: 7 }), /exhaustion: /);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, resourcesUsed: { rage: -1 } }), /resourcesUsed\.rage: /);
+});

@@ -186,6 +186,7 @@ export function buildCharacter(choices: CharacterChoices, rng: Rng, data: Srd = 
     ...UNDERIVED,
     version: 1, name: choices.name, level: 1, xp: 0, classId: cls.id, speciesId: species.id, backgroundId: background.id,
     subclassId: null, size, speed: species.speed, abilityScores: scores, abilityRolls: rolled.rolls, hpRolls: [cls.hitDie],
+    hitDiceSpent: 0, exhaustion: 0, resourcesUsed: {},
     savingThrows: cls.saves, skills, otherProficiencies,
     equipment, gp: kit[0].gp + kit[1].gp, pendingChoices: kit.flatMap((o) => o.pending),
     traits: species.traits, feat: background.feat, feats: [], features: cls.levels[0].features.map((f) => f.name),

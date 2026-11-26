@@ -8,6 +8,7 @@ import { RuleViolation } from './violation.ts';
 
 const int = z.number().int();
 export const MAX_LEVEL = 20;
+export const MAX_EXHAUSTION = 6;
 const ability = z.enum(ABILITIES);
 const score = int.min(1).max(30);
 const perAbility = <T extends z.ZodType>(value: T) => z.object({ str: value, dex: value, con: value, int: value, wis: value, cha: value });
@@ -29,6 +30,12 @@ export const CharacterSheetSchema = z.object({
   proficiencyBonus: int,
   /** The hit die result for each level, level 1's being the die's maximum; max HP is derived from them. */
   hpRolls: z.array(int.positive()),
+  /** Hit Point Dice spent since they were last regained (the hero has one per level). */
+  hitDiceSpent: int.min(0),
+  /** SRD 5.2 Exhaustion level; the hero dies at 6. */
+  exhaustion: int.min(0).max(MAX_EXHAUSTION),
+  /** Uses spent of limited class features, by resource id ("rage", "second-wind"). */
+  resourcesUsed: z.record(z.string(), int.min(0)),
   maxHp: int.positive(),
   hp: int.min(0),
   armorClass: int,
@@ -68,7 +75,8 @@ export const CharacterSheetSchema = z.object({
   }).refine((c) => c.expended.every((n, i) => n <= c.slots[i]), { path: ['expended'], message: 'no more slots can be spent than there are' }).nullable(),
 })
   .refine((s) => s.hp <= s.maxHp, { path: ['hp'], message: 'hit points cannot exceed the maximum' })
-  .refine((s) => s.hpRolls.length === s.level, { path: ['hpRolls'], message: 'one hit die roll per level' });
+  .refine((s) => s.hpRolls.length === s.level, { path: ['hpRolls'], message: 'one hit die roll per level' })
+  .refine((s) => s.hitDiceSpent <= s.level, { path: ['hitDiceSpent'], message: "no more hit dice can be spent than the hero's level" });
 
 export type CharacterSheet = z.infer<typeof CharacterSheetSchema>;
 

@@ -49,6 +49,7 @@ test('a dwarf fighter soldier gets the level-1 numbers the SRD gives', () => {
 test('a new hero starts at level 1 with no XP, its level-1 class features and its hit die as level 1 HP', () => {
   const s = buildCharacter(BRYN, rng());
   assert.deepEqual([s.level, s.xp, s.subclassId, s.feats, s.hpRolls], [1, 0, null, [], [10]]);
+  assert.deepEqual([s.hitDiceSpent, s.exhaustion, s.resourcesUsed], [0, 0, {}]);
   assert.deepEqual(s.features, ['Fighting Style', 'Second Wind', 'Weapon Mastery']);
 });
 
