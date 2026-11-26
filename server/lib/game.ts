@@ -3,13 +3,17 @@ import { renderImage, SCENE_STYLE } from './ai.ts';
 import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { ownCharacter } from './characters.ts';
+import { COMBAT_CHOICES } from './play/fight.ts';
+import { choiceView, dungeonMode, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import type { RulesState } from './play/turn.ts';
+import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { getDungeonMaster } from './dm/registry.ts';
-import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, SceneText, VoteRecord } from './dm/types.ts';
+import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { badRequest, conflict, forbidden, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { getStore } from './store/index.ts';
-import type { NewMessage } from './store/types.ts';
-import { CHOICE_IDS, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type StoredScene } from './types.ts';
+import type { GamePatch, NewMessage } from './store/types.ts';
+import { CHOICE_IDS, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
 
 export const MAX_PLAYERS = 6;
 export const DEFAULT_SCENE_COUNT = 4;
@@ -22,10 +26,39 @@ export function newCode(): string {
 }
 
 const clip = (text: string, max = 500) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
-const rollD20 = () => randomInt(1, 21);
+
+/** The game's dice: each vote's d20, and the seed of a rules game's dice. Tests may set their own. */
+export interface Dice { d20(): number; seed(): number }
+const RANDOM_DICE: Dice = { d20: () => randomInt(1, 21), seed: () => randomInt(2 ** 31) };
+let dice = RANDOM_DICE;
+export function setDice(next: Dice = RANDOM_DICE): void {
+  dice = next;
+}
 
 // ---------------------------------------------------------------------------------------------------------
 // Views
+
+function sceneView(game: Game, current: StoredScene, playerId: string): SceneView {
+  return {
+    index: current.index,
+    title: current.title,
+    narration: current.narration,
+    imageUrl: current.imageUrl,
+    choices: current.choices.map(choiceView),
+    combat: game.combat !== null,
+    isFinale: current.isFinale,
+    votes: current.votes,
+    myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
+    outcome: current.outcome,
+  };
+}
+
+function rulesOf(game: Game): RulesView | null {
+  const state = rulesStateOf(game);
+  if (!state) return null;
+  const { results = [] } = state.party;
+  return rulesView(state, results);
+}
 
 export function toState(game: Game, playerId: string, messages: Message[]): GameState {
   const current = game.scenes.find((s) => s.index === game.sceneIndex) ?? null;
@@ -37,17 +70,7 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
     title: game.title,
     sceneCount: game.sceneCount,
     players: game.players.map((p) => ({ playerId: p.playerId, character: p.character, isHost: p.playerId === game.hostId, joinedAt: p.joinedAt })),
-    scene: current && {
-      index: current.index,
-      title: current.title,
-      narration: current.narration,
-      imageUrl: current.imageUrl,
-      choices: current.choices,
-      isFinale: current.isFinale,
-      votes: current.votes,
-      myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
-      outcome: current.outcome,
-    },
+    scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
       .filter((s) => s.outcome !== null)
       .map((s) => ({
@@ -58,6 +81,7 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
         outcome: s.outcome as string,
       })),
     messages,
+    rules: rulesOf(game),
     updatedAt: game.updatedAt,
   };
 }
@@ -190,15 +214,17 @@ export async function setDungeonMaster(code: string, playerId: string, dungeonMa
 // Play
 
 /** POST /api/games/{code}/start — lobby → preparing; the DM writes scene 0 in the background. */
-export async function startGame(code: string, playerId: string, sceneCount: unknown, origin: string): Promise<GameState> {
+export async function startGame(code: string, playerId: string, sceneCount: unknown, origin: string, dungeon?: unknown): Promise<GameState> {
   const count = sceneCount === undefined || sceneCount === null ? DEFAULT_SCENE_COUNT : sceneCount;
   if (typeof count !== 'number' || !Number.isInteger(count) || count < 2 || count > 8) {
     throw badRequest('sceneCount must be a whole number from 2 to 8');
   }
+  const mode = dungeonMode(dungeon);
   const game = await loadGame(code);
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
-  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: count }))) {
+  const rules = newRules(game.players, mode, dice.seed(), count);
+  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: count, ...rules }))) {
     throw conflict('the game is already starting');
   }
   await system(code, `${host.character.name} opened the dungeon door. ${archetype(game.dungeonMaster).name} is preparing the adventure…`);
@@ -214,7 +240,7 @@ export async function castVote(code: string, playerId: string, sceneIndex: unkno
   member(game, playerId);
   if (game.status !== 'voting') throw conflict(`can't vote: the game is ${game.status}`);
   if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
-  const vote = await getStore().castVote(code, sceneIndex, playerId, choiceId as ChoiceId, rollD20());
+  const vote = await getStore().castVote(code, sceneIndex, playerId, choiceId as ChoiceId, dice.d20());
   if (!vote) throw conflict('voting on that scene has closed');
   await resolveIfAllVoted(code, sceneIndex, origin);
   return viewGame(code, playerId);
@@ -287,7 +313,7 @@ function pastScene(game: Game, scene: StoredScene): PastScene {
   };
 }
 
-async function contextFor(game: Game, sceneIndex: number): Promise<DMContext> {
+async function contextFor(game: Game, sceneIndex: number, rules: RulesState | null = rulesStateOf(game)): Promise<DMContext> {
   const messages = await getStore().listMessages(game.code, undefined, 20);
   return {
     archetype: archetype(game.dungeonMaster),
@@ -299,7 +325,7 @@ async function contextFor(game: Game, sceneIndex: number): Promise<DMContext> {
     recentChat: messages
       .filter((m) => m.kind !== 'system')
       .map((m) => ({ characterName: m.characterName, kind: m.kind as 'chat' | 'dm', text: m.text })),
-    rules: null,
+    rules: rules && rulesContext(rules),
   };
 }
 
@@ -321,9 +347,13 @@ export function resolutionOf(game: Game, scene: StoredScene): Resolution {
   };
 }
 
-function choicesOf(choices: DMChoice[]) {
+/** The DM's three choices, clipped; in a rules game each keeps its hook if the hook holds up. */
+function choicesOf(choices: DMChoice[], rules: boolean): StoredChoice[] {
   if (choices.length < 3) throw new Error(`the DM wrote ${choices.length} choices, not 3`);
-  return choices.slice(0, 3).map((c, i) => ({ id: CHOICE_IDS[i], label: clip(c.label.trim(), 80), detail: clip(c.detail.trim(), 300) }));
+  return choices.slice(0, 3).map((c, i) => {
+    const choice = { id: CHOICE_IDS[i], label: clip(c.label.trim(), 80), detail: clip(c.detail.trim(), 300) };
+    return rules ? storedChoice(choice, c.rules) : choice;
+  });
 }
 
 const sceneTitle = (text: SceneText, fallback: string) => clip(text.title?.trim() || fallback, 120);
@@ -341,7 +371,7 @@ async function writeOpening(code: string, origin: string): Promise<void> {
       narration: draft.narration.trim(),
       imagePrompt: draft.imagePrompt,
       imageUrl: null,
-      choices: choicesOf(draft.choices),
+      choices: choicesOf(draft.choices, game.party !== null),
       isFinale: false,
     };
     await store.saveScene(code, scene);
@@ -358,45 +388,101 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   await paintScene(code, 0, draft, origin);
 }
 
+/** What resolving a scene will do: the engine's step (rules games), the resolution the DM gets, what comes next. */
+interface Plan {
+  resolution: Resolution;
+  next: number;
+  isFinale: boolean;
+  /** The engine's state after its step; null for a game from before the engine. */
+  rules: RulesState | null;
+  /** Saved with the move to the next scene. */
+  patch: GamePatch;
+  /** The engine's dice lines, posted to the chat. */
+  lines: string[];
+}
+
+function planOf(game: Game, scene: StoredScene): Plan {
+  const resolution = resolutionOf(game, scene);
+  const next = scene.index + 1;
+  const state = rulesStateOf(game);
+  if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [] };
+  const step = engineStep(state, scene, resolution);
+  const sceneCount = sceneCountAfter(step, next, game.sceneCount);
+  const { party } = step.state;
+  return { resolution: step.resolution, next, isFinale: next >= sceneCount - 1, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results! };
+}
+
+/** The next scene's choices: a fight's Attack, Cast and Dodge, or the DM's. */
+function nextChoices(plan: Plan, draft: NextScene): StoredChoice[] {
+  if (plan.rules?.combat) return COMBAT_CHOICES.map((c, i) => ({ id: CHOICE_IDS[i], ...c }));
+  return choicesOf(draft.choices, plan.rules !== null);
+}
+
+async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
+  const dm = getDungeonMaster(game.dungeonMaster);
+  const ctx = await contextFor(game, plan.next, plan.rules); // history ends with the scene being resolved
+  const draft = plan.isFinale ? await dm.finale(ctx, plan.resolution) : await dm.nextScene(ctx, plan.resolution);
+  const { leaders } = plan.resolution;
+  const chosen = leaders.includes(draft.chosenChoiceId) ? draft.chosenChoiceId : (leaders[0] ?? null);
+  const store = getStore();
+  await store.setSceneOutcome(game.code, scene.index, clip(draft.outcome.trim(), 1000), chosen);
+  await store.saveScene(game.code, {
+    index: plan.next,
+    title: sceneTitle(draft, plan.isFinale ? 'Epilogue' : `Scene ${plan.next + 1}`),
+    narration: draft.narration.trim(),
+    imagePrompt: draft.imagePrompt,
+    imageUrl: null,
+    choices: plan.isFinale ? [] : nextChoices(plan, draft as NextScene),
+    isFinale: plan.isFinale,
+  });
+  return draft;
+}
+
+/** The adventure is over: each hero's sheet goes home to its character. */
+async function sendHeroesHome(game: Game, rules: RulesState | null): Promise<void> {
+  if (!rules) return;
+  const store = getStore();
+  for (const { characterId, sheet } of writeBack(rules.party, game.players)) {
+    const character = await store.getCharacter(characterId);
+    if (character) await store.saveCharacter({ ...character, sheet, updatedAt: new Date().toISOString() });
+  }
+}
+
 async function resolveScene(code: string, sceneIndex: number, origin: string): Promise<void> {
   const store = getStore();
   const game = await store.getGame(code);
   const scene = game?.scenes.find((s) => s.index === sceneIndex);
   if (!game || !scene || game.status !== 'resolving' || game.sceneIndex !== sceneIndex) return;
-
-  const next = sceneIndex + 1;
-  const isFinale = next >= game.sceneCount - 1;
-  const resolution = resolutionOf(game, scene);
+  const plan = planOf(game, scene);
   let draft;
   try {
-    const dm = getDungeonMaster(game.dungeonMaster);
-    const ctx = await contextFor(game, next); // history ends with the scene being resolved
-    draft = isFinale ? await dm.finale(ctx, resolution) : await dm.nextScene(ctx, resolution);
-    const chosen = resolution.leaders.includes(draft.chosenChoiceId) ? draft.chosenChoiceId : (resolution.leaders[0] ?? null);
-    const nextScene = {
-      index: next,
-      title: sceneTitle(draft, isFinale ? 'Epilogue' : `Scene ${next + 1}`),
-      narration: draft.narration.trim(),
-      imagePrompt: draft.imagePrompt,
-      imageUrl: null,
-      choices: isFinale ? [] : choicesOf((draft as NextScene).choices),
-      isFinale,
-    };
-    await store.setSceneOutcome(code, sceneIndex, clip(draft.outcome.trim(), 1000), chosen);
-    await store.saveScene(code, nextScene);
+    draft = await writeNext(game, scene, plan);
   } catch (error) {
-    console.error(`DM failed to resolve ${code}#${sceneIndex}:`, error);
-    if (await store.updateGame(code, { status: 'resolving', sceneIndex }, { status: 'voting' })) {
-      await system(code, `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);
-    }
+    await dmFumbled(code, sceneIndex, error);
     return;
   }
-  const moved = await store.updateGame(code, { status: 'resolving', sceneIndex }, { status: isFinale ? 'ended' : 'voting', sceneIndex: next });
-  if (!moved) return;
-  await dmSays(code, game, draft.outcome);
-  if (draft.quip) await dmSays(code, game, draft.quip);
-  if (isFinale) await system(code, 'The adventure has ended. Thanks for playing!');
-  await paintScene(code, next, draft, origin);
+  const status = plan.isFinale ? 'ended' : 'voting';
+  if (!(await store.updateGame(code, { status: 'resolving', sceneIndex }, { status, sceneIndex: plan.next, ...plan.patch }))) return;
+  await announce(game, plan, draft);
+  await paintScene(code, plan.next, draft, origin);
+}
+
+/** The DM threw: votes reopen (once) and the table hears about it. */
+async function dmFumbled(code: string, sceneIndex: number, error: unknown): Promise<void> {
+  console.error(`DM failed to resolve ${code}#${sceneIndex}:`, error);
+  if (await getStore().updateGame(code, { status: 'resolving', sceneIndex }, { status: 'voting' })) {
+    await system(code, `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);
+  }
+}
+
+/** The dice, then the DM's outcome and quip; at the end, the heroes go home. */
+async function announce(game: Game, plan: Plan, draft: ResolvedTurn & SceneText): Promise<void> {
+  for (const line of plan.lines) await system(game.code, line);
+  await dmSays(game.code, game, draft.outcome);
+  if (draft.quip) await dmSays(game.code, game, draft.quip);
+  if (!plan.isFinale) return;
+  await sendHeroesHome(game, plan.rules);
+  await system(game.code, 'The adventure has ended. Thanks for playing!');
 }
 
 /** Paints a scene and fills in its imageUrl. Failures leave the image null (the text is already live). */

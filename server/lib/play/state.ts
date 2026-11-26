@@ -14,6 +14,8 @@ export interface PartyState {
   /** seededRng(rng) continues the game's dice. */
   rng: number;
   sheets: Record<string, CharacterSheet>;
+  /** The engine's lines for the last resolved scene (the API's rules.results). */
+  results?: string[];
 }
 
 /** Where the party is in its dungeon, and what it has found and beaten there. */

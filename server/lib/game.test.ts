@@ -28,7 +28,7 @@ import { fakeDungeonMaster } from './dm/fake.ts';
 import { registerDungeonMaster, unregisterDungeonMaster } from './dm/registry.ts';
 import type { DungeonMaster } from './dm/types.ts';
 import { MemoryStore } from './store/memory.ts';
-import { setStore } from './store/index.ts';
+import { getStore, setStore } from './store/index.ts';
 import type { Character, GameState, Message } from './types.ts';
 
 async function table(n: number) {
@@ -349,7 +349,7 @@ test('DM failures drop back to the previous status with a system message', async
   assert.equal(state.chronicle[0].choiceLabel, 'Charge straight in');
 });
 
-test('ties are broken by the DM pick, but only among the leaders', async () => {
+test('in a game from before the rules engine, ties are broken by the DM pick, but only among the leaders', async () => {
   const picky: DungeonMaster = {
     ...fakeDungeonMaster,
     nextScene: async (ctx, r) => ({ ...(await fakeDungeonMaster.nextScene(ctx, r)), chosenChoiceId: 'b' }),
@@ -358,6 +358,7 @@ test('ties are broken by the DM pick, but only among the leaders', async () => {
   const { code, players, host } = await table(2);
   await call(startApi.POST, gamePath(code, 'start'), { player: host, body: { sceneCount: 4 } });
   await settle();
+  await getStore().updateGame(code, {}, { party: null, combat: null, dungeon: null }); // a legacy game
   await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, choiceId: 'a' } });
   await call(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 0, choiceId: 'b' } });
   await settle();

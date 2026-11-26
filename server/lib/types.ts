@@ -1,5 +1,7 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
+import type { RulesHook } from './play/hooks.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
+import type { RulesView } from './play/view.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
@@ -42,13 +44,23 @@ export interface Vote {
 }
 
 /** A scene as stored. `imagePrompt` and `chosenChoiceId` are server-only. */
+/** A choice as stored: with the rules hook the engine checked (rules-engine games). */
+export interface StoredChoice extends Choice {
+  hook?: RulesHook | null;
+}
+
+/** A choice as the API shows it: the hook as a label ("Athletics check, DC 12"). */
+export interface ChoiceView extends Choice {
+  rules: string | null;
+}
+
 export interface StoredScene {
   index: number;
   title: string;
   narration: string;
   imagePrompt: string;
   imageUrl: string | null;
-  choices: Choice[];
+  choices: StoredChoice[];
   isFinale: boolean;
   votes: Vote[];
   outcome: string | null;
@@ -101,7 +113,9 @@ export interface SceneView {
   title: string;
   narration: string;
   imageUrl: string | null;
-  choices: Choice[];
+  choices: ChoiceView[];
+  /** A combat round: each vote is that player's own hero's action. */
+  combat: boolean;
   isFinale: boolean;
   votes: Vote[];
   myVote: ChoiceId | null;
@@ -127,5 +141,7 @@ export interface GameState {
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];
+  /** The rules engine's numbers; null for games started before it. */
+  rules: RulesView | null;
   updatedAt: string;
 }
