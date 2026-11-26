@@ -808,7 +808,10 @@ struct Combatant: Codable, Hashable, Identifiable {
     /// How hurt a foe looks ("Bleeding", "Bloodied", "Gasping"): its hit points are hidden, so a foe's `hp` and
     /// `maxHp` are not sent. Nil for a hero, and from a server older than wounds.
     var wound: String? = nil
-    /// A foe's vigor, 6 (unhurt) down to 0, for its gauge. Nil for a hero, and from a server older than wounds.
+    /// How full a foe's gauge looks, 0 to 1: fuzzy, so its hit points cannot be read off it (it stays inside
+    /// the band its wound names). Nil for a hero, and from older servers.
+    var fill: Double? = nil
+    /// A foe's vigor, 6 (unhurt) down to 0: what servers before the fuzzy gauge sent instead of `fill`.
     var vigor: Int? = nil
     /// Where it stands in the fight: "engaged" (in melee), "near" (about 30 ft) or "far" (about 60 ft).
     /// Nil from a server without range bands.
@@ -820,8 +823,14 @@ struct Combatant: Codable, Hashable, Identifiable {
     var healthText: String { wound ?? "\(hp)/\(maxHp)" }
     /// The same, spoken.
     var healthSpoken: String { wound ?? "\(hp) of \(maxHp) hit points" }
-    /// The bar's fill: a foe's vigor out of 6, or hit points.
-    var gauge: (now: Int, most: Int) { vigor.map { ($0, Combatant.vigorRungs) } ?? (hp, maxHp) }
+    /// The bar's fill, 0 to 1: a foe's fuzzy fill (or, from an older server, its vigor out of 6), or a hero's
+    /// hit points.
+    var gauge: Double {
+        let share = fill ?? vigor.map { Double($0) / Double(Combatant.vigorRungs) } ?? (maxHp > 0 ? Double(hp) / Double(maxHp) : 0)
+        return min(1, max(0, share))
+    }
+    /// A foe's gauge is an impression, not a count: drawn with a soft edge.
+    var gaugeIsFuzzy: Bool { isFoe && (fill != nil || vigor != nil) }
     static let vigorRungs = 6
 
     var isFoe: Bool { side == "foes" }
@@ -845,6 +854,7 @@ extension Combatant {
         toughness = try c.decodeIfPresent(String.self, forKey: .toughness)
         wound = try c.decodeIfPresent(String.self, forKey: .wound)
         vigor = c.contains(.vigor) ? try c.whole(.vigor) : nil
+        fill = (try? c.decodeIfPresent(Double.self, forKey: .fill)).flatMap { $0 }.flatMap { $0.isFinite ? $0 : nil }
         position = try c.decodeIfPresent(String.self, forKey: .position)
         engagedWith = try c.value(.engagedWith, or: [])
     }

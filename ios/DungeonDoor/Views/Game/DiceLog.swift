@@ -79,13 +79,15 @@ struct DiceLineStyle: Equatable {
         } else if has(" attacks ") {
             if has("critical hit") {
                 pick = (good, "sparkles")
-            } else if has("hit for") {
+            } else if has("hit for", ", hit.") {
+                // A hit on a foe is told without its damage ("vs AC 15, hit."); on a hero, with it.
                 pick = (good, "burst.fill")
             } else {
                 pick = (.quiet, "wind")
             }
         } else if has(" casts ") {
-            pick = (has("damage") ? good : .quiet, "wand.and.stars")
+            // A spell on a foe says who it struck, not the damage ("is hit", "fails the save").
+            pick = (has("damage", " is hit", " is struck", "fails the save") ? good : .quiet, "wand.and.stars")
         } else if Self.tellsAWound(text) {
             // A foe's wounds look different after the round: its hit points are not shown.
             pick = (byHero ? .bad : .good, "drop.fill")

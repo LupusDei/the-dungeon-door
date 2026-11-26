@@ -390,6 +390,12 @@ private struct DashboardScenePanel: View {
                 .font(.system(size: 11, design: .serif))
                 .monospacedDigit()
                 .foregroundStyle(out ? Palette.ember : Palette.muted)
+            if combatant.isFoe && !out {
+                // A foe's gauge: fuzzy, so its hit points cannot be read off it (server `fill`).
+                HPBar(fraction: combatant.gauge, tint: Palette.ember, height: 4, soft: combatant.gaugeIsFuzzy)
+                    .frame(width: 34)
+                    .accessibilityHidden(true)
+            }
             if !out, let position = combatant.position {
                 // The range band: in melee, about 30 feet off, or about 60.
                 Text("\u{00B7} \(position)")
