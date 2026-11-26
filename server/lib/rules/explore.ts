@@ -14,7 +14,10 @@ import { RuleViolation } from './violation.ts';
 const ENTRANCE = 'e';
 const MAX_ENTRANCE_EXITS = 3;
 
-const isDoor = (connection: string) => connection.endsWith('-door');
+export const isDoor = (connection: string) => connection.endsWith('-door');
+
+/** The id of the area beyond an exit once it is explored. */
+export const areaBeyond = (nodeId: string, exitId: string) => `${nodeId}.${exitId}`;
 
 function roomExits(rng: Rng, count: number): Exit[] {
   return Array.from({ length: count }, (_, i) => ({ id: `x${i + 1}`, connection: rollOn(rng, dungeonTables().connections), to: null }));
@@ -103,7 +106,7 @@ export function expand(dungeon: Dungeon, nodeId: string, exitId: string, level?:
   const via = from.exits.find((x) => x.id === exitId);
   if (!via) throw new RuleViolation(`there is no exit ${exitId} from ${nodeId}`);
   if (via.to !== null) return dungeon;
-  const id = `${nodeId}.${exitId}`;
+  const id = areaBeyond(nodeId, exitId);
   const depth = Math.max(level ?? from.depth, from.depth) + (via.connection === 'stairs' ? 1 : 0);
   const mainLine = onMainLine(dungeon, nodeId) && wayOn(from) === via;
   const child = beyond(derivedRng(dungeon.seed, id), dungeon, id, depth, via, mainLine);

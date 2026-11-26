@@ -4,6 +4,7 @@ import { heroSheet } from '../characters.ts';
 import type { Resolution } from '../dm/types.ts';
 import { generateDungeon } from '../rules/dungeon.ts';
 import type { Game, GamePlayer, StoredScene } from '../types.ts';
+import { dungeonLevel } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 import { choiceView, dungeonMode, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
@@ -26,6 +27,16 @@ test('a new game’s rules: every hero’s sheet (built for a hero saved before 
   assert.equal(plain.party.sheets.p2.name, 'Old Hero', 'built for a legacy hero');
   assert.equal(newRules(players, 'fixed', 7, 4).dungeon!.map.mode, 'fixed');
   assert.equal(newRules(players, 'explore', 7, 4).dungeon!.map.mode, 'explore');
+});
+
+test('a new game’s dungeon starts at the living heroes’ average level, rounded down; new heroes start at 1', () => {
+  const at = (level: number, dead = false) => ({ ...fighter, level, ...(dead ? { dead: true } : {}) });
+  const party = [player('p1', 'A', at(3)), player('p2', 'B', at(6)), player('p3', 'C', at(12, true))];
+  for (const mode of ['fixed', 'explore'] as const) {
+    const d = newRules(party, mode, 7, 4).dungeon!;
+    assert.deepEqual([dungeonLevel(d), d.map.nodes[d.at].depth], [4, 4], mode);
+  }
+  assert.equal(dungeonLevel(newRules([player('p1', 'A'), player('p2', 'B')], 'fixed', 7, 4).dungeon!), 1);
 });
 
 test('a game from before the engine has no rules state', () => {

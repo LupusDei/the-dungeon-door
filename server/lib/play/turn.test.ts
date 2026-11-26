@@ -337,3 +337,34 @@ test('a hero who dies in a turn is marked with the clock at its start; one alrea
   assert.equal(fall.party.sheets.p1.diedAt, 7200);
   assert.equal(fall.party.sheets.p2.diedAt, 5);
 });
+
+const tough = () => party({ p1: { ...fighter, hp: 500, maxHp: 500 }, p2: { ...rogue, hp: 500, maxHp: 500 } });
+const pitLoss = (level: number) => seeds.reduce((lost, rng) => {
+  const d = { ...startDungeon('fixed', 3, [1, 1], 4), level };
+  const t = playTurn({ ...state({ dungeon: d }), party: { ...tough(), rng } }, { kind: 'trap', trap: 'spiked-pit' }, ballots(1, 1));
+  return lost + 1000 - t.party.sheets.p1.hp - t.party.sheets.p2.hp;
+}, 0);
+
+test('in a dungeon, a trap is scaled to the dungeon’s level, not the party’s', () => {
+  assert.ok(pitLoss(5) > pitLoss(1) * 1.3, `${pitLoss(5)} vs ${pitLoss(1)}`);
+});
+
+test('wanderers in a deeper dungeon are a band for its level', () => {
+  const turns = seeds.map((rng) => playTurn({ ...inDungeon(rng, { wander: 1200, level: 6 }), party: { ...tough(), rng } }, null, []));
+  const bands = turns.flatMap((t) => (t.combat ? Object.values(t.combat.combatants).filter((c) => c.side === 'foes') : []));
+  assert.ok(bands.length > 0);
+  const shallow = seeds.map((rng) => playTurn({ ...inDungeon(rng, { wander: 1200 }), party: { ...tough(), rng } }, null, []))
+    .flatMap((t) => (t.combat ? Object.values(t.combat.combatants).filter((c) => c.side === 'foes') : []));
+  const xp = (cs: { xp: number }[]) => cs.reduce((n, c) => n + c.xp, 0) / Math.max(1, cs.length);
+  assert.ok(xp(bands) > xp(shallow), `${xp(bands)} vs ${xp(shallow)}`);
+});
+
+test('going deeper is told: the line after the party enters names the new level', () => {
+  const found = Array.from({ length: 120 }, (_, i) => startDungeon('fixed', i + 1, [1, 1], 6))
+    .map((d) => ({ d, door: d.map.nodes[d.at].exits.find((x) => x.connection.endsWith('-door') && d.map.nodes[x.to!].type === 'room') }))
+    .filter(({ door }) => door)
+    .map(({ d, door }) => playTurn(state({ dungeon: d }), { kind: 'move', exit: door!.id }, ballots(5, 5)))
+    .find((t) => t.dungeon!.level === 2)!;
+  assert.ok(found);
+  assert.equal(found.lines[1], 'The way leads deeper: dungeon level 2.');
+});

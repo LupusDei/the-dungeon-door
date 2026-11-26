@@ -48,6 +48,9 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   exits say so), passed on the way and possibly trapped. The engine rolls for wandering monsters every half
   hour in a dungeon and after noise (a fight, a trap going off); when they come, its results say who they
   are and whether they attack or go their way. Don't invent wandering monsters yourself.
+- Dungeon levels: the dungeon starts at the party's level and may go a level deeper behind a new door (the
+  results say "The way leads deeper"); its monsters, traps and treasure are the engine's, for that level.
+  Make the deeper level feel it: older stone, colder air, stranger signs.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
@@ -74,7 +77,7 @@ function combatLine(c: NonNullable<RulesContext['combat']>): string {
 function dungeonLine(d: NonNullable<RulesContext['dungeon']>): string {
   const exits = d.exits.map((x) => `${x.id} ${x.connection} to ${x.leadsTo === null ? 'unexplored' : x.leadsTo}`).join('; ') || 'none';
   const foes = d.waiting ? `. Waiting here, not attacking: ${d.waiting.foes} (${d.waiting.attitude})` : '';
-  return `DUNGEON (${d.kind}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}${foes}`;
+  return `DUNGEON (${d.kind}, level ${d.level}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}${foes}`;
 }
 
 export function rulesBlock(rules: RulesContext | null): string {

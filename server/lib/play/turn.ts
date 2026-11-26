@@ -4,12 +4,13 @@
  */
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { HazardSpec } from '../rules/hazards.ts';
+import { atLevel } from '../rules/depth.ts';
 import { habitat, kindIdOf } from '../rules/habitats.ts';
 import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
 import { groupRoll } from './checks.ts';
-import { arrival, claimTreasure, clearRoom, enter, partyLevel, waitingFoes, withAttitude } from './delve.ts';
+import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
 import { provisions } from './provisions.ts';
 import { afterHarm } from './dying.ts';
@@ -47,6 +48,11 @@ function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): 
 
 const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
 const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.level);
+/** In a dungeon, the heroes standing counted at its level (what a band or a trap is scaled to); outside one, the heroes' own levels. */
+function foesFor(s: RulesState): number[] {
+  if (!s.dungeon) return levelsOf(s);
+  return atLevel(Object.values(s.party.sheets).filter((h) => !h.dead).length, dungeonLevel(s.dungeon));
+}
 /** The monsters that live in the party's dungeon (none outside one: any may come). */
 const poolOf = (s: RulesState) => (s.dungeon ? habitat(kindIdOf(s.dungeon.map.kind)) : undefined);
 
@@ -87,7 +93,7 @@ function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballo
 const loud = (s: RulesState): RulesState => (s.dungeon ? { ...s, dungeon: { ...s.dungeon, noise: true } } : s);
 
 function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
-  const sprung = springTrap(s.party, id, partyLevel(levelsOf(s)), votesOf(ballots), lightLevel(s));
+  const sprung = springTrap(s.party, id, partyLevel(foesFor(s)), votesOf(ballots), lightLevel(s));
   const settled = harmed(s.party, sprung);
   const after = { ...s, party: settled.party };
   return done(sprung.success ? after : loud(after), [...before, ...settled.lines], sprung.success);
@@ -131,13 +137,17 @@ function arrive(s: RulesState, moved: Moved, ballots: readonly Ballot[], before:
   const entered = { ...s, dungeon: moved.dungeon };
   const lit = lightUp(s.party, ambientLight(entered));
   const here = { ...entered, party: lit.party };
-  const lines = [...before, `The party enters ${moved.node.name}${moved.node.purpose ? `: ${moved.node.purpose}` : ''}.`, ...lit.lines];
+  const lines = [...before, `The party enters ${moved.node.name}${moved.node.purpose ? `: ${moved.node.purpose}` : ''}.`, ...deeperLine(s.dungeon!, moved.dungeon), ...lit.lines];
   const found = arrival(moved.dungeon, moved.node);
   if (found.fight) return meet(here, found.fight, lines);
   const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
   const cleared = clearHere(trapped, trapped.lines);
   return { ...trapped, ...cleared.state, lines: cleared.lines };
 }
+
+/** The way went a level deeper on this move. */
+const deeperLine = (before: DungeonState, after: DungeonState): string[] =>
+  (dungeonLevel(after) > dungeonLevel(before) ? [`The way leads deeper: dungeon level ${dungeonLevel(after)}.`] : []);
 
 const CORRIDOR_SECONDS = 600;
 
@@ -160,7 +170,7 @@ function through(s: RulesState, moved: Moved, exit: string, ballots: readonly Ba
 function onTheWay(s: RulesState, spoor: boolean): { state: RulesState; came: Wanderers | null } {
   if (!spoor) return { state: s, came: null };
   const rng = seededRng(s.party.rng);
-  const came = wanderingRoll(rng, levelsOf(s), 2, poolOf(s));
+  const came = wanderingRoll(rng, foesFor(s), 2, poolOf(s));
   return { state: { ...s, party: { ...s.party, rng: rng.state() } }, came };
 }
 
@@ -181,7 +191,7 @@ function wander(t: RulesTurn, seconds: number): RulesTurn {
   const { noise, ...quiet } = d;
   const due = checksDue(d.wander ?? 0, seconds);
   const rng = seededRng(t.party.rng);
-  const came = wanderingChecks(rng, levelsOf(t), due.checks, noise === true, poolOf(t));
+  const came = wanderingChecks(rng, foesFor(t), due.checks, noise === true, poolOf(t));
   const calm = { ...t, party: { ...t.party, rng: rng.state() }, dungeon: { ...quiet, wander: due.since } };
   return came ? meetWanderers(calm, came) : calm;
 }
@@ -190,7 +200,7 @@ function wander(t: RulesTurn, seconds: number): RulesTurn {
 function rest(s: RulesState, kind: 'short' | 'long'): RulesTurn {
   if (s.dungeon && !waitingFoes(s.dungeon)) {
     const rng = seededRng(s.party.rng);
-    const came = wanderingRoll(rng, levelsOf(s), 1, poolOf(s));
+    const came = wanderingRoll(rng, foesFor(s), 1, poolOf(s));
     const calm = { ...s, party: { ...s.party, rng: rng.state() }, dungeon: { ...s.dungeon, wander: 0 } };
     if (came) return meetWanderers(done(calm, [`Before the party can rest:`]), came);
     s = calm;

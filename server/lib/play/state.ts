@@ -40,4 +40,8 @@ export interface DungeonState {
   wander?: number;
   /** Something loud just happened (a fight ended, a trap went off): a check comes at once, 2 in 6. */
   noise?: true;
+  /** The dungeon level the party has reached (Phase 5, play/delve.ts dungeonLevel); absent: the map's starting level. */
+  level?: number;
+  /** Where the dungeon went deeper, and to what level, oldest first. */
+  deepened?: { at: string; level: number }[];
 }

@@ -29,7 +29,7 @@ const sheetOf = ({ character }: GamePlayer): CharacterSheet => upgradeCharacter(
 
 export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed: number, sceneCount: number): RulesState {
   const sheets = Object.fromEntries(players.map((p) => [p.playerId, unpacked(sheetOf(p))]));
-  const levels = Object.values(sheets).map((s) => s.level);
+  const levels = Object.values(sheets).filter((s) => !s.dead).map((s) => s.level); // the dungeon starts at the living heroes' level
   return {
     party: { version: 1, rng: seed, sheets },
     combat: null,

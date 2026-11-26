@@ -60,7 +60,7 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.equal(rulesContext({ party: { ...party, sheets: { p1: { ...wizard, equipment: [{ id: 'plate-armor', name: 'Plate Armor', count: 3 }] } } }, combat: null, dungeon: null }).party[0].dragging, true);
   assert.deepEqual(ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior'), { name: 'Goblin Warrior', side: 'foes', hp: combat.combatants['foe-1'].hp, maxHp: combat.combatants['foe-1'].maxHp, status: 'up' });
   assert.deepEqual(ctx.dungeon, {
-    kind: d.map.kind, area: d.map.nodes.r0.name, purpose: 'Threshold',
+    kind: d.map.kind, level: 1, area: d.map.nodes.r0.name, purpose: 'Threshold',
     exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: d.map.nodes.r1.name }, { id: 'r4', connection: 'unlocked-door', leadsTo: `${d.map.nodes.r4.name}, by a winding passage` }],
     waiting: null,
   });
@@ -106,4 +106,12 @@ test('conditions show with how they end, in the API and to the DM', () => {
   const s = { party: { ...party, sheets: { p1: carried } }, combat: null, dungeon: null };
   assert.deepEqual(rulesView(s, []).party[0].conditions.map((c) => c.ends), ['40 minutes', '1.5 hours', 'until a long rest', 'DC 12 CON save to end', 'DC 10 Sleight Of Hand to break free']);
   assert.equal(rulesContext(s).party[0].conditions, 'poisoned (40 minutes), poisoned (1.5 hours), frightened (until a long rest), paralyzed (DC 12 CON save to end), restrained (DC 10 Sleight Of Hand to break free)');
+});
+
+test('the dungeon level and where it went deeper, to the app and the DM', () => {
+  const d = { ...startDungeon('fixed', 3, [1, 1], 4), level: 3, deepened: [{ at: 'r1', level: 2 }, { at: 'r2', level: 3 }] };
+  const s = { party, combat: null, dungeon: d };
+  assert.deepEqual([rulesView(s, []).dungeon!.level, rulesView(s, []).dungeon!.deepened, rulesContext(s).dungeon!.level], [3, d.deepened, 3]);
+  const fresh = { party, combat: null, dungeon: startDungeon('fixed', 3, [1, 1], 4) };
+  assert.deepEqual([rulesView(fresh, []).dungeon!.level, rulesView(fresh, []).dungeon!.deepened], [1, []]);
 });

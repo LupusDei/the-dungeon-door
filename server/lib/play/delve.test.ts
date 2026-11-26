@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SAMPLE } from '../rules/sheet.fixture.ts';
-import { arrival, claimTreasure, clearRoom, enter, mapSize, partyLevel, startDungeon } from './delve.ts';
+import { temperedBudget } from '../rules/encounter.ts';
+import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, mapSize, partyLevel, startDungeon } from './delve.ts';
 import type { DungeonState, PartyState } from './state.ts';
 
 test('a fixed dungeon is a whole map, sized by the adventure; explore mode starts with the entrance only', () => {
@@ -62,4 +63,63 @@ test('treasure: the coins are shared out as gold; gems, jewellery and the magic 
 test('a cleared room is remembered once', () => {
   const d: DungeonState = startDungeon('fixed', 3, [1], 4);
   assert.deepEqual(clearRoom(clearRoom(d, 'r1'), 'r1').cleared, ['r0', 'r1']);
+});
+
+const doorsIn = (d: DungeonState) => d.map.nodes[d.at].exits.filter((x) => x.connection.endsWith('-door'));
+
+test('the dungeon starts at the party’s level; a game from before dungeon levels reads its map’s level, or 1', () => {
+  assert.equal(dungeonLevel(startDungeon('fixed', 3, [1, 1], 4)), 1);
+  assert.equal(dungeonLevel(startDungeon('explore', 3, [4, 5, 3], 4)), 4);
+  const old = startDungeon('fixed', 3, [1, 1], 4);
+  const { level: _, ...map } = old.map;
+  assert.equal(dungeonLevel({ ...old, map }), 1);
+});
+
+test('through a new door, a seeded chance (1 in 4) that the dungeon goes a level deeper: the room beyond is restocked for it and the change recorded', () => {
+  const tried = Array.from({ length: 200 }, (_, seed) => startDungeon('fixed', seed + 1, [2, 2, 2], 6))
+    .map((d) => ({ d, door: doorsIn(d).find((x) => d.map.nodes[x.to!].type === 'room') }))
+    .filter(({ door }) => door !== undefined)
+    .map(({ d, door }) => ({ d, door: door!, moved: enter(d, door!.id)! }));
+  const deeper = tried.filter((t) => dungeonLevel(t.moved.dungeon) === 3);
+  assert.ok(deeper.length > tried.length * 0.15 && deeper.length < tried.length * 0.35, `${deeper.length} of ${tried.length}`);
+  assert.ok(tried.every((t) => [2, 3].includes(dungeonLevel(t.moved.dungeon))));
+  for (const { d, door, moved } of deeper) {
+    assert.equal(moved.node.depth, 3);
+    assert.deepEqual(moved.dungeon.deepened, [{ at: moved.node.id, level: 3 }]);
+    assert.deepEqual(enter(d, door.id), moved, 'the same every time');
+    const e = moved.node.contents?.encounter;
+    if (e) assert.equal(e.budget, temperedBudget([3, 3, 3], e.difficulty));
+  }
+  for (const { moved } of deeper) {
+    for (const x of moved.node.exits) assert.ok(dungeonLevel(enter(moved.dungeon, x.id)!.dungeon) >= 3, 'never shallower again');
+  }
+});
+
+test('no roll through an open passage, into a fixed map’s corridor, or back into a room already seen', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const d = startDungeon('fixed', seed, [1, 1], 6);
+    for (const x of d.map.nodes[d.at].exits) {
+      const moved = enter(d, x.id)!;
+      const into = d.map.nodes[x.to!];
+      if (!x.connection.endsWith('-door') || into.type === 'corridor') assert.equal(dungeonLevel(moved.dungeon), 1, `${seed} ${x.id}`);
+    }
+    for (const x of doorsIn(d)) {
+      const seen = { ...d, visited: [...d.visited, x.to!] };
+      assert.equal(dungeonLevel(enter(seen, x.id)!.dungeon), 1, `${seed} ${x.id}: seen before`);
+    }
+  }
+});
+
+test('in an explore dungeon the area beyond a door that goes deeper is rolled at the new level', () => {
+  let found = 0;
+  for (let seed = 1; seed <= 300 && found < 5; seed++) {
+    const d = startDungeon('explore', seed, [1, 1, 1], 6);
+    const door = doorsIn(d)[0];
+    if (!door) continue;
+    const moved = enter(d, door.id)!;
+    if (dungeonLevel(moved.dungeon) === 1) continue;
+    found++;
+    assert.equal(moved.node.depth, 2);
+  }
+  assert.ok(found > 0);
 });

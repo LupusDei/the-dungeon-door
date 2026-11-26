@@ -11,7 +11,7 @@ import { encounterBudget, monsters } from '../rules/monsters.ts';
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
-import { waitingFoes } from './delve.ts';
+import { dungeonLevel, waitingFoes } from './delve.ts';
 import { foesNamed } from './hooks.ts';
 import type { Attitude } from './parley.ts';
 import type { DungeonState } from './state.ts';
@@ -73,6 +73,8 @@ export interface RulesView {
   };
   dungeon: null | {
     mode: 'fixed' | 'explore'; kind: string; at: string;
+    /** The dungeon level the party has reached (Phase 5), and where it went deeper, oldest first. */
+    level: number; deepened: { at: string; level: number }[];
     areas: { id: string; name: string; purpose: string | null; cleared: boolean; exits: { id: string; connection: string; to: string | null }[] }[];
     /** Foes in this area who did not attack: "Boar ×3" and their attitude. */
     waiting: Waiting | null;
@@ -119,6 +121,8 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
       mode: dungeon.map.mode,
       kind: dungeon.map.kind,
       at: dungeon.at,
+      level: dungeonLevel(dungeon),
+      deepened: dungeon.deepened ?? [],
       areas: dungeon.visited.map((id) => dungeon.map.nodes[id]).map(({ id, name, purpose, exits }) =>
         ({ id, name, purpose, cleared: dungeon.cleared.includes(id), exits: exits.map(({ id: x, connection, to }) => ({ id: x, connection, to })) })),
       waiting: waiting(dungeon),
@@ -142,7 +146,7 @@ export interface RulesContext {
   /** "dark; the party's light: Bryn's Torch (40 minutes left)", or "dim; no light carried". */
   light: string;
   combat: null | { round: number; combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string }[] };
-  dungeon: null | { kind: string; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
+  dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
   monsters: string[];
 }
@@ -189,6 +193,7 @@ export function rulesContext(state: RulesState): RulesContext {
     },
     dungeon: dungeon && here && {
       kind: dungeon.map.kind,
+      level: dungeonLevel(dungeon),
       area: here.name,
       purpose: here.purpose,
       exits: here.exits.map((x) => ({ id: x.id, connection: x.connection, leadsTo: x.to === null ? null : leadsTo(dungeon, x.id, x.to) })),
