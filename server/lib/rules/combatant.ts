@@ -1,4 +1,5 @@
 /** Heroes and monsters in one shape for combat. A Combatant is plain JSON, stored inside the combat state. */
+import { type Body, bodyOf } from './wounds.ts';
 import { type Ability, abilityModifier } from './abilities.ts';
 import type { DamageRoll, Monster } from './monsters.ts';
 import type { Power, Rider } from './powers.ts';
@@ -50,9 +51,12 @@ export interface Combatant {
   multiattack?: string[];
   /** Undead, constructs and oozes: they never break (no morale check). Monsters only. */
   fearless?: true;
+  /** What its wounds look like (rules/wounds.ts): undead, construct or ooze; absent for flesh. Monsters only. */
+  body?: Exclude<Body, 'flesh'>;
 }
 
-const FEARLESS = /undead|construct|ooze/;
+/** Undead, constructs and oozes never break, and their wounds are told in their own words. */
+const unbreakable = (body: Body): Pick<Combatant, 'fearless' | 'body'> => (body === 'flesh' ? {} : { fearless: true, body });
 
 /** "1d8" with a modifier, written the way the SRD writes it: "1d8+3", "1d8", "1d8-1". */
 function withModifier(dice: string, modifier: number): string {
@@ -106,7 +110,7 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     id, name: m.name, side: 'foes', ac: m.ac, hp: m.hp, maxHp: m.hp,
     initiative: abilityModifier(m.abilities.dex), saveBonuses: { ...m.saveBonuses }, attacks: m.attacks,
     resistances: m.resistances, vulnerabilities: m.vulnerabilities, immunities: m.immunities, conditionImmunities: m.conditionImmunities,
-    ...fresh(), xp: m.xp, ...(FEARLESS.test(m.type) ? { fearless: true as const } : {}),
+    ...fresh(), xp: m.xp, ...unbreakable(bodyOf(m.type)),
     ...(m.multiattack.length ? { multiattack: m.multiattack } : {}),
     ...(m.powers.length ? { powers: m.powers } : {}),
     ...(m.disengages ? { disengages: true as const } : {}),
