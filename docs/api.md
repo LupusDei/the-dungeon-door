@@ -227,17 +227,25 @@ Scene {
                                      // is still one of these, with the same fields.
   combat: boolean                    // true for a combat round: each vote is that player's own hero's action,
                                      // and `choices` are written for the caller's hero (see below)
+  battlefield: null | {              // the fight's map, or null outside combat. 5-foot squares, origin at the
+                                     // north-west. A room is 10 by 8; a road fight is 16 by 6 so 60 feet fits.
+    width: number; height: number; squareFeet: 5
+    walls: [{ x: number; y: number }]          // squares nothing can enter. Empty on open ground.
+    cover?: [{ x: number; y: number }]         // squares of cover, when the room has any. Omitted when there are none.
+  }
   canAct: boolean                    // false when the caller's hero cannot act this round (down or dead):
                                      // nothing to choose, and the round does not wait for them
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
   votes: [{ playerId, choiceId, roll: number /* d20 */,
             label?: string, actionId?: string, targets?: string[],
-            move?: { to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean } }]
+            move?: { x: number; y: number; dash?: boolean; disengage?: boolean }
+                 | { to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean } }]
                                      // in a combat round, `label` is what that hero is doing ("Attack with
                                      // Longsword", "Cast Fire Bolt", "Dash", "Move to near"). `actionId` and
                                      // `targets` are set when the vote named an action from `actions` rather
                                      // than a letter. `move` is a combat move taken with the vote (see the
-                                     // vote endpoint). A written check is not listed here; it is in `freeforms`
+                                     // vote endpoint): a destination square, or the older band move.
+                                     // A written check is not listed here; it is in `freeforms`
   myVote: string | null              // choiceId of the caller; a letter vote is still "a", "b" or "c".
                                      // Null when they wrote a check or have not acted
   myAction: null | { id: string; targets: string[] }
@@ -263,6 +271,18 @@ LegalAction {
   targets: [{ id: string; name: string }]   // who or what a vote may name; empty when it needs no target
   picks: "none" | "one" | "many"     // how many of `targets` the vote names
   limit?: number                     // for "many": at most this many (an area, or a spell's darts)
+  squares?: [{ x: number; y: number }]  // a move: every square this action can end on this turn.
+                                     // Walls block the path. A square someone stands on (unless they are
+                                     // dead) cannot be the end, and an enemy's square cannot be crossed.
+                                     // Speed is the budget; a Dash lists the squares at double speed and
+                                     // spends the action. Absent on any other kind.
+  rangeFeet?: { normal: number; long: number | null } | null
+                                     // an attack or a spell. Feet, from the SRD. `long` is null when there
+                                     // is no long range (a spell, or a ranged weapon with one range).
+                                     // Null for a melee attack or a touch spell. Absent on other kinds.
+  reachFeet?: number | null          // a melee attack or a melee/touch spell: 5, or 10 for a Reach weapon,
+                                     // or a monster's listed reach when that is what is being swung.
+                                     // Null for a ranged attack or spell. Absent on other kinds.
   available: boolean
   reason: string | null              // why not, when available is false; null when it can be taken
 }
@@ -313,9 +333,15 @@ RulesView {                          // SRD 5.2 (2024 rules)
                    wound?: string; fill?: number    // a foe's instead: its hit points are hidden
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
                    toughness: null | "puny" | "weak" | "even" | "strong" | "deadly";
-                   position: "engaged" | "near" | "far";   // range band: melee (about 5 ft, reach included),
-                                      // about 30 ft, or about 60 ft. A fight starts with both sides near.
-                   engagedWith: string[] }]   // ids they are in melee with; empty unless engaged. Initiative order.
+                   position: "engaged" | "near" | "far";   // derived from the squares (see Positions):
+                                      // engaged within melee reach, near at 30 ft or less, far beyond.
+                                      // A room starts near; a road starts far. Kept for older apps.
+                   engagedWith: string[]      // ids within melee reach; empty unless engaged. Symmetric.
+                   square: { x: number; y: number } | null   // where they stand. Null when the fight has no grid
+                                      // (a fight stored before grids, until it is mended on read).
+                   speedFeet?: number }]      // a hero only: feet they can move this turn. The species' speed
+                                      // (30 when it is the usual one), less 5 ft a level of exhaustion,
+                                      // and 5 ft at most while dragging. Initiative order.
                                       // a hero's id is its playerId; toughness is null for a hero, and the
                                       // foe's own rating against this party (absent from older servers).
                                       // wound: how hurt the foe looks, by the share of hit points left:
@@ -455,11 +481,17 @@ Reaction {
   vote. The server checks the action is one this hero can take and the targets are among its `targets`;
   otherwise 400, and `error` says why (`"No level 1 spell slot or higher left"`, `"that is not a valid target"`).
   Voting status only; you can change your vote until the scene resolves. The server rolls a d20
-  for each vote (kept when you change your vote). `move`, only in a fight, is
+  for each vote (kept when you change your vote). `move`, only in a fight, is either a destination
+  square `{ x, y, dash?: boolean, disengage?: boolean }` or the older band move
   `{ to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean }`.
-  One band happens before the choice; `dash: true` covers two bands and spends the action (the choice
-  is not taken). `engage` names who you close with, and is required when `to` is `"engaged"`.
-  `disengage: true` leaves melee without opportunity attacks. An illegal move is a 400. When every player has voted the scene resolves:
+  A square is one this hero's speed can reach (a move action's `squares`); it happens before the
+  choice. `x` and `y` are whole numbers on the battlefield. When `dash` is omitted, a square past
+  the hero's speed and within double speed is a Dash. `dash: true` spends the action (the choice is
+  not taken) and is refused when a normal move already reaches that square. `disengage: true` leaves
+  an enemy's reach without opportunity attacks, and is refused when the step leaves no one's reach.
+  The older band move still works: one band before the choice, two when `dash` is true. `engage` names
+  who you close with, and is required when `to` is `"engaged"`. On a grid the band is carried out by
+  stepping to a square that puts the hero there. An illegal move is a 400. When every player has voted the scene resolves:
   status `resolving`, the DM weighs all votes and rolls, writes `outcome` on the old scene and the
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
   Voting again replaces a written action (below) and keeps the same d20.
@@ -606,19 +638,28 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     the hero's turns, or by breaking free. A concentrating hero makes a CON save each time it is hit
     (DC 10 or half the damage) and loses the spell on a failure, at 0 HP or when Incapacitated; the spell
     ends with the fight. Species resistances halve damage of their types.
-  - **Positions.** Each combatant has a range band (`position`): engaged with the ids in `engagedWith`
-    (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). A fight in a room starts with both sides
-    near; a fight on the road starts far (they see each other down the track). One side surprising the
-    other begins in melee. Moving one band is a move; Dash moves two and spends
-    the action. Leaving an engaged foe provokes an opportunity attack unless you Disengage. Melee and
-    reach need engaged. A ranged weapon or spell is checked against the band (long range has disadvantage;
-    past it, the attack cannot be made), and a ranged attack while engaged has disadvantage. A vote may
-    carry `move` (above). The choice text says when the hero will step in as part of Attack or Cast.
-    Monsters close in when they fight in melee and keep their distance when they only shoot.
-  - **Area spells** catch by band, where the area fits. A cone, line, emanation or an area of range Self
-    reaches from the caster (a 15-foot cone catches who they are engaged with, after they step in).
+  - **Positions.** The fight is a grid of 5-foot squares (`scene.battlefield`). Each combatant has a
+    `square`. Distance in feet is 5 times the Chebyshev distance (a diagonal costs the same as a step
+    orthogonally). The range band is read off that distance, and `position` and `engagedWith` stay on
+    the combatant for older apps. Two creatures are engaged when the distance is within the longer
+    melee reach: 5 feet, 10 with a Reach weapon, or a monster's listed reach when that is longer.
+    Otherwise near is 30 feet or less and far is beyond. A room starts with the heroes on the west
+    edge and the monsters opposite, 30 feet apart (near). A road starts 60 feet apart (far), on a
+    longer map. One side surprising the other begins adjacent, in melee; a hero who is down stays
+    back at the band. A hero's `speedFeet` is how far they can move. A move action lists every square
+    reachable this turn (`squares`); Dash lists double and spends the action. Leaving an enemy's reach
+    (theirs, not yours) provokes an opportunity attack unless you Disengage. A melee attack reaches
+    `reachFeet`. A ranged weapon or spell carries `rangeFeet`: within normal range as usual, between
+    normal and long at disadvantage, past long range not at all. A target is listed when the attack or
+    spell can hit them from where the hero stands or from a square they can reach without Dashing, so
+    a vote can move and strike together; long range is still a legal target. A ranged attack while
+    engaged has disadvantage. A vote may carry `move` (above). The choice text says when the hero will
+    step in as part of Attack or Cast. Monsters use the same squares: a melee foe closes in, a ranged
+    foe steps out of reach and keeps its distance.
+  - **Area spells** catch by feet on the grid. A cone, line, emanation or an area of range Self
+    reaches from the caster (a 15-foot cone catches whoever is within 15 feet, after they step in).
     A sphere, cylinder or cube with a range is placed on a foe and catches whoever is within its size
-    of that foe. Each makes its own save.
+    of that foe. Each makes its own save. A fight stored with bands and no squares still catches by band.
   - **Second Wind and potions.** A hero at half HP or less takes one Bonus Action to heal before their
     voted action: a fighter with Second Wind left uses it (1d10 + Fighter level), anyone else (or a fighter
     out of uses) drinks the least of their healing potions.

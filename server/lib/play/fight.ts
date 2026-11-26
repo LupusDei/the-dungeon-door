@@ -17,12 +17,13 @@ import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
 import { monster } from '../rules/monsters.ts';
 import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { HEALING_POTIONS, item } from '../rules/items.ts';
-import { held, removeItem } from '../rules/inventory.ts';
+import { held, paceOf as heroPace, removeItem } from '../rules/inventory.ts';
 import { resourcesOf, useResource } from '../rules/resources.ts';
 import { type Action, act, aimAgain, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, relocate, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { castSpell, endConcentration, slotsLeft, spellDamageDice, strikesAt } from '../rules/spells.ts';
-import { type Move, areaFromSelf, distanceFeet, engagedWith, meleeCluster, neededApproach, rangedShot, spellHits, stepToward, validateMove } from '../rules/bands.ts';
+import { type Move, areaFromSelf, distanceFeet, engagedWith, isSquareMove, meleeCluster, neededApproach, rangedShot, spellHits, stepToward, validateMove } from '../rules/bands.ts';
+import { closestApproach, feetBetween, moveNeedsDash, occupancy, reachableSquares, stepIntoReach } from '../rules/grid.ts';
 import { RuleViolation } from '../rules/violation.ts';
 import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
@@ -65,7 +66,7 @@ function foes(ids: readonly string[], light: LightLevel): Combatant[] {
 /** The hero as a combatant, with the conditions it carries (rules/conditions.ts). */
 function heroOf(playerId: string, sheet: CharacterSheet, light: LightLevel): Combatant {
   const carried = conditionsOf(sheet).map((c) => c.condition);
-  const c = { ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' as const : 'up' as const, conditions: carried, ...(carried.length ? { carried } : {}) };
+  const c = { ...heroCombatant(playerId, sheet), speed: heroPace(sheet), status: sheet.hp === 0 ? 'stable' as const : 'up' as const, conditions: carried, ...(carried.length ? { carried } : {}) };
   return blindedIf(c, !carried.includes('blinded') && sightOf(sheet, light) === 'none');
 }
 
@@ -117,8 +118,12 @@ export function bestSpell(sheet: CharacterSheet): SrdSpell | null {
 /** The attack with the best bonus to hit. */
 export const bestWeapon = (me: Combatant) => me.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best));
 
-/** One band toward the foe when this action cannot reach them yet. */
-function closer(me: Combatant, foe: Combatant): Action {
+/** One step toward the foe when this action cannot reach them yet. On a grid, as far as speed allows. */
+function closer(combat: CombatState, me: Combatant, foe: Combatant): Action {
+  if (combat.battlefield && me.square && foe.square) {
+    const sq = closestApproach(combat.battlefield, me, combat.combatants, foe.square, me.speed ?? 30);
+    if (sq) return { kind: 'move', to: 'near', x: sq.x, y: sq.y };
+  }
   const to = stepToward(me.place?.band ?? 'near', foe.place?.band ?? 'near');
   return to === 'engaged' ? { kind: 'move', to, engage: [foe.id] } : { kind: 'move', to };
 }
@@ -129,6 +134,18 @@ export function strikePlan(combat: CombatState, me: Combatant): { target: Combat
   const type = attack.damage[0]?.type;
   const foes = caught(combat, me.side, 99, type).map((id) => combat.combatants[id]);
   if (!me.place) return { target: foes[0] ?? null, approach: null };
+  if (!attack.ranged && combat.battlefield && me.square) {
+    const reach = attack.reach ?? 5;
+    const speed = me.speed ?? 30;
+    const inReach = foes.filter((f) => f.square && feetBetween(me.square!, f.square) <= reach);
+    if (inReach[0]) return { target: inReach[0], approach: null };
+    for (const foe of foes) {
+      if (!foe.square) continue;
+      const sq = stepIntoReach(combat.battlefield, me, combat.combatants, foe.square, reach, speed);
+      if (sq) return { target: foe, approach: { to: 'engaged', engage: [foe.id], x: sq.x, y: sq.y } };
+    }
+    return { target: null, approach: null };
+  }
   if (!attack.ranged) {
     const cluster = meleeCluster(combat, me.id);
     const held = foes.filter((f) => engagedWith(me, f.id));
@@ -141,12 +158,66 @@ export function strikePlan(combat: CombatState, me: Combatant): { target: Combat
   return { target: inRange[0] ?? null, approach: null };
 }
 
+/** Who a cast hits from the squares this hero can reach without Dashing. */
+function gridCast(combat: CombatState, me: Combatant, spell: SrdSpell, sheet: CharacterSheet): { targets: string[]; approach: Move | null } {
+  const type = spell.damage?.type;
+  const foes = caught(combat, me.side, 99, type).map((id) => combat.combatants[id]);
+  const speed = me.speed ?? 30;
+  const { blocked, through } = occupancy(me, combat.combatants);
+  const squares = reachableSquares({ battlefield: combat.battlefield!, from: me.square!, speedFeet: speed, blocked, through });
+  const standing = (sq: { x: number; y: number }) => ({ ...me, square: sq });
+  const strikes = strikesAt(spell, spell.level, sheet.level);
+  if (!spell.area) {
+    if (spell.darts) return { targets: splitDarts(combat, me.side, strikes, averageDice(parseDice(spell.damage!.dice)), type ?? ''), approach: null };
+    const here = foes.filter((f) => spellHits(me, f, spell));
+    if (here[0]) return { targets: Array<string>(strikes).fill(here[0].id), approach: null };
+    for (const foe of foes) {
+      const sq = squares.find((s) => spellHits(standing(s), foe, spell));
+      if (sq) return { targets: Array<string>(strikes).fill(foe.id), approach: { to: 'engaged', engage: [foe.id], x: sq.x, y: sq.y } };
+    }
+    return { targets: [], approach: null };
+  }
+  if (areaFromSelf(spell)) {
+    const countAt = (sq: { x: number; y: number }) => foes.filter((f) => spellHits(standing(sq), f, spell));
+    let bestSq = me.square!;
+    let best = countAt(bestSq);
+    for (const sq of squares) {
+      const hits = countAt(sq);
+      if (hits.length > best.length) {
+        best = hits;
+        bestSq = sq;
+      }
+    }
+    const approach = bestSq.x === me.square!.x && bestSq.y === me.square!.y ? null : { to: 'engaged' as const, engage: best.map((f) => f.id), x: bestSq.x, y: bestSq.y };
+    return { targets: best.map((f) => f.id), approach };
+  }
+  const inRangeFrom = (sq: { x: number; y: number }) => foes.filter((f) => spellHits(standing(sq), f, spell));
+  let origin = me.square!;
+  let pool = inRangeFrom(origin);
+  if (pool.length === 0) {
+    for (const sq of squares) {
+      const hits = inRangeFrom(sq);
+      if (hits.length > 0) {
+        origin = sq;
+        pool = hits;
+        break;
+      }
+    }
+  }
+  if (pool.length === 0) return { targets: [], approach: null };
+  const center = pool[0];
+  const caughtHere = pool.filter((f) => f.id === center.id || (f.square && center.square && spell.area && feetBetween(center.square, f.square) <= spell.area.feet));
+  const approach = origin.x === me.square!.x && origin.y === me.square!.y ? null : { to: 'engaged' as const, engage: [center.id], x: origin.x, y: origin.y };
+  return { targets: caughtHere.map((f) => f.id), approach };
+}
+
 /**
  * Who a cast hits. A cone, line, emanation or Self area catches every foe in the bands it reaches, stepping
  * into melee first when that is one move. A placed area is centred on the most wounded foe in range and
  * catches whoever is within its size of them. Empty when nothing is in reach even after one step.
  */
 export function castPlan(combat: CombatState, me: Combatant, spell: SrdSpell, sheet: CharacterSheet): { targets: string[]; approach: Move | null } {
+  if (combat.battlefield && me.square) return gridCast(combat, me, spell, sheet);
   const type = spell.damage?.type;
   const foes = caught(combat, me.side, 99, type).map((id) => combat.combatants[id]);
   if (!spell.area) {
@@ -173,7 +244,7 @@ export function castPlan(combat: CombatState, me: Combatant, spell: SrdSpell, sh
 
 function attackAction(combat: CombatState, me: Combatant, sheet: CharacterSheet, natural: number): Action {
   const plan = strikePlan(combat, me);
-  if (!plan.target) return closer(me, mostWounded(combat, me.side, weaponType(me)));
+  if (!plan.target) return closer(combat, me, mostWounded(combat, me.side, weaponType(me)));
   const attack = bestWeapon(me).name;
   const extra = extraAttacks(sheet);
   return { kind: 'attack', attack, target: plan.target.id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
@@ -211,7 +282,7 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
   if (!spell) return { action: attackAction(combat, me, sheet, natural), sheet };
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
   const plan = castPlan(combat, me, spell, sheet);
-  if (!plan.targets.length) return { action: closer(me, mostWounded(combat, me.side, spell.damage?.type)), sheet };
+  if (!plan.targets.length) return { action: closer(combat, me, mostWounded(combat, me.side, spell.damage?.type)), sheet };
   return { action: { kind: 'spell', caster: casterOf(sheet), cast, targets: plan.targets, natural }, sheet: spent };
 }
 
@@ -393,14 +464,18 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
   let here = drunk;
   if (vote.move) {
+    const me = here.state.combatants[id];
+    const move = isSquareMove(vote.move) && vote.move.dash === undefined && here.state.battlefield && me && moveNeedsDash(here.state.battlefield, me, here.state.combatants, vote.move)
+      ? { ...vote.move, dash: true as const }
+      : vote.move;
     try {
-      validateMove(here.state, id, vote.move);
+      validateMove(here.state, id, move);
     } catch (e) {
       if (e instanceof RuleViolation) return { action: { kind: 'other', text: e.message }, ...here };
       throw e;
     }
-    if (vote.move.dash) return { action: { kind: 'move', ...vote.move }, ...here };
-    const stepped = relocate(here.state, id, vote.move);
+    if (move.dash) return { action: { kind: 'move', ...move }, ...here };
+    const stepped = relocate(here.state, id, move);
     if (stepped.combatants[id].status !== 'up') return { action: { kind: 'dodge' }, state: stepped, sheets: here.sheets };
     here = { state: stepped, sheets: here.sheets };
   }
@@ -476,7 +551,11 @@ function lastingOnSheets(before: CombatState, after: CombatState, sheets: Record
 export function fightRound(party: PartyState, combat: CombatState, votes: CombatVotes): Round {
   const freed = shakeOff(party, ['save']); // breaking free takes an action in a fight (play/actions.ts)
   const start = freedFrom(combat, freed.party.sheets);
-  let state = start;
+  const combatants = Object.fromEntries(Object.entries(start.combatants).map(([id, c]) => {
+    const sheet = freed.party.sheets[id];
+    return [id, sheet ? { ...c, speed: heroPace(sheet) } : c];
+  }));
+  let state = { ...start, combatants };
   let sheets = freed.party.sheets;
   while (state.outcome === 'ongoing' && state.round === start.round) {
     const turn = turnAction(state, sheets, votes);

@@ -40,7 +40,13 @@ test('a fighter in a fight is offered each weapon, Second Wind, and the common a
   assert.equal(one(actions, 'common:break-free').reason, 'You are not restrained or grappled');
   assert.equal(actions.some((a) => a.kind === 'spell'), false);
   const moves = actions.filter((a) => a.kind === 'move');
-  assert.ok(moves.length > 0 && moves.every((a) => a.available && a.id.startsWith('move:') && a.picks === 'none'));
+  assert.ok(moves.length > 0 && moves.every((a) => a.available && a.id.startsWith('move:') && a.picks === 'none' && a.squares && a.squares.length > 0));
+  const dash = moves.find((a) => a.id.includes(':dash'));
+  assert.ok(dash && moves.some((a) => !a.id.includes(':dash') && a.squares!.length < dash.squares!.length), 'Dash lists the squares at double speed');
+  for (const attack of actions.filter((a) => a.kind === 'attack')) {
+    assert.ok(attack.reachFeet !== undefined && attack.rangeFeet !== undefined);
+    assert.equal(attack.reachFeet === null, attack.rangeFeet !== null);
+  }
 });
 
 test('a prepared spell with no slot stays on the list, and says why', () => {

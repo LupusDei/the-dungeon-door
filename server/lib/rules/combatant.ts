@@ -16,7 +16,11 @@ export { CONDITIONS, type Condition } from './conditions.ts';
  * `rider`: a monster attack's condition on a hit (powers.ts).
  * `normal` and `long`: a ranged weapon's range in feet. Absent on a ranged attack: it is treated as reaching.
  */
-export interface Attack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider; normal?: number; long?: number | null }
+export interface Attack {
+  name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider; normal?: number; long?: number | null;
+  /** Melee reach in feet. Absent is 5. A Reach weapon is 10; a monster may list more. */
+  reach?: number;
+}
 
 /** up: fighting. dying: a hero at 0 HP making death saves. stable: at 0 HP, not dying. dead. */
 export type Status = 'up' | 'dying' | 'stable' | 'dead';
@@ -59,6 +63,10 @@ export interface Combatant {
    * Absent on a fight stored before range bands: attacks are not checked for range.
    */
   place?: { band: 'engaged' | 'near' | 'far'; with: string[] };
+  /** The square they stand on. Absent on a fight stored before the grid. */
+  square?: { x: number; y: number } | null;
+  /** Feet they can move in a turn. A hero's is refreshed from the sheet; a monster's is its walk speed. */
+  speed?: number;
   /** What its wounds look like (rules/wounds.ts): undead, construct or ooze; absent for flesh. Monsters only. */
   body?: Exclude<Body, 'flesh'>;
 }
@@ -84,6 +92,7 @@ function weaponAttack(weapon: SrdWeapon, sheet: CharacterSheet): Attack {
     ranged: weapon.range === 'ranged',
     damage: [{ dice: withModifier(weapon.damage, modifier), type: weapon.damageType }],
     ...(weapon.range === 'ranged' ? { normal: weapon.normalRange, long: weapon.longRange } : {}),
+    ...(weapon.range === 'melee' && weapon.properties.includes('reach') ? { reach: 10 } : {}),
   };
 }
 
@@ -116,7 +125,7 @@ export function heroCombatant(id: string, sheet: CharacterSheet, data: Srd = bun
 
 export function monsterCombatant(id: string, m: Monster): Combatant {
   return {
-    id, name: m.name, side: 'foes', ac: m.ac, hp: m.hp, maxHp: m.hp,
+    id, name: m.name, side: 'foes', ac: m.ac, hp: m.hp, maxHp: m.hp, speed: m.speed,
     initiative: abilityModifier(m.abilities.dex), saveBonuses: { ...m.saveBonuses }, attacks: m.attacks,
     resistances: m.resistances, vulnerabilities: m.vulnerabilities, immunities: m.immunities, conditionImmunities: m.conditionImmunities,
     ...fresh(), xp: m.xp, ...unbreakable(bodyOf(m.type)),

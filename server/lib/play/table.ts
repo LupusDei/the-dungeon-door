@@ -6,7 +6,8 @@
 import { upgradeCharacter } from '../characters.ts';
 import type { Resolution } from '../dm/types.ts';
 import { badRequest } from '../http.ts';
-import { unpacked } from '../rules/inventory.ts';
+import { paceOf, unpacked } from '../rules/inventory.ts';
+import { ensureGrid } from '../rules/scene.ts';
 import { longRest } from '../rules/rests.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
@@ -56,11 +57,14 @@ function roadToParty(party: PartyState, stored: StoredDungeon): { party: PartySt
  * (their torches and rations to hand), a map from before Phase 3 gets its traps' 5.2 ids, and a road stored in
  * the dungeon goes to the party.
  */
+const gridded = (party: PartyState, combat: RulesState['combat']) =>
+  combat && ensureGrid(combat, Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, paceOf(s)])));
+
 export function rulesStateOf({ party, combat, dungeon }: Game): RulesState | null {
   if (!party) return null;
-  if (!dungeon) return { party: openPacks(party), combat, dungeon };
+  if (!dungeon) return { party: openPacks(party), combat: gridded(openPacks(party), combat), dungeon };
   const moved = roadToParty(openPacks(party), dungeon);
-  return { party: moved.party, combat, dungeon: { ...moved.dungeon, map: currentTraps(moved.dungeon.map) } };
+  return { party: moved.party, combat: gridded(moved.party, combat), dungeon: { ...moved.dungeon, map: currentTraps(moved.dungeon.map) } };
 }
 
 /** A choice with its hook, if it holds up, and the hook's label from where the party is now. */

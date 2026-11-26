@@ -5,7 +5,7 @@ import { monster } from './monsters.ts';
 import { heroSheet } from '../characters.ts';
 import { RuleViolation } from './violation.ts';
 import {
-  type Band, BAND_FEET, bandSteps, distanceFeet, legalMoves, type Move, neededApproach, openingPlaces, parseMove, placesAfter,
+  type Band, type BandMove, BAND_FEET, bandSteps, distanceFeet, legalMoves, type Move, neededApproach, openingPlaces, parseMove, placesAfter,
   provokedBy, stepsToEngage, validateMove,
 } from './bands.ts';
 
@@ -119,7 +119,7 @@ test('a vote move is read off the body, and a bad shape is refused', () => {
 test('the moves a hero can make are the legal ones, ready for a list of actions', () => {
   const calm = field(near('bryn', 'party'), near('g1', 'foes'), at('g2', 'foes', 'far'));
   const moves = legalMoves(calm, 'bryn');
-  const has = (m: Move) => moves.some((x) => x.to === m.to && !!x.dash === !!m.dash && !!x.disengage === !!m.disengage && (x.engage ?? []).join() === (m.engage ?? []).join());
+  const has = (m: BandMove) => moves.some((x) => x.to === m.to && !!x.dash === !!m.dash && !!x.disengage === !!m.disengage && (x.engage ?? []).join() === (m.engage ?? []).join());
   assert.equal(has({ to: 'far' }), true);
   assert.equal(has({ to: 'engaged', engage: ['g1'] }), true);
   assert.equal(has({ to: 'engaged', engage: ['g2'], dash: true }), true);

@@ -44,7 +44,7 @@ test('a spell that spends a slot says which and how many are left: the lowest it
 test('an area spell names everyone it catches: A, B and C', () => {
   const combat = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
   const blast = mage(['fireball'], [4, 3, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.match(yourChoices(combat, blast, 'p1')[1].detail, /, at Goblin Warrior 1\./, 'a 20-foot sphere, with nobody yet in melee, catches the one it is centred on');
+  assert.match(yourChoices(combat, blast, 'p1')[1].detail, /, at Goblin Warrior 1, Goblin Warrior 2 and Goblin Warrior 3\./, 'a 20-foot sphere catches the goblins standing within it');
 });
 
 test('Magic Missile says how many darts, that they never miss, and whom they will strike', () => {
@@ -83,5 +83,5 @@ test('the choices name the foe the hero will really aim at: past one immune to i
   assert.match(yourChoices(patch(casting, { 'foe-1': { hp: 1, immunities: ['fire'] } }), { ...bolt, spellcasting: { ...bolt.spellcasting!, cantrips: ['fire-bolt'], prepared: [] } }, 'p1')[1].detail, /, at Goblin Warrior 2\.$/);
   const blast = mage(['fireball'], [4, 3, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const three = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
-  assert.match(yourChoices(patch(three, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 2 }, 'foe-3': { hp: 3 } }), blast, 'p1')[1].detail, /, at Goblin Warrior 2\./, 'centred on the most wounded foe it can hurt');
+  assert.match(yourChoices(patch(three, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 2 }, 'foe-3': { hp: 3 } }), blast, 'p1')[1].detail, /, at Goblin Warrior 2,/, 'centred on the most wounded foe it can hurt');
 });

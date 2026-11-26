@@ -8,9 +8,11 @@
  * this list, then played as that action. The vote's d20 is still the die, when the action rolls one.
  */
 import { abilityCheck } from '../rules/checks.ts';
-import { type Attack, extraAttacks, heroCombatant } from '../rules/combatant.ts';
+import { type Attack, type Combatant, extraAttacks, heroCombatant } from '../rules/combatant.ts';
+import { areaFromSelf, rangedShot, spellHits } from '../rules/bands.ts';
+import { feetBetween, occupancy, reachableSquares, type Square } from '../rules/grid.ts';
 import { conditionsOf } from '../rules/conditions.ts';
-import { held, removeItem } from '../rules/inventory.ts';
+import { held, paceOf, removeItem } from '../rules/inventory.ts';
 import { HEALING_POTIONS, item as itemInfo, items } from '../rules/items.ts';
 import { heal } from '../rules/resolve.ts';
 import { resourcesOf, useResource } from '../rules/resources.ts';
@@ -49,6 +51,9 @@ interface Offer {
   targets: { id: string; name: string }[];
   picks: LegalAction['picks'];
   limit?: number;
+  squares?: Square[];
+  rangeFeet?: { normal: number; long: number | null } | null;
+  reachFeet?: number | null;
   reason: string | null;
 }
 
@@ -56,7 +61,36 @@ const offer = ({ reason, limit, ...part }: Offer): LegalAction => ({
   ...part, ...(limit !== undefined ? { limit } : {}), available: reason === null, reason,
 });
 
-/** Every foe still standing. The engine checks range when the action is played, so the list offers any of them. */
+/** Squares `me` can end on with `speed` feet of movement. */
+function squaresFrom(combat: CombatState, me: Combatant, speed: number): Square[] {
+  if (!combat.battlefield || !me.square || speed < 5) return [];
+  const { blocked, through } = occupancy(me, combat.combatants);
+  return reachableSquares({ battlefield: combat.battlefield, from: me.square, speedFeet: speed, blocked, through });
+}
+
+/** True when `ok` holds where they stand, or on a square they can reach without Dashing. No grid: the list is not narrowed. */
+function canReach(combat: CombatState, me: Combatant, targetId: string, speed: number, ok: (from: Combatant) => boolean): boolean {
+  const target = combat.combatants[targetId];
+  if (!combat.battlefield || !me.square || !target?.square) return true;
+  if (ok(me)) return true;
+  return squaresFrom(combat, me, speed).some((sq) => ok({ ...me, square: sq }));
+}
+
+function weaponReach(attack: Attack): { rangeFeet: { normal: number; long: number | null } | null; reachFeet: number | null } {
+  if (!attack.ranged) return { rangeFeet: null, reachFeet: attack.reach ?? 5 };
+  if (attack.normal === undefined && (attack.long === undefined || attack.long === null)) return { rangeFeet: null, reachFeet: null };
+  return { rangeFeet: { normal: attack.normal ?? attack.long ?? 0, long: attack.long ?? null }, reachFeet: null };
+}
+
+function spellReach(spell: SrdSpell): { rangeFeet: { normal: number; long: number | null } | null; reachFeet: number | null } {
+  if (spell.attack === 'melee' || (spell.range > 0 && spell.range <= 5 && spell.attack !== 'ranged' && !spell.area)) {
+    return { rangeFeet: null, reachFeet: spell.range || 5 };
+  }
+  if (areaFromSelf(spell)) return { rangeFeet: { normal: spell.area!.feet, long: null }, reachFeet: null };
+  return { rangeFeet: { normal: spell.range, long: null }, reachFeet: null };
+}
+
+/** Every foe still standing, and — on a grid — only those this attack can reach now or after a move. */
 function foesOf(combat: CombatState | null, side: string): { id: string; name: string }[] {
   if (!combat) return [];
   return Object.values(combat.combatants).filter((c) => c.side !== side && c.status === 'up').map((c) => ({ id: c.id, name: c.name }));
@@ -130,7 +164,13 @@ function spellDetail(spell: SrdSpell, sheet: CharacterSheet): string {
 function spellOffer(spell: SrdSpell, sheet: CharacterSheet, inFight: boolean, combat: CombatState | null, playerId: string): LegalAction {
   const healing = spell.healing !== null;
   const harmful = spell.damage !== null && !healing;
-  const targets = !inFight ? [] : healing ? healTargets(combat, playerId) : harmful ? foesOf(combat, 'party') : [];
+  const me = combat?.combatants[playerId];
+  const speed = paceOf(sheet);
+  const listed = !inFight ? [] : healing ? healTargets(combat, playerId) : harmful ? foesOf(combat, 'party') : [];
+  const targets = !me || !combat ? listed : listed.filter((t) => canReach(combat, me, t.id, speed, (from) => {
+    const who = combat.combatants[t.id];
+    return !who || spellHits(from, who, spell);
+  }));
   const many = harmful && (spell.area !== null || strikesAt(spell, spell.level, sheet.level) > 1);
   const limit = spell.area ? areaCatch(spell.area) : strikesAt(spell, spell.level, sheet.level);
   const needsTarget = healing || harmful;
@@ -139,12 +179,12 @@ function spellOffer(spell: SrdSpell, sheet: CharacterSheet, inFight: boolean, co
     : !inFight
       ? 'Not in a fight'
       : needsTarget && targets.length === 0
-        ? (healing ? 'No one to heal' : 'No one to cast at')
+        ? (healing ? 'No one to heal' : combat?.battlefield ? 'No one in range' : 'No one to cast at')
         : null;
   const picks = targets.length === 0 ? 'none' : many ? 'many' : 'one';
   return offer({
     id: `spell:${spell.id}`, label: `Cast ${spell.name}`, kind: 'spell', detail: spellDetail(spell, sheet),
-    targets, picks, ...(picks === 'many' ? { limit } : {}), reason,
+    targets, picks, ...(picks === 'many' ? { limit } : {}), ...spellReach(spell), reason,
   });
 }
 
@@ -244,22 +284,42 @@ function choicesOf(choices: LegalInput['choices']): LegalAction[] {
 const gated = (actions: LegalAction[], canAct: boolean): LegalAction[] =>
   (canAct ? actions : actions.map((a) => (a.available ? { ...a, available: false, reason: 'You cannot act' } : a)));
 
+/** Squares only a Dash can reach, as their own move, so the map can offer them when no band move is a Dash. */
+function dashMove(combat: CombatState, playerId: string): LegalAction[] {
+  const who = combat.combatants[playerId];
+  if (!who?.square || !combat.battlefield) return [];
+  const speed = who.speed ?? 30;
+  const walk = squaresFrom(combat, who, speed);
+  const doubled = squaresFrom(combat, who, speed * 2);
+  if (doubled.length <= walk.length) return [];
+  return [offer({
+    id: 'move:dash', label: 'Dash', kind: 'move', detail: 'Up to twice your speed. This spends your action.',
+    targets: [], picks: 'none', squares: doubled, reason: null,
+  })];
+}
+
 /** Legal moves for this hero, appended so the dashboard can show them beside the other actions. */
 function movesOf(combat: CombatState | null, playerId: string): LegalAction[] {
   if (!combat?.combatants[playerId]) return [];
-  return moveActions(combat, playerId).flatMap(({ label, action }) => {
-    if (action.kind !== 'move') return [];
+  const listed = moveActions(combat, playerId).flatMap(({ label, action }) => {
+    if (action.kind !== 'move' || !('to' in action)) return [];
     const { kind: _kind, ...move } = action;
     return [offer({
       id: moveKey(move),
       label,
       kind: 'move',
-      detail: move.dash ? 'Two bands. This spends your action.' : 'One band. This is your action.',
+      detail: move.dash ? 'Up to twice your speed. This spends your action.' : move.disengage ? 'Leave reach with no opportunity attack.' : 'Up to your speed.',
       targets: (move.engage ?? []).map((id) => ({ id, name: combat.combatants[id]?.name ?? id })),
       picks: 'none',
+      ...(() => {
+        const who = combat.combatants[playerId];
+        if (!who || !combat.battlefield) return {};
+        return { squares: squaresFrom(combat, who, (who.speed ?? 30) * (move.dash ? 2 : 1)) };
+      })(),
       reason: null,
     })];
   });
+  return [...listed, ...dashMove(combat, playerId)];
 }
 
 /** The hero's legal actions this turn. Unavailable ones are in the list, with the reason. */
@@ -273,19 +333,33 @@ export function legalActions({ combat, sheet, playerId, choices, canAct }: Legal
   const dying = alliesOf(combat, playerId, true);
   const gear = gearOf(sheet);
   const heldFast = conditionsOf(sheet).some((c) => c.until.kind === 'escape');
-  const weapons = attacks.map((a, i) => offer({
-    id: attackIds(attacks)[i], label: `Attack with ${a.name}`, kind: 'attack',
-    detail: `${signed(a.bonus)} to hit, ${a.damage.map((d) => `${d.dice} ${d.type}`).join(' + ')}.`,
-    targets: inFight ? foes : [], picks: foes.length && inFight ? 'one' : 'none',
-    reason: !inFight ? 'Not in a fight' : foes.length === 0 ? 'No one to attack' : null,
-  }));
+  const speed = paceOf(sheet);
+  const standing = me ? { ...me, speed } : undefined;
+  const fight = combat && standing ? { ...combat, combatants: { ...combat.combatants, [playerId]: standing } } : combat;
+  const reachable = (attack: Attack, list: { id: string; name: string }[]) =>
+    !standing || !fight ? list : list.filter((f) => canReach(fight, standing, f.id, speed, (from) => {
+      const foe = fight.combatants[f.id];
+      if (!from.square || !foe?.square) return true;
+      return attack.ranged ? rangedShot(from, foe, attack).ok : feetBetween(from.square, foe.square) <= (attack.reach ?? 5);
+    }));
+  const weapons = attacks.map((a, i) => {
+    const targets = inFight ? reachable(a, foes) : [];
+    return offer({
+      id: attackIds(attacks)[i], label: `Attack with ${a.name}`, kind: 'attack',
+      detail: `${signed(a.bonus)} to hit, ${a.damage.map((d) => `${d.dice} ${d.type}`).join(' + ')}.`,
+      targets, picks: targets.length && inFight ? 'one' : 'none', ...weaponReach(a),
+      reason: !inFight ? 'Not in a fight' : foes.length === 0 ? 'No one to attack' : targets.length === 0 ? (a.ranged ? 'No one in range' : 'No one in reach') : null,
+    });
+  });
+  const best = attacks.reduce<Attack | undefined>((a, b) => (!a || b.bonus > a.bonus ? b : a), undefined);
+  const commonFoes = best && standing && fight ? reachable(best, foes) : foes;
   const list = [
     ...weapons,
-    ...spellsOf(sheet, inFight, combat, playerId),
+    ...spellsOf(sheet, inFight, fight, playerId),
     ...itemsOf(sheet, inFight, dying),
     ...featuresOf(sheet, inFight, hurtAllies(combat, playerId)),
-    ...commonOf(inFight, foes, allies, gear, heldFast),
-    ...movesOf(combat, playerId),
+    ...commonOf(inFight, commonFoes, allies, gear, heldFast),
+    ...movesOf(fight, playerId),
     ...choicesOf(choices),
   ];
   return gated(list, canAct);

@@ -8,6 +8,9 @@ import type { Attack, Combatant } from './combatant.ts';
 import type { Power } from './powers.ts';
 import type { AreaShape, SrdSpell } from './srd.ts';
 import { require } from './violation.ts';
+import {
+  type Battlefield, checkSquare, feetBetween, leavesReach, occupancy, reachableSquares, squareForBand, stepIntoReach,
+} from './grid.ts';
 
 export type Band = 'engaged' | 'near' | 'far';
 export const BANDS: readonly Band[] = ['engaged', 'near', 'far'];
@@ -22,13 +25,28 @@ export interface Place {
 }
 
 /** A move along the bands. `dash` spends the action and covers two bands. `disengage` leaves melee with no opportunity attack. */
-export interface Move {
+export interface BandMove {
   to: Band;
   /** Who to close with. Required when `to` is engaged. */
   engage?: string[];
   dash?: boolean;
   disengage?: boolean;
+  /** Set when a grid has already chosen the square this band move lands on. */
+  x?: number;
+  y?: number;
 }
+
+/** A destination square. `dash` may be omitted: past speed and within double speed, it is a Dash. */
+export interface SquareMove {
+  x: number;
+  y: number;
+  dash?: boolean;
+  disengage?: boolean;
+}
+
+export type Move = BandMove | SquareMove;
+
+export const isSquareMove = (move: Move): move is SquareMove => !('to' in move);
 
 /** The combatants a move is judged against. `moved` is who has already used their move this turn. */
 export interface Field {
@@ -36,6 +54,8 @@ export interface Field {
   combatants: Record<string, Combatant>;
   reacted?: readonly string[];
   moved?: readonly string[];
+  /** Present once the fight is on a grid. Bands are then read off the squares. */
+  battlefield?: Battlefield;
 }
 
 const INDEX: Readonly<Record<Band, number>> = { engaged: 0, near: 1, far: 2 };
@@ -47,17 +67,22 @@ export function parseMove(raw: unknown): Move | undefined {
   if (raw === undefined || raw === null) return undefined;
   require(typeof raw === 'object' && !Array.isArray(raw), 'move must say where to.');
   const body = raw as Record<string, unknown>;
-  require(typeof body.to === 'string' && isBand(body.to), 'move.to must be "engaged", "near" or "far".');
-  require(body.engage === undefined || (Array.isArray(body.engage) && body.engage.every((id) => typeof id === 'string' && id.length > 0)), 'move.engage must be a list of ids.');
   require(body.dash === undefined || typeof body.dash === 'boolean', 'move.dash must be true or false.');
   require(body.disengage === undefined || typeof body.disengage === 'boolean', 'move.disengage must be true or false.');
-  const engage = body.engage as string[] | undefined;
-  return {
-    to: body.to,
-    ...(engage?.length ? { engage } : {}),
-    ...(body.dash ? { dash: true } : {}),
-    ...(body.disengage ? { disengage: true } : {}),
+  const flags = {
+    ...(body.dash ? { dash: true as const } : {}),
+    ...(body.disengage ? { disengage: true as const } : {}),
   };
+  if (body.x !== undefined || body.y !== undefined) {
+    require(body.to === undefined, 'move is a square or a band, not both.');
+    require(typeof body.x === 'number' && Number.isInteger(body.x) && body.x >= 0, 'move.x must be a whole number.');
+    require(typeof body.y === 'number' && Number.isInteger(body.y) && body.y >= 0, 'move.y must be a whole number.');
+    return { x: body.x, y: body.y, ...flags };
+  }
+  require(typeof body.to === 'string' && isBand(body.to), 'move.to must be "engaged", "near" or "far".');
+  require(body.engage === undefined || (Array.isArray(body.engage) && body.engage.every((id) => typeof id === 'string' && id.length > 0)), 'move.engage must be a list of ids.');
+  const engage = body.engage as string[] | undefined;
+  return { to: body.to, ...(engage?.length ? { engage } : {}), ...flags };
 }
 
 /** Bands between two positions on the line engaged—near—far. */
@@ -89,6 +114,7 @@ export function stepsToEngage(from: Band, foe: Band, already: boolean): number {
  * anything involving far is about 60). No place stored: null, and the caller skips the check.
  */
 export function distanceFeet(a: Combatant, b: Combatant): number | null {
+  if (a.square && b.square) return feetBetween(a.square, b.square);
   if (!a.place || !b.place) return null;
   if (engagedWith(a, b.id) || engagedWith(b, a.id)) return BAND_FEET.engaged;
   const zone = (p: Place) => (p.band === 'far' ? BAND_FEET.far : p.band === 'near' ? BAND_FEET.near : 0);
@@ -98,7 +124,7 @@ export function distanceFeet(a: Combatant, b: Combatant): number | null {
 const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id) => b.includes(id));
 
 /** How many bands `move` costs from where `me` is. 0: it changes nothing. */
-function moveCost(field: Field, me: Combatant, move: Move): number {
+function moveCost(field: Field, me: Combatant, move: BandMove): number {
   const from = me.place?.band ?? 'near';
   if (move.to !== 'engaged') return bandSteps(from, move.to);
   const engage = move.engage ?? [];
@@ -110,7 +136,7 @@ function moveCost(field: Field, me: Combatant, move: Move): number {
   return close;
 }
 
-const leaving = (me: Combatant, move: Move): boolean => {
+const leaving = (me: Combatant, move: BandMove): boolean => {
   const was = me.place?.with ?? [];
   if (was.length === 0) return false;
   return move.to !== 'engaged' || was.some((id) => !(move.engage ?? []).includes(id));
@@ -121,6 +147,13 @@ export function validateMove(field: Field, id: string, move: Move): void {
   const me = field.combatants[id];
   require(me !== undefined, `there is no combatant ${id}`);
   require(me.status === 'up', `${me.name} cannot move.`);
+  if (isSquareMove(move)) {
+    require(!!field.battlefield && !!me.square, `${me.name} has nowhere to move.`);
+    const { blocked, through } = occupancy(me, field.combatants);
+    const goes = leavesReach(me, field.combatants, move).length > 0;
+    checkSquare(me.name, field.battlefield, me.square, move, me.speed ?? 30, blocked, through, move.dash, move.disengage, goes);
+    return;
+  }
   require(isBand(move.to), `${me.name} cannot move to ${move.to}.`);
   if (move.to === 'engaged') {
     const engage = move.engage ?? [];
@@ -133,6 +166,16 @@ export function validateMove(field: Field, id: string, move: Move): void {
   } else {
     require((move.engage ?? []).length === 0, `${me.name} engages someone only by moving to engaged.`);
   }
+  if (field.battlefield && me.square && move.x === undefined) {
+    squareForBand(me.name, field.battlefield, me, field.combatants, move);
+    return;
+  }
+  if (field.battlefield && me.square && move.x !== undefined && move.y !== undefined) {
+    const { blocked, through } = occupancy(me, field.combatants);
+    const goes = leavesReach(me, field.combatants, { x: move.x, y: move.y }).length > 0;
+    checkSquare(me.name, field.battlefield, me.square, { x: move.x, y: move.y }, me.speed ?? 30, blocked, through, move.dash, move.disengage, goes);
+    return;
+  }
   const cost = moveCost(field, me, move);
   require(cost > 0, move.to === 'engaged' ? `${me.name} is already engaged with them.` : `${me.name} is already ${move.to}.`);
   require(cost <= 2, `${me.name} cannot get there this turn.`);
@@ -141,7 +184,7 @@ export function validateMove(field: Field, id: string, move: Move): void {
 }
 
 /** Foes who can take an opportunity attack as `id` makes this move. Disengage, and a monster that Disengages as a Bonus Action, draw none. */
-export function provokedBy(field: Field, id: string, move: Move): string[] {
+export function provokedBy(field: Field, id: string, move: BandMove): string[] {
   const me = field.combatants[id];
   if (!me || move.disengage || me.disengages || !leaving(me, move)) return [];
   const kept = move.to === 'engaged' ? (move.engage ?? []) : [];
@@ -153,7 +196,7 @@ export function provokedBy(field: Field, id: string, move: Move): string[] {
 }
 
 /** Places after the move. Engagement is kept symmetric; a creature left with nobody drops back to near. */
-export function placesAfter(combatants: Record<string, Combatant>, id: string, move: Move): Record<string, Combatant> {
+export function placesAfter(combatants: Record<string, Combatant>, id: string, move: BandMove): Record<string, Combatant> {
   const next = { ...combatants };
   const me = next[id];
   const oldWith = me.place?.with ?? [];
@@ -245,6 +288,66 @@ export function powerHits(attacker: Combatant, target: Combatant, power: Power):
   return d <= (power.area ? power.area.feet : power.range ?? BAND_FEET.engaged);
 }
 
+/** A square outside every enemy's reach and still within the ranged weapon's range. The one that keeps the most distance. */
+function stepAway(field: Field, actor: Combatant, target: Combatant, attack: Attack, speed: number): { x: number; y: number } | null {
+  if (!field.battlefield || !actor.square || !target.square) return null;
+  const { blocked, through } = occupancy(actor, field.combatants);
+  const options = reachableSquares({ battlefield: field.battlefield, from: actor.square, speedFeet: speed, blocked, through });
+  const foes = Object.values(field.combatants).filter((c) => c.side !== actor.side && c.status === 'up' && c.square);
+  const clear = (sq: { x: number; y: number }) => foes.every((f) => feetBetween(sq, f.square!) > meleeReachOf(f));
+  const shot = (sq: { x: number; y: number }) => rangedShot({ ...actor, square: sq }, target, attack);
+  const safe = options.filter(clear);
+  const normal = safe.filter((sq) => { const s = shot(sq); return s.ok && !s.longRange; });
+  const pool = normal.length > 0 ? normal : safe.filter((sq) => shot(sq).ok);
+  if (pool.length === 0) return null;
+  const gap = (sq: { x: number; y: number }) => Math.min(...foes.map((f) => feetBetween(sq, f.square!)));
+  pool.sort((a, b) => gap(b) - gap(a) || a.y - b.y || a.x - b.x);
+  return pool[0];
+}
+
+const meleeReachOf = (c: Combatant): number => {
+  const melee = c.attacks.filter((a) => !a.ranged);
+  if (melee.length === 0) return 0;
+  return Math.max(...melee.map((a) => a.reach ?? 5));
+};
+
+/** On a grid: the square a strike or a spell still needs, inside this turn's speed. Never a Dash. */
+function gridApproach(field: Field, actor: Combatant, kind: 'attack' | 'spell' | 'power', detail: {
+  attack?: Attack; target?: Combatant; spell?: Pick<SrdSpell, 'range' | 'attack' | 'area'>; power?: Power; targets?: readonly string[];
+}): BandMove | null {
+  if (!field.battlefield || !actor.square || (field.moved ?? []).includes(actor.id)) return null;
+  const speed = actor.speed ?? 30;
+  if (kind === 'attack' && detail.attack && detail.target?.square) {
+    if (!detail.attack.ranged) {
+      const reach = detail.attack.reach ?? 5;
+      if (feetBetween(actor.square, detail.target.square) <= reach) return null;
+      const sq = stepIntoReach(field.battlefield, actor, field.combatants, detail.target.square, reach, speed);
+      return sq ? { to: 'engaged', engage: [detail.target.id], x: sq.x, y: sq.y } : null;
+    }
+    if (actor.side === 'foes' && actor.place?.band === 'engaged') {
+      const sq = stepAway(field, actor, detail.target, detail.attack, speed);
+      if (!sq) return null;
+      const goes = leavesReach(actor, field.combatants, sq).length > 0;
+      return { to: 'near', x: sq.x, y: sq.y, ...(actor.disengages && goes ? { disengage: true as const } : {}) };
+    }
+    return null;
+  }
+  const ids = detail.targets ?? [];
+  if (ids.length === 0) return null;
+  const hits = (sq: { x: number; y: number }) => ids.every((id) => {
+    const target = field.combatants[id];
+    if (!target) return true;
+    const from = { ...actor, square: sq };
+    return kind === 'spell' && detail.spell ? spellHits(from, target, detail.spell) : kind === 'power' && detail.power ? powerHits(from, target, detail.power) : true;
+  });
+  if (hits(actor.square)) return null;
+  const { blocked, through } = occupancy(actor, field.combatants);
+  const sq = reachableSquares({ battlefield: field.battlefield, from: actor.square, speedFeet: speed, blocked, through }).find(hits);
+  if (!sq) return null;
+  const engage = ids.filter((id) => field.combatants[id] && field.combatants[id].side !== actor.side);
+  return { to: 'engaged', engage: engage.length > 0 ? engage : [...ids], x: sq.x, y: sq.y };
+}
+
 /**
  * The one-band move an attack, spell or power still needs, or null when it can be made from here (or cannot
  * be made by moving one band). A ranged monster steps out of melee first. A melee attack steps into the
@@ -253,6 +356,7 @@ export function powerHits(attacker: Combatant, target: Combatant, power: Power):
 export function neededApproach(field: Field, actor: Combatant, kind: 'attack' | 'spell' | 'power', detail: {
   attack?: Attack; target?: Combatant; spell?: Pick<SrdSpell, 'range' | 'attack' | 'area'>; power?: Power; targets?: readonly string[];
 }): Move | null {
+  if (field.battlefield && actor.square) return gridApproach(field, actor, kind, detail);
   if (!actor.place || (field.moved ?? []).includes(actor.id)) return null;
   if (kind === 'attack' && detail.attack && detail.target?.place) {
     if (!detail.attack.ranged) {
@@ -285,11 +389,11 @@ export function neededApproach(field: Field, actor: Combatant, kind: 'attack' | 
 }
 
 /** Every legal move, for a per-hero list of actions to offer beside Attack and Cast. */
-export function legalMoves(field: Field, id: string): Move[] {
+export function legalMoves(field: Field, id: string): BandMove[] {
   const me = field.combatants[id];
   if (!me || me.status !== 'up') return [];
   const from = me.place?.band ?? 'near';
-  const drafted: Move[] = [];
+  const drafted: BandMove[] = [];
   for (const to of ['near', 'far'] as const) {
     const cost = bandSteps(from, to);
     if (cost < 1 || cost > 2) continue;
@@ -308,7 +412,7 @@ export function legalMoves(field: Field, id: string): Move[] {
   }
   const one = others.filter((c) => stepsToEngage(from, c.place?.band ?? 'near', engagedWith(me, c.id)) === 1).map((c) => c.id);
   if (one.length > 1) drafted.push({ to: 'engaged', engage: one });
-  const out: Move[] = [];
+  const out: BandMove[] = [];
   for (const move of drafted) {
     try {
       validateMove(field, id, move);

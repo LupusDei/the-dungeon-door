@@ -18,6 +18,8 @@ import { hasStolenHeroSpeech, keptWords, stripHeroSpeech, type HeroLine } from '
 import { pushChat, pushForget, pushSceneReady, pushSeen } from './push/notify.ts';
 import type { DMChoice, DMContext, NextScene, OpeningScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { parseMove, validateMove } from './rules/bands.ts';
+import { paceOf } from './rules/inventory.ts';
+import { ensureGrid } from './rules/scene.ts';
 import { RuleViolation } from './rules/violation.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
@@ -50,11 +52,19 @@ export function setDice(next: Dice = RANDOM_DICE): void {
 // ---------------------------------------------------------------------------------------------------------
 // Views
 
+/** The fight as it is read: a stored fight with no squares is laid onto a grid that keeps its bands. */
+function liveCombat(game: Game): Game['combat'] {
+  if (!game.combat) return null;
+  const speeds = game.party ? Object.fromEntries(Object.entries(game.party.sheets).map(([id, s]) => [id, paceOf(s)])) : {};
+  return ensureGrid(game.combat, speeds);
+}
+
 /** A combat round's choices are written for the caller's own hero (play/your-turn.ts); a resolved scene keeps what was stored. */
 function choicesFor(game: Game, current: StoredScene, playerId: string): SceneView['choices'] {
   const levels = game.party ? foeLevels(game.party, game.dungeon) : undefined;
-  if (!game.combat || !game.party || current.outcome !== null || current.isFinale) return current.choices.map((c) => choiceView(c, levels));
-  return canAct(game.combat, playerId) ? yourChoices(game.combat, game.party.sheets[playerId], playerId) : anyonesChoices();
+  const combat = liveCombat(game);
+  if (!combat || !game.party || current.outcome !== null || current.isFinale) return current.choices.map((c) => choiceView(c, levels));
+  return canAct(combat, playerId) ? yourChoices(combat, game.party.sheets[playerId], playerId) : anyonesChoices();
 }
 
 const choosing = (votes: StoredScene['votes']) => votes.filter((v) => !v.freeform);
@@ -63,7 +73,8 @@ const choosing = (votes: StoredScene['votes']) => votes.filter((v) => !v.freefor
 function actionsFor(game: Game, current: StoredScene, playerId: string): LegalAction[] {
   if (current.outcome !== null || current.isFinale) return [];
   const sheet = game.party && Object.hasOwn(game.party.sheets, playerId) ? game.party.sheets[playerId] : null;
-  return legalActions({ combat: game.combat, sheet, playerId, choices: choicesFor(game, current, playerId), canAct: canAct(game.combat, playerId) });
+  const combat = liveCombat(game);
+  return legalActions({ combat, sheet, playerId, choices: choicesFor(game, current, playerId), canAct: canAct(combat, playerId) });
 }
 
 /** In a combat round each vote says what that hero is doing: the label of their own action, which differs hero to hero. */
@@ -98,6 +109,7 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     actions: actionsFor(game, current, playerId),
     combat: game.combat !== null,
     canAct: canAct(game.combat, playerId),
+    battlefield: liveCombat(game)?.battlefield ?? null,
     isFinale: current.isFinale,
     votes: votesFor(game, current),
     myVote: mine?.choiceId ?? null,
@@ -424,7 +436,7 @@ export async function castVote(code: string, playerId: string, body: Record<stri
     try {
       move = parseMove(body.move);
       if (move && !game.combat) throw badRequest('there is no fight to move in');
-      if (move && game.combat) validateMove(game.combat, playerId, move);
+      if (move && game.combat) validateMove(liveCombat(game)!, playerId, move);
     } catch (e) {
       if (e instanceof RuleViolation) throw badRequest(e.message);
       throw e;

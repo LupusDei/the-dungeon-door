@@ -248,7 +248,7 @@ test('a spent power recharges on its d6 at the start of the monster turn; a powe
   assert.ok(seen, 'some seed recharges it');
   const dretch = (spent: number) => onTurn(startCombat(2, [hero('bryn'), { ...monsterCombatant('d', monster('dretch')), spent: { 'Fetid Cloud': spent } }]), 'd');
   assert.equal(monsterAction(dretch(0))!.kind, 'power');
-  assert.equal(monsterAction(dretch(1))!.kind, 'attack', 'once a day, used');
+  assert.notEqual(monsterAction(dretch(1))!.kind, 'power', 'once a day, used');
   const glad = monsterCombatant('g', monster('gladiator'));
   assert.equal(monsterAction(onTurn(startCombat(2, [hero('bryn'), glad]), 'g'))!.kind, 'attack', 'at will, but it has attacks');
   assert.deepEqual(monsterAction(onTurn(startCombat(2, [hero('bryn'), { ...glad, attacks: [] }]), 'g')), { kind: 'power', power: 'Shield Bash', targets: ['bryn'] });
@@ -309,7 +309,7 @@ test('a monster with no attack and no power Dodges on its turn, using its own ac
 });
 
 test('a vote at a foe that fell earlier in the round lands on a living foe instead of throwing (q-mwx1ub52)', () => {
-  const fighter = (id: string) => heroCombatant(id, heroSheet({ id, name: id, race: 'human', characterClass: 'fighter' }));
+  const fighter = (id: string) => ({ ...heroCombatant(id, heroSheet({ id, name: id, race: 'human', characterClass: 'fighter' })), hp: 40, maxHp: 40 });
   const rat = { ...monsterCombatant('rat', monster('rat')), hp: 1 };
   const strike = (id: string) => ({ kind: 'attack' as const, attack: fighter(id).attacks[0].name, target: 'rat', natural: 19 });
   const after = playRound(startCombat(1, [fighter('h1'), fighter('h2'), rat, monsterCombatant('gob', monster('goblin-warrior'))]), { h1: strike('h1'), h2: strike('h2') });

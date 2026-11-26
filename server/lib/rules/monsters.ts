@@ -18,7 +18,7 @@ export type Difficulty = 'low' | 'moderate' | 'high';
 
 /** `advantageOnly`: extra damage the stat block grants only when the attack roll had Advantage. */
 export interface DamageRoll { dice: string; type: string; advantageOnly?: true }
-export interface MonsterAttack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider }
+export interface MonsterAttack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider; normal?: number; long?: number | null; reach?: number }
 export interface Monster {
   id: string; name: string; size: string; type: string;
   ac: number; hp: number; hitDice: string; speed: number;
@@ -125,11 +125,14 @@ const monsterSchema = z.object({
   const listed = new Map(m.proficiencies.map((p) => [p.proficiency.index, p.value]));
   const attacks = m.actions.filter((a) => a.attackBonus !== undefined).map((a) => {
     const ranged = a.desc.startsWith('Ranged');
-    const reach = ranged ? /range (\d+)(?:\/(\d+))?/.exec(a.desc) : null;
+    const shot = ranged ? /range (\d+)(?:\/(\d+))?/.exec(a.desc) : null;
+    const meleeReach = ranged ? null : /reach (\d+) ft/.exec(a.desc);
+    const reach = meleeReach ? Number(meleeReach[1]) : undefined;
     return {
       name: a.name, bonus: a.attackBonus!, ranged,
       damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
-      ...(reach ? { normal: Number(reach[1]), long: reach[2] ? Number(reach[2]) : null } : {}),
+      ...(shot ? { normal: Number(shot[1]), long: shot[2] ? Number(shot[2]) : null } : {}),
+      ...(reach !== undefined && reach !== 5 ? { reach } : {}),
       ...withRider(a),
     };
   });
