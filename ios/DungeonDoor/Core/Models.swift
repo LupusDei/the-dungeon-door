@@ -758,7 +758,7 @@ struct Combatant: Codable, Hashable, Identifiable {
     let status: String
     /// Condition ids: "unconscious", "prone"…
     let conditions: [String]
-    /// "weak", "even", "strong" or "deadly" for a foe, against this party. Nil for a hero, and from a
+    /// "puny", "weak", "even", "strong" or "deadly" for a foe, against this party. Nil for a hero, and from a
     /// server older than toughness ratings.
     var toughness: String? = nil
 
@@ -847,7 +847,7 @@ extension DungeonArea {
 struct RatedFoe: Codable, Hashable {
     let name: String
     let count: Int
-    /// "weak", "even", "strong" or "deadly".
+    /// "puny", "weak", "even", "strong" or "deadly".
     let toughness: String
 }
 

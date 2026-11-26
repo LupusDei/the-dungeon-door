@@ -2,8 +2,9 @@
  * Encounter building, SRD 5.2: spend the party's XP budget on monsters no tougher than the party. At
  * levels 1 and 2, where the 5.2 table is swingy, the budget is halved and the foes are few; an encounter
  * is at most two kinds of monster. The same budgets rate a list of monsters the party can already see
- * (rateEncounter): the fight is low, moderate, high, or deadly above high, and each monster is weak,
- * even, strong or deadly on those same lines. See docs/rules-design.md (Phase 5).
+ * (rateEncounter): the fight is low, moderate, high, or deadly above high, and each monster is puny,
+ * weak, even, strong or deadly. Puny is under half the low line; the others sit on those same lines.
+ * See docs/rules-design.md (Phase 5).
  */
 import { type Difficulty, encounterBudget, type Monster, monster, monsters } from './monsters.ts';
 import { type Rng, pick } from './rng.ts';
@@ -13,8 +14,11 @@ export interface Encounter { difficulty: Difficulty; budget: number; xp: number;
 
 /** The 5.2 budgets, plus deadly: more XP than a high encounter for this party. */
 export type FightBand = Difficulty | 'deadly';
-/** One monster, on the same lines: weak is a low fight alone, even a moderate one, strong a high one. */
-export type Toughness = 'weak' | 'even' | 'strong' | 'deadly';
+/**
+ * One monster against this party. Puny is under half the low budget; weak fills the rest of a low fight,
+ * even a moderate one, strong a high one, deadly anything above high.
+ */
+export type Toughness = 'puny' | 'weak' | 'even' | 'strong' | 'deadly';
 
 const TOUGHNESS = { low: 'weak', moderate: 'even', high: 'strong', deadly: 'deadly' } as const satisfies Record<FightBand, Toughness>;
 
@@ -100,8 +104,16 @@ export function fightBand(levels: readonly number[], xp: number): FightBand {
   return 'deadly';
 }
 
-/** How hard one monster is for this party: the band its own XP would be, by another name. */
-export const toughnessFor = (levels: readonly number[], xp: number): Toughness => TOUGHNESS[fightBand(levels, xp)];
+/**
+ * How hard one monster is for this party. Under half the low budget it is puny (a rat against four
+ * level-1 heroes); at half that line through low it is weak (a goblin, exactly half, stays weak).
+ * The comparison is `xp * 2 < low`, so an odd budget needs no rounding. The fight's own band is unchanged.
+ */
+export function toughnessFor(levels: readonly number[], xp: number): Toughness {
+  const band = fightBand(levels, xp);
+  if (band === 'low' && xp * 2 < temperedBudget(levels, 'low')) return 'puny';
+  return TOUGHNESS[band];
+}
 
 export interface RatedMonster { id: string; name: string; xp: number; toughness: Toughness }
 export interface RatedEncounter { band: FightBand; xp: number; monsters: RatedMonster[] }

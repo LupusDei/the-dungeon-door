@@ -30,8 +30,9 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   example traps; the engine checks the party's passive scores, disarms or springs it, and scales it to their
   level), or {"kind":"hazard","hazard":"falling","feet":30} (also burning; suffocation with "minutes";
   extreme-cold or extreme-heat with "hours"; dehydration; malnutrition with "days").
-- The engine rates every foe against this party: weak, even, strong or deadly, and the whole fight low,
-  moderate, high or deadly (deadly is worse than high). Those words are in the dungeon and combat blocks.
+- The engine rates every foe against this party: puny, weak, even, strong or deadly, and the whole fight
+  low, moderate, high or deadly (deadly is worse than high; a fight is never puny). Puny is under half an
+  easy fight. Those words are in the dungeon and combat blocks.
   When you mention how hard a foe is, repeat them as given. Never invent or change a rating, and still use
   no numbers in the story.
 - Foes the party meets roll an attitude. They do not attack at once. Hostile ones bar the way, and the

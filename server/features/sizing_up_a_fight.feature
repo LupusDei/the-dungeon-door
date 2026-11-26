@@ -11,6 +11,7 @@ Feature: Sizing up a fight
 
     Examples:
       | monster         | line                                   |
+      | Rat             | Fight: Rat (puny) — low                |
       | Goblin Warrior  | Fight: Goblin Warrior (weak) — low     |
       | Bugbear Warrior | Fight: Bugbear Warrior (strong) — high |
       | Ogre            | Fight: Ogre (deadly) — deadly          |

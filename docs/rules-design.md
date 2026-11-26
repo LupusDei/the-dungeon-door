@@ -454,11 +454,14 @@ were at that level (`foeLevels`: n living heroes × the dungeon level).
   monsters are kept in order while they fit the budget and the cap. If none fits, the weakest one is kept.
 - *Toughness* (`rateEncounter`, **original** names on the 5.2 budgets). Any list of monsters is rated
   against the party's tempered budget. The fight is low, moderate, high, or **deadly** when its XP is
-  above high. One monster is **weak**, **even**, **strong** or **deadly** as its own XP falls on those
-  same lines (a weak monster is a low fight by itself). The engine shows the words on a fight choice, on
-  a meeting, and on every foe in a round. They are always visible. The DM may say them and may not change
-  them. A fight the DM proposes is rated after `capFight`; foes the party has already met are rated as
-  they stand.
+  above high. One monster is **puny**, **weak**, **even**, **strong** or **deadly**. Puny is strictly
+  under half the low budget (`xp * 2 < low`): less than half an easy fight, a nuisance. At half that
+  line through the low line the monster is weak, so a foe worth exactly half an easy fight is not
+  puny (four level-1 heroes, low budget 100: a goblin at 50 XP is weak, a rat at 10 XP is puny). Even,
+  strong and deadly are a moderate fight, a high fight, and anything above high. The fight's band has
+  no puny step. The engine shows the words on a fight choice, on a meeting, and on every foe in a
+  round. They are always visible. The DM may say them and may not change them. A fight the DM proposes
+  is rated after `capFight`; foes the party has already met are rated as they stand.
 - *DM suggestions.* The monsters suggested to the DM (`ctx.rules.monsters`) come from the dungeon's
   habitat and fit a moderate fight at its level.
 - *Hero builds.* New heroes put their best scores into their class's primary abilities, then

@@ -107,10 +107,12 @@ test('a fight the DM proposes always keeps one foe: the least of them, when none
   assert.deepEqual(capFight(['adult-red-dragon', 'ghast', 'ogre'], [1]), ['ghast'], 'the first, among equals');
 });
 
-test('a list of monsters is rated on the tempered budget: the fight low, moderate, high or deadly, each monster weak, even, strong or deadly', () => {
+test('a list of monsters is rated on the tempered budget: the fight low, moderate, high or deadly, each monster puny, weak, even, strong or deadly', () => {
   const levels = [1, 1, 1, 1];
   assert.deepEqual([0, 100, 101, 150, 151, 200, 201].map((xp) => fightBand(levels, xp)), ['low', 'low', 'moderate', 'moderate', 'high', 'high', 'deadly']);
   assert.deepEqual([100, 101, 151, 201].map((xp) => toughnessFor(levels, xp)), ['weak', 'even', 'strong', 'deadly']);
+  assert.deepEqual([49, 50].map((xp) => toughnessFor(levels, xp)), ['puny', 'weak'], 'under half the low line is puny; half of it is still weak');
+  assert.equal(fightBand(levels, 49), 'low', 'puny does not add a fight band');
   assert.equal(fightBand([3], temperedBudget([3], 'high')), 'high', 'from level 3 the line is the 5.2 table’s');
   assert.equal(fightBand([3], temperedBudget([3], 'high') + 1), 'deadly');
   const rated = rateEncounter(levels, ['goblin-warrior', 'ogre']);

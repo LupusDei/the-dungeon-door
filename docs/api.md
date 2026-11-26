@@ -237,7 +237,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // The engine's word. Absent from servers older than toughness ratings.
     combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
-                   toughness: null | "weak" | "even" | "strong" | "deadly" }]   // initiative order;
+                   toughness: null | "puny" | "weak" | "even" | "strong" | "deadly" }]   // initiative order;
                                       // a hero's id is its playerId; toughness is null for a hero, and the
                                       // foe's own rating against this party (absent from older servers)
   }
@@ -251,7 +251,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
               exits: [{ id: string; connection: string; to: string | null }] }]   // visited areas only
     waiting: null | { foes: string; attitude: "hostile" | "indifferent" | "friendly";
                    band: "low" | "moderate" | "high" | "deadly";
-                   monsters: [{ name: string; count: number; toughness: "weak" | "even" | "strong" | "deadly" }] }
+                   monsters: [{ name: string; count: number; toughness: "puny" | "weak" | "even" | "strong" | "deadly" }] }
                                       // "Boar ×3": foes the party is facing here. Hostile ones bar the way
                                       // (the scene's choices are Engage, Run and Parley). band and monsters
                                       // rate them against this party; absent from servers older than that
@@ -369,9 +369,12 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   them. Outside a dungeon, a parley the DM names starts Indifferent, and a failure that turns them Hostile
   does start the fight.
 - **Toughness.** Wherever a foe is shown, the engine rates it against the current party, and rates the
-  fight those foes make together. One monster is weak, even, strong or deadly as its XP falls on the
-  party's low, moderate or high budget, or above high. The fight is low, moderate, high or deadly the same
-  way. A fight choice reads "Fight: Goblin Warrior (weak) — low". A meeting lists each kind on
+  fight those foes make together. One monster is puny, weak, even, strong or deadly. Puny is strictly
+  under half the party's low budget (`xp * 2 < low`): a nuisance that would not fill half an easy fight.
+  At half that line through low it is weak, through moderate even, through high strong, and above high
+  deadly. A goblin at exactly half the low line stays weak; a rat under it is puny. The fight itself is
+  low, moderate, high or deadly, with no puny step, so several puny foes can still be a real fight. A
+  fight choice reads "Fight: Goblin Warrior (weak) — low" or "Fight: Rat (puny) — low". A meeting lists each kind on
   `waiting.monsters` with `waiting.band`. A combat round puts `toughness` on each foe and `band` on the
   fight. The words are the engine's; they are always shown, with no check to uncover them. A fight the DM
   proposes is rated after it is held to a high encounter, which is the fight that will be fought. Engage
