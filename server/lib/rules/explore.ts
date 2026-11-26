@@ -6,6 +6,7 @@
 import { corridorContents } from './corridors.ts';
 import { type Dungeon, type DungeonNode, type Exit, newRoom, stockRoom } from './dungeon.ts';
 import { type Beyond, dungeonTables, rollOn } from './dungeonTables.ts';
+import { habitat, kindIdOf } from './habitats.ts';
 import { type Rng, derivedRng, pick } from './rng.ts';
 import { RuleViolation } from './violation.ts';
 
@@ -18,10 +19,7 @@ function roomExits(rng: Rng, count: number): Exit[] {
   return Array.from({ length: count }, (_, i) => ({ id: `x${i + 1}`, connection: rollOn(rng, dungeonTables().connections), to: null }));
 }
 
-function purposesOf(kind: string): string[] {
-  const { kinds, purposes } = dungeonTables();
-  return purposes[kinds.rows.find((r) => r.value.name === kind)!.value.id];
-}
+const purposesOf = (kind: string): string[] => dungeonTables().purposes[kindIdOf(kind)];
 
 /** A new explore-mode dungeon: just its empty entrance room, with one to three ways on. */
 export function startExplore(seed: number, levels: number[]): Dungeon {
@@ -54,7 +52,7 @@ function onMainLine(dungeon: Dungeon, id: string): boolean {
 
 function room(rng: Rng, dungeon: Dungeon, id: string, depth: number, mainLine: boolean): DungeonNode {
   const { explore } = dungeonTables();
-  const context = { levels: dungeon.levels, depth, difficulty: explore.difficulty(depth) };
+  const context = { levels: dungeon.levels, depth, difficulty: explore.difficulty(depth), pool: habitat(kindIdOf(dungeon.kind)) };
   const node = newRoom(rng, id, depth, pick(rng, purposesOf(dungeon.kind).slice(0, -1)), stockRoom(rng, context));
   node.exits = roomExits(rng, Math.max(rollOn(rng, explore.roomExits), mainLine ? 1 : 0));
   return node;

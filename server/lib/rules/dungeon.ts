@@ -8,6 +8,7 @@ import { addCorridors } from './corridors.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { type Amount, dungeonTables, type MapSize, rollOn, type StockKind } from './dungeonTables.ts';
 import { buildEncounter, type Encounter } from './encounter.ts';
+import { habitat } from './habitats.ts';
 import type { Difficulty } from './monsters.ts';
 import { type Rng, pick, sample, seededRng } from './rng.ts';
 import { once, parseTable } from './srd.ts';
@@ -51,7 +52,8 @@ export interface Dungeon {
   goal: string | null;
   nodes: Record<string, DungeonNode>;
 }
-export interface StockingContext { levels: number[]; depth: number; difficulty: Difficulty }
+/** pool: the monsters that live in this kind of dungeon (rules/habitats.ts). */
+export interface StockingContext { levels: number[]; depth: number; difficulty: Difficulty; pool?: readonly string[] }
 
 const magicItems = once(() => parseTable('magicItems', z.object({ name: z.string(), rarity: z.string() }), magicItemsJson));
 const RARE_FROM_DEPTH = 4;
@@ -91,7 +93,7 @@ export function stockRoom(rng: Rng, context: StockingContext): RoomContents {
   const tables = dungeonTables();
   const { kind, treasureIn6 } = rollOn(rng, tables.contents);
   const room: RoomContents = { kind, encounter: null, trap: null, special: null, treasure: null, dressing: '' };
-  if (kind === 'monster') room.encounter = buildEncounter(rng, context.levels, context.difficulty);
+  if (kind === 'monster') room.encounter = buildEncounter(rng, context.levels, context.difficulty, context.pool);
   if (kind === 'trap') room.trap = rollOn(rng, tables.traps);
   if (kind === 'special') room.special = pick(rng, tables.specials);
   room.treasure = withTreasure(rng, context.depth, treasureIn6);
@@ -102,7 +104,7 @@ export function stockRoom(rng: Rng, context: StockingContext): RoomContents {
 /** The goal is never empty: a monster guarding treasure, at high difficulty. */
 function goalContents(rng: Rng, context: StockingContext): RoomContents {
   return {
-    kind: 'monster', encounter: buildEncounter(rng, context.levels, 'high'), trap: null, special: null,
+    kind: 'monster', encounter: buildEncounter(rng, context.levels, 'high', context.pool), trap: null, special: null,
     treasure: rollTreasure(rng, context.depth), dressing: rollOn(rng, dungeonTables().dressing),
   };
 }
@@ -151,7 +153,7 @@ export function generateDungeon(seed: number, size: MapSize, levels: number[]): 
   const kind = rollOn(rng, tables.kinds);
   const purposes = tables.purposes[kind.id];
   const { ids, goal, edges } = layout(rng, size);
-  const context = { levels, depth: FIXED_DEPTH, difficulty: 'moderate' as const };
+  const context = { levels, depth: FIXED_DEPTH, difficulty: 'moderate' as const, pool: habitat(kind.id) };
   const nodes: Record<string, DungeonNode> = {};
   for (const id of ids) {
     if (id === 'r0') nodes[id] = newRoom(rng, id, FIXED_DEPTH, 'Threshold', emptyContents(rng));

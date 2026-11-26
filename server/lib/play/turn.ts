@@ -4,6 +4,7 @@
  */
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { HazardSpec } from '../rules/hazards.ts';
+import { habitat, kindIdOf } from '../rules/habitats.ts';
 import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
@@ -46,6 +47,8 @@ function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): 
 
 const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
 const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.level);
+/** The monsters that live in the party's dungeon (none outside one: any may come). */
+const poolOf = (s: RulesState) => (s.dungeon ? habitat(kindIdOf(s.dungeon.map.kind)) : undefined);
 
 function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const rng = seededRng(s.party.rng);
@@ -157,7 +160,7 @@ function through(s: RulesState, moved: Moved, exit: string, ballots: readonly Ba
 function onTheWay(s: RulesState, spoor: boolean): { state: RulesState; came: Wanderers | null } {
   if (!spoor) return { state: s, came: null };
   const rng = seededRng(s.party.rng);
-  const came = wanderingRoll(rng, levelsOf(s), 2);
+  const came = wanderingRoll(rng, levelsOf(s), 2, poolOf(s));
   return { state: { ...s, party: { ...s.party, rng: rng.state() } }, came };
 }
 
@@ -178,7 +181,7 @@ function wander(t: RulesTurn, seconds: number): RulesTurn {
   const { noise, ...quiet } = d;
   const due = checksDue(d.wander ?? 0, seconds);
   const rng = seededRng(t.party.rng);
-  const came = wanderingChecks(rng, levelsOf(t), due.checks, noise === true);
+  const came = wanderingChecks(rng, levelsOf(t), due.checks, noise === true, poolOf(t));
   const calm = { ...t, party: { ...t.party, rng: rng.state() }, dungeon: { ...quiet, wander: due.since } };
   return came ? meetWanderers(calm, came) : calm;
 }
@@ -187,7 +190,7 @@ function wander(t: RulesTurn, seconds: number): RulesTurn {
 function rest(s: RulesState, kind: 'short' | 'long'): RulesTurn {
   if (s.dungeon && !waitingFoes(s.dungeon)) {
     const rng = seededRng(s.party.rng);
-    const came = wanderingRoll(rng, levelsOf(s), 1);
+    const came = wanderingRoll(rng, levelsOf(s), 1, poolOf(s));
     const calm = { ...s, party: { ...s.party, rng: rng.state() }, dungeon: { ...s.dungeon, wander: 0 } };
     if (came) return meetWanderers(done(calm, [`Before the party can rest:`]), came);
     s = calm;

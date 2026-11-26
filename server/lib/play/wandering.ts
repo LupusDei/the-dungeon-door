@@ -20,17 +20,17 @@ export function checksDue(since: number, seconds: number): { checks: number; sin
 }
 
 /** One check: a d6 at or under `chance` brings a low band for these levels. */
-export function wanderingRoll(rng: Rng, levels: readonly number[], chance: number): Wanderers | null {
+export function wanderingRoll(rng: Rng, levels: readonly number[], chance: number, pool?: readonly string[]): Wanderers | null {
   const roll = rng.die(6);
   if (roll > chance) return null;
-  const { monsters } = buildEncounter(rng, levels, 'low');
+  const { monsters } = buildEncounter(rng, levels, 'low', pool);
   return { monsters, line: `Wandering monsters (d6: ${roll}): ${foesNamed(monsters)}.` };
 }
 
 /** The checks due, the first at 2 in 6 after noise (which brings one at once); the first band to come, or null. */
-export function wanderingChecks(rng: Rng, levels: readonly number[], checks: number, noise: boolean): Wanderers | null {
+export function wanderingChecks(rng: Rng, levels: readonly number[], checks: number, noise: boolean, pool?: readonly string[]): Wanderers | null {
   for (let i = 0; i < Math.max(checks, noise ? 1 : 0); i++) {
-    const came = wanderingRoll(rng, levels, i === 0 && noise ? 2 : 1);
+    const came = wanderingRoll(rng, levels, i === 0 && noise ? 2 : 1, pool);
     if (came) return came;
   }
   return null;

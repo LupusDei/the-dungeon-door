@@ -6,7 +6,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { clearRoom, startDungeon } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { DungeonState, PartyState } from './state.ts';
-import { pickChoice, playTurn, type RulesState } from './turn.ts';
+import { pickChoice, playTurn, type RulesState, type RulesTurn } from './turn.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const rogue = heroSheet({ id: 'r', name: 'Cleo', race: 'halfling', characterClass: 'rogue' });
@@ -276,8 +276,9 @@ test('wandering monsters: a check every half hour in a dungeon; on a 1 a band co
   assert.ok(turns.every((t) => t.dungeon!.wander === 0));
   const came = turns.filter((t) => t.lines.some((l) => l.startsWith('Wandering monsters (d6: 1): ')));
   assert.ok(came.length > 3 && came.length < 30, String(came.length));
-  const attacked = came.find((t) => t.fight === 'started')!;
-  assert.match(attacked.lines.find((l) => l.startsWith('Wandering'))!, /They are hostile \(2d6: [2-5]\)\.$/);
+  const wandering = (t: RulesTurn) => t.lines.find((l) => l.startsWith('Wandering'))!;
+  const attacked = came.find((t) => t.fight === 'started' && wandering(t).includes('2d6'))!;
+  assert.match(wandering(attacked), /They are hostile \(2d6: [2-5]\)\.$/);
   assert.ok(attacked.combat);
   const passed = came.find((t) => t.fight === null)!;
   assert.match(passed.lines.at(-1)!, /They are (indifferent|friendly) \(2d6: \d+\)\. They go their way\.$/);
