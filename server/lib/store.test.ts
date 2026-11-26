@@ -33,6 +33,8 @@ test('memory store: votes keep their first roll; message ids increase', async ()
   await store.updateGame('ABCDEF', {}, { status: 'voting', sceneIndex: 0 });
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'a', 7), { playerId: 'p1', choiceId: 'a', roll: 7 });
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'c', 19), { playerId: 'p1', choiceId: 'c', roll: 7 });
+  assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'a', 3, { actionId: 'attack:greatsword', targets: ['foe-1'] }), { playerId: 'p1', choiceId: 'a', roll: 7, actionId: 'attack:greatsword', targets: ['foe-1'] });
+  assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'b', 3, null), { playerId: 'p1', choiceId: 'b', roll: 7 });
   assert.equal(await store.castVote('ABCDEF', 1, 'p1', 'c', 19), null, 'wrong scene');
 
   const ids = (await Promise.all(Array.from({ length: 20 }, (_, i) =>

@@ -80,9 +80,10 @@ export interface Store {
   setSceneOutcome(code: string, index: number, outcome: string, chosenChoiceId: ChoiceId | null): Promise<void>;
   /**
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its
-   * original roll. Returns the stored vote, or null when the game isn't voting on that scene.
+   * original roll. `named` is the legal action the vote names; null is a choice letter, and clears one.
+   * Returns the stored vote, or null when the game isn't voting on that scene.
    */
-  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number): Promise<Vote | null>;
+  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named?: { actionId: string; targets: string[] } | null): Promise<Vote | null>;
 
   /** Appends a chat/system/dm message with the game's next message id. */
   addMessage(code: string, message: NewMessage): Promise<Message>;

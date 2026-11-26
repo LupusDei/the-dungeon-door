@@ -25,7 +25,7 @@ import { ambientLight, clockOf, lightLevel, lightUp, passTime, secondsFor } from
 import { partyHazard, springTrap } from './traps.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
-export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number }
+export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[] }
 export type FightNews = 'started' | FightEnd | null;
 export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews }
 
@@ -75,7 +75,9 @@ function clearHere(s: RulesState, lines: string[]): { state: RulesState; lines: 
 }
 
 function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballot[]): RulesTurn {
-  const votes = Object.fromEntries(ballots.map((b) => [b.playerId, { choiceId: b.choiceId, roll: b.roll }]));
+  const votes = Object.fromEntries(ballots.map((b) => [b.playerId, {
+    choiceId: b.choiceId, roll: b.roll, ...(b.actionId ? { actionId: b.actionId, targets: b.targets ?? [] } : {}),
+  }]));
   const round = fightRound(s.party, combat, votes);
   const after = { ...s, party: round.party, combat: round.ended ? null : round.combat };
   if (round.ended === null || round.ended === 'defeat') return done(after, round.lines, null, round.ended);

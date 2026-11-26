@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS votes (
   PRIMARY KEY (game_code, scene_idx, player_id)
 );
 
+-- A vote may name a legal action (docs/api.md) as well as a choice letter. Null for a letter vote.
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS action_id text;
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS targets jsonb;
+
 CREATE TABLE IF NOT EXISTS messages (
   game_code      text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
   id             int  NOT NULL,
