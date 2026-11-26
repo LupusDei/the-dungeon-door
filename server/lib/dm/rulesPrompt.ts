@@ -11,11 +11,12 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   "damage":"2d6","damageType":"fire"}, {"kind":"fight","monsters":["goblin-warrior"]} (ids from the list you
   are given), {"kind":"rest","rest":"short"} or "long", or {"kind":"move","exit":"r2"} (an exit id, in a
   dungeon). Leave "rules" null for a pure story choice. DCs: 5 very easy, 10 easy, 15 medium, 20 hard, 25 very
-  hard, 30 nearly impossible.
+  hard, 30 nearly impossible. A hook has every field: fill the ones its kind uses (as in these examples) and
+  leave the others empty ("", 0, false, [] or "none").
 - Checks: pick the skill (an SRD 5.2 skill id) and, where a tool does the work, "tool" ("thieves-tools"). Use
   "mode":"best" when one hero acts and the others can only help (picking a lock), "group" when everyone must
   (sneaking past together). Set "advantage" or "disadvantage" for circumstances. Against a creature, give
-  "against": its monster id and leave "dc" null: the engine uses its passive score or the Influence DC.
+  "against": its monster id and leave "dc" at 0: the engine uses its passive score or the Influence DC.
 - Goods: {"kind":"buy","items":["potion-of-healing"]} (SRD item ids; each is bought by the richest hero who can
   pay, at SRD prices), {"kind":"sell","items":["gemstone"]} (everyone sells all they hold of it: gear at half
   price, gems and jewellery at full value), {"kind":"use","item":"potion-of-healing"} (the most hurt hero

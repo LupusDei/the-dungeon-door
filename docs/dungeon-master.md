@@ -71,7 +71,11 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `{ kind: 'move', exit }`, with an exit id from `ctx.rules.dungeon` (in a dungeon).
   - A choice without `rules` is pure story, as before. So is one whose hook doesn't hold up (unknown
     skill, DC outside 1–30, no known monster): the engine checks every hook where it enters.
-  - The LLM DM's schema takes a flat hook (every field nullable); the fake DM offers an Athletics check
+  - The LLM DM's schema takes a flat hook with no nullable fields (`lib/dm/hookSchema.ts`): the model
+    fills what its kind uses and leaves the rest empty ("", 0, [], "none"), because providers refuse a
+    schema with many nullable fields (Anthropic: more than 16 is a 400 and no game can start). A test
+    counts them; `npm run dm:check` asks the real model (text only, about five cents) and is the only
+    thing that proves a schema or prompt change works. The fake DM offers an Athletics check
     (or the first exit), a Perception check and a Persuasion check, and never starts a fight itself.
 - **`resolution.rules`** (`RulesResults`):
   - `chosen`: the choice the engine picked. Ties go to the higher-rolling voters. `leaders` is just

@@ -1,6 +1,7 @@
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { textModel } from '../models.ts';
+import { FlatHook, hookFromFlat } from './hookSchema.ts';
 import { RULES_INSTRUCTIONS, resultsBlock, rulesBlock } from './rulesPrompt.ts';
 import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, PastScene, Resolution } from './types.ts';
 
@@ -10,36 +11,10 @@ import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Pa
  * implementation for any archetype in ./registry.ts.
  */
 
-/** Flat, so every structured-output provider takes it; the engine checks it (play/hooks.ts parseHook). */
-const RulesHook = z.object({
-  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use', 'trap', 'hazard']),
-  ability: z.enum(['str', 'dex', 'con', 'int', 'wis', 'cha']).nullable().describe('check or save'),
-  skill: z.string().nullable().describe('check: an SRD skill id such as "athletics", or null'),
-  tool: z.string().nullable().describe('check: a tool id such as "thieves-tools", or null'),
-  dc: z.number().int().nullable().describe('check or save: 5, 10, 15, 20, 25 or 30 (null for a check against a monster)'),
-  against: z.string().nullable().describe('check: a monster id when the check is against that creature (sneak past, persuade), or null'),
-  mode: z.enum(['group', 'best']).nullable().describe('check: "group" (everyone rolls) or "best" (the best hero rolls, the others help)'),
-  advantage: z.boolean().nullable().describe('check or save: true when circumstances favour the heroes'),
-  disadvantage: z.boolean().nullable().describe('check or save: true when circumstances hinder the heroes'),
-  damage: z.string().nullable().describe('save: damage dice on a failure, e.g. "2d6", or null'),
-  damageType: z.string().nullable().describe('save: e.g. "fire", or null'),
-  monsters: z.array(z.string()).nullable().describe('fight: monster ids from the list you are given'),
-  rest: z.enum(['short', 'long']).nullable().describe('rest'),
-  exit: z.string().nullable().describe('move: an exit id from the dungeon block'),
-  items: z.array(z.string()).nullable().describe('buy or sell: SRD item ids, e.g. ["potion-of-healing"]'),
-  item: z.string().nullable().describe('use: a potion id, e.g. "potion-of-healing"'),
-  trap: z.string().nullable().describe('trap: an SRD 5.2 trap id, e.g. "poisoned-needle"'),
-  hazard: z.enum(['falling', 'burning', 'suffocation', 'extreme-cold', 'extreme-heat', 'dehydration', 'malnutrition']).nullable().describe('hazard'),
-  feet: z.number().nullable().describe('hazard falling: how far'),
-  minutes: z.number().nullable().describe('hazard suffocation: how long without air'),
-  hours: z.number().nullable().describe('hazard extreme-cold or extreme-heat: hours exposed'),
-  days: z.number().nullable().describe('hazard malnutrition: days without food'),
-});
-
 const Choice = z.object({
   label: z.string().describe('What the party does, 2–6 words, imperative ("Storm the gatehouse")'),
   detail: z.string().describe('One enticing sentence about the approach and its risk'),
-  rules: RulesHook.nullable().describe('The dice behind this choice (rules-engine games only), or null for pure story'),
+  rules: FlatHook.nullable().describe('The dice behind this choice (rules-engine games only), or null for pure story'),
 });
 
 const sceneFields = {
@@ -77,6 +52,16 @@ const FinaleSchema = z.object({
   ...resolutionFields,
   ...sceneFields,
 });
+
+/** What the model is asked to fill, for the test that keeps them within providers' limits. */
+export const DM_SCHEMAS = { opening: OpeningSchema, next: NextSchema, finale: FinaleSchema };
+
+/** The model's choices with each flat hook turned into the hook the engine reads. */
+function withHooks<T>(result: T): T {
+  const { choices } = result as { choices?: { rules?: unknown }[] };
+  if (!choices) return result;
+  return { ...result, choices: choices.map((c) => ({ ...c, rules: hookFromFlat(c.rules) })) };
+}
 
 function instructions(ctx: DMContext): string {
   const a = ctx.archetype;
@@ -169,7 +154,7 @@ async function write<T>(ctx: DMContext, schema: z.ZodType<T>, prompt: string, wa
       });
       const result = output as T;
       if (wantChoices && ((result as { choices?: unknown[] }).choices?.length ?? 0) < 3) throw new Error('DM wrote fewer than three choices');
-      return result;
+      return withHooks(result);
     } catch (error) {
       lastError = error;
       console.warn(`DM attempt ${attempt + 1} failed:`, error);
