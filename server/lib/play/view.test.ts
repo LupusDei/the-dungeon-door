@@ -14,7 +14,7 @@ const party: PartyState = { version: 1, rng: 1, sheets: { p1: { ...fighter, hp: 
 
 test('the API view: each hero’s numbers, the fight in initiative order, the areas seen, the last dice', () => {
   const { combat } = startFight(party, ['goblin-warrior']);
-  const d = enter(startDungeon('fixed', 3, [1, 1], 4), 'r4')!.dungeon;
+  const d = enter(enter(startDungeon('fixed', 3, [1, 1], 4), 'r4')!.dungeon, 'r4')!.dungeon; // by the winding passage r0-r4
   const view = rulesView({ party, combat, dungeon: d }, ['Bryn: …']);
   assert.deepEqual(view.party[0], {
     playerId: 'p1', name: 'Bryn', level: 1, xp: 0, hp: 0, maxHp: fighter.maxHp, armorClass: fighter.armorClass,
@@ -35,8 +35,8 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
   assert.deepEqual(Object.keys(view.combat!.combatants[0]), ['id', 'name', 'side', 'hp', 'maxHp', 'status', 'conditions']);
   assert.deepEqual([view.combat!.round, view.combat!.outcome], [1, 'ongoing']);
   assert.deepEqual([view.dungeon!.mode, view.dungeon!.kind, view.dungeon!.at], ['fixed', d.map.kind, 'r4']);
-  assert.deepEqual(view.dungeon!.areas.map((a) => [a.id, a.cleared]), [['r0', true], ['r4', false]]);
-  assert.deepEqual(view.dungeon!.areas[1].exits, [{ id: 'r0', connection: 'unlocked-door', to: 'r0' }]);
+  assert.deepEqual(view.dungeon!.areas.map((a) => [a.id, a.cleared]), [['r0', true], ['r0-r4', false], ['r4', false]]);
+  assert.deepEqual(view.dungeon!.areas[2].exits, [{ id: 'r0', connection: 'unlocked-door', to: 'r0-r4' }]);
   assert.deepEqual(view.results, ['Bryn: …']);
   assert.deepEqual([rulesView({ party, combat: null, dungeon: null }, []).combat, rulesView({ party, combat: null, dungeon: null }, []).dungeon], [null, null]);
 });
@@ -58,7 +58,7 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual(ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior'), { name: 'Goblin Warrior', side: 'foes', hp: combat.combatants['foe-1'].hp, maxHp: combat.combatants['foe-1'].maxHp, status: 'up' });
   assert.deepEqual(ctx.dungeon, {
     kind: d.map.kind, area: d.map.nodes.r0.name, purpose: 'Threshold',
-    exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.)' }, { id: 'r4', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.)' }],
+    exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.)' }, { id: 'r4', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.), by a winding passage' }],
     waiting: null,
   });
   assert.deepEqual(ctx.monsters, suitableMonsters([1, 1]));

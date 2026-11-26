@@ -109,10 +109,18 @@ function talk(s: RulesState, offered: readonly string[] | null | undefined, ball
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
   const moved = s.dungeon && enter(s.dungeon, exit);
   if (!moved) return done(s, ['That way is closed.']);
+  if (moved.node.type === 'corridor') return through(s, moved, exit, ballots);
+  return arrive(s, moved, ballots, []);
+}
+
+type Moved = NonNullable<ReturnType<typeof enter>>;
+
+/** Into an area: light where needed, then what is there springs (foes met, a trap), then its treasure is taken. */
+function arrive(s: RulesState, moved: Moved, ballots: readonly Ballot[], before: string[]): RulesTurn {
   const entered = { ...s, dungeon: moved.dungeon };
   const lit = lightUp(s.party, ambientLight(entered));
   const here = { ...entered, party: lit.party };
-  const lines = [`The party enters ${moved.node.name}: ${moved.node.purpose}.`, ...lit.lines];
+  const lines = [...before, `The party enters ${moved.node.name}${moved.node.purpose ? `: ${moved.node.purpose}` : ''}.`, ...lit.lines];
   const found = arrival(moved.dungeon, moved.node);
   if (found.fight) return meet(here, found.fight, lines);
   const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
@@ -120,6 +128,19 @@ function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTur
   return { ...trapped, ...cleared.state, lines: cleared.lines };
 }
 
+const CORRIDOR_SECONDS = 600;
+
+/** A corridor is passed through on the way (ten minutes): its trap springs, then the party goes on to the room. */
+function through(s: RulesState, moved: Moved, exit: string, ballots: readonly Ballot[]): RulesTurn {
+  const lit = lightUp(s.party, ambientLight({ ...s, dungeon: moved.dungeon }));
+  const here: RulesState = { ...s, party: lit.party, dungeon: moved.dungeon };
+  const lines = [`The party goes by way of a ${moved.node.name.toLowerCase()}.`, ...lit.lines];
+  const found = arrival(moved.dungeon, moved.node);
+  const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
+  const timed = passTime(trapped.party, CORRIDOR_SECONDS, ambientLight(trapped));
+  const after: RulesState = { ...trapped, party: timed.party, dungeon: clearRoom(trapped.dungeon!, moved.node.id) };
+  return { ...arrive(after, enter(after.dungeon!, exit)!, ballots, [...trapped.lines, ...timed.lines]), success: trapped.success };
+}
 
 const traded = (s: RulesState, t: Pick<Traded, 'party' | 'lines'>) => done({ ...s, party: t.party }, t.lines);
 

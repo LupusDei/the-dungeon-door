@@ -186,9 +186,9 @@ test('a fixed dungeon chosen at start: the map, the party moving through it, wha
   assert.equal(state.scene!.choices[0].rules, `Go on (${exit})`);
   await voteAll(code, players, 0, 'a');
   state = await view(code, host);
-  assert.equal(state.rules!.dungeon!.at, exit);
-  assert.equal(state.rules!.dungeon!.areas.length, 2);
-  assert.match(state.rules!.results[0], /^The party enters /);
+  assert.equal(state.rules!.dungeon!.at, exit, 'through any corridor to the room');
+  assert.deepEqual(state.rules!.dungeon!.areas.map((a) => a.id).filter((id) => !id.includes('-')), ['r0', exit]);
+  assert.ok(state.rules!.results.some((l) => /^The party enters /.test(l)));
 });
 
 test('explore mode rolls each area as the party opens it', async () => {

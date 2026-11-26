@@ -50,11 +50,11 @@ test('magic items are common and uncommon near the top, rare ones join from leve
 test('a fixed map has 5, 7 or 9 rooms: one entrance, one goal, a path between them, branches and loops', () => {
   for (const [size, rooms, loops] of [['short', 5, 0], ['standard', 7, 1], ['delve', 9, 2]] as const) {
     const d = generateDungeon(42, size, [2, 2, 2]);
-    const nodes = Object.values(d.nodes);
+    const nodes = Object.values(d.nodes).filter((n) => n.type === 'room');
     assert.equal(nodes.length, rooms, size);
     const edges = nodes.reduce((n, r) => n + r.exits.length, 0) / 2;
-    assert.equal(edges, rooms - 1 + loops, `${size}: a tree plus ${loops} loops`);
-    assert.ok(nodes.every((r) => r.exits.every((e) => d.nodes[e.to!].exits.some((back) => back.to === r.id))), 'every way goes both ways');
+    assert.equal(edges, rooms - 1 + loops, `${size}: a tree plus ${loops} loops (a corridor is still one way)`);
+    assert.ok(Object.values(d.nodes).every((r) => r.exits.every((e) => d.nodes[e.to!].exits.some((back) => back.to === r.id))), 'every way goes both ways');
     assert.equal(d.mode, 'fixed');
     assert.equal(d.nodes[d.entrance].purpose, 'Threshold');
     assert.equal(d.nodes[d.entrance].contents!.kind, 'empty');
@@ -71,7 +71,7 @@ test('the goal is at the end of the path from the entrance', () => {
     const id = queue.shift()!;
     for (const e of d.nodes[id].exits) if (!distance.has(e.to!)) { distance.set(e.to!, distance.get(id)! + 1); queue.push(e.to!); }
   }
-  assert.equal(distance.size, 9, 'every room can be reached');
+  assert.equal([...distance.keys()].filter((id) => d.nodes[id].type === 'room').length, 9, 'every room can be reached');
   assert.ok(distance.get(d.goal!)! >= 2, 'the goal is not next to the entrance');
 });
 
@@ -108,6 +108,7 @@ test('fixed rooms are one level deep and purposeful: the goal takes the kind\'s 
     assert.equal(d.version, 1);
     for (const n of Object.values(d.nodes)) {
       assert.equal(n.depth, 1);
+      if (n.type !== 'room') continue;
       if (n.id === d.goal) assert.equal(n.purpose, all[all.length - 1]);
       else if (n.id !== d.entrance) assert.ok(all.slice(0, -1).includes(n.purpose!), n.purpose!), used.add(`${d.kind}:${all.indexOf(n.purpose!)}`);
     }

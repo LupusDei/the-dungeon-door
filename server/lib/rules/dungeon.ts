@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import magicItemsJson from '../../data/srd/5.2/magicItems.json' with { type: 'json' };
+import { addCorridors } from './corridors.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { type Amount, dungeonTables, type MapSize, rollOn, type StockKind } from './dungeonTables.ts';
 import { buildEncounter, type Encounter } from './encounter.ts';
@@ -30,7 +31,8 @@ export interface Exit {
 }
 export interface DungeonNode {
   id: string;
-  type: 'room' | 'passage' | 'stairs' | 'dead-end';
+  /** corridor: a fixed map's way between two rooms (corridors.ts); not a room. */
+  type: 'room' | 'passage' | 'corridor' | 'stairs' | 'dead-end';
   name: string;
   depth: number;
   size: string | null;
@@ -157,5 +159,5 @@ export function generateDungeon(seed: number, size: MapSize, levels: number[]): 
     else nodes[id] = newRoom(rng, id, FIXED_DEPTH, pick(rng, purposes.slice(0, -1)), stockRoom(rng, context));
   }
   for (const [a, b] of edges) connect(rng, nodes, a, b);
-  return { version: 1, mode: 'fixed', seed, kind: kind.name, levels, entrance: 'r0', goal, nodes };
+  return addCorridors({ version: 1, mode: 'fixed', seed, kind: kind.name, levels, entrance: 'r0', goal, nodes });
 }

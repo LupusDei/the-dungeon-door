@@ -7,7 +7,7 @@ import type { DungeonState, PartyState } from './state.ts';
 test('a fixed dungeon is a whole map, sized by the adventure; explore mode starts with the entrance only', () => {
   const fixed = startDungeon('fixed', 3, [1, 1], 4);
   assert.deepEqual([fixed.version, fixed.map.mode, fixed.at, fixed.visited, fixed.cleared], [1, 'fixed', 'r0', ['r0'], ['r0']]);
-  assert.equal(Object.keys(fixed.map.nodes).length, 5);
+  assert.equal(Object.values(fixed.map.nodes).filter((n) => n.type === 'room').length, 5);
   const explore = startDungeon('explore', 3, [1, 1], 4);
   assert.deepEqual([explore.map.mode, Object.keys(explore.map.nodes).length, explore.at], ['explore', 1, explore.map.entrance]);
   assert.deepEqual([mapSize(2), mapSize(4), mapSize(5), mapSize(6), mapSize(7), mapSize(8)], ['short', 'short', 'standard', 'standard', 'delve', 'delve']);

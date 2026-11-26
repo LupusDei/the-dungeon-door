@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { corridorContents } from './corridors.ts';
+import { derivedRng } from './rng.ts';
 import { test } from 'node:test';
 import type { Dungeon } from './dungeon.ts';
 import { dungeonTables } from './dungeonTables.ts';
@@ -78,7 +80,7 @@ test('a long walk finds rooms, passages, stairs down to deeper levels and dead e
   assert.ok(nodes.some((n) => n.depth > 1));
   for (const n of nodes) {
     if (n.type === 'room') assert.ok(n.contents && n.size && n.purpose, n.id);
-    else assert.deepEqual([n.contents, n.size, n.purpose], [null, null, null], n.id);
+    else assert.deepEqual([n.contents!.encounter, n.contents!.treasure, n.size, n.purpose], [null, null, null, null], `${n.id}: passages hold no encounter or treasure`);
     if (n.type === 'dead-end') assert.deepEqual(n.exits.map((x) => x.id), ['back']);
     if (n.type === 'stairs') assert.ok(n.exits.some((x) => x.id === 'down' && x.connection === 'stairs'));
     const parent = n.id.slice(0, n.id.lastIndexOf('.'));
@@ -136,4 +138,11 @@ test('rooms take every purpose of the dungeon kind but the goal\'s', () => {
   const all = purposes[kinds.rows.find((r) => r.value.name === d.kind)!.value.id];
   const used = new Set(Object.values(d.nodes).filter((n) => n.id !== d.entrance && n.type === 'room').map((n) => n.purpose));
   assert.deepEqual([...used].sort(), all.slice(0, -1).sort());
+});
+
+test('passages, stairs and dead ends hold what a fixed map\'s corridors do (a trap, a hazard, spoor), rolled from the seed and their id', () => {
+  const d = wander(startExplore(5, [3, 3, 3]), 400);
+  const ways = Object.values(d.nodes).filter((n) => n.type !== 'room');
+  assert.ok(ways.some((n) => n.contents!.trap !== null) && ways.some((n) => n.contents!.special === 'spoor'));
+  for (const n of ways) assert.deepEqual(n.contents, corridorContents(derivedRng(5, `corridor:${n.id}`)), n.id);
 });

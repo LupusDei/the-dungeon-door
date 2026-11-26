@@ -3,6 +3,7 @@
  * original CC0 tables (extras/exploreGenerator.json) with dice derived from the seed and the new area's
  * id, so the same seed and the same choices always give the same dungeon, in any order.
  */
+import { corridorContents } from './corridors.ts';
 import { type Dungeon, type DungeonNode, type Exit, newRoom, stockRoom } from './dungeon.ts';
 import { type Beyond, dungeonTables, rollOn } from './dungeonTables.ts';
 import { type Rng, derivedRng, pick } from './rng.ts';
@@ -80,8 +81,8 @@ function beyond(rng: Rng, dungeon: Dungeon, id: string, depth: number, via: Exit
   const { explore } = dungeonTables();
   const found: Beyond = isDoor(via.connection) ? BEHIND_A_DOOR[rollOn(rng, explore.behindDoor)] : rollOn(rng, explore.beyond);
   if (found.result === 'room') return room(rng, dungeon, id, depth, mainLine);
-  if (found.result === 'dead-end' && mainLine) return passage(rng, id, depth, 'onward', BEHIND_A_DOOR.onward.exits);
-  return passage(rng, id, depth, found.result, found.exits);
+  const way = found.result === 'dead-end' && mainLine ? passage(rng, id, depth, 'onward', BEHIND_A_DOOR.onward.exits) : passage(rng, id, depth, found.result, found.exits);
+  return { ...way, contents: corridorContents(derivedRng(dungeon.seed, `corridor:${id}`)) };
 }
 
 type PassageResult = Exclude<Beyond['result'], 'room'>;

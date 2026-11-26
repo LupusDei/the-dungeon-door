@@ -65,7 +65,7 @@ test('outdoors: daylight from 6 to 19, twilight the hour either side, dark at ni
 test('the light in a dungeon area (original table): the entrance dim, rooms 1 in 6 lit and 1 in 6 dim, the rest dark, the same for the same seed', () => {
   const map = generateDungeon(7, 'delve', [3]);
   assert.equal(areaLight(map, 'r0'), 'dim');
-  const levels = Array.from({ length: 300 }, (_, seed) => generateDungeon(seed, 'delve', [3])).flatMap((m) => Object.keys(m.nodes).filter((id) => id !== 'r0').map((id) => areaLight(m, id)));
+  const levels = Array.from({ length: 300 }, (_, seed) => generateDungeon(seed, 'delve', [3])).flatMap((m) => Object.keys(m.nodes).filter((id) => id !== 'r0' && m.nodes[id].type === 'room').map((id) => areaLight(m, id)));
   const share = (l: string) => levels.filter((x) => x === l).length / levels.length;
   assert.ok(Math.abs(share('bright') - 1 / 6) < 0.04 && Math.abs(share('dim') - 1 / 6) < 0.04, `${share('bright')} ${share('dim')}`);
   assert.deepEqual(Object.keys(map.nodes).map((id) => areaLight(map, id)), Object.keys(map.nodes).map((id) => areaLight(generateDungeon(7, 'delve', [3]), id)));

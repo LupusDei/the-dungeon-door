@@ -137,6 +137,12 @@ function lightLine(s: RulesState): string {
   return `${own}; ${lit ? `the party's light: ${lit.holder}'s ${lit.name} (${lit.minutesLeft} minutes left)` : 'no light carried'}`;
 }
 
+/** The area a way leads to, named with the corridor it goes by. */
+function leadsTo(dungeon: DungeonState, exitId: string, to: string): string {
+  const next = dungeon.map.nodes[to];
+  return next.type === 'corridor' ? `${dungeon.map.nodes[exitId].name}, by a ${next.name.toLowerCase()}` : next.name;
+}
+
 export function rulesContext(state: RulesState): RulesContext {
   const { party, combat, dungeon } = state;
   const sheets = Object.values(party.sheets);
@@ -157,7 +163,7 @@ export function rulesContext(state: RulesState): RulesContext {
       kind: dungeon.map.kind,
       area: here.name,
       purpose: here.purpose,
-      exits: here.exits.map((x) => ({ id: x.id, connection: x.connection, leadsTo: x.to === null ? null : dungeon.map.nodes[x.to].name })),
+      exits: here.exits.map((x) => ({ id: x.id, connection: x.connection, leadsTo: x.to === null ? null : leadsTo(dungeon, x.id, x.to) })),
       waiting: waiting(dungeon),
     },
     monsters: suitableMonsters(sheets.map((s) => s.level)),

@@ -104,7 +104,7 @@ test('a way on: the party moves, and what is in the room springs: monsters fight
   assert.ok(!boars.dungeon!.cleared.includes('r1'), 'cleared once the boars are beaten');
   const loot = playTurn(state({ dungeon: d }), { kind: 'move', exit: 'r4' }, ballots(5, 5));
   assert.deepEqual([loot.fight, loot.dungeon!.cleared.includes('r4')], [null, true]);
-  assert.equal(loot.lines[1], 'Treasure: 60 gp in coin (30 each).');
+  assert.ok(loot.lines.includes('Treasure: 60 gp in coin (30 each).'));
   const back = playTurn(state({ dungeon: clearRoom(d, 'r1') }), { kind: 'move', exit: 'r1' }, []);
   assert.deepEqual([back.fight, back.lines.length], [null, 1]);
 });
@@ -163,8 +163,9 @@ test('a trapped room springs its SRD 5.2 trap (or the 5.2 counterpart of an old 
   const trapped: DungeonState = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r4: { ...r4, contents: { ...r4.contents!, trap: 'pits', treasure: null } } } } };
   const blind = { ...state({ dungeon: trapped }), party: party({ p1: { ...fighter, skillBonuses: { ...fighter.skillBonuses, investigation: -5 } }, p2: { ...rogue, skillBonuses: { ...rogue.skillBonuses, investigation: -5 } } }) };
   const sprung = playTurn(blind, { kind: 'move', exit: 'r4' }, ballots(1, 1));
-  assert.equal(sprung.lines[1], 'Nobody notices the Hidden Pit.');
-  assert.match(sprung.lines[2], /^Damage \d bludgeoning: Bryn takes \d$/);
+  const pit = sprung.lines.indexOf('Nobody notices the Hidden Pit.');
+  assert.ok(pit > 0);
+  assert.match(sprung.lines[pit + 1], /^Damage \d bludgeoning: Bryn takes \d$/);
   assert.equal(sprung.success, false);
   assert.ok(sprung.dungeon!.cleared.includes('r4'));
 });
@@ -234,4 +235,17 @@ test('a hero killed outside a fight may be Revivified on the spot; the revive ho
   const temple = playTurn(state({ party: party({ p1: { ...fighter, hp: 0, dead: true }, p2: priest }) }), { kind: 'revive' }, []);
   assert.deepEqual([temple.party.sheets.p1.revivalPenalty, temple.party.sheets.p2.gp], [4, 400]);
   assert.match(temple.lines[0], /^Mira casts Raise Dead on Bryn/);
+});
+
+test('a corridor is passed through on the way to the room: its trap springs, ten more minutes pass, it is on the map', () => {
+  const d = startDungeon('fixed', 3, [1, 1], 4);
+  assert.equal(d.map.nodes['r0-r4'].name, 'Winding passage');
+  const gone = playTurn(state({ dungeon: d }), { kind: 'move', exit: 'r4' }, ballots(5, 5));
+  assert.equal(gone.lines[0], 'The party goes by way of a winding passage.');
+  assert.ok(gone.lines.includes('Nobody notices the Spiked Pit.') || gone.lines.some((l) => l.includes('spots a Spiked Pit')));
+  assert.equal(gone.lines.filter((l) => l.startsWith('The party enters Cramped')).length, 1);
+  assert.deepEqual([gone.dungeon!.at, gone.dungeon!.visited, gone.party.clock], ['r4', ['r0', 'r0-r4', 'r4'], 1200]);
+  assert.ok(gone.dungeon!.cleared.includes('r0-r4'), 'its trap is spent');
+  const again = playTurn({ ...gone, combat: null }, { kind: 'move', exit: 'r0' }, []);
+  assert.deepEqual([again.dungeon!.at, again.lines.some((l) => l.includes('Spiked Pit'))], ['r0', false]);
 });
