@@ -109,13 +109,56 @@ export interface Game {
 
 export type MessageKind = 'chat' | 'system' | 'dm';
 
-export interface Message {
+/** "in": the hero speaks. "out": the player, out of character. */
+export type MessageVoice = 'in' | 'out';
+
+/** Who a `@name` points at. "hero" is the character; "player" is the person who plays them. */
+export type MentionTarget = 'hero' | 'player';
+
+export interface Mention {
+  playerId: string;
+  /** The hero's name, as the party knows it. */
+  name: string;
+  target: MentionTarget;
+}
+
+/** One emoji on a line. `count` is `playerIds.length`; ids are in the order they first reacted. */
+export interface Reaction {
+  emoji: string;
+  count: number;
+  playerIds: string[];
+}
+
+/** A snapshot of the line a message answers. It has no reactions: those live on the original. */
+export interface MessageQuote {
   id: number;
   kind: MessageKind;
   playerId: string | null;
   characterName: string | null;
   text: string;
+  voice: MessageVoice | null;
+}
+
+export interface Message {
+  /** Monotonic per game, and stable: reactions edit the line and never mint a new id. */
+  id: number;
+  kind: MessageKind;
+  playerId: string | null;
+  characterName: string | null;
+  text: string;
+  /** "in" or "out" on a player's line; null for system and dm. A chat line from before the field reads as "in". */
+  voice: MessageVoice | null;
+  replyTo: number | null;
+  reply: MessageQuote | null;
+  mentions: Mention[];
+  reactions: Reaction[];
   createdAt: string;
+}
+
+export interface TypingNotice {
+  playerId: string;
+  /** The hero's name, so the table can say who is writing. */
+  name: string;
 }
 
 // ---- API views ----
@@ -165,6 +208,10 @@ export interface GameState {
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];
+  /** Lines at or before `since` whose reactions changed. Empty when the poll asked for the whole log. */
+  messageUpdates: Message[];
+  /** Players composing a line, other than the caller. */
+  typing: TypingNotice[];
   /** The rules engine's numbers; null for games started before it. */
   rules: RulesView | null;
   updatedAt: string;

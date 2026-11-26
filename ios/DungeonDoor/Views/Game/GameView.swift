@@ -52,6 +52,12 @@ struct GameView: View {
                         .background(Palette.ember.opacity(0.85))
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                // The sheet has its own composer. This one stays on the table while chat is closed.
+                if !session.chatOpen {
+                    ChatComposerBar(session: session, showsThread: true)
+                }
+            }
         }
         .sheet(isPresented: $session.chatOpen) {
             ChatView(session: session)

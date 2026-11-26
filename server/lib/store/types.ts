@@ -1,5 +1,5 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, StoredScene, TypingNotice, Vote } from '../types.ts';
 
 export interface NewGame {
   code: string;
@@ -33,6 +33,10 @@ export interface NewMessage {
   playerId: string | null;
   characterName: string | null;
   text: string;
+  voice?: MessageVoice | null;
+  replyTo?: number | null;
+  reply?: MessageQuote | null;
+  mentions?: Mention[];
 }
 
 /** A scene as written by the DM: everything but its votes and resolution. */
@@ -84,8 +88,21 @@ export interface Store {
    */
   castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number): Promise<Vote | null>;
 
-  /** Appends a chat/system/dm message with the game's next message id. */
+  /** Appends a chat/system/dm message with the game's next message id. Ids are never reused. */
   addMessage(code: string, message: NewMessage): Promise<Message>;
+  /** One line, or null. Used to quote a reply and to reject a reply to a line that isn't there. */
+  getMessage(code: string, id: number): Promise<Message | null>;
   /** Messages with id > `since` (all when omitted), oldest first, at most the newest `limit`. */
   listMessages(code: string, since?: number, limit?: number): Promise<Message[]>;
+  /**
+   * Lines with id ≤ `since` whose reactions have changed, oldest first, at most the newest `limit`.
+   * A reaction never changes the line's id, so the poll can deliver it beside the new lines.
+   */
+  listUpdatedMessages(code: string, since: number, limit?: number): Promise<Message[]>;
+  /** Adds the caller's emoji or removes it if they already had it. Null when the line isn't in the game. */
+  toggleReaction(code: string, messageId: number, playerId: string, emoji: string): Promise<Message | null>;
+  /** `until` is an ISO time; a time in the past clears the player. */
+  setTyping(code: string, playerId: string, name: string, until: string): Promise<void>;
+  /** Players still composing at `now` (ISO). */
+  listTyping(code: string, now: string): Promise<TypingNotice[]>;
 }

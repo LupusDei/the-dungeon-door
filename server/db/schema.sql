@@ -94,6 +94,36 @@ CREATE TABLE IF NOT EXISTS messages (
   PRIMARY KEY (game_code, id)
 );
 
+-- Party chat: in/out of character, a quoted reply, @mentions, and when reactions last changed the line.
+-- revised_at stays null until a reaction, so the poll can send that line again without a new id.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS voice text;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to int;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply jsonb;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS mentions jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS revised_at timestamptz;
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_voice_check;
+ALTER TABLE messages ADD CONSTRAINT messages_voice_check CHECK (voice IS NULL OR voice IN ('in', 'out'));
+
+-- One row per player per emoji. Toggling deletes the row. The message id does not change.
+CREATE TABLE IF NOT EXISTS message_reactions (
+  game_code  text NOT NULL,
+  message_id int  NOT NULL,
+  player_id  text NOT NULL,
+  emoji      text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (game_code, message_id, player_id, emoji),
+  FOREIGN KEY (game_code, message_id) REFERENCES messages (game_code, id) ON DELETE CASCADE
+);
+
+-- Who is composing. `until` is a few seconds out; the poll drops anyone past it.
+CREATE TABLE IF NOT EXISTS typing (
+  game_code text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
+  player_id text NOT NULL,
+  name      text NOT NULL,
+  until     timestamptz NOT NULL,
+  PRIMARY KEY (game_code, player_id)
+);
+
 -- The quest log (website /quest-log): JSON documents, kind 'task' or 'meta'. See lib/quests.ts.
 CREATE TABLE IF NOT EXISTS quest_docs (
   kind       text NOT NULL,

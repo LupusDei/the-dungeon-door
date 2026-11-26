@@ -23,6 +23,14 @@
       "destination": "/api/game-messages?code=:code"
     },
     {
+      "source": "/api/games/:code/reactions",
+      "destination": "/api/game-reactions?code=:code"
+    },
+    {
+      "source": "/api/games/:code/typing",
+      "destination": "/api/game-typing?code=:code"
+    },
+    {
       "source": "/api/games/:code/dungeon-master",
       "destination": "/api/game-dungeon-master?code=:code"
     },

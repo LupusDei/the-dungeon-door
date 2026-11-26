@@ -83,6 +83,11 @@ export interface ChatLine {
   characterName: string | null;
   kind: 'chat' | 'dm';
   text: string;
+  /**
+   * "in" when a player speaks as their hero, "out" when they speak as themselves.
+   * Null on the dungeon master's own lines. On the line so a prompt can tell roleplay from table talk.
+   */
+  voice: 'in' | 'out' | null;
 }
 
 export interface DMContext {

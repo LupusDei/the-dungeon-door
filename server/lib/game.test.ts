@@ -147,6 +147,9 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.equal(msg.body.kind, 'chat');
   assert.equal(msg.body.text, 'Hello there!');
   assert.equal(msg.body.characterName, 'Hero 2');
+  assert.equal(msg.body.voice, 'in');
+  assert.equal(msg.body.replyTo, null);
+  assert.deepEqual(msg.body.reactions, []);
   assert.equal((await call(messagesApi.POST, gamePath(code, 'messages'), { player: p2, body: { text: '' } })).status, 400);
   assert.equal((await call(messagesApi.POST, gamePath(code, 'messages'), { player: p2, body: { text: 'x'.repeat(501) } })).status, 400);
   assert.equal((await call(messagesApi.POST, gamePath(code, 'messages'), { player: outsider, body: { text: 'hi' } })).status, 403);

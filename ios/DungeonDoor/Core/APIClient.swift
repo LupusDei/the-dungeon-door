@@ -86,9 +86,23 @@ struct APIClient: Sendable {
         let _: OK = try await send("POST", "api/games/\(code)/leave", body: [String: String]())
     }
 
-    func say(_ code: String, text: String) async throws -> Message {
-        struct Body: Encodable { let text: String }
-        return try await send("POST", "api/games/\(code)/messages", body: Body(text: text))
+    /// `voice` is "in" (the hero) or "out" (the player). `replyTo` quotes that message.
+    func say(_ code: String, text: String, voice: String, replyTo: Int?) async throws -> Message {
+        struct Body: Encodable { let text: String; let voice: String; let replyTo: Int? }
+        return try await send("POST", "api/games/\(code)/messages", body: Body(text: text, voice: voice, replyTo: replyTo))
+    }
+
+    /// Toggles the caller's emoji on a line. The returned line has the same id.
+    func react(_ code: String, messageId: Int, emoji: String) async throws -> Message {
+        struct Body: Encodable { let messageId: Int; let emoji: String }
+        return try await send("POST", "api/games/\(code)/reactions", body: Body(messageId: messageId, emoji: emoji))
+    }
+
+    /// Says the caller is composing, or clears it. The next poll shows it to everyone else.
+    func typing(_ code: String, typing: Bool) async throws {
+        struct Body: Encodable { let typing: Bool }
+        struct OK: Decodable { let ok: Bool }
+        let _: OK = try await send("POST", "api/games/\(code)/typing", body: Body(typing: typing))
     }
 
     func setDungeonMaster(_ code: String, id: String) async throws -> GameState {

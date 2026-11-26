@@ -11,12 +11,13 @@ import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
+import { chatLines, oneEmoji, parseMentions, quoteOf, replyIdOf, TYPING_MS, voiceOf } from './chat.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
-import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
+import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene, type TypingNotice } from './types.ts';
 
 export const MAX_PLAYERS = 6;
 export const DEFAULT_SCENE_COUNT = 4;
@@ -95,7 +96,7 @@ function heroInGame(game: Game, { playerId, character }: GamePlayer): Character 
   return upgradeCharacter({ ...character, sheet: live });
 }
 
-export function toState(game: Game, playerId: string, messages: Message[]): GameState {
+export function toState(game: Game, playerId: string, messages: Message[], messageUpdates: Message[] = [], typing: TypingNotice[] = []): GameState {
   const current = game.scenes.find((s) => s.index === game.sceneIndex) ?? null;
   return {
     code: game.code,
@@ -123,6 +124,8 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
         };
       }),
     messages,
+    messageUpdates,
+    typing,
     rules: rulesOf(game),
     updatedAt: game.updatedAt,
   };
@@ -158,9 +161,15 @@ async function say(code: string, message: NewMessage): Promise<Message> {
 /** GET /api/games/{code}?since= */
 export async function viewGame(code: string, playerId: string, since?: number): Promise<GameState> {
   const store = getStore();
-  const [game, messages] = await Promise.all([loadGame(code), store.listMessages(code, since)]);
+  const now = new Date().toISOString();
+  const [game, messages, messageUpdates, typing] = await Promise.all([
+    loadGame(code),
+    store.listMessages(code, since),
+    since === undefined ? Promise.resolve([] as Message[]) : store.listUpdatedMessages(code, since),
+    store.listTyping(code, now),
+  ]);
   member(game, playerId);
-  return toState(game, playerId, messages);
+  return toState(game, playerId, messages, messageUpdates, typing.filter((notice) => notice.playerId !== playerId));
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -238,12 +247,52 @@ export async function leaveGame(code: string, playerId: string, origin: string):
 }
 
 /** POST /api/games/{code}/messages */
-export async function postMessage(code: string, playerId: string, text: unknown): Promise<Message> {
+export async function postMessage(code: string, playerId: string, text: unknown, options: { voice?: unknown; replyTo?: unknown } = {}): Promise<Message> {
   const trimmed = typeof text === 'string' ? text.trim() : '';
   if (!trimmed || trimmed.length > 500) throw badRequest('text must be 1–500 characters');
+  let voice;
+  let replyTo: number | null;
+  try {
+    voice = voiceOf(options.voice);
+  } catch {
+    throw badRequest('voice must be "in" or "out"');
+  }
+  try {
+    replyTo = replyIdOf(options.replyTo);
+  } catch {
+    throw badRequest('replyTo must be a message id');
+  }
   const game = await loadGame(code);
   const player = member(game, playerId);
-  return getStore().addMessage(code, { kind: 'chat', playerId, characterName: player.character.name, text: trimmed });
+  const quoted = replyTo === null ? null : await getStore().getMessage(code, replyTo);
+  if (replyTo !== null && !quoted) throw badRequest('replyTo must be a message in this game');
+  const mentions = parseMentions(trimmed, game.players.map((p) => ({ playerId: p.playerId, name: p.character.name })));
+  return getStore().addMessage(code, {
+    kind: 'chat', playerId, characterName: player.character.name, text: trimmed,
+    voice, replyTo, reply: quoted ? quoteOf(quoted) : null, mentions,
+  });
+}
+
+/** POST /api/games/{code}/reactions — toggles the caller's emoji. The line keeps its id. */
+export async function react(code: string, playerId: string, messageId: unknown, emoji: unknown): Promise<Message> {
+  const game = await loadGame(code);
+  member(game, playerId);
+  if (typeof messageId !== 'number' || !Number.isInteger(messageId) || messageId < 1) throw badRequest('messageId must be a message id');
+  const mark = oneEmoji(emoji);
+  if (!mark) throw badRequest('emoji must be a single emoji');
+  const message = await getStore().toggleReaction(code, messageId, playerId, mark);
+  if (!message) throw notFound('no such message');
+  return message;
+}
+
+/** POST /api/games/{code}/typing. A ping lasts TYPING_MS; false clears it. */
+export async function setTyping(code: string, playerId: string, typing: unknown): Promise<{ ok: true }> {
+  const game = await loadGame(code);
+  const player = member(game, playerId);
+  if (typing !== undefined && typing !== null && typeof typing !== 'boolean') throw badRequest('typing must be true or false');
+  const until = typing === false ? new Date(0).toISOString() : new Date(Date.now() + TYPING_MS).toISOString();
+  await getStore().setTyping(code, playerId, player.character.name, until);
+  return { ok: true };
 }
 
 /** POST /api/games/{code}/dungeon-master */
@@ -450,9 +499,7 @@ async function contextFor(game: Game, sceneIndex: number, rules: RulesState | nu
     history: game.scenes.filter((s) => s.index < sceneIndex).map((s) => pastScene(game, s)),
     sceneIndex,
     sceneCount: game.sceneCount,
-    recentChat: messages
-      .filter((m) => m.kind !== 'system')
-      .map((m) => ({ characterName: m.characterName, kind: m.kind as 'chat' | 'dm', text: m.text })),
+    recentChat: chatLines(messages),
     rules: rules && rulesContext(rules),
   };
 }
