@@ -1,7 +1,8 @@
 /**
  * Combat in the voting flow: a fight is a run of scenes, one per round. Each player's vote is their own
  * hero's action: (a) Attack, (b) Cast, (c) Dodge; the vote's d20 is the attack roll. Monsters act by the
- * engine's rules. When it ends the living heroes split the XP and level up. See docs/api.md.
+ * engine's rules. Shaken foes check morale (morale.ts). When it ends the living heroes split the XP and level
+ * up: all of it on a victory or surrender, the slain foes' when the rest flee. See docs/api.md.
  */
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
@@ -15,6 +16,7 @@ import { beamsAt, castSpell, slotsLeft, spellDamageDice } from '../rules/spells.
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
 import { afterFight } from './dying.ts';
+import { type Break, morale } from './morale.ts';
 import type { PartyState } from './state.ts';
 
 export const MAX_ROUNDS = 10;
@@ -95,8 +97,8 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
 type Names = (id: string) => string;
 
 const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names) => string } = {
-  attack: ({ actor, result: r }, name) =>
-    `${name(actor)} attacks ${name(r.target)} with ${r.attack}: ${r.roll.natural} (total ${r.roll.total}) vs AC ${r.ac}, ` +
+  attack: ({ actor, result: r, reaction }, name) =>
+    `${reaction ? 'Opportunity Attack: ' : ''}${name(actor)} attacks ${name(r.target)} with ${r.attack}: ${r.roll.natural} (total ${r.roll.total}) vs AC ${r.ac}, ` +
     (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.'),
   spell: ({ actor, spellId, outcomes }, name) =>
     `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) =>
@@ -149,11 +151,11 @@ export function autoLevelUp(sheet: CharacterSheet): { sheet: CharacterSheet; lin
   return { sheet: s, lines };
 }
 
-function victory(party: PartyState, combat: CombatState): { party: PartyState; lines: string[] } {
-  const xp = xpEarned(combat);
-  const alive = Object.keys(party.sheets).filter((id) => living(combat.combatants[id]));
+/** The XP split among the living heroes, who level up on the spot. */
+function award(party: PartyState, combat: CombatState, xp: number, headline: string): { party: PartyState; lines: string[] } {
+  const alive = Object.keys(party.sheets).filter((id) => Object.hasOwn(combat.combatants, id) && living(combat.combatants[id]));
   const share = splitXp(xp, alive.length); // the hero who struck the last blow is alive
-  const lines = [`Victory! ${xp} XP, ${share} each.`];
+  const lines = [xp === 0 ? headline : `${headline} ${xp} XP, ${share} each.`];
   const sheets = { ...party.sheets };
   for (const id of alive) {
     const up = autoLevelUp(awardXp(sheets[id], share));
@@ -163,10 +165,14 @@ function victory(party: PartyState, combat: CombatState): { party: PartyState; l
   return { party: { ...party, sheets }, lines };
 }
 
-function endOf(combat: CombatState): FightEnd | null {
+function endOf(combat: CombatState, broke: Break | null): FightEnd | null {
   if (combat.outcome !== 'ongoing') return combat.outcome;
+  if (broke !== null) return broke === 'flee' ? 'fled' : 'victory';
   return combat.round > MAX_ROUNDS ? 'fled' : null;
 }
+
+/** Every foe's XP: they were all defeated, slain or surrendered. */
+const allFoes = (combat: CombatState) => Object.values(combat.combatants).filter((c) => c.side === 'foes').reduce((n, c) => n + c.xp, 0);
 
 /** The fighters' HP back onto their sheets (the dead sat the fight out). */
 const synced = (party: PartyState, combat: CombatState): PartyState => ({
@@ -188,10 +194,14 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
 }
 
 /** However it ends, the slain stay dead and the fallen are settled: stabilized by a friend, or left to their death saves. */
-function settleFight(party: PartyState, combat: CombatState, lines: string[]): Round {
-  const ended = endOf(combat);
+function settleFight(party: PartyState, combat: CombatState, lines: string[], broke: Break | null): Round {
+  const ended = endOf(combat, broke);
   if (ended === null) return { party, combat, lines, ended };
-  const won = { victory: () => victory(party, combat), fled: () => ({ party, lines: ['The foes flee.'] }), defeat: () => ({ party, lines: [] }) }[ended]();
+  const won = {
+    victory: () => award(party, combat, broke === 'surrender' ? allFoes(combat) : xpEarned(combat), 'Victory!'),
+    fled: () => award(party, combat, xpEarned(combat), 'The foes flee.'),
+    defeat: () => ({ party, lines: [] }),
+  }[ended]();
   const settled = afterFight(won.party, combat);
   return { party: settled.party, combat, lines: [...lines, ...won.lines, ...settled.lines], ended };
 }
@@ -205,5 +215,7 @@ export function fightRound(party: PartyState, combat: CombatState, votes: Combat
     sheets = turn.sheets;
     state = act(state, turn.action);
   }
-  return settleFight(synced({ ...party, sheets }, state), state, tell(combat, state));
+  const shaken = morale(combat, state);
+  const lines = [...tell(combat, state), ...shaken.lines, ...tell(state, shaken.combat)];
+  return settleFight(synced({ ...party, sheets }, shaken.combat), shaken.combat, lines, shaken.broke);
 }

@@ -23,7 +23,7 @@ export interface Roll {
 }
 export interface GroupRoll { rolls: Roll[]; success: boolean; sheets: Hero[]; lines: string[] }
 
-const signed = (n: number) => (n < 0 ? `- ${-n}` : `+ ${n}`);
+export const signed = (n: number) => (n < 0 ? `- ${-n}` : `+ ${n}`);
 const standing = (h: Hero) => h.sheet.hp > 0;
 
 /** The DC: the DM's, or the monster's when the check is against one. */

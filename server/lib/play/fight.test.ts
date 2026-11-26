@@ -131,7 +131,7 @@ test('a fight still going after the last round ends with the foes fleeing', () =
   const result = fightRound(p, stalemate, {});
   assert.equal(result.ended, 'fled');
   assert.equal(fightRound(p, { ...stalemate, round: MAX_ROUNDS - 1 }, {}).ended, null, 'the last round is still fought');
-  assert.ok(result.lines.includes('The foes flee.'));
+  assert.ok(result.lines.includes('The foes flee.'), 'none slain, no XP');
 });
 
 test('the round is told in lines: attacks, dodges', () => {
@@ -175,4 +175,29 @@ test('the dead do not join a fight, and their sheets are left alone', () => {
   for (let i = 0; result.ended === null && i < 6; i++) result = fightRound(result.party, result.combat, {});
   assert.equal(result.ended, 'defeat');
   assert.deepEqual(result.party.sheets.p2, ghost);
+});
+
+/** Round 1 against two goblins: Bryn's bow drops one; Cleo can only poke. Then the survivor's morale. */
+function shakenRound(rng: number) {
+  const { combat, party: p } = startFight({ ...party(), rng }, ['goblin-warrior', 'goblin-warrior']);
+  const bow = deadly.map((a) => ({ ...a, ranged: true }));
+  const rigged = patch(combat, { p1: { attacks: bow }, p2: { attacks: harmless }, 'foe-1': { attacks: harmless }, 'foe-2': { attacks: harmless } });
+  return fightRound(p, rigged, { p1: { choiceId: 'a', roll: 10 }, p2: { choiceId: 'a', roll: 10 } });
+}
+
+test('morale in the fight: the shaken foes stand, flee (XP for the slain, Opportunity Attacks) or surrender (all the XP)', () => {
+  const rounds = Array.from({ length: 60 }, (_, i) => shakenRound(i + 1));
+  const by = (word: string) => rounds.find((r) => r.lines.some((l) => l.startsWith('Morale (') && l.includes(word)))!;
+  const stand = by('stand firm');
+  assert.equal(stand.ended, null);
+  const fled = by('break and flee');
+  assert.equal(fled.ended, 'fled');
+  assert.ok(fled.lines.some((l) => /^Opportunity Attack: Cleo attacks Goblin Warrior 2 with Poke: /.test(l)), fled.lines.join(' | '));
+  assert.ok(fled.lines.includes('The foes flee. 50 XP, 25 each.'));
+  assert.deepEqual([fled.party.sheets.p1.xp, fled.party.sheets.p2.xp], [25, 25]);
+  const morale = fled.lines.findIndex((l) => l.startsWith('Morale ('));
+  assert.ok(fled.lines.findIndex((l) => l.startsWith('Opportunity Attack')) > morale, 'the flight, then the parting blows');
+  const yielded = by('surrender');
+  assert.equal(yielded.ended, 'victory');
+  assert.ok(yielded.lines.includes('Victory! 100 XP, 50 each.'), yielded.lines.join(' | '));
 });
