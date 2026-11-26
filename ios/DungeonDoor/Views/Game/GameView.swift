@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The whole game, full screen: lobby, then scenes, then the finale. Chat, the chronicle, the
-/// caller's hero sheet and (in a dungeon) the map open as sheets from the toolbar.
+/// The whole game, full screen: lobby, then the play dashboard (the hero's sheet, which is where
+/// the game is played), then the finale on that same screen. Chat, the chronicle, the full tabbed
+/// sheet and (in a dungeon) the map open as sheets from the toolbar.
 struct GameView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -35,7 +36,9 @@ struct GameView: View {
                 case .preparing where session.state.scene == nil:
                     PreparingView(title: session.state.title)
                 default:
-                    SceneView(session: session, narrator: narrator) { sheetHero = SheetHero(playerId: $0) }
+                    PlayDashboard(session: session, narrator: narrator, openMap: { showMap = true }) {
+                        sheetHero = SheetHero(playerId: $0)
+                    }
                 }
             }
             .animation(.easeInOut(duration: 0.4), value: session.state.status)
