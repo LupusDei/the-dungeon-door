@@ -4,6 +4,7 @@
  * id, so the same seed and the same choices always give the same dungeon, in any order.
  */
 import { corridorContents } from './corridors.ts';
+import { startingLevel } from './depth.ts';
 import { type Dungeon, type DungeonNode, type Exit, newRoom, stockRoom } from './dungeon.ts';
 import { type Beyond, dungeonTables, rollOn } from './dungeonTables.ts';
 import { habitat, kindIdOf } from './habitats.ts';
@@ -25,9 +26,10 @@ const purposesOf = (kind: string): string[] => dungeonTables().purposes[kindIdOf
 export function startExplore(seed: number, levels: number[]): Dungeon {
   const rng = derivedRng(seed, ENTRANCE);
   const kind = rollOn(rng, dungeonTables().kinds).name;
-  const entrance = newRoom(rng, ENTRANCE, 1, 'Threshold', { kind: 'empty', encounter: null, trap: null, special: null, treasure: null, dressing: rollOn(rng, dungeonTables().dressing) });
+  const level = startingLevel(levels);
+  const entrance = newRoom(rng, ENTRANCE, level, 'Threshold', { kind: 'empty', encounter: null, trap: null, special: null, treasure: null, dressing: rollOn(rng, dungeonTables().dressing) });
   entrance.exits = roomExits(rng, rng.die(MAX_ENTRANCE_EXITS));
-  return { version: 1, mode: 'explore', seed, kind, levels, entrance: ENTRANCE, goal: null, nodes: { [ENTRANCE]: entrance } };
+  return { version: 1, mode: 'explore', seed, kind, levels, entrance: ENTRANCE, goal: null, nodes: { [ENTRANCE]: entrance }, level };
 }
 
 /** Every exit not yet taken, as [area id, exit id]. */
@@ -52,7 +54,7 @@ function onMainLine(dungeon: Dungeon, id: string): boolean {
 
 function room(rng: Rng, dungeon: Dungeon, id: string, depth: number, mainLine: boolean): DungeonNode {
   const { explore } = dungeonTables();
-  const context = { levels: dungeon.levels, depth, difficulty: explore.difficulty(depth), pool: habitat(kindIdOf(dungeon.kind)) };
+  const context = { levels: dungeon.levels, depth, difficulty: explore.difficulty(depth - (dungeon.level ?? 1) + 1), pool: habitat(kindIdOf(dungeon.kind)) };
   const node = newRoom(rng, id, depth, pick(rng, purposesOf(dungeon.kind).slice(0, -1)), stockRoom(rng, context));
   node.exits = roomExits(rng, Math.max(rollOn(rng, explore.roomExits), mainLine ? 1 : 0));
   return node;
@@ -91,17 +93,18 @@ function passage(rng: Rng, id: string, depth: number, result: PassageResult, exi
 }
 
 /**
- * Take an exit: roll the area beyond it and return the grown dungeon (the old one is untouched). Taking
- * an exit already explored returns the dungeon as it is.
+ * Take an exit: roll the area beyond it, at `level` (the dungeon level the party has reached; by default
+ * the area it comes from), a level deeper down stairs, and return the grown dungeon (the old one is
+ * untouched). Taking an exit already explored returns the dungeon as it is.
  */
-export function expand(dungeon: Dungeon, nodeId: string, exitId: string): Dungeon {
+export function expand(dungeon: Dungeon, nodeId: string, exitId: string, level?: number): Dungeon {
   if (!Object.hasOwn(dungeon.nodes, nodeId)) throw new RuleViolation(`there is no area ${nodeId}`);
   const from = dungeon.nodes[nodeId];
   const via = from.exits.find((x) => x.id === exitId);
   if (!via) throw new RuleViolation(`there is no exit ${exitId} from ${nodeId}`);
   if (via.to !== null) return dungeon;
   const id = `${nodeId}.${exitId}`;
-  const depth = from.depth + (via.connection === 'stairs' ? 1 : 0);
+  const depth = Math.max(level ?? from.depth, from.depth) + (via.connection === 'stairs' ? 1 : 0);
   const mainLine = onMainLine(dungeon, nodeId) && wayOn(from) === via;
   const child = beyond(derivedRng(dungeon.seed, id), dungeon, id, depth, via, mainLine);
   child.exits.unshift({ id: 'back', connection: via.connection, to: nodeId });

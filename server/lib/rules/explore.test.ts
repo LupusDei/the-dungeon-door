@@ -4,6 +4,7 @@ import { derivedRng } from './rng.ts';
 import { test } from 'node:test';
 import type { Dungeon } from './dungeon.ts';
 import { dungeonTables } from './dungeonTables.ts';
+import { temperedBudget } from './encounter.ts';
 import { expand, startExplore, unexplored } from './explore.ts';
 import { RuleViolation } from './violation.ts';
 
@@ -89,11 +90,11 @@ test('a long walk finds rooms, passages, stairs down to deeper levels and dead e
   }
 });
 
-test('room monsters get harder deeper down', () => {
+test('room monsters get harder deeper down, counted from the level the dungeon starts at', () => {
   const d = wander(startExplore(5, [3, 3, 3]), 400);
   for (const n of Object.values(d.nodes)) {
     const encounter = n.contents?.encounter;
-    if (encounter) assert.equal(encounter.difficulty, ['low', 'moderate', 'high'][Math.min(n.depth, 3) - 1], n.id);
+    if (encounter) assert.equal(encounter.difficulty, ['low', 'moderate', 'high'][Math.min(n.depth - d.level! + 1, 3) - 1], n.id);
   }
 });
 
@@ -145,4 +146,23 @@ test('passages, stairs and dead ends hold what a fixed map\'s corridors do (a tr
   const ways = Object.values(d.nodes).filter((n) => n.type !== 'room');
   assert.ok(ways.some((n) => n.contents!.trap !== null) && ways.some((n) => n.contents!.special === 'spoor'));
   for (const n of ways) assert.deepEqual(n.contents, corridorContents(derivedRng(5, `corridor:${n.id}`)), n.id);
+});
+
+test('an explore dungeon starts at the party’s level; an area is rolled at the level given (stairs a level below it), its difficulty by how far below the start', () => {
+  const d = startExplore(7, [3, 3]);
+  assert.deepEqual([d.level, d.nodes[d.entrance].depth], [3, 3]);
+  const [at, exit] = unexplored(d)[0];
+  const id = `${at}.${exit}`;
+  assert.equal(expand(d, at, exit).nodes[id].depth, d.nodes[at].depth + (d.nodes[at].exits.find((x) => x.id === exit)!.connection === 'stairs' ? 1 : 0));
+  const deeper = expand(d, at, exit, 5).nodes[id];
+  assert.equal(deeper.depth, 5 + (d.nodes[at].exits.find((x) => x.id === exit)!.connection === 'stairs' ? 1 : 0));
+  for (let seed = 1; seed <= 60; seed++) {
+    let e = startExplore(seed, [4, 4, 4]);
+    for (let step = 0; step < 6 && unexplored(e).length; step++) e = expand(e, ...unexplored(e)[0]);
+    for (const n of Object.values(e.nodes)) {
+      const enc = n.contents?.encounter;
+      if (enc) assert.equal(enc.difficulty, ['low', 'moderate', 'high'][Math.min(n.depth - 4 + 1, 3) - 1], n.id);
+      if (enc) assert.equal(enc.budget, temperedBudget([n.depth, n.depth, n.depth], enc.difficulty), n.id);
+    }
+  }
 });

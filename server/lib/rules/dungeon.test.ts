@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { generateDungeon, layout, magicItemPool, rollTreasure, stockRoom } from './dungeon.ts';
+import { generateDungeon, layout, magicItemPool, restock, rollTreasure, stockRoom } from './dungeon.ts';
+import { temperedBudget } from './encounter.ts';
+import { monster } from './monsters.ts';
 import { dungeonTables } from './dungeonTables.ts';
 import { scriptedRng, seededRng } from './rng.ts';
 
@@ -99,7 +101,7 @@ test('a fixed map lays out the path first, branches off the path, then loops bet
   assert.deepEqual([...attached.standard].sort(), ['r1', 'r2', 'r3']);
 });
 
-test('fixed rooms are one level deep and purposeful: the goal takes the kind\'s last purpose, the rest the others', () => {
+test('fixed rooms start one level deep for level-1 heroes, and are purposeful: the goal takes the kind\'s last purpose, the rest the others', () => {
   const { kinds, purposes } = dungeonTables();
   const used = new Set<string>();
   for (let seed = 0; seed < 20; seed++) {
@@ -115,4 +117,37 @@ test('fixed rooms are one level deep and purposeful: the goal takes the kind\'s 
   }
   assert.ok([...used].some((u) => u.endsWith(':0')), 'the first purpose is used');
   assert.ok([...used].some((u) => !u.endsWith(':0')), 'and the others');
+});
+
+test('a fixed map starts at the party’s level: every area that deep, its fights and treasure for that level', () => {
+  for (let seed = 0; seed < 30; seed++) {
+    const d = generateDungeon(seed, 'standard', [5, 5, 4]);
+    assert.equal(d.level, 4);
+    for (const n of Object.values(d.nodes)) {
+      assert.equal(n.depth, 4, n.id);
+      const e = n.contents?.encounter;
+      if (e) assert.equal(e.budget, temperedBudget([4, 4, 4], e.difficulty), n.id);
+      if (e) assert.ok(e.monsters.every((m) => monster(m).cr <= 4), e.monsters.join());
+    }
+  }
+  assert.equal(generateDungeon(1, 'short', [1, 2]).level, 1);
+});
+
+test('a room restocked a level deeper: same kind, its fight rebuilt and its treasure rolled for the new level; the same every time', () => {
+  const d = generateDungeon(3, 'delve', [1, 1, 1, 1]);
+  const guarded = Object.values(d.nodes).find((n) => n.contents?.encounter && n.id !== d.goal)!;
+  const again = restock(d, guarded, 6);
+  assert.deepEqual(restock(d, guarded, 6), again);
+  assert.equal(again.depth, 6);
+  assert.equal(again.contents!.kind, guarded.contents!.kind);
+  assert.equal(again.contents!.encounter!.difficulty, guarded.contents!.encounter!.difficulty);
+  assert.equal(again.contents!.encounter!.budget, temperedBudget([6, 6, 6, 6], guarded.contents!.encounter!.difficulty));
+  assert.deepEqual([again.name, again.purpose, again.exits], [guarded.name, guarded.purpose, guarded.exits]);
+  const rich = { ...guarded, contents: { ...guarded.contents!, treasure: { sp: 1, gp: 0, gems: 0, jewellery: 0, magicItem: null } } };
+  assert.notDeepEqual(restock(d, rich, 6).contents!.treasure, rich.contents.treasure);
+  const bare = { ...guarded, contents: { ...guarded.contents!, kind: 'empty' as const, encounter: null, treasure: null } };
+  assert.deepEqual(restock(d, bare, 6).contents, bare.contents);
+  assert.equal(restock(d, guarded, 1), guarded, 'no deeper: unchanged');
+  const corridor = { ...guarded, contents: null };
+  assert.deepEqual(restock(d, corridor, 6), { ...corridor, depth: 6 });
 });

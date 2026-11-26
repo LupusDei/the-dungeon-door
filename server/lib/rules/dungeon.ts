@@ -7,10 +7,11 @@ import magicItemsJson from '../../data/srd/5.2/magicItems.json' with { type: 'js
 import { addCorridors } from './corridors.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { type Amount, dungeonTables, type MapSize, rollOn, type StockKind } from './dungeonTables.ts';
+import { atLevel, startingLevel } from './depth.ts';
 import { buildEncounter, type Encounter } from './encounter.ts';
-import { habitat } from './habitats.ts';
+import { habitat, kindIdOf } from './habitats.ts';
 import type { Difficulty } from './monsters.ts';
-import { type Rng, pick, sample, seededRng } from './rng.ts';
+import { type Rng, derivedRng, pick, sample, seededRng } from './rng.ts';
 import { once, parseTable } from './srd.ts';
 
 export interface Treasure { sp: number; gp: number; gems: number; jewellery: number; magicItem: string | null }
@@ -50,6 +51,8 @@ export interface Dungeon {
   entrance: string;
   /** The fixed map's goal room; explore mode has none. */
   goal: string | null;
+  /** The level it starts at (Phase 5, rules/depth.ts); absent on a map from before: 1. */
+  level?: number;
   nodes: Record<string, DungeonNode>;
 }
 /** pool: the monsters that live in this kind of dungeon (rules/habitats.ts). */
@@ -57,8 +60,6 @@ export interface StockingContext { levels: number[]; depth: number; difficulty: 
 
 const magicItems = once(() => parseTable('magicItems', z.object({ name: z.string(), rarity: z.string() }), magicItemsJson));
 const RARE_FROM_DEPTH = 4;
-/** A fixed map is one level deep. */
-const FIXED_DEPTH = 1;
 
 /** Magic items fit for a dungeon level: common and uncommon, and rare ones from level 4. */
 export function magicItemPool(depth: number): string[] {
@@ -88,12 +89,16 @@ function withTreasure(rng: Rng, depth: number, inSix: number): Treasure | null {
   return inSix > 0 && rng.die(6) <= inSix ? rollTreasure(rng, depth) : null;
 }
 
+/** The fight for a room at the context's dungeon level: each hero counted at that level. */
+const encounterAt = (rng: Rng, context: StockingContext, difficulty: Difficulty) =>
+  buildEncounter(rng, atLevel(context.levels.length, context.depth), difficulty, context.pool);
+
 /** OSE stocking: empty, monster, special or trap, each with its chance of treasure, plus dressing. */
 export function stockRoom(rng: Rng, context: StockingContext): RoomContents {
   const tables = dungeonTables();
   const { kind, treasureIn6 } = rollOn(rng, tables.contents);
   const room: RoomContents = { kind, encounter: null, trap: null, special: null, treasure: null, dressing: '' };
-  if (kind === 'monster') room.encounter = buildEncounter(rng, context.levels, context.difficulty, context.pool);
+  if (kind === 'monster') room.encounter = encounterAt(rng, context, context.difficulty);
   if (kind === 'trap') room.trap = rollOn(rng, tables.traps);
   if (kind === 'special') room.special = pick(rng, tables.specials);
   room.treasure = withTreasure(rng, context.depth, treasureIn6);
@@ -104,7 +109,7 @@ export function stockRoom(rng: Rng, context: StockingContext): RoomContents {
 /** The goal is never empty: a monster guarding treasure, at high difficulty. */
 function goalContents(rng: Rng, context: StockingContext): RoomContents {
   return {
-    kind: 'monster', encounter: buildEncounter(rng, context.levels, 'high', context.pool), trap: null, special: null,
+    kind: 'monster', encounter: encounterAt(rng, context, 'high'), trap: null, special: null,
     treasure: rollTreasure(rng, context.depth), dressing: rollOn(rng, dungeonTables().dressing),
   };
 }
@@ -146,20 +151,39 @@ export function layout(rng: Rng, size: MapSize): { ids: string[]; goal: string; 
   return { ids, goal: path[path.length - 1], edges: [...tree, ...sample(rng, loopCandidates(ids, tree), plan.loops)] };
 }
 
-/** A whole map at once, from the seed: 5, 7 or 9 rooms, the same every time for the same seed. */
+/**
+ * A whole map at once, from the seed: 5, 7 or 9 rooms, the same every time for the same seed. It is stocked
+ * at its starting level (the heroes' average); rooms behind a door that goes deeper are restocked on the way.
+ */
 export function generateDungeon(seed: number, size: MapSize, levels: number[]): Dungeon {
   const rng = seededRng(seed);
   const tables = dungeonTables();
   const kind = rollOn(rng, tables.kinds);
   const purposes = tables.purposes[kind.id];
   const { ids, goal, edges } = layout(rng, size);
-  const context = { levels, depth: FIXED_DEPTH, difficulty: 'moderate' as const, pool: habitat(kind.id) };
+  const level = startingLevel(levels);
+  const context = { levels, depth: level, difficulty: 'moderate' as const, pool: habitat(kind.id) };
   const nodes: Record<string, DungeonNode> = {};
   for (const id of ids) {
-    if (id === 'r0') nodes[id] = newRoom(rng, id, FIXED_DEPTH, 'Threshold', emptyContents(rng));
-    else if (id === goal) nodes[id] = newRoom(rng, id, FIXED_DEPTH, purposes[purposes.length - 1], goalContents(rng, context));
-    else nodes[id] = newRoom(rng, id, FIXED_DEPTH, pick(rng, purposes.slice(0, -1)), stockRoom(rng, context));
+    if (id === 'r0') nodes[id] = newRoom(rng, id, level, 'Threshold', emptyContents(rng));
+    else if (id === goal) nodes[id] = newRoom(rng, id, level, purposes[purposes.length - 1], goalContents(rng, context));
+    else nodes[id] = newRoom(rng, id, level, pick(rng, purposes.slice(0, -1)), stockRoom(rng, context));
   }
   for (const [a, b] of edges) connect(rng, nodes, a, b);
-  return addCorridors({ version: 1, mode: 'fixed', seed, kind: kind.name, levels, entrance: 'r0', goal, nodes });
+  return addCorridors({ version: 1, mode: 'fixed', seed, kind: kind.name, levels, entrance: 'r0', goal, nodes, level });
+}
+
+/**
+ * An area as it is found at a deeper level: its fight rebuilt for the level (same difficulty) and its
+ * treasure rolled for it; its kind, trap (scaled when sprung), name and ways are kept. Seeded by the area
+ * and the level, so it comes out the same every time. Not deeper: unchanged.
+ */
+export function restock(map: Dungeon, node: DungeonNode, level: number): DungeonNode {
+  if (level <= node.depth) return node;
+  const c = node.contents;
+  if (!c) return { ...node, depth: level };
+  const rng = derivedRng(map.seed, `restock:${node.id}:${level}`);
+  const context = { levels: map.levels, depth: level, difficulty: 'moderate' as const, pool: habitat(kindIdOf(map.kind)) };
+  const encounter = c.encounter && encounterAt(rng, context, c.encounter.difficulty);
+  return { ...node, depth: level, contents: { ...c, encounter, treasure: c.treasure && rollTreasure(rng, level) } };
 }
