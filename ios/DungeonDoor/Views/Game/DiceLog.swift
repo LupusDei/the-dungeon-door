@@ -111,8 +111,11 @@ struct DiceLineStyle: Equatable {
             pick = (.quiet, "fork.knife")
         } else if has("vs dc", "(passive") {
             pick = has(", failure") ? (.bad, "xmark.circle.fill") : (.good, "checkmark.circle.fill")
-        } else if text.hasPrefix("damage") || has("goes off", "nobody notices", "the party meets") {
+        } else if text.hasPrefix("damage") || has("goes off", "nobody notices", "the party meets", "bar the way") {
             pick = (.bad, "exclamationmark.triangle.fill")
+        } else if has("backs out into", "slips past") {
+            // The party ran before a fight began.
+            pick = (.quiet, "arrow.uturn.backward")
         } else if has("a fight begins") {
             pick = (.plain, "flame.fill")
         } else if has("the party enters") {

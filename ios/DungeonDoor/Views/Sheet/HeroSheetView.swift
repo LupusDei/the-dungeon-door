@@ -218,11 +218,12 @@ struct VitalsBar: View {
 
     private var speed: some View {
         // The sheet's speed is the hero's own. Each level of exhaustion takes 5 feet off it, and
-        // over their carrying capacity a hero drags along at 5 feet.
+        // over their carrying capacity a hero drags along at 5 feet. In a game the server says what
+        // the hero moves at; the sum here is for a hero at home, and for an older server.
         let dragging = live?.standing.dragging ?? false
         let exhaustion = live?.standing.exhaustion ?? sheet.exhaustion
         let tired = max(0, sheet.speed - 5 * exhaustion)
-        let feet = dragging ? min(5, tired) : tired
+        let feet = live?.standing.speed ?? (dragging ? min(5, tired) : tired)
         let label = dragging ? "Speed, dragging" : feet < sheet.speed ? "Speed, exhausted" : "Speed"
         return StatCell(label: label, spoken: "\(label), \(feet) feet",
                         minWidth: Self.cellWidth, labelTint: feet < sheet.speed ? Palette.ember : Palette.muted) {

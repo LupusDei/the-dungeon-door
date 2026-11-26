@@ -537,8 +537,8 @@ private struct WaitingFoesNotice: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let rating = waiting.rating {
                     Text(rating)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Palette.ember)
+                        .font(.serif(.subheadline, weight: .semibold))
+                        .foregroundStyle(Danger.tint(waiting.band))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(waiting.note)
