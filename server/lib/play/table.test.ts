@@ -7,6 +7,7 @@ import type { Game, GamePlayer, StoredScene } from '../types.ts';
 import { dungeonLevel } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
+import { meetOnTheRoad, planTrek } from './trek.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
@@ -37,6 +38,17 @@ test('a new game’s dungeon starts at the living heroes’ average level, round
     assert.deepEqual([dungeonLevel(d), d.map.nodes[d.at].depth], [4, 4], mode);
   }
   assert.equal(dungeonLevel(newRules([player('p1', 'A'), player('p2', 'B')], 'fixed', 7, 4).dungeon!), 1);
+});
+
+test('a dungeon game starts on the road from the tavern: two seeded stretches, the first already met; a tale told has none', () => {
+  const players = [player('p1', 'A'), player('p2', 'B')];
+  for (const mode of ['fixed', 'explore'] as const) {
+    const r = newRules(players, mode, 7, 4);
+    assert.deepEqual(r.dungeon!.trek, planTrek(7, [1, 1], 1), mode);
+    const met = meetOnTheRoad({ version: 1, rng: 7, sheets: r.party.sheets }, { ...r.dungeon!, facing: undefined });
+    assert.deepEqual([r.party.rng, r.dungeon!.facing], [met.party.rng, met.dungeon.facing], 'the first stretch is met as the game starts');
+  }
+  assert.equal(newRules(players, 'none', 7, 4).dungeon, null);
 });
 
 test('a game from before the engine has no rules state', () => {

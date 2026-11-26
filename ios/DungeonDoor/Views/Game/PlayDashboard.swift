@@ -344,7 +344,7 @@ private struct DashboardScenePanel: View {
                 SectionLabel("Initiative")
                 Spacer()
                 if let combat = state.rules?.combat, scene?.combat == true, let band = combat.band {
-                    Text("a \(band) fight").font(.caption).foregroundStyle(Palette.ember)
+                    TagLabel("\(band) fight", tint: Danger.tint(band))
                 }
             }
             if let combat = state.rules?.combat, scene?.combat == true, !combat.combatants.isEmpty {
@@ -384,7 +384,7 @@ private struct DashboardScenePanel: View {
             if let toughness = combatant.toughness {
                 Text(toughness)
                     .font(.system(size: 10, weight: .semibold, design: .serif))
-                    .foregroundStyle(Palette.ember)
+                    .foregroundStyle(out ? Palette.muted : Danger.tint(toughness))
             }
             Text(out ? statusWord(combatant) : "\(combatant.hp)")
                 .font(.system(size: 11, design: .serif))

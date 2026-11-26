@@ -34,7 +34,8 @@ DM team can add archetypes without an app release.
     "symbol": "book.closed", "accent": "#C9A227"
   }],
   "narrators": [{ "id": "george-storyteller", "name": "George, the old storyteller", "description": "…" }],
-  "defaultNarrator": "george-storyteller"
+  "defaultNarrator": "george-storyteller",
+  "push": false
 }
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
@@ -44,6 +45,32 @@ A background's `abilities` are the three scores it can raise (the builder puts +
 and `explore`, in the order to show them.
 `narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
 to show them; `defaultNarrator` is the one used when a request names none. New voices need no app release.
+`push` is true when this server sends push notifications (it holds the push key; see docs/push.md). The app
+asks leave to notify only then.
+
+## Pushes, companions and invitations
+
+The server pushes to a player's devices when it is their turn (a new scene, or a combat round their hero
+can act in), when someone else in their party chats, and when a companion invites them. How often, and
+what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" or "invite") and `code`
+(the game) beside the alert, and the app opens that game, or the way in for an invitation.
+
+- `POST /api/devices` body `{ token, environment }` → `{ ok: true }`. `token` is the APNs device token as
+  hex; `environment` is `"sandbox"` (a build run from Xcode) or `"production"` (TestFlight, the App Store).
+  The token then takes this player's pushes; a token belongs to the last player to register it. Send it at
+  each launch. 400 for a token that is not hex or another environment.
+- `DELETE /api/devices` body `{ token }` → `{ ok: true }`. The device takes no more pushes.
+- `GET /api/companions` → `{ companions: [{ playerId, name, lastPlayedAt }] }`: the players the caller has
+  shared a game with, most recent first, each by the hero they last played beside the caller. There are no
+  accounts or friend lists; these are the people a player can invite.
+- `POST /api/games/{code}/invites` body `{ playerId }` → `{ ok: true, alreadyInvited: boolean }`. Anyone in a
+  party still in its lobby invites one of their companions. The invited player gets a push (once per game)
+  and the invitation. 403 for someone who is not the caller's companion, or a caller not in the game; 409 once
+  the adventure has begun, or for someone already in the party.
+- `GET /api/invites` → `{ invites: [{ code, fromPlayerId, fromName, createdAt, party: string[] }] }`: the
+  caller's invitations to parties still in the lobby that they have not joined, newest first. `party` names
+  the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
+- `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
 ## Characters
 
@@ -220,6 +247,9 @@ Scene {
   myFreeform: { text, roll: number } | null
                                      // the caller's written check, or null. Absent on older servers
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
+  roleplay: [{ playerId: string; characterName: string; text: string }]
+                                     // in-character lines and deeds this turn, oldest first. No roll.
+                                     // Empty until someone speaks. Omitted by servers from before this.
 }
 
 LegalAction {
@@ -243,6 +273,8 @@ ChronicleEntry {
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
   combat: boolean                    // a combat round: every hero took their own action
+  roleplay: [{ playerId: string; characterName: string; text: string }]
+                                     // what the heroes said and did in character that turn. Omitted by older servers.
 }
 
 RulesView {                          // SRD 5.2 (2024 rules)
@@ -275,13 +307,31 @@ RulesView {                          // SRD 5.2 (2024 rules)
     outcome: "ongoing"                // a settled fight is gone (combat: null); its end is in results
     band: "low" | "moderate" | "high" | "deadly"   // the fight against this party; deadly is above high.
                                       // The engine's word. Absent from servers older than toughness ratings.
-    combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
+    combatants: [{ id: string; name: string; side: "party" | "foes";
+                   hp?: number; maxHp?: number      // a hero's hit points; absent for a foe
+                   wound?: string; vigor?: number   // a foe's instead: its hit points are hidden
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
                    toughness: null | "puny" | "weak" | "even" | "strong" | "deadly" }]   // initiative order;
                                       // a hero's id is its playerId; toughness is null for a hero, and the
-                                      // foe's own rating against this party (absent from older servers)
+                                      // foe's own rating against this party (absent from older servers).
+                                      // wound: how hurt the foe looks, by the share of hit points left:
+                                      // "Unhurt" (full), "Scratched" (over 3/4), "Bleeding" (over 1/2),
+                                      // "Bloodied" (1/2 or less, the 2024 term), "Staggering" (over 1/10),
+                                      // "Gasping", "Dead" (0). Undead: Whole, Torn, Rent, Crumbling, Falling
+                                      // apart, Coming undone, Destroyed. Constructs: Intact, Scuffed, Dented,
+                                      // Cracked, Breaking, Failing, Destroyed. Oozes: Whole, Rippling, Seeping,
+                                      // Shrinking, Sloughing, Dissolving, Destroyed. vigor: the same as a rung
+                                      // for a gauge, 6 (unhurt) to 0. Servers before wounds sent a foe's
+                                      // hp and maxHp instead
   }
-  dungeon: null | {
+  trek: null | {                      // the road from the tavern to the dungeon door, while the party is on it
+    stretch: number; of: number       // stretch 1 of 2 (each a scene)
+    terrain: string                   // "a forest road under old oaks"
+    event: "bandits" | "varmints" | "band" | "vendor" | "quiet"
+    wares: [{ id: string; name: string; cost: number }]   // a wandering vendor's goods (gp); else []
+    waiting: null | { ... }           // foes met on this stretch, as dungeon.waiting
+  }                                   // absent from older servers
+  dungeon: null | {                   // null on the road: the dungeon begins at its door
     mode: "fixed" | "explore"; kind: string
     at: string                        // area id the party is in
     level: number                     // the dungeon level reached, 1–20: it starts at the living heroes'
@@ -360,22 +410,34 @@ Reaction {
   Re-joining with a different character swaps the character. Max 6 players.
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
 - `POST /api/games/{code}/messages` body `{ text, voice?, replyTo? }` → `Message`. `voice` is `"in"`
-  (the default: the hero speaks) or `"out"` (the player, out of character). `replyTo` is a message id in
-  this game; 400 when it isn't. Names in the text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa`
-  is the player of that hero. The longest hero name that fits is used, and a name that isn't at the table
-  is left as text. 400 when `text` isn't 1–500 characters or `voice` isn't `"in"` or `"out"`.
+  (the default: the hero speaks) or `"out"` (the player, out of character). `"in"` is the same kind of
+  player-voice input as `POST …/speak`: those words are the hero's, and the narrator must answer them
+  and must not rewrite them. `"out"` is table talk. It is not what the hero said, and it is never an
+  instruction to the dungeon master. `replyTo` is a message id in this game; 400 when it isn't. Names in
+  the text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa` is the player of that hero. The longest
+  hero name that fits is used, and a name that isn't at the table is left as text. 400 when `text` isn't
+  1–500 characters or `voice` isn't `"in"` or `"out"`.
 - `POST /api/games/{code}/reactions` body `{ messageId, emoji }` → `Message`. Toggles the caller's reaction
   on that line (any kind of line): the first tap adds it, the next removes it. The returned line has the
   same `id`. `emoji` is a single emoji. 400 when it isn't; 404 when the line isn't in this game.
 - `POST /api/games/{code}/typing` body `{ typing? }` → `{ ok: true }`. `typing: true` (the default) says the
   caller is composing; the next poll shows them in `typing` for about five seconds, to everyone else.
   `typing: false` clears it at once.
+- `POST /api/games/{code}/speak` body `{ text }` → `GameState`.
+  An in-character line or deed, 1–500 characters: what the hero says or does, with no roll and nothing for
+  the rules engine to adjudicate. Voting only (409 otherwise). It is appended to the current scene's
+  `roleplay`, which is the turn's log, and stays on that chronicle entry once the scene resolves. The
+  dungeon master's next narration, and the NPCs in it, answer these words. A player may send several.
+  This is not a freeform action. An in-character chat line (`voice: "in"`) is the same promise: the
+  narrator keeps those words. Out-of-character chat is not.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
   Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
   map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
   The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
-  becomes `voting` when it's ready.
+  becomes `voting` when it's ready. A dungeon game opens with two scenes on the road from the tavern to
+  the dungeon door (`rules.trek`; `rules.dungeon` is null until the door), so its `sceneCount` is two more
+  than asked for. Foes on the road who bar the way give Engage, Run and Parley, as in a room.
 - `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId }` or `{ sceneIndex, actionId, targets? }` → `GameState`.
   `choiceId` is still `"a"`, `"b"` or `"c"`. `actionId` is an id from `scene.actions`, and `targets` are ids
   from that action (omit them when `picks` is `"none"`; one id when `"one"`; one or more, up to `limit`,

@@ -64,6 +64,15 @@ struct HomeView: View {
         .onChange(of: model.didRefresh, initial: true) { _, _ in handleLaunchArguments() }
         .sheet(isPresented: $newGame) { NewGameView() }
         .sheet(isPresented: $joining) { JoinGameView() }
+        .sheet(item: Binding(get: { model.joinCode.map(DoorCode.init) }, set: { if $0 == nil { model.joinCode = nil } })) {
+            JoinGameView(code: $0.code)
+        }
+        // A tapped notification: an invitation opens the way in, anything else its game.
+        .onChange(of: PushCenter.shared.tapped, initial: true) { _, news in
+            guard let news else { return }
+            PushCenter.shared.tapped = nil
+            Task { await model.open(news) }
+        }
         .fullScreenCover(isPresented: Binding(get: { model.activeGame != nil }, set: { if !$0 { model.closeGame() } })) {
             if let session = model.activeGame { GameView(session: session) }
         }
@@ -214,6 +223,12 @@ struct HomeView: View {
             if model.characters.isEmpty {
                 firstHero
             } else {
+                ForEach(model.invitations.prefix(2)) { invitation in
+                    InvitationCard(invitation: invitation,
+                                   join: { model.joinCode = invitation.code },
+                                   decline: { Task { await model.decline(invitation) } })
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 roster
                 Button { newGame = true } label: {
                     Label("Open a new door", systemImage: "door.left.hand.open")
@@ -269,6 +284,63 @@ struct HomeView: View {
             }
             .scrollClipDisabled()
         }
+    }
+}
+
+/// A door code as something a sheet can be presented for.
+private struct DoorCode: Identifiable {
+    let code: String
+    var id: String { code }
+}
+
+/// A companion's invitation to a party still gathering: who asks, who is there, and the way in.
+private struct InvitationCard: View {
+    let invitation: Invitation
+    let join: () -> Void
+    let decline: () -> Void
+
+    private var others: String {
+        let rest = invitation.party.filter { $0 != invitation.fromName }
+        return rest.isEmpty ? "Door code \(invitation.code)" : "With \(rest.formatted(.list(type: .and))) · door code \(invitation.code)"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "envelope.open.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(Palette.gold)
+                .frame(width: 30)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(invitation.fromName) invites you")
+                    .font(.display(16))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(others)
+                    .font(.caption)
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            Button("Join", action: join)
+                .font(.serif(.subheadline, weight: .semibold))
+                .foregroundStyle(Palette.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Palette.gold, in: .capsule)
+                .buttonStyle(.plain)
+            Button(action: decline) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.muted)
+                    .frame(width: 30, height: 30)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Decline \(invitation.fromName)\u{2019}s invitation")
+        }
+        .padding(12)
+        .glassCard()
+        .accessibilityElement(children: .contain)
     }
 }
 

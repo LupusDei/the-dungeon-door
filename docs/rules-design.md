@@ -89,7 +89,13 @@ type RulesHook =
 4. The engine applies the result to state (damage, conditions, HP, death saves, XP) and hands the DM
    a structured summary in `Resolution`, for example "Bryn: 17 + 5 = 22 vs AC 15, hit, 9 slashing,
    goblin down".
-5. The DM narrates it. It can colour the result, but it cannot change the numbers.
+5. The DM narrates it. It can colour the result, but it cannot change the numbers, and it cannot play the
+   heroes. The heroes belong to the players: the narrator does not put words in their mouths, decide their
+   feelings, attitudes or choices, or narrate actions they did not take. It describes the world, the NPCs,
+   the monsters and the immediate physical result of the chosen action, then hands the moment back. Whimsical
+   detail of places and items is part of the world. A player may speak or act in character
+   (`POST /api/games/{code}/speak`) with no roll and no adjudication; the line is kept on the turn, and the
+   next narration answers it. Quoted hero speech the player did not write is stripped.
 
 **Exploration scenes** keep the current rule: the party goes with the most-voted choice, and every
 voter's roll still counts (a check is made by each voter; the DM narrates successes and failures).
@@ -530,6 +536,68 @@ won and under 5% of heroes dead per fight**.
   fragile (40% won).
 
 Not yet: an XP award for finishing a quest, so leveling up still takes many fights.
+
+## The road from the tavern to the door
+
+Robert's design: *"From the tavern to the door there should be a trek through territory with risk of
+bandits, varmints, bands of level 1-2 surface monsters, and wandering vendors. Two scenes before the door
+to the dungeon begins."*
+
+`play/trek.ts`. A dungeon game (`fixed` or `explore`; a tale told has no door) opens on the road: **two
+scenes**, then the door scene as before. The game is two scenes longer than the `sceneCount` asked for (the
+map is still sized for the count asked for).
+
+- **The road is rolled when the game starts**, from the game's seed (`derivedRng(seed, 'trek')`): a terrain
+  (farm road, forest road, moorland track, hill trails, river valley) and, for each stretch, a d12:
+
+  | d12   | On the stretch | Odds |
+  |-------|----------------|------|
+  | 1–3   | bandits: Bandit, Scout, Tough, Bandit Captain | 25% |
+  | 4–6   | wild beasts: Giant Rat, Jackal, Wolf, Boar, Giant Badger, Giant Wolf Spider, … up to Brown Bear and Giant Boar | 25% |
+  | 7–8   | a band of monsters: Goblin Minion, Warrior or Boss, Hobgoblin Warrior, Gnoll Warrior, Worg, Bugbear Warrior | 17% |
+  | 9–10  | a wandering vendor | 17% |
+  | 11–12 | a quiet stretch | 17% |
+
+  So two of three stretches hold foes. They are a **low** fight for the party (`buildEncounter`, the same
+  budget, tempering and party-size cap as a dungeon room), at the levels the dungeon starts at; the
+  tougher ones only appear for parties that can afford them. Bandits and monster bands carry treasure for
+  the dungeon's starting level; beasts carry none.
+- **Foes are met** as in a dungeon room: they roll an attitude (2d6: 2–5 Hostile, about 28%). Hostile ones
+  bar the way: Engage, Run (slip past: no fight, no loot, no XP) or Parley. If a parley fails and they are
+  still Hostile, they attack: there is no way back on the road. Others watch and wait while the party goes on.
+- **A fight** on the road awards XP like any other, and its victors take the stretch's treasure.
+- **A wandering vendor** sells a Potion of Healing (50 gp) and four other SRD adventuring gear items of
+  25 gp or less, at SRD prices, through the `buy` hook.
+- **After each scene** the party goes on by itself (two hours, under the open sky's light) to the next
+  stretch, or, after the second, to the dungeon door ("The party reaches the dungeon door."). On the road
+  there are no exits (`move` is refused), no dungeon wanderers, and no torches needed by day.
+- **The DM** sees `trek` (stretch, terrain, what is on it, wares, who waits) and no `dungeon` until the
+  door; its instructions say to narrate overland travel, with no corridors, rooms or doors.
+
+## Wounds, not hit points
+
+Robert's design: *"The monster's hp should not be explicitly shown. Instead it should show degrees of
+incapacity like Bleeding, limping, gasping etc. players should see that they are making progress without
+knowing exactly how much."*
+
+`rules/wounds.ts`. A foe's hit points stay in the engine's state; the app and the DM see its **wound**, one
+of six rungs of **vigor** by the share of hit points left:
+
+| Vigor | Hit points left | Flesh | Undead | Construct | Ooze |
+|-------|-----------------|-------|--------|-----------|------|
+| 6 | all | Unhurt | Whole | Intact | Whole |
+| 5 | over 3/4 | Scratched | Torn | Scuffed | Rippling |
+| 4 | over 1/2 | Bleeding | Rent | Dented | Seeping |
+| 3 | over 1/4 (1/2 or less: Bloodied, as in the 2024 rules) | Bloodied | Crumbling | Cracked | Shrinking |
+| 2 | over 1/10 | Staggering | Falling apart | Breaking | Sloughing |
+| 1 | any left | Gasping | Coming undone | Failing | Dissolving |
+| 0 | none | Dead | Destroyed | Destroyed | Destroyed |
+
+- The API's foe combatants carry `wound` and `vigor` and no `hp`/`maxHp`; heroes keep theirs.
+- A round's lines tell a foe's wounds when they change ("Goblin Warrior is bleeding."). Damage rolled on a
+  hit is still shown ("hit for 7"), but never what is left.
+- The DM's combat block gives the wound word for each foe, and its instructions say to show wounds in the
+  story, never hit points.
 
 ## For the app (the game layer on top)
 

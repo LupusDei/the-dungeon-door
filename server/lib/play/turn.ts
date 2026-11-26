@@ -24,6 +24,7 @@ import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
 import { checksDue, wanderingChecks, wanderingRoll, type Wanderers } from './wandering.ts';
 import { ambientLight, clockOf, lightLevel, lightUp, passTime, secondsFor } from './time.ts';
 import { partyHazard, springTrap } from './traps.ts';
+import { meetOnTheRoad, type Trek } from './trek.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
 export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[] }
@@ -174,6 +175,7 @@ function talk(s: RulesState, offered: readonly string[] | null | undefined, ball
 }
 
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
+  if (s.dungeon?.trek) return done(s, ['The road leads on; the dungeon door is still ahead.']);
   const moved = s.dungeon && enter(s.dungeon, exit);
   if (!moved) return done(s, ['That way is closed.']);
   if (moved.node.type === 'corridor') return through(s, moved, exit, ballots);
@@ -238,7 +240,7 @@ function meetWanderers(t: RulesTurn, came: Wanderers): RulesTurn {
 /** After the turn's time, the checks due (noise first, 2 in 6); a fight on, or foes waiting here, keeps others off. */
 function wander(t: RulesTurn, seconds: number): RulesTurn {
   const d = t.dungeon;
-  if (!d || t.combat || waitingFoes(d)) return t;
+  if (!d || d.trek || t.combat || waitingFoes(d)) return t; // the road has its own encounters (play/trek.ts)
   const { noise, ...quiet } = d;
   const due = checksDue(d.wander ?? 0, seconds);
   const rng = seededRng(t.party.rng);
@@ -249,7 +251,7 @@ function wander(t: RulesTurn, seconds: number): RulesTurn {
 
 /** A rest in a dungeon: one check first (wandering.ts); wanderers who come interrupt it. */
 function rest(s: RulesState, kind: 'short' | 'long'): RulesTurn {
-  if (s.dungeon && !waitingFoes(s.dungeon)) {
+  if (s.dungeon && !s.dungeon.trek && !waitingFoes(s.dungeon)) {
     const rng = seededRng(s.party.rng);
     const came = wanderingRoll(rng, foesFor(s), 1, poolOf(s));
     const calm = { ...s, party: { ...s.party, rng: rng.state() }, dungeon: { ...s.dungeon, wander: 0 } };
@@ -291,9 +293,36 @@ function improvise(s: RulesState, freeforms: readonly FreeformBallot[]): { state
   return { state: { ...s, party: { ...s.party, rng: rng.state() } }, lines };
 }
 
+const STRETCH_SECONDS = 2 * 3600;
+
+/**
+ * After a turn on the road (play/trek.ts): foes still barring the way attack; otherwise, with no fight on,
+ * the party goes on by itself, to the next stretch or to the dungeon door.
+ */
+function alongTheRoad(t: RulesTurn): RulesTurn {
+  const d = t.dungeon;
+  if (!d?.trek || t.combat || t.fight === 'defeat') return t;
+  if (d.facing?.attitude !== 'hostile') return goOn(t, d, d.trek);
+  const attacked = fight({ ...t, dungeon: withoutFacing(d) }, d.facing.monsters, [...t.lines, 'They will not let the party pass: they attack.']);
+  return { ...attacked, success: t.success };
+}
+
+/** Two hours on: the victors of a fight take the stretch's treasure; then the next stretch is met, or the door is reached. */
+function goOn(t: RulesTurn, d: DungeonState, trek: Trek): RulesTurn {
+  const spoils = t.fight === 'victory' || t.fight === 'fled' ? trek.legs[trek.leg].treasure : null;
+  const loot = spoils ? claimTreasure(t.party, spoils) : { party: t.party, lines: [] };
+  const walked = passTime(loot.party, STRETCH_SECONDS, ambientLight(t));
+  const lines = [...t.lines, ...loot.lines, ...walked.lines];
+  const next = { ...trek, leg: trek.leg + 1 };
+  const { trek: _, ...road } = withoutFacing(d);
+  if (next.leg >= trek.legs.length) return { ...t, party: walked.party, dungeon: road, lines: [...lines, 'The party reaches the dungeon door.'] };
+  const met = meetOnTheRoad(walked.party, { ...road, trek: next });
+  return { ...t, party: met.party, dungeon: met.dungeon, lines: [...lines, ...met.lines] };
+}
+
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
 export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[] = []): RulesTurn {
-  return withDeathTimes(clockOf(s.party), turnPlayed(s, hook, ballots, freeforms));
+  return withDeathTimes(clockOf(s.party), alongTheRoad(turnPlayed(s, hook, ballots, freeforms)));
 }
 
 function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {

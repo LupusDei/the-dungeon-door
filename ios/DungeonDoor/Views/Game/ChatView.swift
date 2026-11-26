@@ -454,6 +454,10 @@ struct ChronicleView: View {
                             if let deed = session.deed(of: entry) {
                                 Text(deed).font(.proseSmall.weight(.semibold)).foregroundStyle(Palette.gold)
                             }
+                            ForEach(Array(entry.roleplay.enumerated()), id: \.offset) { _, line in
+                                (Text(line.characterName + ": ").bold() + Text(line.text))
+                                    .font(.proseSmall)
+                            }
                             Text(entry.outcome).font(.prose)
                         }
                     }

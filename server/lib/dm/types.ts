@@ -7,7 +7,7 @@ import type { DungeonMasterArchetype } from '../catalog.ts';
 import type { RulesHook } from '../play/hooks.ts';
 import type { FightNews } from '../play/turn.ts';
 import type { RulesContext } from '../play/view.ts';
-import type { ChoiceId } from '../types.ts';
+import type { ChoiceId, RoleplayLine } from '../types.ts';
 
 export type { RulesContext } from '../play/view.ts';
 
@@ -52,6 +52,8 @@ export interface PastScene {
   /** The DM's summary of what happened (null only for a scene still being resolved). */
   outcome: string | null;
   chosenChoiceId: ChoiceId | null;
+  /** Lines and deeds the players wrote in character this turn, oldest first. */
+  roleplay?: RoleplayLine[];
 }
 
 /** The scene the party just voted on, with everything the DM needs to weigh the votes. */

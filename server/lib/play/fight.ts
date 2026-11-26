@@ -5,6 +5,7 @@
  * engine's rules. Shaken foes check morale (morale.ts). When it ends the living heroes split the XP and level
  * up: all of it on a victory or surrender, the slain foes' when the rest flee. See docs/api.md.
  */
+import { woundOf } from '../rules/wounds.ts';
 import { fightsWith } from '../attacks.ts';
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
@@ -219,7 +220,13 @@ function tell(before: CombatState, after: CombatState): string[] {
   const name: Names = (id) => after.combatants[id].name;
   const events = after.log.slice(before.log.length).map((e) => (LINES[e.kind] as (x: CombatEvent, n: Names) => string)(e, name));
   const fallen = Object.values(after.combatants).filter((c) => c.status === 'dead' && before.combatants[c.id].status !== 'dead');
-  return [...events, ...fallen.map((c) => `${c.name} falls.`)];
+  return [...events, ...woundsTold(before, after), ...fallen.map((c) => `${c.name} falls.`)];
+}
+
+/** A foe still up whose wounds look different now: "Goblin Warrior is bloodied." (its hit points stay hidden). */
+function woundsTold(before: CombatState, after: CombatState): string[] {
+  const changed = (c: Combatant) => c.side === 'foes' && c.status === 'up' && woundOf(c) !== woundOf(before.combatants[c.id]);
+  return Object.values(after.combatants).filter(changed).map((c) => `${c.name} is ${woundOf(c).toLowerCase()}.`);
 }
 
 // ---- after the fight ----

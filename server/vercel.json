@@ -31,6 +31,10 @@
       "destination": "/api/game-typing?code=:code"
     },
     {
+      "source": "/api/games/:code/speak",
+      "destination": "/api/game-speak?code=:code"
+    },
+    {
       "source": "/api/games/:code/dungeon-master",
       "destination": "/api/game-dungeon-master?code=:code"
     },
@@ -49,6 +53,10 @@
     {
       "source": "/api/games/:code/advance",
       "destination": "/api/game-advance?code=:code"
+    },
+    {
+      "source": "/api/games/:code/invites",
+      "destination": "/api/game-invites?code=:code"
     },
     {
       "source": "/api/games/:code/narration",

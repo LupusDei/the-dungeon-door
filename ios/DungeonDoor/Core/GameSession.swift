@@ -131,6 +131,13 @@ final class GameSession {
         }
     }
 
+    /// What this hero says or does, in the story. No roll. The narrator answers it next turn.
+    func speakInCharacter(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        await run { self.absorb(try await self.api.speak(self.code, text: String(trimmed.prefix(500)))) }
+    }
+
     func chooseDungeonMaster(_ id: String) async {
         await run { self.absorb(try await self.api.setDungeonMaster(self.code, id: id)) }
     }

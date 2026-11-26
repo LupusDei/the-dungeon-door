@@ -1,5 +1,5 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, StoredScene, TypingNotice, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
 
 export interface NewGame {
   code: string;
@@ -28,6 +28,14 @@ export interface GameExpectation {
   sceneIndex?: number;
 }
 
+/** Someone the player has shared a game with, by the hero they last played beside them. */
+export interface Companion { playerId: string; name: string; lastPlayedAt: string }
+
+/** An invitation to a party still in its lobby. */
+export interface Invite { code: string; toPlayerId: string; fromPlayerId: string; fromName: string; createdAt: string }
+/** An invitation as the invited player sees it: with who is in the party already. */
+export interface InviteView extends Invite { party: string[] }
+
 export interface NewMessage {
   kind: MessageKind;
   playerId: string | null;
@@ -39,8 +47,8 @@ export interface NewMessage {
   mentions?: Mention[];
 }
 
-/** A scene as written by the DM: everything but its votes and resolution. */
-export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices'>;
+/** A scene as written by the DM: everything but its votes, its in-character lines, and its resolution. */
+export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices' | 'roleplay'>;
 
 /**
  * Persistence for characters, games and chat. Two implementations: Postgres (`postgres.ts`, when
@@ -93,6 +101,11 @@ export interface Store {
    * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.
    */
   setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>): Promise<Vote | null>;
+  /**
+   * Appends an in-character line to the scene, only while the game is voting on it and the turn holds
+   * fewer than 20. Returns the turn's lines, or null when the scene is not open.
+   */
+  appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null>;
 
   /** Appends a chat/system/dm message with the game's next message id. Ids are never reused. */
   addMessage(code: string, message: NewMessage): Promise<Message>;
@@ -111,4 +124,12 @@ export interface Store {
   setTyping(code: string, playerId: string, name: string, until: string): Promise<void>;
   /** Players still composing at `now` (ISO). */
   listTyping(code: string, now: string): Promise<TypingNotice[]>;
+
+  /** The players this one has shared a game with, most recent first. */
+  listCompanions(playerId: string, limit?: number): Promise<Companion[]>;
+  /** Records an invitation. False when that player is already invited to that game. */
+  addInvite(invite: Invite): Promise<boolean>;
+  /** The player's invitations to games still in the lobby that they have not joined, newest first. */
+  listInvites(toPlayerId: string): Promise<InviteView[]>;
+  removeInvite(code: string, toPlayerId: string): Promise<void>;
 }

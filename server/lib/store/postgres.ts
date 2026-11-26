@@ -1,6 +1,6 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, Reaction, StoredScene, TypingNotice, Vote } from '../types.ts';
-import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, Reaction, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
+import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 type Row = Record<string, any>;
 
@@ -149,6 +149,7 @@ export class PostgresStore implements Store {
       votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
       outcome: s.outcome,
       chosenChoiceId: s.chosen_choice_id as ChoiceId | null,
+      roleplay: Array.isArray(s.roleplay) ? s.roleplay as RoleplayLine[] : [],
       createdAt: iso(s.created_at),
     }));
     return gameRow(row, players, scenes);
@@ -246,6 +247,27 @@ export class PostgresStore implements Store {
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
       [code, index, outcome, chosenChoiceId],
     );
+  }
+
+  async appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null> {
+    const rows = await this.q(
+      `WITH s AS (
+         UPDATE scenes AS sc
+         SET roleplay = COALESCE(sc.roleplay, '[]'::jsonb) || $3::jsonb
+         FROM games g
+         WHERE sc.game_code = g.code AND g.code = $1 AND sc.idx = $2
+           AND g.status = 'voting' AND g.scene_index = $2
+           AND jsonb_array_length(COALESCE(sc.roleplay, '[]'::jsonb)) < 20
+         RETURNING sc.roleplay
+       ),
+       bumped AS (
+         UPDATE games SET updated_at = now() WHERE code = $1 AND EXISTS (SELECT 1 FROM s) RETURNING code
+       )
+       SELECT roleplay FROM s`,
+      [code, index, JSON.stringify([line])],
+    );
+    const [row] = rows;
+    return row && Array.isArray(row.roleplay) ? row.roleplay as RoleplayLine[] : null;
   }
 
   async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null) {
@@ -398,6 +420,49 @@ export class PostgresStore implements Store {
       [code, nowIso],
     );
     return rows.map((row) => ({ playerId: row.player_id as string, name: row.name as string }));
+  }
+
+  // ---- companions and invitations ----
+
+  async listCompanions(playerId: string, limit = 30) {
+    const rows = await this.q(
+      `SELECT o.player_id, (array_agg(o.character->>'name' ORDER BY g.updated_at DESC))[1] AS name, max(g.updated_at) AS last_played
+       FROM game_players me
+       JOIN game_players o ON o.game_code = me.game_code AND o.player_id <> me.player_id
+       JOIN games g ON g.code = me.game_code
+       WHERE me.player_id = $1
+       GROUP BY o.player_id ORDER BY last_played DESC LIMIT $2`,
+      [playerId, limit],
+    );
+    return rows.map((r): Companion => ({ playerId: r.player_id, name: r.name, lastPlayedAt: iso(r.last_played) }));
+  }
+
+  async addInvite(invite: Invite) {
+    const rows = await this.q(
+      `INSERT INTO invites (game_code, to_player, from_player, from_name, created_at) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (game_code, to_player) DO NOTHING RETURNING game_code`,
+      [invite.code, invite.toPlayerId, invite.fromPlayerId, invite.fromName, invite.createdAt],
+    );
+    return rows.length > 0;
+  }
+
+  async listInvites(toPlayerId: string) {
+    const rows = await this.q(
+      `SELECT i.game_code, i.from_player, i.from_name, i.created_at,
+         COALESCE((SELECT json_agg(p.character->>'name' ORDER BY p.joined_at) FROM game_players p WHERE p.game_code = i.game_code), '[]') AS party
+       FROM invites i JOIN games g ON g.code = i.game_code
+       WHERE i.to_player = $1 AND g.status = 'lobby'
+         AND NOT EXISTS (SELECT 1 FROM game_players p WHERE p.game_code = i.game_code AND p.player_id = $1)
+       ORDER BY i.created_at DESC LIMIT 20`,
+      [toPlayerId],
+    );
+    return rows.map((r): InviteView => ({
+      code: r.game_code, toPlayerId, fromPlayerId: r.from_player, fromName: r.from_name, createdAt: iso(r.created_at), party: r.party as string[],
+    }));
+  }
+
+  async removeInvite(code: string, toPlayerId: string) {
+    await this.q('DELETE FROM invites WHERE game_code = $1 AND to_player = $2', [code, toPlayerId]);
   }
 }
 

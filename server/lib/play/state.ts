@@ -7,6 +7,7 @@ import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { Attitude } from './parley.ts';
 import type { Lit } from './time.ts';
+import type { Trek } from './trek.ts';
 
 export type { CombatState } from '../rules/scene.ts';
 
@@ -53,4 +54,6 @@ export interface DungeonState {
   level?: number;
   /** Where the dungeon went deeper, and to what level, oldest first. */
   deepened?: { at: string; level: number }[];
+  /** On the road from the tavern to the door (play/trek.ts); absent once the party has reached the door, and in games from before. */
+  trek?: Trek;
 }

@@ -1,5 +1,5 @@
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, StoredScene, TypingNotice, Vote } from '../types.ts';
-import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
+import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
   game: Game;
@@ -22,6 +22,7 @@ export class MemoryStore implements Store {
   /** Message ids whose reactions have changed, by "CODE:id". The id itself never changes. */
   private revised = new Set<string>();
   private typing = new Map<string, { playerId: string; name: string; until: string }[]>();
+  private invites: Invite[] = [];
 
   async getCharacter(id: string) {
     await tick();
@@ -127,7 +128,7 @@ export class MemoryStore implements Store {
       if (existing.narration !== scene.narration) this.forgetVoices(code, existing); // new words need new readings
       Object.assign(existing, structuredClone(scene));
     } else {
-      game.scenes.push({ ...structuredClone(scene), voices: {}, votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
+      game.scenes.push({ ...structuredClone(scene), voices: {}, roleplay: [], votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
       game.scenes.sort((a, b) => a.index - b.index);
     }
     game.updatedAt = now();
@@ -177,6 +178,18 @@ export class MemoryStore implements Store {
     scene.outcome = outcome;
     scene.chosenChoiceId = chosenChoiceId;
     game.updatedAt = now();
+  }
+
+  async appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null> {
+    await tick();
+    const game = this.games.get(code)?.game;
+    const scene = game?.scenes.find((s) => s.index === index);
+    if (!game || !scene || game.status !== 'voting' || game.sceneIndex !== index) return null;
+    const roleplay = scene.roleplay ?? [];
+    if (roleplay.length >= 20) return null;
+    scene.roleplay = [...roleplay, structuredClone(line)];
+    game.updatedAt = now();
+    return scene.roleplay.map((entry) => structuredClone(entry));
   }
 
   async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null) {
@@ -278,6 +291,45 @@ export class MemoryStore implements Store {
   async listTyping(code: string, nowIso: string): Promise<TypingNotice[]> {
     await tick();
     return (this.typing.get(code) ?? []).filter((t) => t.until > nowIso).map(({ playerId, name }) => ({ playerId, name }));
+  }
+
+  async listCompanions(playerId: string, limit = 30) {
+    await tick();
+    const met = new Map<string, Companion>();
+    for (const { game } of this.games.values()) {
+      if (!game.players.some((p) => p.playerId === playerId)) continue;
+      for (const p of game.players) {
+        if (p.playerId === playerId) continue;
+        const known = met.get(p.playerId);
+        if (!known || known.lastPlayedAt < game.updatedAt) met.set(p.playerId, { playerId: p.playerId, name: p.character.name, lastPlayedAt: game.updatedAt });
+      }
+    }
+    return [...met.values()].sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt)).slice(0, limit);
+  }
+
+  async addInvite(invite: Invite) {
+    await tick();
+    if (this.invites.some((i) => i.code === invite.code && i.toPlayerId === invite.toPlayerId)) return false;
+    this.invites.push({ ...invite });
+    return true;
+  }
+
+  async listInvites(toPlayerId: string) {
+    await tick();
+    return this.invites
+      .filter((i) => i.toPlayerId === toPlayerId)
+      .map((i): InviteView | null => {
+        const game = this.games.get(i.code)?.game;
+        if (!game || game.status !== 'lobby' || game.players.some((p) => p.playerId === toPlayerId)) return null;
+        return { ...i, party: game.players.map((p) => p.character.name) };
+      })
+      .filter((i): i is InviteView => i !== null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async removeInvite(code: string, toPlayerId: string) {
+    await tick();
+    this.invites = this.invites.filter((i) => !(i.code === code && i.toPlayerId === toPlayerId));
   }
 }
 
