@@ -4,3 +4,6 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Personal quest keys for the website tracker (never commit)
+.quest-keys.local

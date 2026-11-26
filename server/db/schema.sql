@@ -66,3 +66,12 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (game_code, id)
 );
+
+-- The quest log (website /quest-log): JSON documents, kind 'task' or 'meta'. See lib/quests.ts.
+CREATE TABLE IF NOT EXISTS quest_docs (
+  kind       text NOT NULL,
+  id         text NOT NULL,
+  data       jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (kind, id)
+);

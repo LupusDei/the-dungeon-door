@@ -9,9 +9,18 @@ The Dungeon Door is a tabletop-style fantasy game with an AI dungeon master. Pla
 | --- | --- |
 | `ios/` | SwiftUI iPhone/iPad app (XcodeGen). `Core/` talks to the server, `Views/` are the screens, `UI/` holds the theme and the home-screen dragon. |
 | `server/` | Vercel functions in TypeScript (`api/*.ts`), logic in `lib/`. Postgres (Neon) or in-memory storage; images in Vercel Blob. |
+| `server/public/` | The marketing website and the quest log page (static HTML, CSS and JS; no build step). |
 | `server/lib/dm/` | The dungeon master seam. New or changed DM behaviour goes here; see `docs/dungeon-master.md`. |
 | `docs/api.md` | The contract between app and server. |
 | `design/` | Source art and recipes for generated assets. |
+
+## Where tasks live
+
+The team's shared board is the quest log on the website: https://the-dungeon-door.vercel.app/quest-log
+(API: `GET /api/quests`, and `POST`/`PATCH`/`DELETE` with the `x-quest-key` header; see the README).
+When you start, finish or discover team-level work, update it there if you have been given a quest
+key (it is in the `QUEST_KEY` environment variable when you have one; never print it or commit it).
+`bd` is for your own working notes inside this repository, not for coordinating with the team.
 
 ## Build & Test
 

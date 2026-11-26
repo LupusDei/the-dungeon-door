@@ -1,0 +1,84 @@
+/* The Dungeon Door website. One look, like the game: candlelit near-black, parchment text, gilt edges.
+   Type: Cinzel for display (sparingly), Spectral for story prose, Inter for interface text. */
+:root {
+  --bg: #120e0a;
+  --surface: #1b150f;
+  --raised: #261e15;
+  --line: #3b2f22;
+  --fg: #eadbc0;
+  --muted: #a8957a;
+  --gold: #d9a649;
+  --gold-bright: #f3cf7d;
+  --on-gold: #1a1206;
+  --ember: #dd6e45;
+  --verdigris: #74b3a1;
+  --glow: rgba(217, 166, 73, .28);
+  --scrim: rgba(8, 5, 3, .72);
+  --display: "Cinzel", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --prose: "Spectral", "Iowan Old Style", Georgia, serif;
+  --gutter: max(20px, env(safe-area-inset-left, 0px));
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, p, figure { margin: 0; }
+h1, h2, h3 { text-wrap: balance; }
+img, video { max-width: 100%; height: auto; display: block; }
+a { color: var(--gold); }
+button, select, input, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.wrap { max-width: 1180px; margin-inline: auto; padding-left: var(--gutter); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+
+/* Top bar */
+.topbar { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.topbar .wrap { display: flex; align-items: center; gap: 18px; min-height: 60px; }
+.wordmark { display: flex; align-items: center; gap: 10px; font: 700 1.02rem/1 var(--display); letter-spacing: .06em; color: var(--fg); text-decoration: none; white-space: nowrap; }
+.wordmark img { width: 30px; height: 30px; border-radius: 8px; }
+.topnav { margin-left: auto; display: flex; align-items: center; gap: 4px 20px; flex-wrap: wrap; justify-content: flex-end; }
+.topnav a { color: var(--muted); text-decoration: none; font-size: 14.5px; font-weight: 500; padding: 6px 0; }
+.topnav a:hover, .topnav a[aria-current="page"] { color: var(--gold); }
+@media (max-width: 620px) { .topnav .optional { display: none; } }
+@media (max-width: 480px) {
+  .topbar .wrap { gap: 10px; }
+  .wordmark { font-size: .9rem; letter-spacing: .03em; gap: 8px; }
+  .topnav { gap: 14px; flex-wrap: nowrap; }
+  .topnav a { font-size: 13.5px; white-space: nowrap; }
+}
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 18px; cursor: pointer; font-weight: 600; text-decoration: none; color: var(--fg); }
+.btn:hover { border-color: var(--gold); }
+.btn.primary { background: linear-gradient(180deg, #f0c66b, var(--gold) 55%, #a87a2c); border-color: transparent; color: var(--on-gold); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.quiet { border-color: transparent; background: none; color: var(--muted); padding-inline: 8px; font-weight: 500; }
+.btn.danger { color: var(--ember); }
+.btn.small { padding: 7px 12px; font-size: 14px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+.eyebrow { font: 600 12.5px/1.3 var(--display); letter-spacing: .26em; text-transform: uppercase; color: var(--gold); }
+.kicker { font: 600 1rem/1.2 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
+
+/* Progress pieces shared by the home page and the quest log */
+.bar { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; display: flex; }
+.bar > i { display: block; height: 100%; }
+.bar .done { background: var(--verdigris); }
+.bar .doing { background: var(--gold); }
+.bar.thin { height: 6px; }
+@media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease; } }
+.avatar { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); object-fit: cover; flex: none; }
+.avatar.big { width: 44px; height: 44px; }
+.avatar.tiny { width: 20px; height: 20px; }
+
+/* Footer */
+.sitefoot { border-top: 1px solid var(--line); margin-top: 96px; padding-block: 28px calc(36px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 14px; }
+.sitefoot .wrap { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: center; }
+.sitefoot a { color: var(--muted); }
+.sitefoot a:hover { color: var(--gold); }
+.sitefoot .grow { flex: 1 1 200px; }

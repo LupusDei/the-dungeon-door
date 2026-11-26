@@ -6,9 +6,9 @@
  *   PORT=4000 npm run dev
  *   npm run dev:real            # real AI Gateway calls (needs `vercel env pull` → .env.local)
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage } from 'node:http';
-import { dirname, join } from 'node:path';
+import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -52,12 +52,39 @@ async function body(req: IncomingMessage): Promise<string | undefined> {
 
 const port = Number(process.env.PORT ?? 3000);
 
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.mp4': 'video/mp4',
+};
+
+/** The website in public/, the way Vercel serves it: /quest-log → public/quest-log/index.html. */
+function staticFile(pathname: string): { body: Buffer; type: string } | null {
+  const publicDir = join(root, 'public');
+  const safe = normalize(decodeURIComponent(pathname)).replace(/^([/\\]|\.\.)+/, '');
+  for (const candidate of [safe, join(safe, 'index.html'), `${safe}.html`]) {
+    const file = join(publicDir, candidate);
+    if (file.startsWith(publicDir) && existsSync(file) && statSync(file).isFile()) {
+      return { body: readFileSync(file), type: TYPES[extname(file)] ?? 'application/octet-stream' };
+    }
+  }
+  return null;
+}
+
 createServer(async (req, res) => {
   const started = Date.now();
   try {
     const original = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${port}`}`);
     const target = new URL(rewrite(original.pathname), original);
     for (const [key, value] of original.searchParams) if (!target.searchParams.has(key)) target.searchParams.set(key, value);
+
+    if (!target.pathname.startsWith('/api/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const file = staticFile(target.pathname);
+      if (file) {
+        res.writeHead(200, { 'content-type': file.type, 'content-length': file.body.length, 'accept-ranges': 'bytes' });
+        res.end(req.method === 'HEAD' ? undefined : file.body);
+        return;
+      }
+    }
 
     const name = target.pathname.match(/^\/api\/([a-z-]+)\/?$/)?.[1];
     const mod = name ? await load(name) : null;
@@ -84,5 +111,14 @@ createServer(async (req, res) => {
 }).listen(port, '0.0.0.0', () => {
   const ai = process.env.DD_FAKE_AI === '1' ? 'fake AI' : `real AI (${process.env.DD_TEXT_MODEL ?? 'default models'})`;
   const store = process.env.DATABASE_URL ? 'Postgres' : 'in-memory store';
-  console.log(`The Dungeon Door API on http://localhost:${port} — ${ai}, ${store}`);
+  console.log(`The Dungeon Door on http://localhost:${port} (site + API) — ${ai}, ${store}`);
+  if (!process.env.DATABASE_URL) void seedLocalQuestLog();
 });
+
+/** Without a database the quest log starts from db/quest-seed.json, so /quest-log has something to show. */
+async function seedLocalQuestLog(): Promise<void> {
+  const { quests } = await import(join(root, 'lib', 'quests.ts'));
+  const seed = JSON.parse(readFileSync(join(root, 'db', 'quest-seed.json'), 'utf8'));
+  await quests().setMeta(seed.meta);
+  for (const task of seed.tasks) await quests().put(task);
+}

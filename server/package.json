@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types lib/*.test.ts",
     "migrate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/migrate.ts",
+    "seed:quests": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/seed-quests.ts",
     "bot": "node --experimental-strip-types scripts/bot.ts"
   },
   "engines": {

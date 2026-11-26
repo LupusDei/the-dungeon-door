@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Dungeon Door — a tabletop adventure with an AI dungeon master</title>
+<meta name="description" content="Gather your party, describe your hero, and step through the door. An AI dungeon master writes the tale, paints every scene, and weighs every player's choice.">
+<meta property="og:title" content="The Dungeon Door">
+<meta property="og:description" content="A tabletop adventure where the dungeon master is an AI and the whole party decides what happens next.">
+<meta property="og:image" content="https://the-dungeon-door.vercel.app/media/og.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#120e0a">
+<link rel="icon" href="/media/favicon.png">
+<link rel="apple-touch-icon" href="/media/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;1,400&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+/* Hero: the copy on one side, the dragon seen through an arched doorway on the other. */
+.hero { position: relative; overflow: hidden; }
+.hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(900px 520px at 72% 30%, rgba(88, 52, 24, .55), transparent 70%); pointer-events: none; }
+.hero .wrap { position: relative; display: grid; gap: 40px; padding-block: 56px 72px; align-items: center; }
+@media (min-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; padding-block: 84px 104px; } }
+#embers { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.hero-copy { display: grid; gap: 22px; justify-items: start; }
+.hero h1 {
+  font: 700 clamp(2.7rem, 8vw, 5rem)/1 var(--display); letter-spacing: .01em;
+  background: linear-gradient(180deg, #ffe9b0, #e9b95a 55%, #9c6b22); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 22px rgba(255, 154, 61, .35));
+}
+.hero .lede { font: 400 clamp(1.15rem, 2.2vw, 1.4rem)/1.5 var(--prose); color: var(--fg); max-width: 34ch; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.hero-note { color: var(--muted); font-size: 14px; }
+
+.doorway { justify-self: center; width: min(100%, 400px); }
+.arch { position: relative; aspect-ratio: 9 / 14; border-radius: 999px 999px 22px 22px; overflow: hidden; border: 1.5px solid var(--gold); box-shadow: 0 0 0 8px rgba(217, 166, 73, .08), 0 30px 80px rgba(0, 0, 0, .7), 0 0 90px rgba(217, 120, 40, .22); background: #000; }
+.arch video, .arch img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.arch::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(18, 14, 10, .85)); pointer-events: none; }
+.doorway figcaption { text-align: center; margin-top: 16px; font: italic 400 1rem/1.4 var(--prose); color: var(--muted); }
+
+section.band { padding-block: 72px 0; }
+.band-head { display: grid; gap: 12px; margin-bottom: 36px; max-width: 60ch; }
+.band-head h2 { font: 700 clamp(1.7rem, 4vw, 2.5rem)/1.12 var(--display); }
+.band-head p { color: var(--muted); font: 400 1.1rem/1.5 var(--prose); }
+
+/* How a night goes */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; counter-reset: step; }
+@media (min-width: 760px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.step { counter-increment: step; display: grid; gap: 18px; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); align-content: start; min-width: 0; }
+.step h3 { font: 600 1.25rem/1.25 var(--display); display: flex; gap: 12px; align-items: baseline; }
+.step h3::before { content: counter(step, upper-roman); color: var(--gold); font-size: .95rem; min-width: 1.6em; }
+.step p { color: var(--muted); }
+.step .show { margin-top: 4px; }
+.portrait-card { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; align-items: center; }
+.portrait-card img { border-radius: 14px; border: 1px solid var(--gold); aspect-ratio: 1; object-fit: cover; }
+.said { font: italic 400 1.05rem/1.45 var(--prose); color: var(--fg); }
+.said small { display: block; margin-top: 8px; font: 500 12.5px/1.3 var(--body); color: var(--muted); letter-spacing: .04em; }
+.code-tiles { display: flex; gap: clamp(5px, 1.6vw, 8px); }
+.code-tiles span { width: clamp(32px, 10.5vw, 44px); height: clamp(42px, 13vw, 54px); display: grid; place-items: center; font: 700 1.35rem/1 var(--display); background: var(--bg); border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); border-radius: 9px; }
+.phone { width: min(100%, 250px); margin-inline: auto; border-radius: 34px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); box-shadow: 0 22px 50px rgba(0, 0, 0, .6); background: #000; }
+.phone img { width: 100%; aspect-ratio: 1320 / 2868; object-fit: cover; object-position: top; }
+
+/* One game, three paintings */
+.triptych { display: grid; gap: 14px; }
+@media (min-width: 760px) { .triptych { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.triptych figure { display: grid; gap: 10px; }
+.triptych img { border-radius: 14px; border: 1px solid var(--line); aspect-ratio: 3 / 2; object-fit: cover; width: 100%; }
+.triptych figcaption { font: 600 .98rem/1.3 var(--display); }
+.triptych figcaption span { display: block; font: 400 13px/1.4 var(--body); color: var(--muted); margin-top: 2px; }
+.quote { margin-top: 30px; padding: 6px 0 6px 20px; border-left: 2px solid var(--gold); max-width: 62ch; font: italic 400 1.2rem/1.5 var(--prose); }
+.quote cite { display: block; margin-top: 8px; font: 500 13px/1.3 var(--body); color: var(--muted); font-style: normal; }
+
+/* Dungeon masters */
+.masters { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.master { display: grid; gap: 8px; padding: 22px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); border-top: 2px solid var(--accent); align-content: start; }
+.master h3 { font: 600 1.2rem/1.2 var(--display); }
+.master .tag { font: italic 400 1.02rem/1.4 var(--prose); color: var(--accent); }
+.master p:last-child { color: var(--muted); font-size: 15px; }
+
+/* The dragon */
+.dragon-row { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 760px; }
+.dragon-row figure { display: grid; gap: 10px; }
+.dragon-row img { border-radius: 999px 999px 14px 14px; border: 1px solid var(--line); aspect-ratio: 9 / 14; object-fit: cover; width: 100%; }
+.dragon-row figcaption { font: italic 400 .98rem/1.4 var(--prose); color: var(--muted); text-align: center; }
+.split { display: grid; gap: 36px; align-items: center; }
+@media (min-width: 900px) { .split { grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); } }
+
+/* Built in the open */
+.progress { display: grid; gap: 22px; padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, var(--raised), var(--surface)); }
+.progress-line { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+.progress-where { font: 600 1.3rem/1.25 var(--display); }
+.progress-count { color: var(--muted); }
+.level-strip { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+.level-strip li { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px dashed var(--line); color: var(--muted); min-width: 0; }
+.level-strip li[data-state="cleared"] { border: 1px solid color-mix(in srgb, var(--verdigris) 60%, transparent); color: var(--fg); }
+.level-strip li[data-state="here"] { border: 1px solid var(--gold); color: var(--fg); box-shadow: 0 0 0 4px var(--glow); }
+.level-strip .n { font: 700 12px/1 var(--display); letter-spacing: .12em; color: var(--gold); }
+.level-strip li[data-state="cleared"] .n { color: var(--verdigris); }
+.level-strip .name { font: 600 .93rem/1.25 var(--display); overflow-wrap: anywhere; }
+.party { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; }
+.party-member { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 500; }
+.party-member:hover { color: var(--gold); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="wordmark" href="/"><img src="/media/icon.png" alt="" width="30" height="30">The Dungeon Door</a>
+    <nav class="topnav" aria-label="Site">
+      <a class="optional" href="#play">How it plays</a>
+      <a class="optional" href="#masters">Dungeon masters</a>
+      <a href="/quest-log">Quest log</a>
+      <a href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <canvas id="embers" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">An AI dungeon master · iPhone and iPad</p>
+        <h1>The Dungeon Door</h1>
+        <p class="lede">Gather your party and step through. An AI dungeon master writes the tale, paints every scene, and weighs every player's choice.</p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#play">See how it plays</a>
+          <a class="btn" href="/quest-log">Follow the quest log</a>
+        </div>
+        <p class="hero-note">In private beta on TestFlight. Being built in the open.</p>
+      </div>
+      <figure class="doorway">
+        <div class="arch">
+          <img src="/media/dragon-perch.jpg" alt="An ancient black dragon perched on a mountain summit beside a ruined castle, looking at the viewer with glowing amber eyes." width="768" height="1344">
+          <video autoplay muted loop playsinline preload="metadata" poster="/media/dragon-perch.jpg" aria-hidden="true">
+            <source src="/media/dragon-watcher.mp4" type="video/mp4">
+          </video>
+        </div>
+        <figcaption>The master of this dungeon is watching.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band" id="play">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="kicker">How a night goes</p>
+        <h2>Four of you on the couch. One door.</h2>
+        <p>It plays like a tabletop session with a dungeon master, except the dungeon master never needs a night off.</p>
+      </div>
+      <ol class="steps">
+        <li class="step">
+          <h3>Forge a hero</h3>
+          <p>Choose a race, a class and a temperament, then describe your hero in your own words. The game embellishes the description and paints the portrait.</p>
+          <div class="show portrait-card">
+            <img src="/media/ilsa.jpg" alt="Painted portrait of Ilsa Thornwood, an elf ranger with a copper braid, a burn scar on her cheek and a patched green cloak." width="640" height="640" loading="lazy">
+            <p class="said">“Copper braid, burn scar on one cheek, patched green cloak, too many rings.”<small>What the player typed for Ilsa Thornwood, elf ranger</small></p>
+          </div>
+        </li>
+        <li class="step">
+          <h3>Gather the party</h3>
+          <p>Open a door and share its six-letter code. Up to six friends join from their own phones, pick who will run the game, and talk it over in party chat.</p>
+          <div class="show code-tiles" role="img" aria-label="An example door code: 7 J P F D S"><span>7</span><span>J</span><span>P</span><span>F</span><span>D</span><span>S</span></div>
+        </li>
+        <li class="step">
+          <h3>The master sets the scene</h3>
+          <p>A painting of the moment with your heroes in it, a few paragraphs of story, and three ways forward.</p>
+          <div class="show phone"><img src="/media/shot-scene.jpg" alt="The app showing scene one, The Door Beneath the Tide: a painting of two heroes at a bronze-bound door on a tidal shore, with the story text below." width="600" height="1304" loading="lazy"></div>
+        </li>
+        <li class="step">
+          <h3>Everyone chooses, the dice roll</h3>
+          <p>Each player votes for themselves and rolls a d20. The dungeon master weighs every vote and every roll, not just the majority. A dissenter still acts. A natural 1 still hurts.</p>
+          <div class="show phone"><img src="/media/shot-finale.jpg" alt="The app showing the finale, The Crown and the Tide, with a panel titled What came of it describing how each hero's choice played out." width="600" height="1304" loading="lazy"></div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="kicker">One game, three paintings</p>
+        <h2>Your heroes, in every scene</h2>
+        <p>These are from a single real game. The same two heroes, painted fresh as the story moved, from the players' own portraits.</p>
+      </div>
+      <div class="triptych">
+        <figure><img src="/media/scene-1.jpg" alt="An elf ranger and a horned rogue stand before a tall bronze-bound door on a beach at sunset." loading="lazy" width="1200" height="800"><figcaption>The Door Beneath the Tide<span>Scene one</span></figcaption></figure>
+        <figure><img src="/media/scene-2.jpg" alt="The same two heroes face an armoured, kelp-draped guardian in a flooded hall." loading="lazy" width="1200" height="800"><figcaption>The Drowned Throne Wakes<span>Scene two</span></figcaption></figure>
+        <figure><img src="/media/scene-3.jpg" alt="The two heroes walk away from a ruined lighthouse at sunset, one carrying a glowing orb." loading="lazy" width="1200" height="800"><figcaption>The Crown and the Tide<span>The finale</span></figcaption></figure>
+      </div>
+      <blockquote class="quote">“One knock for a thief, three for a friend. That was a fourth, and a fine one.”<cite>The Tide-Warden, as written by the Chronicler in that game</cite></blockquote>
+    </div>
+  </section>
+
+  <section class="band" id="masters">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="kicker">Choose who tells the tale</p>
+        <h2>Four dungeon masters, four very different nights</h2>
+      </div>
+      <div class="masters">
+        <article class="master" style="--accent:#c9a227"><h3>The Chronicler</h3><p class="tag">A classic tale of heroes, told true.</p><p>Fair, sweeping high fantasy: lost kingdoms, ancient magic, honest danger and rewards earned.</p></article>
+        <article class="master" style="--accent:#7bc96f"><h3>The Trickster</h3><p class="tag">Nothing is what it seems. Especially the door.</p><p>Talking hats, riddling goblins and staircases that change their minds. The fey keep their word, to the letter.</p></article>
+        <article class="master" style="--accent:#c44a5a"><h3>The Grim Warden</h3><p class="tag">Few return. Fewer return unchanged.</p><p>Dark, gothic dread and hard choices, where every lantern matters and victories are bought dearly.</p></article>
+        <article class="master" style="--accent:#e0662f"><h3>The Bard</h3><p class="tag">Swords, songs and spectacular entrances!</p><p>Rooftop duels, pirate ships and villains with magnificent moustaches. The bolder the plan, the louder the applause.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap split">
+      <div class="band-head" style="margin-bottom:0">
+        <p class="kicker">On the mountain</p>
+        <h2>Touch the dragon, if you dare</h2>
+        <p>The home screen belongs to him. He flies in, lands on his summit and watches. Touch him and he answers: sometimes with words, sometimes with fire.</p>
+        <p class="said" style="margin-top:6px">“I have watched a thousand heroes walk through that door. Few walked back.”</p>
+      </div>
+      <div class="dragon-row">
+        <figure><img src="/media/dragon-speak.jpg" alt="The dragon's face fills the frame, amber eyes blazing." loading="lazy" width="520" height="910"><figcaption>He speaks</figcaption></figure>
+        <figure><img src="/media/dragon-fire.jpg" alt="The dragon breathes a column of fire into the storm clouds." loading="lazy" width="520" height="910"><figcaption>He burns</figcaption></figure>
+        <figure><img src="/media/dragon-roar.jpg" alt="The dragon spreads his wings and roars as lightning strikes behind him." loading="lazy" width="520" height="910"><figcaption>He roars</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="progress">
+    <div class="wrap">
+      <div class="band-head">
+        <p class="kicker">Built in the open</p>
+        <h2>Follow the descent</h2>
+        <p>Every milestone is a level of the dungeon. The quest log shows what's done, what's in progress and what's next, as the team updates it.</p>
+      </div>
+      <div class="progress">
+        <div class="progress-line">
+          <div class="progress-where" id="where">Finding the party…</div>
+          <div class="progress-count num" id="count"></div>
+        </div>
+        <div class="bar" id="overall" hidden><i class="done"></i><i class="doing"></i></div>
+        <ol class="level-strip" id="levels"></ol>
+        <div class="party" id="party" aria-label="The party building it"></div>
+        <div><a class="btn primary" href="/quest-log">Open the quest log</a></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="sitefoot">
+  <div class="wrap">
+    <span class="grow">The Dungeon Door. An independent game, still being built.</span>
+    <a href="/quest-log">Quest log</a>
+    <a href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+  const el = (tag, props, ...kids) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) { if (v == null) continue; if (k === "text") node.textContent = v; else node.setAttribute(k, v); }
+    node.append(...kids.filter(Boolean));
+    return node;
+  };
+
+  // Live progress from the quest log.
+  async function loadProgress() {
+    let board;
+    try {
+      const response = await fetch("/api/quests", { cache: "no-store" });
+      if (!response.ok) throw new Error(String(response.status));
+      board = await response.json();
+    } catch {
+      document.getElementById("where").textContent = "The quest log is out of reach right now.";
+      return;
+    }
+    const tasks = board.tasks || [];
+    const milestones = (board.meta && board.meta.milestones) || [];
+    const counts = (list) => ({ total: list.length, done: list.filter((t) => t.status === "done").length, doing: list.filter((t) => t.status === "doing").length });
+    const levels = milestones.map((m) => ({ m, c: counts(tasks.filter((t) => t.milestone === m.id)) }));
+    let here = levels.findIndex((x) => x.c.total === 0 || x.c.done < x.c.total);
+    if (here < 0) here = levels.length;
+    const all = counts(tasks);
+    document.getElementById("where").textContent = !levels.length ? "The map is still being drawn"
+      : here < levels.length ? "The party stands at Level " + (ROMAN[here] || here + 1) + " · " + levels[here].m.name : "Every level is cleared";
+    document.getElementById("count").textContent = all.total ? all.done + " of " + all.total + " tasks done" : "";
+    const bar = document.getElementById("overall");
+    if (all.total) {
+      bar.hidden = false;
+      bar.children[0].style.width = (all.done / all.total) * 100 + "%";
+      bar.children[1].style.width = (all.doing / all.total) * 100 + "%";
+      bar.setAttribute("role", "img");
+      bar.setAttribute("aria-label", all.done + " of " + all.total + " tasks done");
+    }
+    const strip = document.getElementById("levels");
+    strip.replaceChildren(...levels.map((x, i) => el("li", { "data-state": i < here ? "cleared" : i === here ? "here" : "ahead" },
+      el("span", { class: "n", text: (i < here ? "✓ " : "") + "Level " + (ROMAN[i] || i + 1) }),
+      el("span", { class: "name", text: x.m.name }),
+      el("span", { class: "num", style: "font-size:12.5px", text: x.c.total ? x.c.done + "/" + x.c.total + " done" : "no tasks yet" }))));
+    const party = document.getElementById("party");
+    party.replaceChildren(...(board.people || []).map((p) => el("a", { class: "party-member", href: "https://github.com/" + encodeURIComponent(p.id), rel: "noopener" },
+      el("img", { class: "avatar big", src: p.avatar, alt: "", width: "44", height: "44", loading: "lazy" }), el("span", { text: p.name }))));
+  }
+  loadProgress();
+
+  // Embers drifting up behind the hero. Skipped for people who prefer less motion.
+  const canvas = document.getElementById("embers");
+  if (canvas && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const ctx = canvas.getContext("2d");
+    let seed = 0xD4A60;
+    const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const motes = Array.from({ length: 46 }, () => ({ x: rand(), speed: 0.012 + rand() * 0.04, phase: rand(), sway: 6 + rand() * 26, rate: 0.25 + rand() * 0.7, size: 1 + rand() * 2.2, arcane: rand() < 0.2, tw: 0.6 + rand() * 1.8 }));
+    let w = 0, h = 0, visible = true;
+    const size = () => { const r = canvas.getBoundingClientRect(); const d = Math.min(devicePixelRatio || 1, 2); w = r.width; h = r.height; canvas.width = w * d; canvas.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); };
+    size();
+    addEventListener("resize", size);
+    new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }).observe(canvas);
+    const draw = (now) => {
+      requestAnimationFrame(draw);
+      if (!visible || document.hidden) return;
+      const t = now / 1000;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "lighter";
+      for (const m of motes) {
+        const life = (t * m.speed + m.phase) % 1;
+        const y = h * (1.06 - life * 1.12);
+        const x = m.x * w + Math.sin(t * m.rate + m.phase * 20) * m.sway;
+        const alpha = Math.sin(life * Math.PI) * (0.65 + 0.35 * Math.sin(t * m.tw * 3 + m.phase * 40)) * 0.75;
+        const glow = m.size * 3.6;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, glow);
+        g.addColorStop(0, m.arcane ? `rgba(143,211,255,${alpha})` : `rgba(255,197,107,${alpha})`);
+        g.addColorStop(0.25, m.arcane ? `rgba(59,123,255,${alpha * 0.35})` : `rgba(255,122,46,${alpha * 0.35})`);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, glow, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    requestAnimationFrame(draw);
+  }
+})();
+</script>
+</body>
+</html>

@@ -39,6 +39,27 @@ The deployed server is https://the-dungeon-door.vercel.app (Vercel project `the-
 Neon Postgres, Vercel Blob, AI Gateway). It requires the shared app key, which builds read from
 `ios/Config/Secrets.xcconfig` (gitignored: `DD_APP_KEY = …`, ask the owner).
 
+## Website and quest log
+
+The marketing site is static files in `server/public/`, served from the same Vercel project as the
+API: https://the-dungeon-door.vercel.app. Its `/quest-log` page is the team's progress board:
+milestones as levels of the dungeon, workstreams, and every task.
+
+Anyone can read the board. Adding or changing tasks needs a personal quest key, one per team member
+(LupusDei, unclebob, slagyr, slagyr-assistant; ask the owner for yours). Paste it into "Team sign-in"
+on the page, or send it from a script:
+
+```bash
+curl -X POST https://the-dungeon-door.vercel.app/api/quests \
+  -H "x-quest-key: $QUEST_KEY" -H "content-type: application/json" \
+  -d '{"title": "What needs doing", "area": "rules", "milestone": "armory", "owner": "unclebob"}'
+```
+
+`PATCH /api/quests?id=…` changes a task (for example `{"status": "done"}`), `DELETE` removes one, and
+`GET /api/quests` returns the whole board with the valid `area` and `milestone` ids. The code is
+`server/lib/quests.ts` and `server/api/quests.ts`; `npm run dev` serves the site and a seeded board
+locally, where the key `dev-<your GitHub login>` works.
+
 ## Ship to TestFlight
 
 ```bash

@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quest Log — The Dungeon Door</title>
+<meta name="description" content="Where The Dungeon Door stands: milestones as levels of the dungeon, workstreams, and every task done, in progress and to come.">
+<meta property="og:title" content="The Dungeon Door Quest Log">
+<meta property="og:description" content="Follow the build: what's done, what's in progress, what's next.">
+<meta property="og:image" content="https://the-dungeon-door.vercel.app/media/og.jpg">
+<meta name="theme-color" content="#120e0a">
+<link rel="icon" href="/media/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&family=Spectral:ital,wght@0,400;1,400&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+/* Layout: a masthead that says where the party stands; the descent (levels = milestones) beside
+   the workstreams; then a three-column task board. */
+.page { display: grid; gap: 44px; padding-block: 34px 0; }
+.masthead { display: grid; gap: 18px; }
+.masthead h1 { font: 700 clamp(2.1rem, 6vw, 3.2rem)/1.05 var(--display); letter-spacing: .01em; }
+.lede { font: 400 1.12rem/1.5 var(--prose); color: var(--muted); max-width: 62ch; }
+.position { display: grid; gap: 14px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, var(--raised), var(--surface)); }
+.position-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.position-where { font: 600 1.25rem/1.25 var(--display); }
+.position-count { color: var(--muted); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; font-size: 15px; }
+.facts div { display: flex; gap: 8px; min-width: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 14px; }
+.hint { color: var(--muted); font-size: 13px; }
+.overview { display: grid; gap: 44px 40px; }
+@media (min-width: 900px) { .overview { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; } }
+.stack { display: grid; gap: 36px; min-width: 0; }
+
+.levels { list-style: none; margin: 0; padding: 0; display: grid; }
+.level { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 14px; padding-bottom: 18px; }
+.level:last-child { padding-bottom: 0; }
+.level::before { content: ""; position: absolute; left: 22px; top: 46px; bottom: 0; width: 2px; background: var(--line); }
+.level:last-child::before { display: none; }
+.level[data-state="cleared"]::before { background: var(--verdigris); opacity: .55; }
+.level-mark { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font: 700 15px/1 var(--display); border: 1.5px dashed var(--line); color: var(--muted); background: var(--bg); position: relative; z-index: 1; }
+.level[data-state="cleared"] .level-mark { border: 1.5px solid var(--verdigris); color: var(--verdigris); }
+.level[data-state="here"] .level-mark { border: 1.5px solid var(--gold); background: var(--gold); color: var(--on-gold); box-shadow: 0 0 0 5px var(--glow); }
+.level-body { display: grid; gap: 5px; text-align: left; width: 100%; padding: 2px 10px 8px; margin: -2px 0 0 -10px; background: none; border: 1px solid transparent; border-radius: 10px; cursor: pointer; }
+.level-body:hover, .level-body[aria-pressed="true"] { border-color: var(--line); background: var(--surface); }
+.level-name { font: 600 1.02rem/1.25 var(--display); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.level[data-state="ahead"] .level-name { color: var(--muted); }
+.here-tag { font: 600 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.level-blurb { color: var(--muted); font-size: 13.5px; }
+.level-meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; }
+
+.areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.area { display: grid; gap: 8px; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; min-width: 0; }
+.area:hover, .area[aria-pressed="true"] { border-color: var(--gold); }
+.area-name { font-weight: 600; }
+.area-counts { color: var(--muted); font-size: 12.5px; }
+.area-owners { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; min-height: 20px; }
+
+.moves { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.moves li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+.move-what { overflow-wrap: anywhere; }
+.move-meta { color: var(--muted); font-size: 12.5px; display: block; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; flex: none; }
+.dot.doing { background: var(--gold); }
+.dot.done { background: var(--verdigris); }
+.dot.todo { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+.toolbar select, .toolbar input[type="search"], .field input, .field select, .field textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; min-width: 0; }
+.toolbar input[type="search"] { flex: 1 1 180px; }
+.toolbar select { flex: 0 1 auto; max-width: 100%; }
+.spacer { flex: 1 1 0; }
+.whoami { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+
+.board { display: grid; gap: 22px 16px; }
+@media (min-width: 860px) { .board { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; } }
+.column { display: grid; gap: 10px; min-width: 0; }
+.column-head { display: flex; align-items: center; gap: 9px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.column-head .count { color: var(--muted); font-weight: 400; }
+.task { display: grid; gap: 9px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.task[data-status="doing"] { border-color: var(--gold); }
+.task[data-status="done"] .task-title { color: var(--muted); }
+.task-title { font: 600 15px/1.35 var(--body); overflow-wrap: anywhere; }
+.task-notes { font: 400 15px/1.45 var(--prose); color: var(--muted); overflow-wrap: anywhere; white-space: pre-line; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { font-size: 12px; line-height: 1; padding: 5px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.chip.owner { color: var(--fg); border-color: var(--muted); padding: 2px 9px 2px 2px; }
+.task-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.task-foot select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
+.task-link { font-size: 13px; }
+.empty { color: var(--muted); font: italic 400 15px/1.45 var(--prose); padding: 6px 2px; }
+.notice { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); }
+.notice strong { color: var(--fg); }
+
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--bg); color: var(--fg); width: min(560px, calc(100vw - 32px)); padding: 22px; max-height: calc(100vh - 32px); overflow: auto; }
+dialog::backdrop { background: var(--scrim); }
+.dialog-title { font: 600 1.15rem/1.2 var(--display); margin-bottom: 8px; }
+.dialog-lede { color: var(--muted); margin-bottom: 16px; font-size: 15px; }
+.fields { display: grid; gap: 14px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-size: 13px; color: var(--muted); }
+.field textarea { min-height: 92px; resize: vertical; font: 400 15.5px/1.45 var(--prose); }
+.row { display: grid; gap: 14px; }
+@media (min-width: 520px) { .row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.form-error { color: var(--ember); font-size: 13.5px; min-height: 1.2em; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 40; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; max-width: calc(100vw - 32px); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+.howto { color: var(--muted); font-size: 14px; display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 18px; }
+.howto code { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: block; overflow-x: auto; white-space: pre; color: var(--fg); }
+@media (prefers-reduced-motion: no-preference) {
+  .level[data-state="here"] .level-mark { animation: torch 3.2s ease-in-out infinite; }
+  @keyframes torch { 50% { box-shadow: 0 0 0 9px transparent; } }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="wordmark" href="/"><img src="/media/icon.png" alt="" width="30" height="30">The Dungeon Door</a>
+    <nav class="topnav" aria-label="Site">
+      <a class="optional" href="/#play">How it plays</a>
+      <a href="/quest-log" aria-current="page">Quest log</a>
+      <a href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap page">
+  <header class="masthead">
+    <p class="eyebrow">Building The Dungeon Door</p>
+    <h1>Quest Log</h1>
+    <p class="lede" id="lede">Where the game stands, what's in progress, and what comes next.</p>
+    <div class="position" id="position" aria-live="polite"></div>
+  </header>
+
+  <div class="overview">
+    <section aria-labelledby="h-descent">
+      <div class="section-head">
+        <h2 class="kicker" id="h-descent">The descent</h2>
+        <span class="hint">Each level is a milestone. Select one to see its tasks.</span>
+      </div>
+      <ol class="levels" id="levels"></ol>
+    </section>
+    <div class="stack">
+      <section aria-labelledby="h-areas">
+        <div class="section-head">
+          <h2 class="kicker" id="h-areas">Workstreams</h2>
+          <span class="hint">Select one to filter the board.</span>
+        </div>
+        <div class="areas" id="areas"></div>
+      </section>
+      <section aria-labelledby="h-moves">
+        <div class="section-head"><h2 class="kicker" id="h-moves">Latest moves</h2></div>
+        <ul class="moves" id="moves"></ul>
+      </section>
+    </div>
+  </div>
+
+  <section aria-labelledby="h-tasks">
+    <div class="section-head">
+      <h2 class="kicker" id="h-tasks">Tasks</h2>
+      <span class="hint" id="filter-note"></span>
+    </div>
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Search tasks" aria-label="Search tasks">
+      <select id="filter-area" aria-label="Filter by workstream"></select>
+      <select id="filter-owner" aria-label="Filter by owner"></select>
+      <select id="filter-level" aria-label="Filter by level"></select>
+      <button class="btn quiet small" id="clear-filters" type="button" hidden>Clear filters</button>
+      <span class="spacer"></span>
+      <span class="whoami" id="whoami" hidden></span>
+      <button class="btn small" id="sign-in" type="button">Team sign-in</button>
+      <button class="btn primary small" id="add-task" type="button" hidden>Add a task</button>
+    </div>
+    <div id="board-notice"></div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section class="howto" aria-label="Adding tasks from a script">
+    <div><strong style="color:var(--fg)">On the team?</strong> Sign in with your personal quest key to add and move tasks here. Assistants can do the same from a script:</div>
+    <code>curl -X POST https://the-dungeon-door.vercel.app/api/quests \
+  -H "x-quest-key: $QUEST_KEY" -H "content-type: application/json" \
+  -d '{"title": "What needs doing", "area": "rules", "milestone": "armory", "owner": "unclebob"}'</code>
+    <div>Change one with <span class="num">PATCH /api/quests?id=…</span> (for example <span class="num">{"status": "done"}</span>). Read the whole board with <span class="num">GET /api/quests</span>.</div>
+  </section>
+</main>
+
+<footer class="sitefoot">
+  <div class="wrap">
+    <span class="grow">The Dungeon Door. An independent game, still being built.</span>
+    <a href="/">Home</a>
+    <a href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<dialog id="task-dialog" aria-labelledby="dialog-title">
+  <form id="task-form" method="dialog" novalidate>
+    <div class="dialog-title" id="dialog-title">Add a task</div>
+    <div class="fields">
+      <div class="field"><label for="f-title">What needs doing</label><input id="f-title" maxlength="140" autocomplete="off" required></div>
+      <div class="row">
+        <div class="field"><label for="f-area">Workstream</label><select id="f-area"></select></div>
+        <div class="field"><label for="f-owner">Owner</label><select id="f-owner"></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="f-level">Level</label><select id="f-level"></select></div>
+        <div class="field"><label for="f-status">Status</label><select id="f-status"></select></div>
+      </div>
+      <div class="field"><label for="f-notes">Notes (optional)</label><textarea id="f-notes" maxlength="1200"></textarea></div>
+      <div class="field"><label for="f-link">Link (optional, https://…)</label><input id="f-link" inputmode="url" maxlength="300" autocomplete="off" placeholder="https://github.com/…"></div>
+      <div class="form-error" id="form-error" role="alert"></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn primary" id="f-save" type="submit">Add task</button>
+      <button class="btn" id="f-cancel" type="button">Cancel</button>
+      <span class="spacer"></span>
+      <button class="btn danger" id="f-delete" type="button" hidden>Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="key-dialog" aria-labelledby="key-title">
+  <form id="key-form" method="dialog" novalidate>
+    <div class="dialog-title" id="key-title">Team sign-in</div>
+    <p class="dialog-lede">Paste your personal quest key. It stays in this browser, and everything you add or move is marked with your name.</p>
+    <div class="fields">
+      <div class="field"><label for="k-key">Quest key</label><input id="k-key" type="password" autocomplete="off" spellcheck="false" required></div>
+      <div class="form-error" id="key-error" role="alert"></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn primary" id="k-save" type="submit">Sign in</button>
+      <button class="btn" id="k-cancel" type="button">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  const STATUSES = [{ id: "todo", name: "To do" }, { id: "doing", name: "In progress" }, { id: "done", name: "Done" }];
+  const CHANGE_WORDS = { added: "added", started: "started", finished: "finished", reopened: "reopened", edited: "edited" };
+  const DONE_PREVIEW = 6;
+  const KEY_SLOT = "dd.questKey";
+  const REFRESH_MS = 20000;
+
+  const state = {
+    tasks: [], meta: null, people: [], loaded: false, problem: null, me: null, key: null,
+    filter: { area: "", owner: "", level: "", q: "" }, showAllDone: false, busy: new Set(),
+    editing: null, confirmDelete: false,
+  };
+  let toastTimer = null;
+  const $ = (id) => document.getElementById(id);
+
+  /** Tiny DOM builder. Text always goes in as text, never markup. */
+  function el(tag, props, ...kids) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props || {})) {
+      if (value == null || value === false) continue;
+      if (key === "class") node.className = value;
+      else if (key === "text") node.textContent = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value === true ? "" : value);
+    }
+    for (const kid of kids.flat(Infinity)) {
+      if (kid == null || kid === false) continue;
+      node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+    return node;
+  }
+
+  const milestones = () => (state.meta && Array.isArray(state.meta.milestones) ? state.meta.milestones : []);
+  const areas = () => (state.meta && Array.isArray(state.meta.areas) ? state.meta.areas : []);
+  const person = (id) => state.people.find((p) => p.id === id) || null;
+  const nameOf = (list, id, fallback) => (list.find((x) => x.id === id) || {}).name || fallback;
+  const levelIndex = (id) => milestones().findIndex((m) => m.id === id);
+  const levelLabel = (id) => { const i = levelIndex(id); return i < 0 ? "" : "Level " + (ROMAN[i] || i + 1); };
+  const safeUrl = (value) => (typeof value === "string" && /^https:\/\//i.test(value.trim()) ? value.trim() : "");
+  const avatar = (p, size) => (p ? el("img", { class: "avatar" + (size ? " " + size : ""), src: p.avatar, alt: "", loading: "lazy", title: p.name }) : null);
+
+  function count(list) {
+    const c = { todo: 0, doing: 0, done: 0, total: list.length };
+    for (const t of list) c[t.status === "done" ? "done" : t.status === "doing" ? "doing" : "todo"]++;
+    return c;
+  }
+
+  function bar(c, thin) {
+    const pct = (n) => (c.total ? (n / c.total) * 100 : 0) + "%";
+    return el("div", { class: "bar" + (thin ? " thin" : ""), role: "img",
+      "aria-label": c.done + " of " + c.total + " done" + (c.doing ? ", " + c.doing + " in progress" : "") },
+      el("i", { class: "done", style: "width:" + pct(c.done) }), el("i", { class: "doing", style: "width:" + pct(c.doing) }));
+  }
+
+  function ago(iso) {
+    const t = Date.parse(iso);
+    if (!t) return "";
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 90) return "just now";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " h ago";
+    if (s < 86400 * 14) return Math.round(s / 86400) + " d ago";
+    return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  /** The level the party stands on: the first one with unfinished work. */
+  function levelStates() {
+    const list = milestones().map((m) => ({ m, c: count(state.tasks.filter((t) => t.milestone === m.id)) }));
+    let here = list.findIndex((x) => x.c.total === 0 || x.c.done < x.c.total);
+    if (here < 0) here = list.length;
+    return list.map((x, i) => ({ ...x, state: i < here ? "cleared" : i === here ? "here" : "ahead" }));
+  }
+
+  const problemText = () => (state.loaded
+    ? "The quest log can't be reached right now, so this may be out of date."
+    : "The quest log can't be reached yet. It will appear here when the connection returns.");
+
+  // ---------- Rendering ----------
+
+  function renderPosition() {
+    const box = $("position");
+    box.replaceChildren();
+    if (state.meta && state.meta.summary) $("lede").textContent = state.meta.summary;
+    if (!state.loaded) {
+      box.append(el("div", { class: "position-count", text: state.problem ? problemText() : "Loading the quest log…" }));
+      return;
+    }
+    const all = count(state.tasks);
+    const levels = levelStates();
+    const here = levels.find((x) => x.state === "here");
+    const where = !levels.length ? "No levels mapped yet"
+      : here ? "The party stands at " + levelLabel(here.m.id) + " · " + here.m.name : "Every level is cleared";
+    box.append(
+      el("div", { class: "position-line" },
+        el("div", { class: "position-where", text: where }),
+        el("div", { class: "position-count num", text: all.done + " of " + all.total + " tasks done" + (all.doing ? " · " + all.doing + " in progress" : "") })),
+      bar(all));
+    const facts = state.meta && Array.isArray(state.meta.facts) ? state.meta.facts : [];
+    if (facts.length) {
+      box.append(el("dl", { class: "facts" }, facts.map((f) => {
+        const href = safeUrl(f.href);
+        return el("div", null, el("dt", { text: f.label }),
+          el("dd", null, href ? el("a", { href, rel: "noopener", text: f.value }) : String(f.value || "")));
+      })));
+    }
+    if (state.problem) box.append(el("div", { class: "position-count", text: problemText() }));
+  }
+
+  function renderLevels() {
+    const list = $("levels");
+    list.replaceChildren();
+    const levels = levelStates();
+    if (!levels.length) { list.append(el("li", { class: "empty", text: state.loaded ? "No levels have been mapped yet." : "…" })); return; }
+    levels.forEach((x, i) => {
+      const pressed = state.filter.level === x.m.id;
+      list.append(el("li", { class: "level", "data-state": x.state },
+        el("div", { class: "level-mark", "aria-hidden": "true", text: x.state === "cleared" ? "✓" : ROMAN[i] || String(i + 1) }),
+        el("button", { class: "level-body", type: "button", "aria-pressed": String(pressed), onclick: () => setFilter("level", pressed ? "" : x.m.id, true) },
+          el("span", { class: "level-name" }, el("span", { text: x.m.name }),
+            x.state === "here" ? el("span", { class: "here-tag", text: "The party is here" }) : null),
+          el("span", { class: "level-blurb", text: x.m.blurb || "" }),
+          el("span", { class: "level-meter" }, bar(x.c, true),
+            el("span", { class: "num", text: x.c.total ? x.c.done + "/" + x.c.total : "no tasks yet" })))));
+    });
+  }
+
+  function renderAreas() {
+    const box = $("areas");
+    box.replaceChildren();
+    if (!areas().length) { box.append(el("div", { class: "empty", text: state.loaded ? "No workstreams yet." : "…" })); return; }
+    for (const a of areas()) {
+      const mine = state.tasks.filter((t) => t.area === a.id);
+      const c = count(mine);
+      const owners = [...new Set(mine.filter((t) => t.status !== "done" && t.owner).map((t) => t.owner))].map(person).filter(Boolean);
+      const pressed = state.filter.area === a.id;
+      box.append(el("button", { class: "area", type: "button", "aria-pressed": String(pressed), onclick: () => setFilter("area", pressed ? "" : a.id, true) },
+        el("span", { class: "area-name", text: a.name }),
+        bar(c, true),
+        el("span", { class: "area-counts num", text: c.total ? c.done + " done · " + c.doing + " in progress · " + c.todo + " to do" : "No tasks yet" }),
+        el("span", { class: "area-owners" },
+          owners.length ? [owners.map((p) => avatar(p, "tiny")), owners.map((p) => p.name).join(", ")]
+            : c.todo + c.doing ? "Open work is unassigned" : "Nothing open")));
+    }
+  }
+
+  function renderMoves() {
+    const list = $("moves");
+    list.replaceChildren();
+    const recent = [...state.tasks].filter((t) => t.updatedAt).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)).slice(0, 6);
+    if (!recent.length) { list.append(el("li", { class: "empty", text: state.loaded ? "Nothing has moved yet." : "…" })); return; }
+    for (const t of recent) {
+      const who = person(t.updatedBy);
+      const meta = [CHANGE_WORDS[t.lastChange] || "updated", who ? "by " + who.name : "", ago(t.updatedAt)].filter(Boolean).join(" · ");
+      list.append(el("li", null,
+        avatar(who) || el("span", { class: "dot " + (t.status || "todo"), style: "margin:9px 0 0 9px", "aria-hidden": "true" }),
+        el("span", null, el("span", { class: "move-what", text: t.title || "Untitled" }), el("span", { class: "move-meta", text: meta }))));
+    }
+  }
+
+  function visibleTasks() {
+    const f = state.filter, q = f.q.trim().toLowerCase();
+    return state.tasks.filter((t) =>
+      (!f.area || t.area === f.area) &&
+      (!f.owner || (f.owner === "~none" ? !t.owner : t.owner === f.owner)) &&
+      (!f.level || t.milestone === f.level) &&
+      (!q || ((t.title || "") + " " + (t.notes || "")).toLowerCase().includes(q)));
+  }
+
+  function sortFor(status, list) {
+    const stamp = (t, key) => t[key] || "";
+    if (status === "todo") {
+      return list.sort((a, b) => {
+        const la = levelIndex(a.milestone), lb = levelIndex(b.milestone);
+        return (la < 0 ? 99 : la) - (lb < 0 ? 99 : lb) || (stamp(a, "createdAt") < stamp(b, "createdAt") ? -1 : 1);
+      });
+    }
+    return list.sort((a, b) => (stamp(a, "updatedAt") < stamp(b, "updatedAt") ? 1 : -1));
+  }
+
+  function renderBoard() {
+    const board = $("board"), notice = $("board-notice");
+    board.replaceChildren();
+    notice.replaceChildren();
+    $("add-task").hidden = !(state.loaded && state.me && state.meta);
+    if (!state.loaded) { notice.append(el("div", { class: "notice", text: state.problem ? problemText() : "Loading tasks…" })); return; }
+    if (!state.tasks.length) {
+      notice.append(el("div", { class: "notice" }, el("strong", { text: "No tasks yet. " }),
+        state.me ? "Use “Add a task” to write the first one." : "They will appear here as the team adds them."));
+      return;
+    }
+    const shown = visibleTasks(), f = state.filter;
+    const filtered = !!(f.area || f.owner || f.level || f.q.trim());
+    $("clear-filters").hidden = !filtered;
+    $("filter-note").textContent = filtered ? "Showing " + shown.length + " of " + state.tasks.length : state.tasks.length + " in all";
+    for (const s of STATUSES) {
+      const list = sortFor(s.id, shown.filter((t) => (t.status || "todo") === s.id));
+      const column = el("div", { class: "column" },
+        el("div", { class: "column-head" }, el("span", { class: "dot " + s.id, "aria-hidden": "true" }), s.name,
+          el("span", { class: "count num", text: String(list.length) })));
+      const clip = s.id === "done" && !state.showAllDone && !filtered && list.length > DONE_PREVIEW;
+      const cards = clip ? list.slice(0, DONE_PREVIEW) : list;
+      if (!cards.length) column.append(el("div", { class: "empty", text: filtered ? "Nothing here matches." : s.id === "doing" ? "Nothing in progress." : "Nothing here." }));
+      for (const t of cards) column.append(taskCard(t));
+      if (clip) column.append(el("button", { class: "btn quiet small", type: "button", text: "Show all " + list.length + " done", onclick: () => { state.showAllDone = true; renderBoard(); } }));
+      board.append(column);
+    }
+  }
+
+  function taskCard(t) {
+    const status = t.status || "todo", owner = person(t.owner);
+    const chips = el("div", { class: "chips" },
+      owner ? el("span", { class: "chip owner" }, avatar(owner, "tiny"), owner.name) : el("span", { class: "chip", text: "Unassigned" }),
+      t.area ? el("span", { class: "chip", text: nameOf(areas(), t.area, t.area) }) : null,
+      levelLabel(t.milestone) ? el("span", { class: "chip", title: nameOf(milestones(), t.milestone, ""), text: levelLabel(t.milestone) }) : null);
+    const foot = el("div", { class: "task-foot" });
+    if (state.me) {
+      foot.append(
+        el("select", { id: "status-" + t.id, "aria-label": "Status of " + (t.title || "task"), disabled: state.busy.has(t.id), onchange: (e) => changeStatus(t, e.target.value) },
+          STATUSES.map((s) => el("option", { value: s.id, selected: s.id === status, text: s.name }))),
+        el("button", { class: "btn quiet small", type: "button", text: "Edit", onclick: () => openDialog(t) }));
+    }
+    const href = safeUrl(t.link);
+    if (href) foot.append(el("a", { class: "task-link", href, rel: "noopener", text: linkLabel(href) }));
+    return el("article", { class: "task", "data-status": status },
+      el("h3", { class: "task-title", text: t.title || "Untitled" }),
+      t.notes ? el("p", { class: "task-notes", text: t.notes }) : null, chips, foot.childNodes.length ? foot : null);
+  }
+
+  function linkLabel(href) {
+    const m = href.match(/github\.com\/[^/]+\/[^/]+\/(pull|issues)\/(\d+)/i);
+    if (m) return (m[1].toLowerCase() === "pull" ? "Pull request #" : "Issue #") + m[2];
+    try { return new URL(href).hostname.replace(/^www\./, ""); } catch { return "Link"; }
+  }
+
+  function renderWho() {
+    const who = $("whoami");
+    who.replaceChildren();
+    who.hidden = !state.me;
+    $("sign-in").textContent = state.me ? "Sign out" : "Team sign-in";
+    if (state.me) who.append(avatar(state.me), el("span", { text: state.me.name }));
+  }
+
+  function fillSelect(select, options, value, placeholder) {
+    select.replaceChildren();
+    if (placeholder != null) select.append(el("option", { value: "", text: placeholder }));
+    for (const o of options) select.append(el("option", { value: o.id, text: o.name }));
+    select.value = [...select.options].some((o) => o.value === value) ? value : "";
+  }
+
+  function renderFilters() {
+    fillSelect($("filter-area"), areas(), state.filter.area, "All workstreams");
+    fillSelect($("filter-owner"), [...state.people, { id: "~none", name: "Unassigned" }], state.filter.owner, "Anyone");
+    fillSelect($("filter-level"), milestones().map((m) => ({ id: m.id, name: levelLabel(m.id) + " · " + m.name })), state.filter.level, "All levels");
+  }
+
+  function renderAll() { renderPosition(); renderLevels(); renderAreas(); renderMoves(); renderBoard(); renderWho(); }
+
+  function setFilter(key, value, scroll) {
+    state.filter[key] = value;
+    renderFilters(); renderLevels(); renderAreas(); renderBoard();
+    if (scroll && value) $("h-tasks").scrollIntoView({ block: "start" });
+  }
+
+  function toast(message) {
+    const box = $("toast");
+    box.textContent = message;
+    box.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { box.hidden = true; }, 4200);
+  }
+
+  // ---------- Talking to the server ----------
+
+  async function api(method, path, body) {
+    const headers = {};
+    if (body) headers["content-type"] = "application/json";
+    if (state.key) headers["x-quest-key"] = state.key;
+    const response = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data.error || "Request failed"), { status: response.status });
+    return data;
+  }
+
+  let filtersKey = "";
+  async function refresh() {
+    try {
+      const board = await api("GET", "/api/quests");
+      state.tasks = board.tasks || [];
+      state.meta = board.meta || null;
+      state.people = board.people || [];
+      state.loaded = true;
+      state.problem = null;
+    } catch {
+      state.problem = "unreachable";
+    }
+    const key = JSON.stringify([areas(), milestones(), state.people.map((p) => p.id)]);
+    if (key !== filtersKey) { filtersKey = key; renderFilters(); }
+    // Don't redraw the board under an open dialog or a status menu being used.
+    if (!$("task-dialog").open && !(document.activeElement && document.activeElement.id.startsWith("status-"))) renderAll();
+  }
+
+  function writeFailed(error) {
+    if (error.status === 401) {
+      signOut();
+      toast("That quest key is no longer valid. Sign in again.");
+    } else {
+      toast(error.status === 400 || error.status === 404 ? error.message : "That didn't save. Check your connection and try again.");
+    }
+  }
+
+  async function changeStatus(task, next) {
+    if (state.busy.has(task.id) || next === (task.status || "todo")) return;
+    state.busy.add(task.id);
+    try {
+      await api("PATCH", "/api/quests?id=" + encodeURIComponent(task.id), { status: next });
+    } catch (error) {
+      writeFailed(error);
+    } finally {
+      state.busy.delete(task.id);
+      document.activeElement && document.activeElement.blur();
+      await refresh();
+    }
+  }
+
+  function openDialog(task) {
+    state.editing = task || null;
+    state.confirmDelete = false;
+    const here = levelStates().find((x) => x.state === "here");
+    fillSelect($("f-area"), areas(), task ? task.area : state.filter.area || (areas()[0] || {}).id || "");
+    fillSelect($("f-owner"), state.people, task ? task.owner || "" : state.me ? state.me.id : "", "Unassigned");
+    fillSelect($("f-level"), milestones().map((m) => ({ id: m.id, name: levelLabel(m.id) + " · " + m.name })),
+      task ? task.milestone || "" : state.filter.level || (here ? here.m.id : ""), "No level");
+    fillSelect($("f-status"), STATUSES, task ? task.status || "todo" : "todo");
+    $("f-title").value = task ? task.title || "" : "";
+    $("f-notes").value = task ? task.notes || "" : "";
+    $("f-link").value = task ? task.link || "" : "";
+    $("form-error").textContent = "";
+    $("dialog-title").textContent = task ? "Edit task" : "Add a task";
+    $("f-save").textContent = task ? "Save changes" : "Add task";
+    $("f-delete").hidden = !task;
+    $("f-delete").textContent = "Delete";
+    $("task-dialog").showModal();
+    $("f-title").focus();
+  }
+
+  async function saveDialog(event) {
+    event.preventDefault();
+    const title = $("f-title").value.trim(), link = $("f-link").value.trim();
+    if (!title) { $("form-error").textContent = "Give the task a short title."; $("f-title").focus(); return; }
+    if (link && !safeUrl(link)) { $("form-error").textContent = "Links must start with https://"; $("f-link").focus(); return; }
+    const fields = { title, area: $("f-area").value, owner: $("f-owner").value, milestone: $("f-level").value,
+      status: $("f-status").value || "todo", notes: $("f-notes").value.trim(), link };
+    const editing = state.editing;
+    $("f-save").disabled = true;
+    try {
+      if (editing) await api("PATCH", "/api/quests?id=" + encodeURIComponent(editing.id), fields);
+      else await api("POST", "/api/quests", fields);
+      $("task-dialog").close();
+      toast(editing ? "Saved." : "Task added.");
+    } catch (error) {
+      if (error.status === 400) { $("form-error").textContent = error.message; return; }
+      $("task-dialog").close();
+      writeFailed(error);
+    } finally {
+      $("f-save").disabled = false;
+      refresh();
+    }
+  }
+
+  async function deleteFromDialog() {
+    const task = state.editing;
+    if (!task) return;
+    if (!state.confirmDelete) { state.confirmDelete = true; $("f-delete").textContent = "Delete for everyone?"; return; }
+    $("f-delete").disabled = true;
+    try {
+      await api("DELETE", "/api/quests?id=" + encodeURIComponent(task.id));
+      $("task-dialog").close();
+      toast("Task deleted.");
+    } catch (error) {
+      $("task-dialog").close();
+      writeFailed(error);
+    } finally {
+      $("f-delete").disabled = false;
+      refresh();
+    }
+  }
+
+  // ---------- Team sign-in ----------
+
+  const remembered = () => { try { return localStorage.getItem(KEY_SLOT); } catch { return null; } };
+  const remember = (key) => { try { key ? localStorage.setItem(KEY_SLOT, key) : localStorage.removeItem(KEY_SLOT); } catch { /* private window */ } };
+
+  async function signIn(key) {
+    state.key = key;
+    try {
+      state.me = (await api("GET", "/api/quest-me")).person;
+      remember(key);
+      return true;
+    } catch (error) {
+      state.key = null;
+      state.me = null;
+      if (error.status === 401) remember(null);
+      return false;
+    }
+  }
+
+  function signOut() {
+    state.key = null;
+    state.me = null;
+    remember(null);
+    renderAll();
+  }
+
+  async function submitKey(event) {
+    event.preventDefault();
+    const key = $("k-key").value.trim();
+    if (!key) { $("key-error").textContent = "Paste your quest key."; return; }
+    $("k-save").disabled = true;
+    const ok = await signIn(key);
+    $("k-save").disabled = false;
+    if (!ok) { $("key-error").textContent = "That key isn't recognised. Check it with whoever sent it to you."; return; }
+    $("k-key").value = "";
+    $("key-dialog").close();
+    renderAll();
+    toast("Signed in as " + state.me.name + ".");
+  }
+
+  $("q").addEventListener("input", (e) => { state.filter.q = e.target.value; renderBoard(); });
+  $("filter-area").addEventListener("change", (e) => setFilter("area", e.target.value));
+  $("filter-owner").addEventListener("change", (e) => setFilter("owner", e.target.value));
+  $("filter-level").addEventListener("change", (e) => setFilter("level", e.target.value));
+  $("clear-filters").addEventListener("click", () => {
+    state.filter = { area: "", owner: "", level: "", q: "" };
+    $("q").value = "";
+    renderFilters(); renderLevels(); renderAreas(); renderBoard();
+  });
+  $("add-task").addEventListener("click", () => openDialog(null));
+  $("task-form").addEventListener("submit", saveDialog);
+  $("f-cancel").addEventListener("click", () => $("task-dialog").close());
+  $("f-delete").addEventListener("click", deleteFromDialog);
+  $("sign-in").addEventListener("click", () => {
+    if (state.me) { signOut(); toast("Signed out."); return; }
+    $("key-error").textContent = "";
+    $("key-dialog").showModal();
+    $("k-key").focus();
+  });
+  $("key-form").addEventListener("submit", submitKey);
+  $("k-cancel").addEventListener("click", () => $("key-dialog").close());
+
+  (async () => {
+    renderFilters();
+    renderAll();
+    const saved = remembered();
+    await Promise.all([refresh(), saved ? signIn(saved) : null]);
+    renderAll();
+    setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  })();
+})();
+</script>
+</body>
+</html>
