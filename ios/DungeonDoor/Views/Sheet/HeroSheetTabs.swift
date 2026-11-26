@@ -281,6 +281,12 @@ struct CombatTab: View {
                                  spoken: "Exhaustion level \(exhaustion) of 6",
                                  detail: rules.condition("exhaustion")))
         }
+        if let resists = live?.standing.resistances, !resists.isEmpty {
+            rows.append(SheetRow(id: "resistances", title: "Resistances",
+                                 tags: resists.map { SheetRow.Tag(text: SRD.name($0), tint: Palette.verdigris) },
+                                 subtitle: "Takes half damage of \(resists.count == 1 ? "this kind" : "these kinds").",
+                                 spoken: "Resists \(resists.map { SRD.name($0) }.joined(separator: ", ")) damage"))
+        }
         if sheet.revivalPenalty > 0 {
             let penalty = sheet.revivalPenalty
             rows.append(SheetRow(id: "revival", title: "Weakened by the ordeal",

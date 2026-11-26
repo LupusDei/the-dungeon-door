@@ -368,7 +368,8 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
 Two scripts play the engine with bots, for nothing (`server/`):
 
 - `npm run fights` plays the fights a mapped dungeon rolls, straight through `play/fight.ts`, and
-  reports won / foes fled / lost and how many heroes died.
+  reports won / foes fled / lost and how many heroes died. `--light dark` fights them in an unlit room
+  and `--race dwarf` builds the party from another species (who sees in the dark decides a lot).
 - `npm run playtest` plays whole games through the API handlers with the fake DM and reports scenes,
   fights, deaths, levels gained and anything that broke. `--dungeon none --fights 2` makes the DM offer
   a fight of two monsters in every scene.

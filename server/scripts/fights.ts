@@ -4,11 +4,13 @@
  *
  *   npm run fights                         # 400 fights each for a few level-1 parties
  *   npm run fights -- --fights 2000 --party fighter,cleric --level 3
+ *   npm run fights -- --light dark --race human    # in an unlit room (bright unless given): who is Blinded
  */
 import { heroSheet } from '../lib/characters.ts';
 import { autoLevelUp, fightRound, startFight } from '../lib/play/fight.ts';
 import type { PartyState } from '../lib/play/state.ts';
 import { generateDungeon } from '../lib/rules/dungeon.ts';
+import type { LightLevel } from '../lib/rules/light.ts';
 import { awardXp } from '../lib/rules/leveling.ts';
 import { encounterBudget, monsters } from '../lib/rules/monsters.ts';
 import { srd } from '../lib/rules/srd.ts';
@@ -19,12 +21,14 @@ function arg(name: string, fallback: string): string {
 }
 const FIGHTS = Number(arg('fights', '400'));
 const LEVEL = Number(arg('level', '1'));
+const LIGHT = arg('light', 'bright') as LightLevel;
+const RACE = arg('race', 'human');
 const PARTIES = process.argv.includes('--party')
   ? [arg('party', 'fighter').split(',')]
   : [['fighter'], ['wizard'], ['rogue', 'cleric'], ['fighter', 'rogue', 'cleric', 'wizard'], ['barbarian', 'bard', 'druid', 'monk', 'paladin', 'warlock']];
 
 const hero = (characterClass: string, n: number) => {
-  const sheet = heroSheet({ id: `fights-${characterClass}-${n}`, name: `${characterClass} ${n}`, race: 'human', characterClass });
+  const sheet = heroSheet({ id: `fights-${characterClass}-${n}`, name: `${characterClass} ${n}`, race: RACE, characterClass });
   return LEVEL > 1 ? autoLevelUp(awardXp(sheet, srd().advancement[LEVEL - 1].xp)).sheet : sheet;
 };
 
@@ -50,7 +54,7 @@ for (const classes of PARTIES) {
     const foes = source.next().value as string[];
     const sheets = Object.fromEntries(classes.map((c, i) => [`p${i}`, hero(c, i)]));
     let party: PartyState = { version: 1, rng: 1000 + f, sheets };
-    const started = startFight(party, foes);
+    const started = startFight(party, foes, LIGHT);
     party = started.party;
     let combat = started.combat;
     let ended: string | null = null;

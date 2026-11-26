@@ -210,6 +210,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
     sight: "clear" | "dim" | "none"   // how the hero sees here: dim, Perception has Disadvantage; none,
                                       // Perception and Investigation fail and in a fight the hero is Blinded
     darkvision: number                // feet, from the species; 0 without
+    resistances: string[]             // damage types the hero takes half of, from species traits: ["poison"]
   }]
   combat: null | {
     round: number

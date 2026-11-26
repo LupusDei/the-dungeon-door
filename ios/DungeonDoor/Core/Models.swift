@@ -604,6 +604,8 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     let sight: String
     /// Feet of darkvision from the hero's species; 0 without.
     let darkvision: Int
+    /// Damage types the hero takes half of, from species traits: "poison", "fire".
+    let resistances: [String]
 
     var id: String { playerId }
     var isUp: Bool { !down && !dead }
@@ -641,6 +643,7 @@ extension HeroStanding {
         dragging = try c.value(.dragging, or: false)
         sight = try c.value(.sight, or: "clear")
         darkvision = try c.whole(.darkvision)
+        resistances = try c.value(.resistances, or: [])
     }
 }
 
