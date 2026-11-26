@@ -288,7 +288,7 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
 
 ### In the app
 
-The app (1.1 and later) shows all of the above: the hero's sheet (`Character.sheet`, `attacks`, the
+The app (0.2 and later) shows all of the above: the hero's sheet (`Character.sheet`, `attacks`, the
 reference text) on the hero page and during a game with live numbers from `rules.party`; the rules label
 under each choice; the fight (combatants in initiative order, the round's dice from `rules.results`, your
 hero's three actions); the dungeon map from `rules.dungeon.areas`; a background picker with a sheet
