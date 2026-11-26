@@ -236,6 +236,15 @@ export function caught(combat: CombatState, side: Combatant['side'], n: number, 
 // ---- telling the round ----
 
 type Names = (id: string) => string;
+/** Whose hit points are hidden (a foe's: rules/wounds.ts): what is done to them is told without numbers. */
+type Hidden = (id: string) => boolean;
+
+/** ", 7 damage" to a hero; nothing to a foe, whose wounds tell it. */
+const damageTold = (target: string, damage: number, hidden: Hidden) => (damage > 0 && !hidden(target) ? `, ${damage} damage` : '');
+
+/** What a spell did to one target: the HP it gave back (only heroes heal), or how it struck, with the damage to a hero. */
+const spellTold = (o: SpellOutcome, name: Names, hidden: Hidden): string =>
+  (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${struck(o)}${damageTold(o.target, o.damage, hidden)}`);
 const titled = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 /** What a hit's rider did: "Bryn fails the DC 10 CON save: Paralyzed.", "Bryn is Grappled.", "Bryn makes the DC 10 CON save." */
@@ -252,24 +261,22 @@ const struck = (o: SpellOutcome): string => {
   return o.save ? (o.save.success ? 'saves' : 'fails the save') : 'is struck';
 };
 
-const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names) => string } = {
+const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names, hidden: Hidden) => string } = {
   move: ({ actor, to, engage, dash, disengage }, name) => {
     const how = dash ? 'Dashes' : disengage ? 'Disengages' : 'moves';
     const where = to === 'engaged' ? `engage ${(engage ?? []).map(name).join(' and ')}` : to;
     return `${name(actor)} ${how} to ${where}.`;
   },
-  attack: ({ actor, result: r, reaction, rider }, name) =>
+  attack: ({ actor, result: r, reaction, rider }, name, hidden) =>
     `${reaction ? 'Opportunity Attack: ' : ''}${name(actor)} attacks ${name(r.target)} with ${r.attack}: ${r.roll.natural} (total ${r.roll.total}) vs AC ${r.ac}, ` +
-    (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.') + (rider ? ` ${riderLine(rider, name(r.target))}` : ''),
-  spell: ({ actor, spellId, outcomes }, name) =>
-    `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) =>
-      (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${struck(o)}`) +
-      (o.damage > 0 ? `, ${o.damage} damage` : '')).join('; ') + '.',
+    (r.hit ? `${r.critical ? 'critical hit' : 'hit'}${hidden(r.target) ? '' : ` for ${r.damage}`}.` : 'miss.') + (rider ? ` ${riderLine(rider, name(r.target))}` : ''),
+  spell: ({ actor, spellId, outcomes }, name, hidden) =>
+    `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) => spellTold(o, name, hidden)).join('; ') + '.',
   dodge: ({ actor, as }, name) => `${name(actor)}${as ? ` uses ${as}, and` : ''} dodges.`,
   other: ({ text }) => text,
-  power: ({ actor, power, dc, ability, outcomes }, name) =>
+  power: ({ actor, power, dc, ability, outcomes }, name, hidden) =>
     `${name(actor)} uses ${power} (DC ${dc} ${ability.toUpperCase()} save): ` + outcomes.map((o) =>
-      `${name(o.target)} ${o.success ? 'saves' : 'fails'}${o.damage > 0 ? `, ${o.damage} damage` : ''}${o.condition ? `, ${titled(o.condition)}` : ''}`).join('; ') + '.',
+      `${name(o.target)} ${o.success ? 'saves' : 'fails'}${damageTold(o.target, o.damage, hidden)}${o.condition ? `, ${titled(o.condition)}` : ''}`).join('; ') + '.',
   recharge: ({ actor, power, roll }, name) => `${name(actor)}: ${power} is ready again (d6: ${roll}).`,
   deathSave: ({ actor, status }, name) => `${name(actor)} makes a death save: ${status}.`,
   skip: ({ actor }, name) => `${name(actor)} cannot act.`,
@@ -279,7 +286,8 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
 
 function tell(before: CombatState, after: CombatState): string[] {
   const name: Names = (id) => after.combatants[id].name;
-  const events = after.log.slice(before.log.length).map((e) => (LINES[e.kind] as (x: CombatEvent, n: Names) => string)(e, name));
+  const hidden: Hidden = (id) => after.combatants[id].side === 'foes';
+  const events = after.log.slice(before.log.length).map((e) => (LINES[e.kind] as (x: CombatEvent, n: Names, h: Hidden) => string)(e, name, hidden));
   const fallen = Object.values(after.combatants).filter((c) => c.status === 'dead' && before.combatants[c.id].status !== 'dead');
   return [...events, ...woundsTold(before, after), ...fallen.map((c) => `${c.name} falls.`)];
 }

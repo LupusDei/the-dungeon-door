@@ -359,6 +359,24 @@ test('a monster power is told, and the condition it brings goes on the hero shee
   assert.equal(hard.party.sheets.p1.conditions, undefined, 'no condition, nothing on the sheet');
 });
 
+test('a foe\u2019s hurts are told without numbers (its hit points are hidden): a hit is just a hit, a spell says only who it struck or who saved; a hero\u2019s still say how much', () => {
+  const sure = (c: Combatant) => c.attacks.map((x) => ({ ...x, bonus: 50 }));
+  const start = startFight(party({ p1: fighter }), ['goblin-warrior']);
+  const { p1, 'foe-1': goblin } = start.combat.combatants;
+  const both = patch(start.combat, { p1: { attacks: sure(p1), hp: 500, maxHp: 500 }, 'foe-1': { attacks: sure(goblin), hp: 500, maxHp: 500 } });
+  const told = fightRound(start.party, both, { p1: { choiceId: 'a', roll: 15 } }).lines;
+  assert.ok(told.some((l) => /^Bryn attacks Goblin Warrior with [^:]+: 15 \(total \d+\) vs AC \d+, hit\.$/.test(l)), told.join('\n'));
+  assert.ok(told.some((l) => /^Goblin Warrior attacks Bryn with [^:]+: .* (critical hit|hit) for \d+\.$/.test(l)), told.join('\n'));
+  for (const [spell, line] of [['fire-bolt', /^Cleo casts Fire Bolt: Goblin Warrior is (hit|missed)\.$/], ['sacred-flame', /^Cleo casts Sacred Flame: Goblin Warrior (saves|fails the save)\.$/]] as const) {
+    const cleo = { ...caster([spell], []), spellcasting: { ...caster([spell], []).spellcasting!, ability: 'int' as const } };
+    const mage = startFight(party({ p2: cleo }), ['goblin-warrior']);
+    const first = { ...patch(mage.combat, { 'foe-1': { attacks: harmless, hp: 500, maxHp: 500 } }), order: ['p2', 'foe-1'], turn: 0 };
+    const cast = fightRound(mage.party, first, { p2: { choiceId: 'b', roll: 15 } }).lines;
+    assert.ok(cast.some((l) => line.test(l)), cast.join('\n'));
+    assert.ok(!cast.some((l) => /\d+ damage|hit for/.test(l)), cast.join('\n'));
+  }
+});
+
 test('a hit rider is told, and its condition goes on the hero sheet', () => {
   const start = startFight(party({ p1: fighter }), ['ghoul']);
   const sure = start.combat.combatants['foe-1'].attacks.map((a) => ({ ...a, bonus: 50 }));
@@ -444,7 +462,7 @@ test('Magic Missile is cast in a fight: it outscores Fire Bolt at level 1 (three
   assert.equal(sheet.spellcasting!.expended[0], 1);
   const round = fightRound(party({ p1: fighter, p2: mm }), hurt, { p1: { choiceId: 'c', roll: 10 }, p2: { choiceId: 'b', roll: 10 } });
   const line = round.lines.find((l) => l.startsWith(`${mm.name} casts Magic Missile: `))!;
-  assert.match(line, /^Cleo casts Magic Missile: Goblin Warrior 2 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage\.$/);
+  assert.match(line, /^Cleo casts Magic Missile: Goblin Warrior 2 is struck; Goblin Warrior 1 is struck; Goblin Warrior 1 is struck\.$/);
 });
 
 test('a vote carries a move: one band before the action, a Dash instead of it, and leaving melee draws an opportunity attack', () => {
