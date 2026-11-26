@@ -11,6 +11,8 @@ import type { HazardKind } from '../rules/hazards.ts';
 import { modeOf } from '../rules/resolve.ts';
 import { isTrap } from '../rules/traps.ts';
 import { srd } from '../rules/srd.ts';
+import type { DungeonState } from './state.ts';
+import { wayLabel } from './ways.ts';
 
 export type RulesHook =
   | {
@@ -133,12 +135,12 @@ function hazardAmount(h: Extract<RulesHook, { kind: 'hazard' }>): string {
   return unit ? ` (${h[unit]} ${unit})` : '';
 }
 
-const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>) => string } = {
+const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>, dungeon: DungeonState | null) => string } = {
   check: (h) => `${rollName(h)} check${target(h)}${h.mode === 'best' ? ', one hero with help' : ''}${edgeLabel(h)}`,
   save: (h) => `${rollName(h)}, DC ${h.dc}${edgeLabel(h)}`,
   fight: (h) => `Fight: ${countedList(h.monsters, monsterName, (n, name) => `${n} ${name}s`)}`,
   rest: (h) => (h.rest === 'short' ? 'Short rest' : 'Long rest'),
-  move: (h) => `Go on (${h.exit})`,
+  move: (h, dungeon) => wayLabel(dungeon, h.exit),
   buy: (h) => `Buy ${countedList(h.items, itemName, times)}`,
   sell: (h) => `Sell ${countedList(h.items, itemName, times)}`,
   use: (h) => `Drink a ${itemName(h.item)}`,
@@ -148,5 +150,6 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   revive: () => 'Raise the dead',
 };
 
-/** What the app shows under the choice. */
-export const hookLabel = (hook: RulesHook): string => (LABELS[hook.kind] as (h: RulesHook) => string)(hook);
+/** What the app shows under the choice; a way on is named from where the party is in `dungeon` (play/ways.ts). */
+export const hookLabel = (hook: RulesHook, dungeon: DungeonState | null = null): string =>
+  (LABELS[hook.kind] as (h: RulesHook, d: DungeonState | null) => string)(hook, dungeon);

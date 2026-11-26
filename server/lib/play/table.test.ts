@@ -61,6 +61,16 @@ test('a choice keeps a hook that holds up and shows it as a label; a bad hook or
   assert.deepEqual(choiceView({ id: 'c', label: 'x', detail: 'y' }), { id: 'c', label: 'x', detail: 'y', rules: null });
 });
 
+test('a way on is labelled where it was offered, by the way and not the exit id, and keeps that label once the party has moved', () => {
+  const d = newRules([], 'fixed', 3, 4).dungeon!;
+  const exit = d.map.nodes[d.at].exits[0].id;
+  const go = storedChoice({ id: 'a', label: 'Onward', detail: '' }, { kind: 'move', exit }, d);
+  assert.match(choiceView(go).rules!, /^Go on \([a-z ]+\)$/);
+  assert.equal(go.rules, choiceView(go).rules, 'stored with the choice, so a resolved scene still reads as it did');
+  assert.equal(choiceView({ ...go, rules: undefined }).rules, 'Go on', 'a choice stored before labels were: never the exit id');
+  assert.equal(storedChoice({ id: 'b', label: 'x', detail: 'y' }, null, d).rules, null);
+});
+
 const scene = (choices: StoredScene['choices']): StoredScene => ({ index: 0, title: '', narration: '', imagePrompt: '', imageUrl: null, voices: {}, choices, isFinale: false, votes: [], outcome: null, chosenChoiceId: null, createdAt: '' });
 const resolution = (leaders: Resolution['leaders'], votes: [string, 'a' | 'b' | 'c', number][]): Resolution => ({
   scene: {} as Resolution['scene'], tally: { a: 0, b: 0, c: 0 }, abstained: [], rules: null, leaders,

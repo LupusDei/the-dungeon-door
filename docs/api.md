@@ -317,7 +317,9 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
 
 - **Choices with `rules`.** A choice may be a check ("Athletics check, DC 12"), a saving throw ("Dexterity
   save, DC 13"), a fight ("Fight: 2 Goblin Warriors"), a rest ("Short rest", "Long rest") or, in a
-  dungeon, a way on ("Through the locked door"). The party still goes with the most-voted choice. Ties go
+  dungeon, a way on, named by how it is closed and, once the party has been there, where it leads ("Go on
+  (locked door)", "Back to Narthex (open passage)"; ways alike are told apart: "Go on (second open
+  passage)"). It never shows an exit id, and it is fixed when the choice is offered. The party still goes with the most-voted choice. Ties go
   to the choice whose voters rolled highest. Every hero makes the check or save with their vote's d20
   (or a fresh one if they didn't vote) plus their own bonus. In 5.2 a natural 20 or 1 is not automatic on
   a check or save. The party succeeds if at least half the heroes do (5.2 group check). A failed save

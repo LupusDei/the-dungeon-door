@@ -14,7 +14,7 @@ import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } 
 import { startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
-import type { LevelUp, PartyState } from './state.ts';
+import type { DungeonState, LevelUp, PartyState } from './state.ts';
 import { pickChoice, playTurn, type FightNews, type RulesState } from './turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
@@ -48,9 +48,13 @@ const openPacks = (party: PartyState): PartyState =>
 export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | null =>
   party && { party: openPacks(party), combat, dungeon: dungeon && { ...dungeon, map: currentTraps(dungeon.map) } };
 
-export const storedChoice = (choice: Choice, hook: unknown): StoredChoice => ({ ...choice, hook: parseHook(hook) });
+/** A choice with its hook, if it holds up, and the hook's label from where the party is now. */
+export function storedChoice(choice: Choice, hook: unknown, dungeon: DungeonState | null = null): StoredChoice {
+  const parsed = parseHook(hook);
+  return { ...choice, hook: parsed, rules: parsed && hookLabel(parsed, dungeon) };
+}
 
-export const choiceView = ({ hook, ...choice }: StoredChoice): ChoiceView => ({ ...choice, rules: hook ? hookLabel(hook) : null });
+export const choiceView = ({ hook, rules, ...choice }: StoredChoice): ChoiceView => ({ ...choice, rules: rules ?? (hook ? hookLabel(hook) : null) });
 
 export interface EngineStep {
   state: RulesState;

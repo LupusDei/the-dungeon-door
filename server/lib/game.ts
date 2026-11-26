@@ -473,12 +473,12 @@ export function resolutionOf(game: Game, scene: StoredScene): Resolution {
   };
 }
 
-/** The DM's three choices, clipped; in a rules game each keeps its hook if the hook holds up. */
-function choicesOf(choices: DMChoice[], rules: boolean): StoredChoice[] {
+/** The DM's three choices, clipped; in a rules game (its state given) each keeps its hook if the hook holds up. */
+function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | null): StoredChoice[] {
   if (choices.length < 3) throw new Error(`the DM wrote ${choices.length} choices, not 3`);
   return choices.slice(0, 3).map((c, i) => {
     const choice = { id: CHOICE_IDS[i], label: clip(c.label.trim(), 80), detail: clip(c.detail.trim(), 300) };
-    return rules ? storedChoice(choice, c.rules) : choice;
+    return rules ? storedChoice(choice, c.rules, rules.dungeon) : choice;
   });
 }
 
@@ -497,7 +497,7 @@ async function writeOpening(code: string, origin: string): Promise<void> {
       narration: draft.narration.trim(),
       imagePrompt: draft.imagePrompt,
       imageUrl: null,
-      choices: choicesOf(draft.choices, game.party !== null),
+      choices: choicesOf(draft.choices, game.party && game),
       isFinale: false,
     };
     await store.saveScene(code, scene);
@@ -572,7 +572,7 @@ function planOf(game: Game, scene: StoredScene): Plan {
 /** The next scene's choices: a fight's Attack, Cast and Dodge, or the DM's. */
 function nextChoices(plan: Plan, draft: NextScene): StoredChoice[] {
   if (plan.rules?.combat) return COMBAT_CHOICES.map((c, i) => ({ id: CHOICE_IDS[i], ...c }));
-  return choicesOf(draft.choices, plan.rules !== null);
+  return choicesOf(draft.choices, plan.rules);
 }
 
 async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
