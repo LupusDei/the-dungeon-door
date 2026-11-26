@@ -15,6 +15,7 @@ import { partyRest } from './rest.ts';
 import { newlyDead, raiseTheDead, revivify } from './revive.ts';
 import type { CombatState, DungeonState, PartyState } from './state.ts';
 import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
+import { ambientLight, clockOf, lightUp, passTime, secondsFor } from './time.ts';
 import { partyHazard, springTrap } from './traps.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
@@ -106,8 +107,10 @@ function talk(s: RulesState, offered: readonly string[] | null | undefined, ball
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
   const moved = s.dungeon && enter(s.dungeon, exit);
   if (!moved) return done(s, ['That way is closed.']);
-  const here = { ...s, dungeon: moved.dungeon };
-  const lines = [`The party enters ${moved.node.name}: ${moved.node.purpose}.`];
+  const entered = { ...s, dungeon: moved.dungeon };
+  const lit = lightUp(s.party, ambientLight(entered));
+  const here = { ...entered, party: lit.party };
+  const lines = [`The party enters ${moved.node.name}: ${moved.node.purpose}.`, ...lit.lines];
   const found = arrival(moved.dungeon, moved.node);
   if (found.fight) return meet(here, found.fight, lines);
   const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
@@ -135,7 +138,17 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
 export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[]): RulesTurn {
-  if (s.combat) return combatRound(s, s.combat, ballots);
-  if (!hook) return done(s);
-  return (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(s, hook, ballots);
+  if (s.combat) return elapse(combatRound(s, s.combat, ballots), ROUND_SECONDS);
+  const played = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(s, hook, ballots) : done(s);
+  return elapse(played, secondsFor(hook), hook?.kind === 'rest');
+}
+
+const ROUND_SECONDS = 6;
+
+/** The turn's time passes: the light burns (put out to rest, and the time it has left kept), and is lit where needed. */
+function elapse(t: RulesTurn, seconds: number, resting = false): RulesTurn {
+  const ambient = ambientLight(t);
+  const timed = resting ? { party: { ...t.party, clock: clockOf(t.party) + seconds }, lines: [] } : passTime(t.party, seconds, ambient);
+  const lit = lightUp(timed.party, ambient);
+  return { ...t, party: lit.party, lines: [...t.lines, ...timed.lines, ...lit.lines] };
 }

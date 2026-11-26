@@ -6,6 +6,7 @@ import type { Dungeon } from '../rules/dungeon.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { Attitude } from './parley.ts';
+import type { Lit } from './time.ts';
 
 export type { CombatState } from '../rules/scene.ts';
 
@@ -17,6 +18,10 @@ export interface PartyState {
   sheets: Record<string, CharacterSheet>;
   /** The engine's lines for the last resolved scene (the API's rules.results). */
   results?: string[];
+  /** Seconds since the adventure began (play/time.ts); absent in games from before it: 0. */
+  clock?: number;
+  /** The light the party carries lit, if any (absent or null: none). */
+  lit?: Lit | null;
 }
 
 /** Where the party is in its dungeon, and what it has found and beaten there. */

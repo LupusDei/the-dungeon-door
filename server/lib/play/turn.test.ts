@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { heroSheet } from '../characters.ts';
+import { addItem } from '../rules/inventory.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { clearRoom, startDungeon } from './delve.ts';
 import { startFight } from './fight.ts';
@@ -21,9 +22,22 @@ test('ties go to the choice whose voters rolled highest; then to the first; no l
   assert.equal(pickChoice([], []), null);
 });
 
-test('a story choice (no hook) leaves everything as it was', () => {
+test('a story choice (no hook) only lets ten minutes pass', () => {
   const s = state();
-  assert.deepEqual(playTurn(s, null, ballots(5, 5)), { ...s, lines: [], success: null, fight: null });
+  assert.deepEqual(playTurn(s, null, ballots(5, 5)), { ...s, party: { ...s.party, clock: 600 }, lines: [], success: null, fight: null });
+});
+
+test('time passes with every turn: a dark place is lit, the light burns, a rest does not burn it, a combat round is 6 seconds', () => {
+  const torch = addItem({ ...fighter, equipment: [] }, 'torch', 2);
+  const dungeon = startDungeon('fixed', 7, [1], 6);
+  const into = playTurn(state({ party: party({ p1: torch }), dungeon }), { kind: 'move', exit: dungeon.map.nodes.r0.exits[0].id }, ballots(10, 10));
+  assert.equal(into.lines[1], 'Bryn lights a Torch (1 hour).', 'lit on the way in, before anything springs');
+  assert.equal(into.party.clock, 600);
+  const rested = playTurn({ ...into, combat: null }, { kind: 'rest', rest: 'long' }, []);
+  assert.deepEqual([rested.party.clock, rested.party.lit?.left], [600 + 8 * 3600, into.party.lit?.left]);
+  const fight = startFight(party(), ['goblin-warrior']);
+  const round = playTurn(state({ combat: fight.combat, party: { ...party(), lit: { source: 'torch', holder: 'p1', left: 60 } } }), null, ballots(10, 10));
+  assert.deepEqual([round.party.clock, round.party.lit?.left], [6, 54]);
 });
 
 test('a check: every hero rolls with their vote, the party succeeds or fails together, the dice move on', () => {
