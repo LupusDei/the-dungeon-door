@@ -88,6 +88,16 @@ export function concentrationCheck(rng: Rng, target: Combatant, damage: number, 
   return { dc, ...savingThrow(rng, target, 'con', dc, options) };
 }
 
+/** Feet of area per foe caught, by shape. */
+const FEET_PER_FOE: Readonly<Record<AreaShape, number>> = { Sphere: 5, Cylinder: 5, Emanation: 5, Cone: 10, Cube: 10, Line: 30 };
+
+/**
+ * How many foes an area catches when nobody places it on a grid (theatre of the mind): an original rule of
+ * thumb (CC0) — 1 + radius/5 for a sphere, cylinder or emanation, 1 + size/10 for a cone or cube, 1 + length/30
+ * for a line, rounded down. See docs/rules-design.md.
+ */
+export const areaCatch = (area: { shape: AreaShape; feet: number }): number => 1 + Math.floor(area.feet / FEET_PER_FOE[area.shape]);
+
 export interface Position { id: string; x: number; y: number }
 
 /**

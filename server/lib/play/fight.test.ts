@@ -69,6 +69,17 @@ test('the Ability Score Improvement: +2 to the best score below 20, or +1 to the
   assert.deepEqual(improvement(scores({ str: 20, dex: 19, con: 15 })).increases, { dex: 1, con: 1 });
 });
 
+test('an area spell catches as many foes as it can (areaCatch), the most wounded first', () => {
+  const { combat } = startFight(party(), ['goblin-warrior', 'goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
+  const pyro = { ...wizard, spellcasting: { ...wizard.spellcasting!, cantrips: [], prepared: ['burning-hands'] } };
+  const hurt = patch(combat, { 'foe-3': { hp: 1 }, 'foe-4': { hp: 0, status: 'dead' } });
+  const { action } = heroAction(hurt, pyro, 'p2', 'b', 12);
+  assert.deepEqual(action.kind === 'spell' && [action.cast.spellId, action.targets], ['burning-hands', ['foe-3', 'foe-1']], 'a 15-foot cone: two foes, never the dead');
+  const blast = { ...pyro, level: 5, spellcasting: { ...pyro.spellcasting!, prepared: ['fireball'], slots: [4, 3, 2, 0, 0, 0, 0, 0, 0], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0] } };
+  const { action: big } = heroAction(hurt, blast, 'p2', 'b', 12);
+  assert.deepEqual(big.kind === 'spell' && big.targets, ['foe-3', 'foe-1', 'foe-2'], 'a 20-foot sphere would take five: there are three left');
+});
+
 test('Cast: the caster’s best attack spell it can cast now; a leveled one spends its slot; no spell means Attack', () => {
   const { combat } = startFight(party(), ['goblin-warrior']);
   const spell = bestSpell(wizard)!;

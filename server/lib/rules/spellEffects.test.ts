@@ -4,7 +4,7 @@ import { heroCombatant, monsterCombatant } from './combatant.ts';
 import { monster } from './monsters.ts';
 import { scriptedRng } from './rng.ts';
 import { SAMPLE } from './sheet.fixture.ts';
-import { type Caster, casterOf, concentrationCheck, resolveSpell, targetsInRadius } from './spellEffects.ts';
+import { areaCatch, type Caster, casterOf, concentrationCheck, resolveSpell, targetsInRadius } from './spellEffects.ts';
 import type { Cast } from './spells.ts';
 import { RuleViolation } from './violation.ts';
 
@@ -95,4 +95,11 @@ test('a sphere, cylinder or emanation takes everyone within its radius on the 5-
   assert.deepEqual(targetsInRadius({ shape: 'Emanation', feet: 5 }, { x: 5, y: 1 }, positions), ['a', 'b', 'f']);
   assert.deepEqual(targetsInRadius({ shape: 'Cylinder', feet: 25 }, { x: 0, y: 0 }, positions), ['a', 'b', 'c', 'd', 'e', 'f']);
   assert.throws(() => targetsInRadius({ shape: 'Cone', feet: 15 }, { x: 0, y: 0 }, positions), violation(/give the targets of a Cone yourself/));
+});
+
+test('how many foes an unplaced area catches: 1 + radius/5 (sphere, cylinder, emanation), 1 + size/10 (cone, cube), 1 + length/30 (line)', () => {
+  const caught = (shape: Parameters<typeof areaCatch>[0]['shape'], feet: number) => areaCatch({ shape, feet });
+  assert.deepEqual([caught('Sphere', 20), caught('Sphere', 5), caught('Cylinder', 10), caught('Emanation', 14)], [5, 2, 3, 3]);
+  assert.deepEqual([caught('Cone', 15), caught('Cone', 60), caught('Cube', 10), caught('Cube', 9)], [2, 7, 2, 1]);
+  assert.deepEqual([caught('Line', 100), caught('Line', 29)], [4, 1]);
 });

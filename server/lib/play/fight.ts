@@ -13,6 +13,7 @@ import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { type Action, act, type CombatEvent, type CombatState, currentActor, monsterAction, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { beamsAt, castSpell, slotsLeft, spellDamageDice } from '../rules/spells.ts';
+import { areaCatch } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
 import { afterFight } from './dying.ts';
@@ -22,7 +23,7 @@ import type { PartyState } from './state.ts';
 export const MAX_ROUNDS = 10;
 export const COMBAT_CHOICES = [
   { label: 'Attack', detail: 'Strike the most wounded foe with your best weapon.' },
-  { label: 'Cast', detail: 'Hurl your best attack spell at the most wounded foe (or strike, if you have none).' },
+  { label: 'Cast', detail: 'Hurl your best attack spell at the most wounded foe; an area spell catches several (or strike, if you have none).' },
   { label: 'Dodge', detail: 'Keep your guard up: attacks against you have disadvantage until your next turn.' },
 ];
 
@@ -90,9 +91,15 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
   if (!spell) return { action: attackAction(combat, me, natural), sheet };
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
   const { saveDc, attackBonus } = sheet.spellcasting!;
-  const target = mostWounded(combat, me.side).id;
   const caster = { saveDc, attackBonus, modifier: attackBonus - sheet.proficiencyBonus };
-  return { action: { kind: 'spell', caster, cast, targets: Array(cast.beams).fill(target), natural }, sheet: spent };
+  const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area)) : Array<string>(cast.beams).fill(mostWounded(combat, me.side).id);
+  return { action: { kind: 'spell', caster, cast, targets, natural }, sheet: spent };
+}
+
+/** The `n` most wounded living foes (fewer if fewer are left), for an area spell. */
+function caught(combat: CombatState, side: Combatant['side'], n: number): string[] {
+  const foes = Object.values(combat.combatants).filter((c) => c.side !== side && living(c));
+  return foes.sort((a, b) => a.hp - b.hp).slice(0, n).map((c) => c.id);
 }
 
 // ---- telling the round ----
