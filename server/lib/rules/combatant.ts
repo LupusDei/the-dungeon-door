@@ -1,6 +1,7 @@
 /** Heroes and monsters in one shape for combat. A Combatant is plain JSON, stored inside the combat state. */
 import { type Ability, abilityModifier } from './abilities.ts';
 import type { DamageRoll, Monster } from './monsters.ts';
+import { heroResistances } from './defenses.ts';
 import { d20Modifier } from './rests.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { type Srd, type SrdWeapon, srd as bundledSrd } from './srd.ts';
@@ -79,7 +80,7 @@ export function heroCombatant(id: string, sheet: CharacterSheet, data: Srd = bun
     id, name: sheet.name, side: 'party', ac: sheet.armorClass, hp: sheet.hp, maxHp: sheet.maxHp,
     initiative: abilityModifier(sheet.abilityScores.dex) + worn, saveBonuses,
     attacks: (attacks.length > 0 ? attacks : [unarmedStrike(sheet)]).map((a) => ({ ...a, bonus: a.bonus + worn })),
-    resistances: [], vulnerabilities: [], immunities: [], conditionImmunities: [],
+    resistances: heroResistances(sheet), vulnerabilities: [], immunities: [], conditionImmunities: [],
     ...fresh(), xp: 0,
   };
 }

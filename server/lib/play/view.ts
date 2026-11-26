@@ -3,6 +3,7 @@
  * (docs/dungeon-master.md). Plain projections of the stored state.
  */
 import { passiveScore } from '../rules/checks.ts';
+import { heroResistances } from '../rules/defenses.ts';
 import { load } from '../rules/inventory.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
 import { encounterBudget, monsters } from '../rules/monsters.ts';
@@ -36,6 +37,8 @@ export interface HeroView {
   carried: number; capacity: number; dragLimit: number; dragging: boolean;
   /** How the hero sees here: clear, dim (Disadvantage on Perception) or none (effectively Blinded); feet of darkvision. */
   sight: Sight; darkvision: number;
+  /** Damage types the hero resists (species traits). */
+  resistances: string[];
 }
 
 /** The party's light: what it is, who carries it, minutes left; null when nothing burns. */
@@ -69,7 +72,7 @@ const heroView = (playerId: string, s: CharacterSheet, light: LightLevel): HeroV
   exhaustion: s.exhaustion, hitDiceLeft: s.level - s.hitDiceSpent, slotsLeft: slotsLeft(s),
   resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
   ...passives(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
-  ...load(s), sight: sightOf(s, light), darkvision: darkvision(s),
+  ...load(s), sight: sightOf(s, light), darkvision: darkvision(s), resistances: heroResistances(s),
 });
 
 const passives = (s: CharacterSheet) => ({

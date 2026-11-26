@@ -208,3 +208,11 @@ test('in "best" mode a hero who can see does the looking', () => {
   const r = groupRoll([{ playerId: 'p1', sheet: sharp, sight: 'none' }, { playerId: 'p2', sheet: SAMPLE, sight: 'clear' }], look, { p2: 15 }, scriptedRng([5, 5]));
   assert.equal(r.rolls[0].name, 'Bryn');
 });
+
+test('the damage of a save of a type the hero resists is halved', () => {
+  const hook = { kind: 'save' as const, ability: 'dex' as const, dc: 30, damage: '10', damageType: 'cold' };
+  const r = groupRoll([{ playerId: 'p1', sheet: { ...SAMPLE, traits: ['draconic-damage-resistance-cold'] } }, { playerId: 'p2', sheet: { ...SAMPLE, name: 'Ann' } }], hook, { p1: 2, p2: 2 }, scriptedRng([]));
+  assert.equal(r.lines.at(-1), 'Damage 10 cold: Bryn takes 5, Ann takes 10');
+  const untyped = groupRoll([{ playerId: 'p1', sheet: { ...SAMPLE, traits: ['draconic-damage-resistance-cold'] } }], { ...hook, damageType: null }, { p1: 2 }, scriptedRng([]));
+  assert.equal(untyped.lines.at(-1), 'Damage 10: Bryn takes 10');
+});

@@ -7,6 +7,7 @@
  * shows up there is original (CC0): DUNGEON_HAZARDS below.
  */
 import { passiveScore } from '../rules/checks.ts';
+import { resisted } from '../rules/defenses.ts';
 import { type LightLevel, sightOf } from '../rules/light.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
 import { damageHero } from '../rules/dying.ts';
@@ -44,13 +45,16 @@ const spotLine = (who: Hero, score: number, detect: Detect, what: string) =>
   `${who.sheet.name} spots ${what} (passive ${titleCase(detect.skill)} ${score} vs DC ${detect.dc}).`;
 
 /** "Damage 3 bludgeoning + 7 piercing" / "Damage 2 darts, 7 poison". */
-function rollDamage(rng: Rng, parts: readonly DamagePart[]): { total: number; text: string } {
+function rollDamage(rng: Rng, parts: readonly DamagePart[]): { total: number; text: string; parts: { total: number; type: string }[] } {
   const rolled = parts.map((p) => {
     const times = p.times ? rollDice(rng, parseDice(p.times)).total : 1;
     const total = Array.from({ length: times }, () => rollDice(rng, parseDice(p.dice)).total).reduce((a, b) => a + b, 0);
     return { total, text: `${p.times ? `${times} darts, ` : ''}${total} ${p.type}` };
   });
-  return { total: rolled.reduce((sum, r) => sum + r.total, 0), text: `Damage ${rolled.map((r) => r.text).join(' + ')}` };
+  return {
+    total: rolled.reduce((sum, r) => sum + r.total, 0), text: `Damage ${rolled.map((r) => r.text).join(' + ')}`,
+    parts: rolled.map((r, i) => ({ total: r.total, type: parts[i].type })),
+  };
 }
 
 
@@ -61,7 +65,7 @@ function damageAll(rng: Rng, trap: Trap, taking: readonly Taking[]): { heroes: H
   const hit = taking.filter((t) => t.share > 0);
   if (trap.damage.length === 0 || hit.length === 0) return { heroes: taking.map((t) => t.hero), lines: [] };
   const damage = rollDamage(rng, trap.damage);
-  const taken = (t: Taking) => Math.floor(damage.total * t.share);
+  const taken = (t: Taking) => damage.parts.reduce((sum, p) => sum + resisted(t.hero.sheet, Math.floor(p.total * t.share), p.type), 0);
   return {
     heroes: taking.map((t) => ({ ...t.hero, sheet: damageHero(t.hero.sheet, taken(t)) })),
     lines: [`${damage.text}: ${hit.map((t) => `${t.hero.sheet.name} takes ${taken(t)}`).join(', ')}`],

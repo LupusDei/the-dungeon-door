@@ -7,6 +7,7 @@
  */
 import { abilityCheck, checkBonus, dcAgainst, hasTool } from '../rules/checks.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
+import { resisted } from '../rules/defenses.ts';
 import { damageHero } from '../rules/dying.ts';
 import { monster } from '../rules/monsters.ts';
 import { d20Modifier } from '../rules/rests.ts';
@@ -74,7 +75,8 @@ function lineOf(roll: Roll, hook: RollHook): string {
 function applyDamage(heroes: Hero[], rolls: Roll[], hook: RollHook, rng: Rng): { sheets: Hero[]; line: string | null } {
   if (hook.kind !== 'save' || !hook.damage) return { sheets: heroes, line: null };
   const damage = rollDice(rng, parseDice(hook.damage)).total;
-  const hurt = heroes.map((h, i) => ({ hero: h, taken: rolls[i].natural === null ? 0 : rolls[i].success ? Math.floor(damage / 2) : damage }));
+  const share = (i: number) => (rolls[i].natural === null ? 0 : rolls[i].success ? Math.floor(damage / 2) : damage);
+  const hurt = heroes.map((h, i) => ({ hero: h, taken: hook.damageType ? resisted(h.sheet, share(i), hook.damageType) : share(i) }));
   const sheets = hurt.map(({ hero, taken }) => ({ ...hero, sheet: damageHero(hero.sheet, taken) }));
   const taken = hurt.filter((h) => h.taken > 0).map((h) => `${h.hero.sheet.name} takes ${h.taken}`);
   return { sheets, line: `Damage ${damage}${hook.damageType ? ` ${hook.damageType}` : ''}: ${taken.join(', ')}` };

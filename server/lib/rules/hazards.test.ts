@@ -17,6 +17,7 @@ test('falling: 1d6 Bludgeoning per 10 feet, at most 20d6, and the hero lands Pro
 });
 
 test('burning: 1d4 Fire, then the hero drops Prone and rolls to put it out', () => {
+  assert.equal(sufferHazard(scriptedRng([3]), { ...bryn, traits: ['lineage-resistance-fire'] }, { kind: 'burning' }).line, 'Bryn catches fire: 1 Fire damage, then drops Prone and rolls to put it out', 'resisted');
   assert.deepEqual(sufferHazard(scriptedRng([3]), bryn, { kind: 'burning' }), { sheet: { ...bryn, hp: SAMPLE.hp - 3 }, line: 'Bryn catches fire: 3 Fire damage, then drops Prone and rolls to put it out' });
 });
 

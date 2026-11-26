@@ -5,6 +5,7 @@
  */
 import { abilityModifier } from './abilities.ts';
 import { parseDice, rollDice } from './dice.ts';
+import { resisted } from './defenses.ts';
 import { damageHero } from './dying.ts';
 import { d20Modifier, gainExhaustion } from './rests.ts';
 import { rollD20 } from './resolve.ts';
@@ -46,7 +47,7 @@ function fall(rng: Rng, s: CharacterSheet, feet: number): Suffered {
 }
 
 function burn(rng: Rng, s: CharacterSheet): Suffered {
-  const damage = rng.die(4);
+  const damage = resisted(s, rng.die(4), 'fire');
   return { sheet: damageHero(s, damage), line: `${s.name} catches fire: ${damage} Fire damage, then drops Prone and rolls to put it out` };
 }
 

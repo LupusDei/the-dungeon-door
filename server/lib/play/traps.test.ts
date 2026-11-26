@@ -103,3 +103,16 @@ test('what the party sees by: dim light costs passive Perception 5 (Disadvantage
   assert.match(seer.lines[0], /^Vex spots a Collapsing Roof \(passive Perception 15 vs DC 11\)/, 'darkness is dim light to darkvision');
   assert.equal(springTrap(party(bryn, sharp), 'falling', 1, {}, 'dark').lines[0], 'The party meets a crumbling floor.');
 });
+
+test('resistance halves the damage of a trap of that type, part by part (a dwarf and poison)', () => {
+  const dwarf = { ...bryn, traits: ['dwarven-resilience'], hp: 40, maxHp: 40 };
+  const human = { ...bryn, hp: 40, maxHp: 40 };
+  const hit = (s: typeof bryn) => springTrap({ ...party(s), rng: 11 }, 'poisoned-darts', 1, { p1: 1 });
+  const full = Number(/takes (\d+)$/.exec(hit(human).lines[2])![1]);
+  const half = Number(/takes (\d+)$/.exec(hit(dwarf).lines[2])![1]);
+  assert.ok(full >= 2);
+  assert.equal(half, Math.floor(full / 2));
+  const pit = springTrap({ ...party(dwarf), rng: 4 }, 'spiked-pit', 1, {});
+  const both = /^Damage (\d+) bludgeoning \+ (\d+) piercing: Bryn takes (\d+)$/.exec(pit.lines[1])!;
+  assert.equal(Number(both[3]), Number(both[1]) + Number(both[2]), 'nothing resisted');
+});
