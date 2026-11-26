@@ -15,7 +15,8 @@ export const DAMAGE_TYPES = [
 ];
 export type Difficulty = 'low' | 'moderate' | 'high';
 
-export interface DamageRoll { dice: string; type: string }
+/** `advantageOnly`: extra damage the stat block grants only when the attack roll had Advantage. */
+export interface DamageRoll { dice: string; type: string; advantageOnly?: true }
 export interface MonsterAttack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[] }
 export interface Monster {
   id: string; name: string; size: string; type: string;
@@ -33,6 +34,17 @@ const action = z.object({
   name: z.string(), desc: z.string(), attackBonus: z.number().optional(),
   damage: z.array(z.object({ damageDice: z.string(), damageType: ref })).optional(),
 });
+
+const ADVANTAGE_ONLY = /if the attack roll had Advantage/;
+
+/** The last roll of an "…plus 2 (1d4) if the attack roll had Advantage" attack only counts with Advantage. */
+function damageRolls(rolls: { damageDice: string; damageType: { index: string } }[], lastNeedsAdvantage: boolean): DamageRoll[] {
+  return rolls.map((d, i) => {
+    const roll: DamageRoll = { dice: d.damageDice, type: d.damageType.index };
+    if (lastNeedsAdvantage && i === rolls.length - 1) roll.advantageOnly = true;
+    return roll;
+  });
+}
 
 const monsterSchema = z.object({
   index: z.string(), name: z.string(), size: z.string(), type: z.string(),
@@ -56,7 +68,7 @@ const monsterSchema = z.object({
     cr: m.challengeRating, xp: m.xp,
     attacks: m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
       name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
-      damage: (a.damage ?? []).map((d) => ({ dice: d.damageDice, type: d.damageType.index })),
+      damage: damageRolls(a.damage ?? [], ADVANTAGE_ONLY.test(a.desc)),
     })),
   };
 });

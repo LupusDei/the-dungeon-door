@@ -5,7 +5,8 @@ import { DAMAGE_TYPES, encounterBudget, monster, monsters, xpForCr } from './mon
 test('a monster stat block loads with its AC, HP, CR, XP and attacks', () => {
   const goblin = monster('goblin-warrior');
   assert.deepEqual([goblin.name, goblin.ac, goblin.hp, goblin.hitDice, goblin.cr, goblin.xp, goblin.speed], ['Goblin Warrior', 15, 10, '3d6', 0.25, 50, 30]);
-  assert.deepEqual(goblin.attacks[0], { name: 'Scimitar', bonus: 4, ranged: false, damage: [{ dice: '1d6+2', type: 'slashing' }, { dice: '1d4', type: 'slashing' }] });
+  assert.deepEqual(goblin.attacks[0], { name: 'Scimitar', bonus: 4, ranged: false, damage: [{ dice: '1d6+2', type: 'slashing' }, { dice: '1d4', type: 'slashing', advantageOnly: true }] });
+  assert.deepEqual(monster('ankheg').attacks[0].damage.map((d) => d.advantageOnly), [undefined, undefined], 'advantage against a grappled target is not extra damage');
   assert.equal(goblin.attacks[1].ranged, true);
 });
 
