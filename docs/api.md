@@ -314,7 +314,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // wound: how hurt the foe looks, by the share of hit points left:
                                       // "Unhurt" (full), "Scratched" (over 3/4), "Bleeding" (over 1/2),
                                       // "Bloodied" (1/2 or less, the 2024 term), "Staggering" (over 1/10),
-                                      // "Gasping", "Dead" (0). Undead: Whole, Torn, Rent, Crumbling, Falling
+                                      // "Gasping", "Dead" (0). Undead: Whole, Torn, Gouged, Crumbling, Falling
                                       // apart, Coming undone, Destroyed. Constructs: Intact, Scuffed, Dented,
                                       // Cracked, Breaking, Failing, Destroyed. Oozes: Whole, Rippling, Seeping,
                                       // Shrinking, Sloughing, Dissolving, Destroyed. vigor: the same as a rung

@@ -14,7 +14,7 @@ test('the wound word, for flesh, the undead, constructs and oozes', () => {
   const words = (body?: Parameters<typeof woundOf>[0]['body']) => [40, 35, 25, 20, 8, 3, 0].map((hp) => woundOf({ hp, maxHp: 40, body }));
   assert.deepEqual(words(), ['Unhurt', 'Scratched', 'Bleeding', 'Bloodied', 'Staggering', 'Gasping', 'Dead']);
   assert.deepEqual(words('flesh'), words());
-  assert.deepEqual(words('undead'), ['Whole', 'Torn', 'Rent', 'Crumbling', 'Falling apart', 'Coming undone', 'Destroyed']);
+  assert.deepEqual(words('undead'), ['Whole', 'Torn', 'Gouged', 'Crumbling', 'Falling apart', 'Coming undone', 'Destroyed']);
   assert.deepEqual(words('construct'), ['Intact', 'Scuffed', 'Dented', 'Cracked', 'Breaking', 'Failing', 'Destroyed']);
   assert.deepEqual(words('ooze'), ['Whole', 'Rippling', 'Seeping', 'Shrinking', 'Sloughing', 'Dissolving', 'Destroyed']);
 });

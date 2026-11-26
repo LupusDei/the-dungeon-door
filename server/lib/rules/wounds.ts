@@ -15,7 +15,7 @@ const FLOORS = [3 / 4, 1 / 2, 1 / 4, 1 / 10];
 /** From the rung of full vigor down to 0 (dead or down). */
 const LADDERS: Readonly<Record<Body, readonly string[]>> = {
   flesh: ['Unhurt', 'Scratched', 'Bleeding', 'Bloodied', 'Staggering', 'Gasping', 'Dead'],
-  undead: ['Whole', 'Torn', 'Rent', 'Crumbling', 'Falling apart', 'Coming undone', 'Destroyed'],
+  undead: ['Whole', 'Torn', 'Gouged', 'Crumbling', 'Falling apart', 'Coming undone', 'Destroyed'],
   construct: ['Intact', 'Scuffed', 'Dented', 'Cracked', 'Breaking', 'Failing', 'Destroyed'],
   ooze: ['Whole', 'Rippling', 'Seeping', 'Shrinking', 'Sloughing', 'Dissolving', 'Destroyed'],
 };

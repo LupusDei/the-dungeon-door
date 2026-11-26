@@ -587,7 +587,7 @@ of six rungs of **vigor** by the share of hit points left:
 |-------|-----------------|-------|--------|-----------|------|
 | 6 | all | Unhurt | Whole | Intact | Whole |
 | 5 | over 3/4 | Scratched | Torn | Scuffed | Rippling |
-| 4 | over 1/2 | Bleeding | Rent | Dented | Seeping |
+| 4 | over 1/2 | Bleeding | Gouged | Dented | Seeping |
 | 3 | over 1/4 (1/2 or less: Bloodied, as in the 2024 rules) | Bloodied | Crumbling | Cracked | Shrinking |
 | 2 | over 1/10 | Staggering | Falling apart | Breaking | Sloughing |
 | 1 | any left | Gasping | Coming undone | Failing | Dissolving |
