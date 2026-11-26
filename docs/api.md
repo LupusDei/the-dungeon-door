@@ -231,12 +231,17 @@ RulesView {                          // SRD 5.2 (2024 rules)
   dungeon: null | {
     mode: "fixed" | "explore"; kind: string
     at: string                        // area id the party is in
+    level: number                     // the dungeon level reached, 1–20: it starts at the living heroes'
+                                      // average level (rounded down) and may go one deeper through a door
+    deepened: [{ at: string; level: number }]   // where it went deeper, oldest first
     areas: [{ id: string; name: string; purpose: string | null; cleared: boolean;
               exits: [{ id: string; connection: string; to: string | null }] }]   // visited areas only
     waiting: null | { foes: string; attitude: "indifferent" | "friendly" }   // "Boar ×3": foes in this
                                       // area who did not attack; a Parley choice talks to them
   }
   results: string[]                   // the engine's dice lines for the last resolved scene
+  levelUps: [{ playerId: string; name: string; from: number; to: number }]   // who levelled up at the
+                                      // quest's end (set with the epilogue; empty until then)
   time: { seconds: number; label: string }   // the adventure's clock, from 8 in the morning of day 1:
                                       // "Day 1, 08:40". A choice takes ten minutes, a rest its length.
   light: {
@@ -323,6 +328,17 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   trapped. In a dungeon the engine rolls for wandering monsters every half hour of the clock (d6, a 1), and
   at once after noise (a fight that ended, a trap that went off: 1 or 2). Wanderers roll an attitude like
   any foes: the Hostile attack, the others go their way.
+- **Dungeon levels.** A dungeon starts at the living heroes' average level (rounded down, at least 1), so
+  new heroes start at 1. Each door into an area not yet seen has a 25% chance of leading a level deeper
+  (seeded), and stairs in explore mode add one too. It never goes down and stops at 20. A line says "The
+  way leads deeper: dungeon level N." Monsters, traps and treasure there are scaled to that level, for
+  the living heroes as if each were at it. Fights the DM proposes are held to a high encounter at that
+  level, with few foes at levels 1–2.
+- **Treasure** is shared in whole gold among the living heroes. The odd pieces go one each to the first
+  of them, and the dead get none ("Treasure: 5 gp in coin (2 each, and 1 more to Bryn)").
+- **Levelling up at the quest's end.** When the next scene is the epilogue, each living hero levels up
+  as far as its XP reaches (2024 thresholds, average hit points). The lines are in `rules.results` and
+  the chat, `rules.levelUps` lists who levelled up, and the hero goes home at its new level.
 - **Meeting monsters.** Foes in a dungeon room roll an attitude (2d6): 2–5 Hostile, and the fight starts;
   6–9 Indifferent or 10–12 Friendly, and they wait (`rules.dungeon.waiting`). Undead, constructs and oozes
   are always Hostile. A parley that works leaves the room to the party (their treasure stays theirs); one
@@ -334,7 +350,7 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   **Dodge**. The id is always `c`; read its `label` and `detail`.
   Each player's vote is their own hero's action, and the vote's d20 is their attack roll. Monsters act
   by simple rules. Each round is a scene, so `sceneCount` grows by one for each round. When the foes all
-  fall, the living heroes split the XP and level up on the spot (average hit points; 5.2 thresholds). If
+  fall, the living heroes split the XP; they level up with it at the quest's end. If
   every hero is down, the next scene is the epilogue. A fight still going after 10 rounds ends with the
   foes fleeing.
   - **Monsters fight by their stat blocks.** Multiattack makes each listed attack (a hydra one per head);

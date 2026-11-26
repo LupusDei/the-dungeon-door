@@ -65,13 +65,18 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `time` and `light`: the clock ("Day 1, 08:40") and the light the party carries. Describe only what
     the heroes can see.
   - `combat`: the round and every combatant's HP and status, or null.
-  - `dungeon`: the area the party is in (its purpose, what is there, its exits by id, any foes waiting
-    there and their attitude), or null.
-  - `monsters`: SRD 5.2 monster ids that suit the party's level, for fights you propose.
+  - `dungeon`: the dungeon's kind and **level**, the area the party is in (its purpose, what is there,
+    its exits by id, any foes waiting there and their attitude), or null. The level starts at the living
+    heroes' average and can go deeper through a door: deeper means more dangerous, so narrate it (lower,
+    older, worse).
+  - `monsters`: SRD 5.2 monster ids that live in this dungeon and fit a moderate fight at its level (or
+    the party's level outside a dungeon), for fights you propose.
 - **Choices may carry `rules`** (a `RulesHook`):
   - `{ kind: 'check', ability, skill?, dc }` or `{ kind: 'save', ability, dc, damage?, damageType? }`.
     5.2 DCs: 5 very easy, 10 easy, 15 medium, 20 hard, 25 very hard, 30 nearly impossible.
   - `{ kind: 'fight', monsters: [ids] }`, using ids from `ctx.rules.monsters` (unknown ids are dropped).
+    The engine keeps a high encounter at most: your monsters in order while they fit the budget and the
+    foe cap (one or two foes for a level-1 party), at least one. Narrate the foes that are in the fight.
   - `{ kind: 'rest', rest: 'short' | 'long' }`.
   - `{ kind: 'move', exit }`, with an exit id from `ctx.rules.dungeon` (in a dungeon).
   - `{ kind: 'buy', items }`, `{ kind: 'sell', items }`, `{ kind: 'use', item }` (SRD item ids; `use`
@@ -90,7 +95,8 @@ The engine owns the numbers; you propose and narrate. For a game from before the
 - **`resolution.rules`** (`RulesResults`):
   - `chosen`: the choice the engine picked. Ties go to the higher-rolling voters. `leaders` is just
     `[chosen]`, so return it as `chosenChoiceId`.
-  - `lines`: the dice, one line each ("Bryn: Athletics 14 + 5 = 19 vs DC 12, success").
+  - `lines`: the dice, one line each ("Bryn: Athletics 14 + 5 = 19 vs DC 12, success"). For the
+    epilogue they end with the heroes who levelled up ("Bryn reaches level 2 (+7 max HP)."): celebrate it.
   - `success` for a check or save, and `fight` ('started' | 'victory' | 'defeat' | 'fled' | null).
   - Your `outcome` and narration must match these results: color them, never change them, and still
     use no numbers in the story.

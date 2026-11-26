@@ -397,6 +397,83 @@ Still simplified: legendary actions and legendary resistance; Hide, Dash, Ready 
 actions; rider creature-type and size limits; subspecies resistances (tiefling legacies, dragonborn
 ancestry) until the sheet records the subspecies; overland travel pace.
 
+## Phase 5: dungeon levels, fights that fit, XP at the quest's end
+
+Robert's design: *"Dungeons start at level one, and all monsters, treasures, and traps should be appropriate
+to that level. Every time through a door, there's a chance that the level will increase, and monsters,
+traps, and treasures should increase with that level. At the end of a quest, the players should level up
+based on their experience points."* He added that the starting level is the party's average level. This
+phase also closes the level-1 lethality issue: level-1 parties died in their first fights.
+
+**The dungeon level** (`rules/depth.ts`, `play/delve.ts`):
+
+- A dungeon starts at the **living heroes' average level, rounded down, from 1 to 20**
+  (`startingLevel`). A new party of level-1 heroes starts at 1. A party of levels 3 and 6 starts at 4.
+  The dead don't count. The map records it as `map.level`.
+- **Each door can lead deeper.** Going through a door into an area not seen before rolls a d100. On 25 or
+  less (`DEEPER_IN_100`, a 25% chance) the dungeon goes one level deeper. The roll is seeded by the map
+  seed and the area (`derivedRng(seed, 'deeper:' + area)`), so it's the same every time. Ways that aren't
+  doors (open passages, corridors) and areas already seen don't roll. In explore mode, stairs still add
+  a level.
+- The level never goes down, and it stops at 20 (`MAX_DUNGEON_LEVEL`). Every change is logged in
+  `dungeon.deepened` (`{ at, level }`, oldest first). The table is told "The way leads deeper: dungeon
+  level N."
+- An area not yet seen, reached at a deeper level, is **restocked** there (`restock`): its encounter is
+  rebuilt at the same difficulty and its treasure rerolled. Its kind, name, trap and ways stay the same.
+  This is seeded by the area and level.
+- In explore mode, a room's difficulty (low, moderate, then high) counts levels below the dungeon's
+  starting level, not from 1. A dungeon that starts at 5 starts with low-difficulty fights at level 5.
+- A game stored before this phase has no `level`, so it reads as its map's level, or 1.
+
+**Scaled to the level:** monsters, traps and treasure all use the dungeon level, as if each living hero
+were at that level (`foeLevels`: n living heroes × the dungeon level).
+
+- *Monsters.* Room encounters, wanderers and the DM's proposed fights are all built for that party.
+- *Traps.* Trap DCs and damage use that level.
+- *Treasure.* Treasure uses OSE's band for that level, and rare magic items appear from level 4.
+- Outside a dungeon, the heroes' own levels are used.
+
+**Fights that fit** (`rules/encounter.ts`, the fix for the lethality issue):
+
+- *Budget.* The SRD 5.2 XP budget is **halved at levels 1–2** (`temperedBudget`). The 5.2 table is
+  swingy there: one bad round kills a hero.
+- *Fight size.* The number of foes is capped (`foeCap`): half the party (rounded up) at levels 1–2, the
+  party's size at 3–4, twice it from level 5, and never more than 8.
+- *Variety.* An encounter has at most two kinds of monster.
+- *Habitats.* Each dungeon kind has its own monsters (`rules/habitats.ts`, by creature type), with no
+  mounts, livestock, sea creatures or townsfolk.
+- *DM fights.* A fight the DM proposes is held to a **high** encounter for the party (`capFight`). Its
+  monsters are kept in order while they fit the budget and the cap. If none fits, the weakest one is kept.
+- *DM suggestions.* The monsters suggested to the DM (`ctx.rules.monsters`) come from the dungeon's
+  habitat and fit a moderate fight at its level.
+- *Hero builds.* New heroes put their best scores into their class's primary abilities, then
+  Constitution. Healers prepare Cure Wounds (or Healing Word). Heroes stored without a sheet keep the old
+  build (`'classic'`), so their numbers stay the same.
+- *Healing in a fight.* When a friend is dying, a healer's Cast casts its healing spell on them.
+
+**Treasure** is shared in **whole gold pieces among the living heroes**. The coins are counted in gp,
+rounded down, and split evenly. The odd pieces go one each to the first living heroes. Dead heroes get no
+share. Gems, jewellery and the magic item go to whoever has room.
+
+**XP and levels.** Fights only add XP: the living heroes share it, and nobody levels up during the
+quest. When the next scene is the **epilogue** (the last scene, or after a lost fight),
+`play/table.ts endQuest` levels up each living hero as far as its XP reaches. It uses the 2024
+thresholds (300, 900, 2,700 …), average hit points, the SRD subclass, and +2 to the best score at an
+Ability Score Improvement. The lines ("Bryn reaches level 2 (+7 max HP).") go to the chat and into the
+DM's resolution for the epilogue. The API shows `rules.levelUps`. Heroes go home with their new level.
+
+**Measured** (`lib/play/lethality.test.ts`, seeded): four new level-1 heroes (fighter, rogue, cleric,
+wizard) fight 400 moderate fights from level-1 dungeons of every kind, and pass a test of **at least 75%
+won and under 5% of heroes dead per fight**.
+
+- *At 1,000 fights* they win 90%, and 2.6% of heroes die per fight.
+- *`npm run fights`* (a mapped dungeon's rooms, the goal room included) gives: four heroes win 91% with
+  3% dead; a rogue and a cleric win 93%; a lone fighter wins 91%.
+- *Before this phase*, level-1 parties lost most of their first fights. A lone level-1 wizard is still
+  fragile (40% won).
+
+Not yet: an XP award for finishing a quest, so leveling up still takes many fights.
+
 ## For the app (the game layer on top)
 
 What the game adds around the engine so the app can show it (Justin's side; `docs/api.md` has the shapes):
