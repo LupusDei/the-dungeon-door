@@ -180,9 +180,10 @@ These are proposals, kept out of the engine PRs so Justin's flow stays as it is 
 
 1. `docs/api.md`: `Character.sheet: CharacterSheet | null`; `PUT /api/characters` accepts build
    choices and stores the sheet the engine returns.
-2. The forge's race list and SRD 5.2 species differ: the catalog has Half-Elf and Half-Orc, the SRD
-   has Goliath and Orc. A mapping (Half-Orc → Orc, Half-Elf → Human or Elf) or a catalog change is
-   Justin's call.
+2. Done in this PR (Robert's call): the forge's race list is now exactly the SRD 5.2 species, with
+   Goliath and Orc in place of Half-Elf and Half-Orc, so every hero the forge makes can be built. A
+   test holds the catalog and the SRD together. Heroes already stored as `half-elf` or `half-orc`
+   still load and show their id, but must pick a new race before they can be saved again.
 3. `PartyMember` gains the numbers the DM needs to narrate fairly (HP, AC, conditions).
 4. `Choice` gains an optional `RulesHook`; `Resolution` gains the engine's roll results.
 
