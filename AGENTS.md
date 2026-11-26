@@ -116,8 +116,8 @@ say plainly that an app change is untested.
 - **Commits.** A commit is its author's alone. No `Co-Authored-By` line for an AI tool, whichever
   agent wrote the change.
 - **Art.** Build-time art (icon, home-screen dragon, sounds) is generated with the owner's Runway
-  account (recipes in `design/`); in-game art (portraits, scenes) goes through the AI Gateway at
-  runtime. Voices are original designs, never imitations of real people.
+  account (recipes in `design/`); in-game art (portraits, scenes) and the narrator's readings go through
+  the AI Gateway at runtime. Voices are original designs, never imitations of real people.
 - **App code.** SwiftUI with `@Observable` models, Swift 5 language mode, no third-party packages.
   Reuse `Palette`, `.card()`, `.glassCard()` and the button styles in `UI/Theme.swift`.
 

@@ -36,7 +36,7 @@ export interface NewMessage {
 }
 
 /** A scene as written by the DM: everything but its votes and resolution. */
-export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt'>;
+export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voiceUrl'>;
 
 /**
  * Persistence for characters, games and chat. Two implementations: Postgres (`postgres.ts`, when
@@ -69,6 +69,13 @@ export interface Store {
   /** Inserts (or rewrites the text of) a scene; its votes and resolution are kept. */
   saveScene(code: string, scene: SceneDraftRecord): Promise<void>;
   setSceneImage(code: string, index: number, imageUrl: string): Promise<void>;
+  /**
+   * Claims the making of a scene's narration: true for exactly one caller, until the voice is set or the
+   * claim is given back, or `staleMs` pass without either (the maker died). False once the scene has a voice.
+   */
+  claimSceneVoice(code: string, index: number, staleMs: number): Promise<boolean>;
+  /** Sets the scene's narration; null gives the claim back so the next request tries again. */
+  setSceneVoice(code: string, index: number, voiceUrl: string | null): Promise<void>;
   setSceneOutcome(code: string, index: number, outcome: string, chosenChoiceId: ChoiceId | null): Promise<void>;
   /**
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its

@@ -224,12 +224,15 @@ cd ios && ./ship.sh "What's new in this build"  # builds a clean copy of HEAD, u
 
 - **No sign-in.** Each device makes a random player id; heroes belong to it.
 - **Polling, not sockets.** The app polls the game every 2 s. Good enough for turn-based play.
-- **Swappable models.** Text and image models are AI Gateway ids set by env (`DD_TEXT_MODEL`,
-  `DD_IMAGE_MODEL`), so Claude, Grok, etc. are a config change.
+- **Swappable models.** Text, image and speech models are AI Gateway ids set by env (`DD_TEXT_MODEL`,
+  `DD_IMAGE_MODEL`, `DD_VOICE_MODEL`), so Claude, Grok, etc. are a config change.
 - **Rules.** The engine in `server/lib/rules/` (pure, seeded, test-first) owns every number; the
   dungeon master proposes and narrates. See `docs/rules-design.md`.
-- **Later:** voice chat in your character's voice, DM narration voices (archetypes already carry a
-  voice description).
+- **The narrator.** Any scene can be read aloud: the first player to ask has the server speak it
+  (`DD_VOICE_MODEL`, about 2 cents a scene), and the file is kept for everyone. See
+  `docs/dungeon-master.md`, "The narrator".
+- **Later:** voice chat in your character's voice, a voice per dungeon master (archetypes already carry
+  a voice description).
 
 ## Rules data and attribution
 

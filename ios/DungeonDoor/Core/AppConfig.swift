@@ -26,6 +26,8 @@ import SwiftUI
 /// - `-newGame YES` opens the "A New Adventure" sheet (the hero picker) from the home screen.
 /// - `-scrollTo <choices|combat|bottom>` scrolls an open scene down to its choices, its fight or
 ///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end.
+/// - `-dd.narrateScenes YES` has the narrator read each scene as it arrives (the "Every scene"
+///   switch on a scene), without a tap.
 ///
 /// For the home-screen dragon, in debug builds only:
 /// - `-dragonAutoPoke <n>` pokes him n times once he has landed, `-dragonPokeEvery <seconds>` apart

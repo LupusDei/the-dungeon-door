@@ -130,6 +130,7 @@ export class PostgresStore implements Store {
       narration: s.narration,
       imagePrompt: s.image_prompt,
       imageUrl: s.image_url,
+      voiceUrl: s.voice_url ?? null,
       choices: s.choices as Choice[],
       isFinale: s.is_finale,
       votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
@@ -182,7 +183,9 @@ export class PostgresStore implements Store {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (game_code, idx) DO UPDATE SET title = EXCLUDED.title, narration = EXCLUDED.narration,
            image_prompt = EXCLUDED.image_prompt, image_url = EXCLUDED.image_url, choices = EXCLUDED.choices,
-           is_finale = EXCLUDED.is_finale
+           is_finale = EXCLUDED.is_finale,
+           voice_url = CASE WHEN scenes.narration = EXCLUDED.narration THEN scenes.voice_url END,
+           voice_started_at = CASE WHEN scenes.narration = EXCLUDED.narration THEN scenes.voice_started_at END
          RETURNING game_code
        )
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
@@ -195,6 +198,25 @@ export class PostgresStore implements Store {
       `WITH s AS (UPDATE scenes SET image_url = $3 WHERE game_code = $1 AND idx = $2 RETURNING game_code)
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
       [code, index, imageUrl],
+    );
+  }
+
+  async claimSceneVoice(code: string, index: number, staleMs: number) {
+    const rows = await this.q(
+      `UPDATE scenes SET voice_started_at = now()
+       WHERE game_code = $1 AND idx = $2 AND voice_url IS NULL
+         AND (voice_started_at IS NULL OR voice_started_at < now() - ($3 * interval '1 millisecond'))
+       RETURNING idx`,
+      [code, index, staleMs],
+    );
+    return rows.length > 0;
+  }
+
+  async setSceneVoice(code: string, index: number, voiceUrl: string | null) {
+    await this.q(
+      `WITH s AS (UPDATE scenes SET voice_url = $3, voice_started_at = NULL WHERE game_code = $1 AND idx = $2 RETURNING game_code)
+       UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
+      [code, index, voiceUrl],
     );
   }
 

@@ -112,6 +112,24 @@ struct APIClient: Sendable {
         try await send("POST", "api/games/\(code)/advance", body: [String: String]())
     }
 
+    /// Asks for a scene to be read aloud. The server makes one reading per scene, the first time
+    /// anyone asks; while it is "making", the file arrives on the scene itself.
+    func narration(_ code: String, sceneIndex: Int) async throws -> NarrationReply {
+        struct Body: Encodable { let sceneIndex: Int }
+        return try await send("POST", "api/games/\(code)/narration", body: Body(sceneIndex: sceneIndex))
+    }
+
+    /// A reading's audio, whole: it is played from memory, so any server that can send a file will do.
+    func audio(at url: URL) async throws -> Data {
+        var request = URLRequest(url: url, timeoutInterval: 60)
+        if let appKey, !appKey.isEmpty, url.host == base.host { request.setValue(appKey, forHTTPHeaderField: "x-dd-key") }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), !data.isEmpty else {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }
+
     // MARK: Transport
 
     private func send<T: Decodable>(_ method: String, _ path: String, query: [String: String] = [:],

@@ -173,6 +173,8 @@ Scene {
   title: string
   narration: string                  // 2–4 short paragraphs
   imageUrl: string | null            // null while the art is still painting
+  voiceUrl: string | null            // the narrator's reading of this scene (an audio file), or null until a
+                                     // player asks for it: POST /api/games/{code}/narration
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
               rules: string | null }]  // e.g. "Athletics check, DC 12"; exactly 3; empty for the epilogue
   combat: boolean                    // true for a combat round: each vote is that player's own hero's action,
@@ -189,6 +191,7 @@ Scene {
 
 ChronicleEntry {
   index: number; title: string; imageUrl: string | null
+  voiceUrl: string | null            // the narrator's reading of that scene, if anyone asked for it
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
   combat: boolean                    // a combat round: every hero took their own action
@@ -272,6 +275,23 @@ Message {
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
 - `POST /api/games/{code}/advance` → `GameState`. Host only: resolve now with the votes that are in
   (for an AFK player). Needs at least one vote.
+- `POST /api/games/{code}/narration` with `{ sceneIndex }` → `{ sceneIndex, status, voiceUrl }`. The scene
+  read aloud by the narrator, on demand: nothing is spoken until a player asks.
+  - `status: "ready"`: `voiceUrl` is the audio (WAV or MP3, by the speech model; a public URL like
+    `imageUrl`). Download it and play it.
+  - `status: "making"`, `voiceUrl: null`: the narrator is speaking it now. The URL then appears on the
+    scene itself (`scene.voiceUrl`, and `chronicle[].voiceUrl` once the scene is past), so the game poll
+    delivers it to every player.
+  - One reading per scene. The first request claims it and is held until the reading is made (about ten
+    seconds for a full scene, at most 20): it answers "ready", or **502** if the reading failed. Requests
+    that arrive meanwhile get "making" at once. A failed reading gives the claim back, so asking again
+    retries; a client waiting on "making" should ask again every 15 seconds or so in case the reading it
+    was waiting for failed.
+  - What is read is what the screen shows for that turn: what came of the scene before (its `outcome`),
+    then the scene's `narration`. A combat round is its `narration` alone. Any scene of the game can be
+    asked for, not only the current one.
+  - 400 `sceneIndex` not a whole number; 403 not in this game; 404 no such game or scene; 502 the
+    reading failed.
 
 ### The rules engine in play
 

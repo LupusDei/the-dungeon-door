@@ -6,6 +6,8 @@ import SwiftUI
 struct SceneView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
+    /// Reads scenes aloud; it belongs to the game screen, so it outlives a scene.
+    var narrator: Narrator
     /// Opens the sheet of the hero with this player id (the party strip's taps).
     var openHero: (String) -> Void = { _ in }
     @State private var revealedRoll: Int?
@@ -24,6 +26,7 @@ struct SceneView: View {
                             // A round of a fight: who stands where and what to do come first, so
                             // nobody scrolls past the picture every round. The telling follows.
                             CombatView(session: session, scene: scene, combat: combat, openHero: openHero).id("combat")
+                            NarratorBar(scene: scene, session: session, narrator: narrator)
                             narration(scene)
                             IllustrationView(url: scene.imageURL)
                         } else {
@@ -31,6 +34,8 @@ struct SceneView: View {
                                 PartyStrip(party: party, players: state.players, me: session.playerId, open: openHero)
                             }
                             IllustrationView(url: scene.imageURL)
+                            // The narrator reads what came of the last scene, then this one's telling.
+                            NarratorBar(scene: scene, session: session, narrator: narrator)
                             whatCameOfIt(scene)
                             narration(scene)
                             if scene.isFinale {
@@ -55,6 +60,10 @@ struct SceneView: View {
             .onChange(of: state.scene?.index) { _, _ in
                 revealedRoll = nil
                 withAnimation { proxy.scrollTo(state.scene?.index, anchor: .top) }
+            }
+            .task(id: state.scene?.index) {
+                // A new scene ends the reading of the one before, and may start its own.
+                narrator.arrived(at: state.scene, in: session)
             }
             .task {
                 // Screenshot checks: `-scrollTo choices`, `combat` or `bottom` jumps below the fold.
@@ -407,6 +416,69 @@ private struct TimeAndLight: View {
                 : "\(hero.name) sees only dimly: Perception is rolled twice and the worse die counts."
         }
         return nil
+    }
+}
+
+/// The narrator's controls above a scene's telling: hear it read, and whether every scene is read
+/// as it arrives.
+private struct NarratorBar: View {
+    let scene: GameScene
+    let session: GameSession
+    @Bindable var narrator: Narrator
+
+    /// What the narrator is doing about this scene (a reading of another scene is not this one's).
+    private var phase: Narrator.Phase { narrator.phase.scene == scene.index ? narrator.phase : .idle }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Button { narrator.toggle(scene, in: session) } label: { listen }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("The narrator reads this scene aloud")
+                Spacer(minLength: 8)
+                Button { narrator.readsEveryScene.toggle() } label: {
+                    Label("Every scene", systemImage: narrator.readsEveryScene ? "checkmark.circle.fill" : "circle")
+                        .font(.system(.caption, design: .serif, weight: .semibold))
+                        .foregroundStyle(narrator.readsEveryScene ? Palette.gold : Palette.muted)
+                        .padding(.vertical, 8)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Read every scene aloud")
+                .accessibilityAddTraits(narrator.readsEveryScene ? .isSelected : [])
+            }
+            if case .failed = phase {
+                Text("The narrator lost the page. Tap Listen to try again.")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.ember)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var listen: some View {
+        HStack(spacing: 8) {
+            switch phase {
+            case .preparing:
+                ProgressView().controlSize(.small).tint(Palette.gold)
+                Text("The narrator draws breath…")
+            case .playing:
+                Image(systemName: "stop.fill")
+                Text("Stop")
+                Image(systemName: "waveform").symbolEffect(.variableColor.iterative, options: .repeating)
+            case .idle, .failed:
+                Image(systemName: "speaker.wave.2.fill")
+                Text("Listen")
+            }
+        }
+        .font(.system(.subheadline, design: .serif, weight: .semibold))
+        .foregroundStyle(Palette.gold)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Palette.raised, in: .capsule)
+        .overlay { Capsule().strokeBorder(Palette.gold.opacity(0.45), lineWidth: 1) }
+        .contentShape(.capsule)
+        .animation(.easeInOut(duration: 0.2), value: phase)
     }
 }
 

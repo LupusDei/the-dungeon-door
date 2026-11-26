@@ -6,10 +6,11 @@ export interface StoredImage {
   mediaType: string;
 }
 
-export type ImageKind = 'portraits' | 'scenes';
+export type ImageKind = 'portraits' | 'scenes' | 'voices';
 
 /**
- * Where generated images live. Vercel Blob (public) when BLOB_READ_WRITE_TOKEN (or a Blob store id with
+ * Where generated files live: portraits, scene paintings and the narrator's readings (audio; the name is
+ * from when there were only pictures). Vercel Blob (public) when BLOB_READ_WRITE_TOKEN (or a Blob store id with
  * OIDC) is configured; otherwise an in-process map served by GET /api/image?id=… so the iOS simulator can
  * load images straight from the local dev server.
  */
@@ -20,7 +21,8 @@ export interface ImageStore {
   load(url: string): Promise<StoredImage | null>;
 }
 
-const extension = (mediaType: string) => (mediaType.split('/')[1] ?? 'png').replace('jpeg', 'jpg');
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav' };
+const extension = (mediaType: string) => EXTENSIONS[mediaType.split(';')[0].trim()] ?? mediaType.split('/')[1]?.split(';')[0] ?? 'png';
 
 export class BlobImageStore implements ImageStore {
   async save(image: StoredImage, kind: ImageKind, _origin: string) {

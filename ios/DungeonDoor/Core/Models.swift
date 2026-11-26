@@ -522,6 +522,8 @@ struct GameScene: Codable, Hashable {
     let title: String
     let narration: String
     let imageUrl: String?
+    /// The narrator's reading of this scene, an audio file; nil until a player asks for it.
+    var voiceUrl: String? = nil
     /// Three, or none for the epilogue. In a fight they are written for the caller's own hero.
     let choices: [Choice]
     /// A round of a fight: each vote is that player's own hero's action.
@@ -534,6 +536,18 @@ struct GameScene: Codable, Hashable {
     let outcome: String?
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
+    var voiceURL: URL? { voiceUrl.flatMap(URL.init(string:)) }
+}
+
+/// The answer to asking for a scene to be read aloud: the file, or word that it is being made (it
+/// then arrives on the scene itself, with the game's next poll).
+struct NarrationReply: Decodable {
+    let sceneIndex: Int
+    /// "ready" or "making".
+    let status: String
+    let voiceUrl: String?
+
+    var voiceURL: URL? { voiceUrl.flatMap(URL.init(string:)) }
 }
 
 extension GameScene {
@@ -543,6 +557,7 @@ extension GameScene {
         title = try c.value(.title, or: "")
         narration = try c.value(.narration, or: "")
         imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choices = try c.value(.choices, or: [])
         combat = try c.value(.combat, or: false)
         canAct = try c.value(.canAct, or: true)
@@ -909,11 +924,14 @@ struct ChronicleEntry: Codable, Hashable, Identifiable {
     let index: Int
     let title: String
     let imageUrl: String?
+    /// The narrator's reading of that scene, if anyone asked for it.
+    var voiceUrl: String? = nil
     /// The most-voted choice. Empty for a round of a fight, where each hero acts for themselves.
     let choiceLabel: String
     let outcome: String
     var id: Int { index }
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
+    var voiceURL: URL? { voiceUrl.flatMap(URL.init(string:)) }
 }
 
 extension ChronicleEntry {
@@ -922,6 +940,7 @@ extension ChronicleEntry {
         index = try c.decode(Int.self, forKey: .index)
         title = try c.value(.title, or: "")
         imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choiceLabel = try c.value(.choiceLabel, or: "")
         outcome = try c.value(.outcome, or: "")
     }

@@ -68,6 +68,8 @@ export interface StoredScene {
   narration: string;
   imagePrompt: string;
   imageUrl: string | null;
+  /** The narrator's reading of this scene, once a player has asked for it (lib/narration.ts). */
+  voiceUrl: string | null;
   choices: StoredChoice[];
   isFinale: boolean;
   votes: Vote[];
@@ -121,6 +123,8 @@ export interface SceneView {
   title: string;
   narration: string;
   imageUrl: string | null;
+  /** The narrator's reading of this scene (an audio file), or null until a player asks for it: POST …/narration. */
+  voiceUrl: string | null;
   choices: ChoiceView[];
   /** A combat round: each vote is that player's own hero's action, and the choices are written for the caller's hero. */
   combat: boolean;
@@ -136,6 +140,8 @@ export interface ChronicleEntry {
   index: number;
   title: string;
   imageUrl: string | null;
+  /** The narrator's reading of that scene, if anyone asked for it. */
+  voiceUrl: string | null;
   choiceLabel: string;
   outcome: string;
   /** A combat round: every hero took their own action, so `choiceLabel` is empty. */

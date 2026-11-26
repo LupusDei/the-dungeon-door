@@ -10,6 +10,8 @@ struct GameView: View {
     /// `-showMap YES` opens the map by itself, once.
     @State private var mapShownForLaunch = false
     @State private var confirmLeave = false
+    /// Reads scenes aloud for as long as the game is on screen.
+    @State private var narrator = Narrator()
     /// The hero whose sheet is open, by player id.
     @State private var sheetHero: SheetHero?
     /// The tab each hero's sheet was left on, for as long as the game is on screen.
@@ -33,7 +35,7 @@ struct GameView: View {
                 case .preparing where session.state.scene == nil:
                     PreparingView(title: session.state.title)
                 default:
-                    SceneView(session: session) { sheetHero = SheetHero(playerId: $0) }
+                    SceneView(session: session, narrator: narrator) { sheetHero = SheetHero(playerId: $0) }
                 }
             }
             .animation(.easeInOut(duration: 0.4), value: session.state.status)
@@ -98,6 +100,7 @@ struct GameView: View {
                 showMap = true
             }
         }
+        .onDisappear { narrator.stop() }
         .confirmationDialog("Leave the party?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave", role: .destructive) { Task { await model.leaveGame() } }
         } message: {

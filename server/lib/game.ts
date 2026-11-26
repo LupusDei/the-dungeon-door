@@ -10,8 +10,9 @@ import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
-import { badRequest, conflict, forbidden, notFound } from './http.ts';
+import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
+import { narrate, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
 import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
@@ -63,6 +64,7 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     title: current.title,
     narration: current.narration,
     imageUrl: current.imageUrl,
+    voiceUrl: current.voiceUrl,
     choices: choicesFor(game, current, playerId),
     combat: game.combat !== null,
     canAct: canAct(game.combat, playerId),
@@ -109,6 +111,7 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
           index: s.index,
           title: s.title,
           imageUrl: s.imageUrl,
+          voiceUrl: s.voiceUrl,
           // In a round each hero took their own action: there is no one choice the party made.
           choiceLabel: combat ? '' : (s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? ''),
           outcome: s.outcome as string,
@@ -287,6 +290,75 @@ export async function castVote(code: string, playerId: string, sceneIndex: unkno
   if (!vote) throw conflict('voting on that scene has closed');
   await resolveIfAllVoted(code, sceneIndex, origin);
   return viewGame(code, playerId);
+}
+
+/** Who reads a scene aloud. Tests may set their own (to count readings, or to fail). */
+let narrator = narrate;
+export function setNarrator(next: typeof narrate = narrate): void {
+  narrator = next;
+}
+
+/** How long a claim on a scene's narration lasts with no voice to show for it: its maker is taken for dead. */
+const NARRATION_CLAIM_MS = 3 * 60_000;
+/** How long the request that started a reading waits for it, to answer with the file (or the failure) itself. */
+const NARRATION_WAIT_MS = 20_000;
+
+/**
+ * What the narrator reads for a scene, as the app shows it: what came of the scene before, then this scene's
+ * telling. A round of a fight is its telling alone (the screen shows the dice in between, not the outcome).
+ */
+export function narrationText(game: Game, scene: StoredScene): string {
+  const before = wasRound(scene) ? null : game.scenes.find((s) => s.index === scene.index - 1)?.outcome;
+  return spokenText(before, scene.narration);
+}
+
+export interface Narration {
+  sceneIndex: number;
+  /** "ready": `voiceUrl` is the audio. "making": the narrator is speaking; it will appear on the scene (`scene.voiceUrl`). */
+  status: 'ready' | 'making';
+  voiceUrl: string | null;
+}
+
+/**
+ * POST /api/games/{code}/narration — a scene read aloud, on demand and once: the first player to ask has
+ * the narrator speak it; the file is kept and every later request gets the same one. The request that
+ * started the reading waits for it (up to `waitMs`) and answers with the file, or with a 502 if the reading
+ * failed; anyone else asking meanwhile is told it is being made, and finds it on the scene when it is.
+ */
+export async function requestNarration(code: string, playerId: string, sceneIndex: unknown, origin: string, waitMs = NARRATION_WAIT_MS): Promise<Narration> {
+  if (typeof sceneIndex !== 'number' || !Number.isInteger(sceneIndex)) throw badRequest('sceneIndex must be a whole number');
+  const game = await loadGame(code);
+  member(game, playerId);
+  const scene = game.scenes.find((s) => s.index === sceneIndex);
+  if (!scene) throw notFound('no such scene');
+  if (scene.voiceUrl) return { sceneIndex, status: 'ready', voiceUrl: scene.voiceUrl };
+  const text = narrationText(game, scene);
+  if (!text) throw conflict('that scene has nothing to read');
+  const store = getStore();
+  if (!(await store.claimSceneVoice(code, sceneIndex, NARRATION_CLAIM_MS))) return { sceneIndex, status: 'making', voiceUrl: null };
+
+  const reading = (async () => {
+    try {
+      const url = await getImageStore().save(await narrator(text), 'voices', origin);
+      await store.setSceneVoice(code, sceneIndex, url);
+      return url;
+    } catch (error) {
+      await store.setSceneVoice(code, sceneIndex, null); // give the claim back: the next request tries again
+      throw error;
+    }
+  })();
+  // The reading outlives this request if it takes longer than the wait.
+  runInBackground(`narrate ${code}#${sceneIndex}`, async () => { await reading; });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const patience = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), waitMs); });
+  try {
+    const voiceUrl = await Promise.race([reading, patience]);
+    return voiceUrl ? { sceneIndex, status: 'ready', voiceUrl } : { sceneIndex, status: 'making', voiceUrl: null };
+  } catch {
+    throw new HttpError(502, 'the narrator could not read that scene; ask again');
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** POST /api/games/{code}/advance — host resolves now with the votes that are in. */

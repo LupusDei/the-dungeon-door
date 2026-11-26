@@ -14,7 +14,8 @@
     "coverage": "mkdir -p coverage && node --test --experimental-strip-types --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"lib/**/*.test.ts\"",
     "playtest": "node --experimental-strip-types scripts/playtest.ts",
     "fights": "node --experimental-strip-types scripts/fights.ts",
-    "dm:check": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/dm-check.ts"
+    "dm:check": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/dm-check.ts",
+    "voice:check": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/voice-check.ts"
   },
   "engines": {
     "node": "24.x"
