@@ -12,8 +12,11 @@ import type { Condition } from './conditions.ts';
 
 export { CONDITIONS, type Condition } from './conditions.ts';
 
-/** `rider`: a monster attack's condition on a hit (powers.ts). */
-export interface Attack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider }
+/**
+ * `rider`: a monster attack's condition on a hit (powers.ts).
+ * `normal` and `long`: a ranged weapon's range in feet. Absent on a ranged attack: it is treated as reaching.
+ */
+export interface Attack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider; normal?: number; long?: number | null }
 
 /** up: fighting. dying: a hero at 0 HP making death saves. stable: at 0 HP, not dying. dead. */
 export type Status = 'up' | 'dying' | 'stable' | 'dead';
@@ -51,6 +54,11 @@ export interface Combatant {
   multiattack?: string[];
   /** Undead, constructs and oozes: they never break (no morale check). Monsters only. */
   fearless?: true;
+  /**
+   * Where they stand (rules/bands.ts): engaged with `with`, near (about 30 ft) or far (about 60 ft).
+   * Absent on a fight stored before range bands: attacks are not checked for range.
+   */
+  place?: { band: 'engaged' | 'near' | 'far'; with: string[] };
   /** What its wounds look like (rules/wounds.ts): undead, construct or ooze; absent for flesh. Monsters only. */
   body?: Exclude<Body, 'flesh'>;
 }
@@ -75,6 +83,7 @@ function weaponAttack(weapon: SrdWeapon, sheet: CharacterSheet): Attack {
     bonus: modifier + (proficient ? sheet.proficiencyBonus : 0),
     ranged: weapon.range === 'ranged',
     damage: [{ dice: withModifier(weapon.damage, modifier), type: weapon.damageType }],
+    ...(weapon.range === 'ranged' ? { normal: weapon.normalRange, long: weapon.longRange } : {}),
   };
 }
 

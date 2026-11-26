@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS votes (
   player_id  text NOT NULL,
   choice_id  text NOT NULL CHECK (choice_id IN ('a', 'b', 'c')),
   roll       int  NOT NULL CHECK (roll BETWEEN 1 AND 20),
+  action_id  text,                    -- a legal action named by the vote; null for a letter vote
+  targets    jsonb,
+  freeform   jsonb,                   -- a written check: { text, ruling }
+  move       jsonb,                   -- a combat move taken with the vote: {to, engage?, dash?, disengage?}
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (game_code, scene_idx, player_id)
 );
@@ -92,6 +96,7 @@ ALTER TABLE votes ADD COLUMN IF NOT EXISTS targets jsonb;
 -- A written check on a vote (play/actions.ts): { text, ruling }. Null on an ordinary vote.
 -- The choice_id of such a row is ignored. Added without rewriting existing votes.
 ALTER TABLE votes ADD COLUMN IF NOT EXISTS freeform jsonb;
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS move jsonb;
 
 CREATE TABLE IF NOT EXISTS messages (
   game_code      text NOT NULL REFERENCES games (code) ON DELETE CASCADE,

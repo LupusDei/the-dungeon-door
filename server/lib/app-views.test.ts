@@ -246,12 +246,12 @@ test('a combat round is written for each player: what their own hero will do', a
 
   const weapon = fighter.players[0].character.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best));
   assert.equal(fighter.scene!.choices[0].label, `Attack with ${weapon.name}`);
-  assert.match(fighter.scene!.choices[0].detail, new RegExp(`^\\+${weapon.bonus} to hit, ${weapon.damage.replace(/[+]/g, '\\+')}, at Goblin Warrior [12]\\.$`));
+  assert.match(fighter.scene!.choices[0].detail, new RegExp(`^\\+${weapon.bonus} to hit, ${weapon.damage.replace(/[+]/g, '\\+')}, at Goblin Warrior [12]\\. You move to engage Goblin Warrior [12]\\.$`));
   assert.equal(fighter.scene!.choices[1].label, fighter.scene!.choices[0].label, 'no spell: Cast is the same strike');
   assert.equal(fighter.scene!.choices[2].label, 'Dodge');
 
   assert.equal(wizard.scene!.choices[1].label, 'Cast Burning Hands');
-  assert.match(wizard.scene!.choices[1].detail, /^3d6 fire, Dexterity save DC \d+ for half, at Goblin Warrior [12] and Goblin Warrior [12]\. Uses a level 1 slot \(\d left\)\.$/, 'a 15-foot cone catches two');
+  assert.match(wizard.scene!.choices[1].detail, /^3d6 fire, Dexterity save DC \d+ for half, at Goblin Warrior [12] and Goblin Warrior [12]\. You move to engage Goblin Warrior [12] and Goblin Warrior [12]\. Uses a level 1 slot \(\d left\)\.$/, 'a 15-foot cone catches the two they step in to engage');
   assert.match(wizard.scene!.choices[0].label, /^Attack with /);
 });
 

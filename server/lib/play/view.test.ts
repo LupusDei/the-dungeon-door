@@ -40,8 +40,9 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
   assert.deepEqual([rulesView(slain, []).party[0].dead, rulesContext(slain).party[0].dead], [true, true]);
   assert.deepEqual([view.party[1].slotsLeft.slice(0, 2), view.party[1].down], [[1, 0], false]);
   assert.deepEqual(view.combat!.combatants.map((c) => c.id), combat.order);
-  assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'party')!), ['id', 'name', 'side', 'hp', 'maxHp', 'status', 'conditions', 'toughness']);
-  assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'foes')!), ['id', 'name', 'side', 'wound', 'vigor', 'status', 'conditions', 'toughness']);
+  assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'party')!), ['id', 'name', 'side', 'hp', 'maxHp', 'status', 'conditions', 'toughness', 'position', 'engagedWith']);
+  assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'foes')!), ['id', 'name', 'side', 'wound', 'vigor', 'status', 'conditions', 'toughness', 'position', 'engagedWith']);
+  assert.deepEqual(view.combat!.combatants.map((c) => [c.position, c.engagedWith]), view.combat!.combatants.map(() => ['near', []]), 'a fight begins with both sides near');
   assert.deepEqual([view.combat!.round, view.combat!.outcome], [1, 'ongoing']);
   assert.deepEqual([view.dungeon!.mode, view.dungeon!.kind, view.dungeon!.at], ['fixed', d.map.kind, 'r4']);
   assert.deepEqual(view.dungeon!.areas.map((a) => [a.id, a.cleared]), [['r0', true], ['r0-r4', false], ['r4', false]]);
@@ -64,7 +65,7 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.equal(lit.light, "bright; the party's light: Cleo's Lamp (10 minutes left)");
   assert.match(ctx.party[1].items, / ×\d/, 'stacks show their count');
   assert.equal(rulesContext({ party: { ...party, sheets: { p1: { ...wizard, equipment: [{ id: 'plate-armor', name: 'Plate Armor', count: 3 }] } } }, combat: null, dungeon: null }).party[0].dragging, true);
-  assert.deepEqual(ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior'), { name: 'Goblin Warrior', side: 'foes', wound: 'Unhurt', status: 'up', toughness: 'weak' });
+  assert.deepEqual(ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior'), { name: 'Goblin Warrior', side: 'foes', wound: 'Unhurt', status: 'up', toughness: 'weak', position: 'near', engagedWith: [] });
   assert.equal(ctx.combat!.band, 'low');
   assert.deepEqual(ctx.dungeon, {
     kind: d.map.kind, level: 1, area: d.map.nodes.r0.name, purpose: 'Threshold',

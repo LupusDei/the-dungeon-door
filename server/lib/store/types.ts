@@ -1,4 +1,5 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
+import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
 
 export interface NewGame {
@@ -95,7 +96,7 @@ export interface Store {
    * original roll. `named` is the legal action the vote names; null is a choice letter, and clears one.
    * Returns the stored vote, or null when the game isn't voting on that scene.
    */
-  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named?: { actionId: string; targets: string[] } | null): Promise<Vote | null>;
+  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named?: { actionId: string; targets: string[] } | null, move?: Move | null): Promise<Vote | null>;
   /**
    * Records a written check on this player's vote — only while the game is voting on scene `index`.
    * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.

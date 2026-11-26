@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types \"lib/**/*.test.ts\"",
     "features": "bb features",
+    "features": "bb features",
     "migrate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/migrate.ts",
     "seed:quests": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/seed-quests.ts",
     "mcp:smoke": "node --experimental-strip-types scripts/mcp-smoke.ts",

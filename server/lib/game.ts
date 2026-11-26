@@ -17,6 +17,8 @@ import { chatLines, oneEmoji, parseMentions, quoteOf, replyIdOf, TYPING_MS, voic
 import { hasStolenHeroSpeech, keptWords, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
 import { pushChat, pushForget, pushSceneReady, pushSeen } from './push/notify.ts';
 import type { DMChoice, DMContext, NextScene, OpeningScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
+import { parseMove, validateMove } from './rules/bands.ts';
+import { RuleViolation } from './rules/violation.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
@@ -417,10 +419,21 @@ export async function castVote(code: string, playerId: string, body: Record<stri
   if (game.status !== 'voting') throw conflict(`can't vote: the game is ${game.status}`);
   if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
   if (!canAct(game.combat, playerId)) return viewGame(code, playerId); // a fallen hero has no action: nothing to record
+  let move: ReturnType<typeof parseMove> = undefined;
+  if (body.move !== undefined) {
+    try {
+      move = parseMove(body.move);
+      if (move && !game.combat) throw badRequest('there is no fight to move in');
+      if (move && game.combat) validateMove(game.combat, playerId, move);
+    } catch (e) {
+      if (e instanceof RuleViolation) throw badRequest(e.message);
+      throw e;
+    }
+  }
   const scene = game.scenes.find((s) => s.index === sceneIndex);
   if (!scene) throw conflict('voting on that scene has closed');
   const ballot = ballotOf(body, actionsFor(game, scene, playerId));
-  const vote = await getStore().castVote(code, sceneIndex, playerId, ballot.choiceId, dice.d20(), ballot.named);
+  const vote = await getStore().castVote(code, sceneIndex, playerId, ballot.choiceId, dice.d20(), ballot.named, move);
   if (!vote) throw conflict('voting on that scene has closed');
   await resolveIfAllVoted(code, sceneIndex, origin);
   return viewGame(code, playerId);

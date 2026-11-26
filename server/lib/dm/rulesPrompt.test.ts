@@ -7,7 +7,7 @@ import { openingNote, RULES_INSTRUCTIONS, rulesBlock, resultsBlock } from './rul
 const ctx: RulesContext = {
   party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false, dead: false, sees: 'clear', conditions: '' },
     { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true, dead: false, sees: 'clear', conditions: '' }],
-  combat: { round: 3, band: 'deadly', combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up', toughness: null }, { name: 'Ogre', side: 'foes', wound: 'Dead', status: 'dead', toughness: 'deadly' }, { name: 'Goblin', side: 'foes', wound: 'Bloodied', status: 'up', toughness: 'weak' }] },
+  combat: { round: 3, band: 'deadly', combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up', toughness: null, position: 'near', engagedWith: [] }, { name: 'Ogre', side: 'foes', wound: 'Dead', status: 'dead', toughness: 'deadly', position: 'near', engagedWith: [] }, { name: 'Goblin', side: 'foes', wound: 'Bloodied', status: 'up', toughness: 'weak', position: 'near', engagedWith: [] }] },
   trek: null,
   dungeon: { kind: 'Lair', level: 1, area: 'Grand chamber', purpose: 'Throne room', exits: [{ id: 'r2', connection: 'locked-door', leadsTo: 'Vault' }, { id: 'x1', connection: 'open-passage', leadsTo: null }], waiting: null },
   monsters: ['ogre', 'goblin-warrior'],
@@ -23,7 +23,7 @@ test('the rules block tells the DM the party’s numbers, the fight, the area an
     '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, passive Perception 13, passive Insight 10, 4 gp; carries Chain Mail, Potion of Healing ×2',
     '- Cleo: level 2, DOWN (0/12 HP), AC 12, spell slots left 2/1, passive Perception 11, passive Insight 12, 0.5 gp, overloaded (Speed 5 ft); carries nothing',
     "NOW: Day 1, 09:10. Light: dark; the party's light: Bryn's Torch (40 minutes left)",
-    'COMBAT, round 3 (deadly): Bryn 7/20 HP; Ogre dead (deadly); Goblin bloodied (weak)',
+    'COMBAT, round 3 (deadly): Bryn 7/20 HP, near; Ogre dead, near (deadly); Goblin bloodied, near (weak)',
     'DUNGEON (Lair, level 1): the party is in Grand chamber (Throne room). Exits: r2 locked-door to Vault; x1 open-passage to unexplored',
     'Monsters for fights: ogre, goblin-warrior',
   ].join('\n'));

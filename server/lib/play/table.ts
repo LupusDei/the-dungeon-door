@@ -81,7 +81,11 @@ function freeformsOf(scene: StoredScene): FreeformBallot[] {
 export function engineStep(state: RulesState, scene: StoredScene, resolution: Resolution): EngineStep {
   const ballots = resolution.votes.map(({ playerId, choiceId, roll }) => {
     const stored = scene.votes.find((v) => v.playerId === playerId);
-    return { playerId, choiceId, roll, ...(stored?.actionId ? { actionId: stored.actionId, targets: stored.targets ?? [] } : {}) };
+    return {
+      playerId, choiceId, roll,
+      ...(stored?.move ? { move: stored.move } : {}),
+      ...(stored?.actionId ? { actionId: stored.actionId, targets: stored.targets ?? [] } : {}),
+    };
   });
   const chosen = pickChoice(resolution.leaders, ballots);
   const inFight = state.combat !== null;

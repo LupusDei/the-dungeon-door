@@ -2,6 +2,7 @@
  * One turn of play through the rules engine: the party's choice (and its hook), or a combat round. Pure:
  * the game (lib/game.ts) loads the state, calls playTurn, and stores what comes back.
  */
+import type { Move } from '../rules/bands.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { HazardSpec } from '../rules/hazards.ts';
 import { capFight } from '../rules/encounter.ts';
@@ -27,7 +28,7 @@ import { partyHazard, springTrap } from './traps.ts';
 import { meetOnTheRoad, type Trek } from './trek.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
-export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[] }
+export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; move?: Move; actionId?: string; targets?: readonly string[] }
 /** A written check, already accepted by the engine. It is this hero's action and not a vote for a choice. */
 export interface FreeformBallot { playerId: string; roll: number; text: string; ruling: CheckRuling }
 export type FightNews = 'started' | FightEnd | null;
@@ -65,7 +66,7 @@ function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before:
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
-  const started = startFight(s.party, monsterIds, lightLevel(s));
+  const started = startFight(s.party, monsterIds, lightLevel(s), s.dungeon?.trek ? { band: 'far' } : undefined);
   return done({ ...s, party: started.party, combat: started.combat }, [...before, ...started.lines], null, 'started');
 }
 
@@ -81,7 +82,9 @@ function clearHere(s: RulesState, lines: string[]): { state: RulesState; lines: 
 function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {
   const votes = {
     ...Object.fromEntries(ballots.map((b) => [b.playerId, {
-      choiceId: b.choiceId, roll: b.roll, ...(b.actionId ? { actionId: b.actionId, targets: b.targets ?? [] } : {}),
+      choiceId: b.choiceId, roll: b.roll,
+      ...(b.actionId ? { actionId: b.actionId, targets: b.targets ?? [] } : {}),
+      ...(b.move ? { move: b.move } : {}),
     }])),
     ...Object.fromEntries(freeforms.map((f) => [f.playerId, { choiceId: 'c' as const, roll: f.roll, text: f.text, freeform: f.ruling }])),
   };

@@ -39,6 +39,8 @@ test('a fighter in a fight is offered each weapon, Second Wind, and the common a
   assert.deepEqual([one(actions, 'common:help').available, one(actions, 'common:help').reason], [false, 'No one to help']);
   assert.equal(one(actions, 'common:break-free').reason, 'You are not restrained or grappled');
   assert.equal(actions.some((a) => a.kind === 'spell'), false);
+  const moves = actions.filter((a) => a.kind === 'move');
+  assert.ok(moves.length > 0 && moves.every((a) => a.available && a.id.startsWith('move:') && a.picks === 'none'));
 });
 
 test('a prepared spell with no slot stays on the list, and says why', () => {
@@ -138,6 +140,16 @@ test('Dash spends the turn; a named potion or Second Wind is the heal, not a sec
   assert.equal(wind.lines.filter((l) => l.includes('Second Wind')).length, 1);
   const left = resourcesOf(wind.party.sheets.p1).find((r) => r.id === 'second-wind')!;
   assert.equal(left.left, left.max - 1);
+});
+
+test('a move on the list is this hero\'s action, and it changes where they stand', () => {
+  const { combat, party: p } = begin({ p1: fighter });
+  const actions = listed({ combat, sheet: p.sheets.p1 });
+  const step = actions.find((a) => a.kind === 'move' && a.id.startsWith('move:engaged') && !a.id.includes(':dash'));
+  assert.ok(step);
+  const round = fightRound(p, combat, { p1: { choiceId: 'c', roll: 8, actionId: step.id, targets: [] } });
+  assert.match(round.lines.join('\n'), /Bryn moves to engage /);
+  assert.equal(round.combat.combatants.p1.place?.band, 'engaged');
 });
 
 test('a hero who cannot act sees the list, each available one closed with the reason', () => {

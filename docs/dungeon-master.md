@@ -69,8 +69,9 @@ The engine owns the numbers; you propose and narrate. For a game from before the
     ("restrained (DC 13 Athletics to break free)").
   - `time` and `light`: the clock ("Day 1, 08:40") and the light the party carries. Describe only what
     the heroes can see.
-  - `combat`: the round, each hero's HP and status, and each foe's wound ("Bloodied", "Gasping") and
-    status, or null. A foe's hit points are hidden: show its wounds in the story, never numbers.
+  - `combat`: the round, how hard the fight is, each hero's HP and status, each foe's wound ("Bloodied",
+    "Gasping") and status, and where everyone stands (engaged with whom, near or far), or null. A foe's
+    hit points are hidden: show its wounds in the story, never numbers.
   - `trek`: in a dungeon game, the road from the tavern to the door (two scenes): the stretch, its
     terrain, what is on it (bandits, beasts, a monster band, a vendor and their wares, or nothing) and who
     waits there; null at the door. Narrate overland travel; the party goes on by itself after each scene.

@@ -1,9 +1,8 @@
 /**
  * What one hero can do on this turn, and what a vote that names one of those actions does.
  * The list is the sheet's: each weapon, each spell they know or have prepared, each usable item,
- * each class feature with uses, and the common actions. One they cannot take stays on the list
- * with the reason. A later kind (a move, once a fight has positions) is another entry of the same
- * shape; nothing here assumes the set of kinds is closed.
+ * each class feature with uses, the common actions, and, in a fight, each legal move. One they
+ * cannot take stays on the list with the reason. Nothing here assumes the set of kinds is closed.
  *
  * A letter vote (choice a, b or c) is untouched. A vote that names an action is checked against
  * this list, then played as that action. The vote's d20 is still the die, when the action rolls one.
@@ -23,6 +22,8 @@ import { areaCatch } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId, LegalAction } from '../types.ts';
 import { STABILIZE_DC, takeThird } from './actions.ts';
+import { moveActions, moveKey, parseMoveKey } from './moves.ts';
+import { validateMove } from '../rules/bands.ts';
 import { RuleViolation } from '../rules/violation.ts';
 
 export interface LegalInput {
@@ -55,7 +56,7 @@ const offer = ({ reason, limit, ...part }: Offer): LegalAction => ({
   ...part, ...(limit !== undefined ? { limit } : {}), available: reason === null, reason,
 });
 
-/** Every foe still standing. Reach and range bands are not known yet, so any of them is a legal target. */
+/** Every foe still standing. The engine checks range when the action is played, so the list offers any of them. */
 function foesOf(combat: CombatState | null, side: string): { id: string; name: string }[] {
   if (!combat) return [];
   return Object.values(combat.combatants).filter((c) => c.side !== side && c.status === 'up').map((c) => ({ id: c.id, name: c.name }));
@@ -243,6 +244,24 @@ function choicesOf(choices: LegalInput['choices']): LegalAction[] {
 const gated = (actions: LegalAction[], canAct: boolean): LegalAction[] =>
   (canAct ? actions : actions.map((a) => (a.available ? { ...a, available: false, reason: 'You cannot act' } : a)));
 
+/** Legal moves for this hero, appended so the dashboard can show them beside the other actions. */
+function movesOf(combat: CombatState | null, playerId: string): LegalAction[] {
+  if (!combat?.combatants[playerId]) return [];
+  return moveActions(combat, playerId).flatMap(({ label, action }) => {
+    if (action.kind !== 'move') return [];
+    const { kind: _kind, ...move } = action;
+    return [offer({
+      id: moveKey(move),
+      label,
+      kind: 'move',
+      detail: move.dash ? 'Two bands. This spends your action.' : 'One band. This is your action.',
+      targets: (move.engage ?? []).map((id) => ({ id, name: combat.combatants[id]?.name ?? id })),
+      picks: 'none',
+      reason: null,
+    })];
+  });
+}
+
 /** The hero's legal actions this turn. Unavailable ones are in the list, with the reason. */
 export function legalActions({ combat, sheet, playerId, choices, canAct }: LegalInput): LegalAction[] {
   if (!sheet) return gated(choicesOf(choices), canAct);
@@ -266,6 +285,7 @@ export function legalActions({ combat, sheet, playerId, choices, canAct }: Legal
     ...itemsOf(sheet, inFight, dying),
     ...featuresOf(sheet, inFight, hurtAllies(combat, playerId)),
     ...commonOf(inFight, foes, allies, gear, heldFast),
+    ...movesOf(combat, playerId),
     ...choicesOf(choices),
   ];
   return gated(list, canAct);
@@ -438,6 +458,17 @@ export function resolveNamedAction(combat: CombatState, sheet: CharacterSheet, p
     if (actionId === 'common:break-free') {
       const third = takeThird(combat, sheet, playerId);
       return { action: third.action, combat: third.combat, sheet: third.sheet };
+    }
+    if (actionId.startsWith('move:')) {
+      const move = parseMoveKey(actionId);
+      if (!move) return dodge(combat, sheet);
+      try {
+        validateMove(combat, playerId, move);
+      } catch (error) {
+        if (error instanceof RuleViolation) return told(combat, sheet, error.message);
+        throw error;
+      }
+      return { action: { kind: 'move', ...move }, combat, sheet };
     }
     const verb = ASIDE[actionId];
     if (verb) return told(combat, sheet, `${sheet.name} ${verb}.`);

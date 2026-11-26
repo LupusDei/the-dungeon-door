@@ -26,7 +26,8 @@ test('a fight starts with the heroes (by player id) and numbered foes; the party
   assert.equal(combat.combatants.p1.name, 'Bryn');
   assert.notEqual(after.rng, 42);
   assert.deepEqual(startFight(party(), ['goblin-warrior']).combat, startFight(party(), ['goblin-warrior']).combat, 'same dice, same fight');
-  assert.match(lines[0], /^A fight begins: Goblin Warrior 1, Goblin Warrior 2, Bugbear Warrior\. Initiative: /);
+  assert.equal(lines[0], 'Both sides begin near, about 30 feet apart.');
+  assert.match(lines[1], /^A fight begins: Goblin Warrior 1, Goblin Warrior 2, Bugbear Warrior\. Initiative: /);
 });
 
 test('a hero at 0 HP joins a fight stable, not up', () => {
@@ -72,15 +73,15 @@ test('the Ability Score Improvement: +2 to the best score below 20, or +1 to the
   assert.deepEqual(improvement(scores({ str: 20, dex: 19, con: 15 })).increases, { dex: 1, con: 1 });
 });
 
-test('an area spell catches as many foes as it can (areaCatch), the most wounded first', () => {
+test('an area spell catches by band: a cone the melee it steps into, a sphere the foe it is centred on', () => {
   const { combat } = startFight(party(), ['goblin-warrior', 'goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
   const pyro = { ...wizard, spellcasting: { ...wizard.spellcasting!, cantrips: [], prepared: ['burning-hands'] } };
   const hurt = patch(combat, { 'foe-3': { hp: 1 }, 'foe-4': { hp: 0, status: 'dead' } });
   const { action } = heroAction(hurt, pyro, 'p2', 'b', 12);
-  assert.deepEqual(action.kind === 'spell' && [action.cast.spellId, action.targets], ['burning-hands', ['foe-3', 'foe-1']], 'a 15-foot cone: two foes, never the dead');
+  assert.deepEqual(action.kind === 'spell' && [action.cast.spellId, action.targets], ['burning-hands', ['foe-3', 'foe-1', 'foe-2']], 'a 15-foot cone, after stepping in, catches the near cluster; never the dead');
   const blast = { ...pyro, level: 5, spellcasting: { ...pyro.spellcasting!, prepared: ['fireball'], slots: [4, 3, 2, 0, 0, 0, 0, 0, 0], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0] } };
   const { action: big } = heroAction(hurt, blast, 'p2', 'b', 12);
-  assert.deepEqual(big.kind === 'spell' && big.targets, ['foe-3', 'foe-1', 'foe-2'], 'a 20-foot sphere would take five: there are three left');
+  assert.deepEqual(big.kind === 'spell' && big.targets, ['foe-3'], 'a 20-foot sphere does not cover the near band: the one it is centred on');
 });
 
 test('Cast: the caster’s best attack spell it can cast now; a leveled one spends its slot; no spell means Attack', () => {
@@ -289,11 +290,12 @@ test('in the dark whoever cannot see fights Blinded: darkvision, blindsight or t
   const dark = startFight(p, ['bandit', 'goblin-warrior'], 'dark');
   const blind = Object.values(dark.combat.combatants).filter((c) => c.conditions.includes('blinded')).map((c) => c.name);
   assert.deepEqual(blind, ['Ann', 'Bandit']);
-  assert.equal(dark.lines[1], 'In the dark, Ann, Bandit cannot see (Blinded).');
+  assert.equal(dark.lines[2], 'In the dark, Ann, Bandit cannot see (Blinded).');
   for (const light of ['dim', 'bright'] as const) {
     const lit = startFight(p, ['bandit'], light);
     assert.equal(Object.values(lit.combat.combatants).some((c) => c.conditions.length > 0), false, light);
-    assert.equal(lit.lines.length, 1);
+    assert.deepEqual(lit.lines, ['Both sides begin near, about 30 feet apart.', lit.lines[1]]);
+    assert.match(lit.lines[1], /^A fight begins: Bandit\. Initiative: /);
   }
 });
 
@@ -443,6 +445,31 @@ test('Magic Missile is cast in a fight: it outscores Fire Bolt at level 1 (three
   const round = fightRound(party({ p1: fighter, p2: mm }), hurt, { p1: { choiceId: 'c', roll: 10 }, p2: { choiceId: 'b', roll: 10 } });
   const line = round.lines.find((l) => l.startsWith(`${mm.name} casts Magic Missile: `))!;
   assert.match(line, /^Cleo casts Magic Missile: Goblin Warrior 2 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage\.$/);
+});
+
+test('a vote carries a move: one band before the action, a Dash instead of it, and leaving melee draws an opportunity attack', () => {
+  const { combat, party: p } = startFight(party({ p1: fighter }), ['shrieker-fungus']);
+  const stepped = fightRound(p, combat, { p1: { choiceId: 'c', roll: 10, move: { to: 'far' } } });
+  assert.equal(stepped.combat.combatants.p1.place?.band, 'far');
+  assert.ok(stepped.lines.includes('Bryn moves to far.'));
+  const dashed = fightRound(stepped.party, stepped.combat, { p1: { choiceId: 'a', roll: 15, move: { to: 'engaged', engage: ['foe-1'], dash: true } } });
+  assert.equal(dashed.combat.combatants.p1.place?.band, 'engaged');
+  assert.ok(dashed.lines.some((l) => l.startsWith('Bryn Dashes to engage ')));
+  assert.equal(dashed.lines.some((l) => l.startsWith('Bryn attacks')), false, 'Dash spends the action');
+  const held = {
+    ...combat,
+    combatants: {
+      p1: { ...combat.combatants.p1, hp: 40, maxHp: 40, place: { band: 'engaged' as const, with: ['foe-1'] } },
+      'foe-1': { ...combat.combatants['foe-1'], place: { band: 'engaged' as const, with: ['p1'] }, attacks: [{ name: 'Poke', bonus: 30, ranged: false, damage: [{ dice: '1', type: 'piercing' }] }] },
+    },
+  };
+  const left = fightRound(p, held, { p1: { choiceId: 'c', roll: 10, move: { to: 'near' } } });
+  assert.ok(left.lines.some((l) => l.startsWith('Opportunity Attack:')), left.lines.join(' | '));
+  const slipped = fightRound(p, held, { p1: { choiceId: 'c', roll: 10, move: { to: 'near', disengage: true } } });
+  assert.equal(slipped.lines.some((l) => l.startsWith('Opportunity Attack:')), false);
+  assert.ok(slipped.lines.some((l) => l.startsWith('Bryn Disengages to near.')));
+  const refused = fightRound(p, combat, { p1: { choiceId: 'c', roll: 10, move: { to: 'near' } } });
+  assert.ok(refused.lines.some((l) => /already near/.test(l)));
 });
 
 test('a fight with a monster that cannot attack goes on: the Shrieker shrieks, the Seahorse dashes, the Mist drifts, the Bat bites (by save)', () => {

@@ -133,7 +133,12 @@ export interface RulesView {
     /** The fight against the current party: low, moderate, high, or deadly above high. */
     band: FightBand;
     /** A hero has hp and maxHp; a foe has wound and vigor instead (its hit points are hidden). */
-    combatants: ({ id: string; name: string; side: 'party' | 'foes'; status: string; conditions: string[]; toughness: Toughness | null } & Health)[];
+    combatants: ({ id: string; name: string; side: 'party' | 'foes'; status: string; conditions: string[]; toughness: Toughness | null;
+      /** Range band: engaged (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). */
+      position: 'engaged' | 'near' | 'far';
+      /** Who they are in melee with, by id. Empty unless engaged. */
+      engagedWith: string[];
+    } & Health)[];
   };
   /** The road from the tavern to the dungeon door, while the party is on it; then null. */
   trek: TrekView | null;
@@ -206,6 +211,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
         combatants: rated.ordered.map((c) => ({
           id: c.id, name: c.name, side: c.side, ...health(c, true), status: c.status,
           conditions: [...c.conditions], toughness: rated.toughness(c),
+          position: c.place?.band ?? 'near', engagedWith: [...(c.place?.with ?? [])],
         })),
       };
     })(),
@@ -231,8 +237,10 @@ export interface RulesContext {
   /** "dark; the party's light: Bryn's Torch (40 minutes left)", or "dim; no light carried". */
   light: string;
   combat: null | {
-    round: number; band: FightBand;
-    combatants: ({ name: string; side: 'party' | 'foes'; status: string; toughness: Toughness | null } & Omit<Health, 'vigor'>)[];
+    round: number;     band: FightBand;
+    combatants: ({ name: string; side: 'party' | 'foes'; status: string; toughness: Toughness | null;
+      position: 'engaged' | 'near' | 'far'; engagedWith: string[];
+    } & Omit<Health, 'vigor'>)[];
   };
   trek: TrekView | null;
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
@@ -281,7 +289,10 @@ export function rulesContext(state: RulesState): RulesContext {
       return {
         round: combat.round,
         band: rated.band,
-        combatants: rated.ordered.map((c) => ({ name: c.name, side: c.side, ...health(c, false), status: c.status, toughness: rated.toughness(c) })),
+        combatants: rated.ordered.map((c) => ({
+          name: c.name, side: c.side, ...health(c, false), status: c.status, toughness: rated.toughness(c),
+          position: c.place?.band ?? 'near', engagedWith: (c.place?.with ?? []).map((id) => combat.combatants[id]?.name ?? id),
+        })),
       };
     })(),
     trek: trekView(state),

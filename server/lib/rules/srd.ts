@@ -80,6 +80,8 @@ export interface SrdSpell {
   area: { shape: AreaShape; feet: number } | null;
   /** Darts that always hit, each dealing `damage` (Magic Missile): how many at the spell's level, and how many more per slot level above. */
   darts: { count: number; perSlot: number } | null;
+  /** Feet. Self is 0, Touch is 5, Sight and Unlimited reach any band. */
+  range: number;
 }
 /** A cantrip's damage from a character level on: more dice, or more beams (separate attacks). */
 export interface CantripStep { level: number; dice: string | null; beams: number | null }
@@ -263,9 +265,20 @@ const DARTS = /create (one|two|three|four) glowing darts[^]*?A dart deals (\d+d\
 const MORE_DARTS = /(one|two) more darts? for each spell slot level above/;
 const AREA = /(\d+)-foot(?:-radius|-long|-wide|-tall|-high)?,? ?(?:\d+-foot[- ](?:wide|tall|high|radius),? ?)?(Sphere|Cone|Cube|Line|Cylinder|Emanation)/;
 
+/** "120 feet", "Touch", "Self", "1 mile", "Sight". A stray "Component:" tail on a few rows is ignored. */
+const spellRange = (text: string): number => {
+  const feet = /^(\d+)\s*feet/.exec(text);
+  if (feet) return Number(feet[1]);
+  const miles = /^(\d+)\s*miles?/.exec(text);
+  if (miles) return Number(miles[1]) * 5280;
+  if (/^touch/i.test(text)) return 5;
+  if (/^self/i.test(text)) return 0;
+  return 10000;
+};
+
 const spellSchema = z.object({
   index: z.string(), name: z.string(), level: z.number(), classes: z.array(z.string()), concentration: z.boolean(),
-  attackType: z.enum(['melee', 'ranged']).nullable(), description: z.string(), higherLevel: z.string().nullable(),
+  attackType: z.enum(['melee', 'ranged']).nullable(), range: z.string(), description: z.string(), higherLevel: z.string().nullable(),
   damage: z.object({ damageType: ref, damageAtSlotLevel: z.record(z.string(), z.string()) }).nullable(),
 }).transform((s): SrdSpell => {
   const text = `${s.higherLevel ?? ''} ${s.description}`;
@@ -285,6 +298,7 @@ const spellSchema = z.object({
     healing: healing ? { dice: healing, upcastDice: HEALING_UPCAST.exec(text)?.[1] ?? null } : null,
     area: area ? { shape: area[2] as AreaShape, feet: Number(area[1]) } : null,
     darts: darts && { count: NUMBERS[darts[1]], perSlot: NUMBERS[MORE_DARTS.exec(s.higherLevel ?? '')?.[1] ?? ''] ?? 0 },
+    range: spellRange(s.range),
   };
 });
 

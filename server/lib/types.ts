@@ -3,6 +3,7 @@ import type { AttackView } from './attacks.ts';
 import type { RulesHook } from './play/hooks.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { RulesView } from './play/view.ts';
+import type { Move } from './rules/bands.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
@@ -44,6 +45,8 @@ export interface Vote {
   choiceId: ChoiceId;
   /** d20, rolled by the server on the first vote and kept when the vote changes. */
   roll: number;
+  /** A combat move taken with this vote. Absent outside a fight, and on votes from before range bands. */
+  move?: Move;
   /** Set when the vote named a legal action rather than a choice letter. */
   actionId?: string;
   /** Ids from that action's targets. Absent when the action needs none. */
@@ -59,7 +62,7 @@ export interface Vote {
 export interface LegalAction {
   id: string;
   label: string;
-  /** "attack", "spell", "item", "feature", "common", "choice", or a later kind such as "move". */
+  /** "attack", "spell", "item", "feature", "common", "choice", or "move". */
   kind: string;
   detail: string;
   targets: { id: string; name: string }[];

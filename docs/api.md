@@ -231,11 +231,13 @@ Scene {
                                      // nothing to choose, and the round does not wait for them
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
   votes: [{ playerId, choiceId, roll: number /* d20 */,
-            label?: string, actionId?: string, targets?: string[] }]
+            label?: string, actionId?: string, targets?: string[],
+            move?: { to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean } }]
                                      // in a combat round, `label` is what that hero is doing ("Attack with
-                                     // Longsword", "Cast Fire Bolt", "Dash"). `actionId` and `targets` are
-                                     // set when the vote named an action from `actions` rather than a letter.
-                                     // A written check is not listed here; it is in `freeforms`
+                                     // Longsword", "Cast Fire Bolt", "Dash", "Move to near"). `actionId` and
+                                     // `targets` are set when the vote named an action from `actions` rather
+                                     // than a letter. `move` is a combat move taken with the vote (see the
+                                     // vote endpoint). A written check is not listed here; it is in `freeforms`
   myVote: string | null              // choiceId of the caller; a letter vote is still "a", "b" or "c".
                                      // Null when they wrote a check or have not acted
   myAction: null | { id: string; targets: string[] }
@@ -256,8 +258,7 @@ LegalAction {
   id: string                         // stable: "attack:greatsword", "spell:fire-bolt", "item:potion-of-healing",
                                      // "feature:second-wind", "common:dash", "choice:a"
   label: string                      // "Attack with Greatsword", "Cast Fire Bolt", "Dash", "Engage"
-  kind: string                       // "attack", "spell", "item", "feature", "common" or "choice".
-                                     // Further kinds (such as "move") use this same shape.
+  kind: string                       // "attack", "spell", "item", "feature", "common", "choice" or "move".
   detail: string
   targets: [{ id: string; name: string }]   // who or what a vote may name; empty when it needs no target
   picks: "none" | "one" | "many"     // how many of `targets` the vote names
@@ -311,7 +312,10 @@ RulesView {                          // SRD 5.2 (2024 rules)
                    hp?: number; maxHp?: number      // a hero's hit points; absent for a foe
                    wound?: string; vigor?: number   // a foe's instead: its hit points are hidden
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
-                   toughness: null | "puny" | "weak" | "even" | "strong" | "deadly" }]   // initiative order;
+                   toughness: null | "puny" | "weak" | "even" | "strong" | "deadly";
+                   position: "engaged" | "near" | "far";   // range band: melee (about 5 ft, reach included),
+                                      // about 30 ft, or about 60 ft. A fight starts with both sides near.
+                   engagedWith: string[] }]   // ids they are in melee with; empty unless engaged. Initiative order.
                                       // a hero's id is its playerId; toughness is null for a hero, and the
                                       // foe's own rating against this party (absent from older servers).
                                       // wound: how hurt the foe looks, by the share of hit points left:
@@ -438,14 +442,19 @@ Reaction {
   becomes `voting` when it's ready. A dungeon game opens with two scenes on the road from the tavern to
   the dungeon door (`rules.trek`; `rules.dungeon` is null until the door), so its `sceneCount` is two more
   than asked for. Foes on the road who bar the way give Engage, Run and Parley, as in a room.
-- `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId }` or `{ sceneIndex, actionId, targets? }` → `GameState`.
+- `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId, move? }` or `{ sceneIndex, actionId, targets?, move? }` → `GameState`.
   `choiceId` is still `"a"`, `"b"` or `"c"`. `actionId` is an id from `scene.actions`, and `targets` are ids
   from that action (omit them when `picks` is `"none"`; one id when `"one"`; one or more, up to `limit`,
-  when `"many"`). `"choice:a"` is the same vote as `choiceId` `"a"`. When both are sent, `actionId` is the
+  when `"many"`). `"choice:a"` is the same vote as `choiceId` `"a"`. A move action (`kind` `"move"`) is named
+  the same way; its id is the move. When both a letter and `actionId` are sent, `actionId` is the
   vote. The server checks the action is one this hero can take and the targets are among its `targets`;
   otherwise 400, and `error` says why (`"No level 1 spell slot or higher left"`, `"that is not a valid target"`).
   Voting status only; you can change your vote until the scene resolves. The server rolls a d20
-  for each vote (kept when you change your vote). When every player has voted the scene resolves:
+  for each vote (kept when you change your vote). `move`, only in a fight, is
+  `{ to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean }`.
+  One band happens before the choice; `dash: true` covers two bands and spends the action (the choice
+  is not taken). `engage` names who you close with, and is required when `to` is `"engaged"`.
+  `disengage: true` leaves melee without opportunity attacks. An illegal move is a 400. When every player has voted the scene resolves:
   status `resolving`, the DM weighs all votes and rolls, writes `outcome` on the old scene and the
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
   Voting again replaces a written action (below) and keeps the same d20.
@@ -569,7 +578,7 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     instead of a choice letter; the letter votes keep working, and the d20 on the vote is still the die the
     engine uses. The list is the same shape out of a fight, where the scene's own choices (a way on, Engage,
     Run, Parley, a rest) are included as `choice:a` and so on, and a weapon or a spell says why it cannot be
-    used yet. A later kind, such as a move once positions exist, is another entry with the same fields.
+    used yet. In a fight the list also offers each legal move (`kind` `"move"`: one band, or a Dash of two).
   Each player's vote is their own hero's action, and the vote's d20 is their attack roll. Monsters act
   by simple rules. Each round is a scene, so `sceneCount` grows by one for each round. When the foes all
   fall, the living heroes split the XP; they level up with it at the quest's end. If
@@ -592,8 +601,19 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     the hero's turns, or by breaking free. A concentrating hero makes a CON save each time it is hit
     (DC 10 or half the damage) and loses the spell on a failure, at 0 HP or when Incapacitated; the spell
     ends with the fight. Species resistances halve damage of their types.
-  - **Area spells** catch several foes, the most wounded first: 1 + radius/5 for a sphere, cylinder or
-    emanation, 1 + size/10 for a cone or cube, 1 + length/30 for a line. Each makes its own save.
+  - **Positions.** Each combatant has a range band (`position`): engaged with the ids in `engagedWith`
+    (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). A fight in a room starts with both sides
+    near; a fight on the road starts far (they see each other down the track). One side surprising the
+    other begins in melee. Moving one band is a move; Dash moves two and spends
+    the action. Leaving an engaged foe provokes an opportunity attack unless you Disengage. Melee and
+    reach need engaged. A ranged weapon or spell is checked against the band (long range has disadvantage;
+    past it, the attack cannot be made), and a ranged attack while engaged has disadvantage. A vote may
+    carry `move` (above). The choice text says when the hero will step in as part of Attack or Cast.
+    Monsters close in when they fight in melee and keep their distance when they only shoot.
+  - **Area spells** catch by band, where the area fits. A cone, line, emanation or an area of range Self
+    reaches from the caster (a 15-foot cone catches who they are engaged with, after they step in).
+    A sphere, cylinder or cube with a range is placed on a foe and catches whoever is within its size
+    of that foe. Each makes its own save.
   - **Second Wind and potions.** A hero at half HP or less takes one Bonus Action to heal before their
     voted action: a fighter with Second Wind left uses it (1d10 + Fighter level), anyone else (or a fighter
     out of uses) drinks the least of their healing potions.

@@ -437,6 +437,8 @@ test('foes barring the road: Run slips past and the party goes on; a failed Parl
   assert.ok(talked.combat);
   assert.equal(talked.dungeon!.trek!.leg, 0, 'the party goes on once the fight is over');
   assert.ok(talked.lines.includes('They will not let the party pass: they attack.'));
+  assert.ok(talked.lines.includes('Both sides begin far, about 60 feet apart.'));
+  assert.ok(Object.values(talked.combat!.combatants).every((c) => c.place?.band === 'far'));
 });
 
 test('a fight on the road: XP as any fight, the stretch\u2019s treasure for the victors, then the road goes on', () => {

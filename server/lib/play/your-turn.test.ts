@@ -24,8 +24,8 @@ test('who can act: everyone outside a fight; in one, only a hero who is up and i
 test('a bonus as a sheet writes it: +0 and +5, -1', () => {
   const combat = fight({ p1: fighter });
   const weapon = (bonus: number) => [{ name: 'Club', bonus, ranged: false, damage: [{ dice: '1d4', type: 'bludgeoning' }] }];
-  assert.equal(yourChoices(patch(combat, { p1: { attacks: weapon(0) } }), fighter, 'p1')[0].detail, '+0 to hit, 1d4 bludgeoning, at Goblin Warrior.');
-  assert.equal(yourChoices(patch(combat, { p1: { attacks: weapon(-1) } }), fighter, 'p1')[0].detail, '-1 to hit, 1d4 bludgeoning, at Goblin Warrior.');
+  assert.equal(yourChoices(patch(combat, { p1: { attacks: weapon(0) } }), fighter, 'p1')[0].detail, '+0 to hit, 1d4 bludgeoning, at Goblin Warrior. You move to engage Goblin Warrior.');
+  assert.equal(yourChoices(patch(combat, { p1: { attacks: weapon(-1) } }), fighter, 'p1')[0].detail, '-1 to hit, 1d4 bludgeoning, at Goblin Warrior. You move to engage Goblin Warrior.');
 });
 
 const mage = (prepared: string[], slots: number[], expended: number[]): CharacterSheet =>
@@ -44,7 +44,7 @@ test('a spell that spends a slot says which and how many are left: the lowest it
 test('an area spell names everyone it catches: A, B and C', () => {
   const combat = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
   const blast = mage(['fireball'], [4, 3, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.match(yourChoices(combat, blast, 'p1')[1].detail, /, at Goblin Warrior 1, Goblin Warrior 2 and Goblin Warrior 3\./);
+  assert.match(yourChoices(combat, blast, 'p1')[1].detail, /, at Goblin Warrior 1\./, 'a 20-foot sphere, with nobody yet in melee, catches the one it is centred on');
 });
 
 test('Magic Missile says how many darts, that they never miss, and whom they will strike', () => {
@@ -77,11 +77,11 @@ test('a fighter at half its HP or less with Second Wind left uses it first, befo
 test('the choices name the foe the hero will really aim at: past one immune to its damage', () => {
   const combat = fight({ p1: fighter }, ['goblin-warrior', 'goblin-warrior']);
   const type = combat.combatants.p1.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best)).damage[0].type;
-  assert.match(yourChoices(patch(combat, { 'foe-1': { hp: 1, immunities: [type] } }), fighter, 'p1')[0].detail, /, at Goblin Warrior 2\.$/);
+  assert.match(yourChoices(patch(combat, { 'foe-1': { hp: 1, immunities: [type] } }), fighter, 'p1')[0].detail, /, at Goblin Warrior 2\./);
   const bolt = mage(['fire-bolt'], [0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const casting = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior']);
   assert.match(yourChoices(patch(casting, { 'foe-1': { hp: 1, immunities: ['fire'] } }), { ...bolt, spellcasting: { ...bolt.spellcasting!, cantrips: ['fire-bolt'], prepared: [] } }, 'p1')[1].detail, /, at Goblin Warrior 2\.$/);
   const blast = mage(['fireball'], [4, 3, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const three = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
-  assert.match(yourChoices(patch(three, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 2 }, 'foe-3': { hp: 3 } }), blast, 'p1')[1].detail, /, at Goblin Warrior 2, Goblin Warrior 3 and Goblin Warrior 1\./);
+  assert.match(yourChoices(patch(three, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 2 }, 'foe-3': { hp: 3 } }), blast, 'p1')[1].detail, /, at Goblin Warrior 2\./, 'centred on the most wounded foe it can hurt');
 });

@@ -43,7 +43,7 @@ test('a hero attacks with each weapon it carries: STR for melee, DEX for ranged,
   ] };
   const [greatsword, longbow, rapier] = heroCombatant('p1', sheet).attacks;
   assert.deepEqual(greatsword, { name: 'Greatsword', bonus: 5, ranged: false, damage: [{ dice: '2d6+3', type: 'slashing' }] });
-  assert.deepEqual(longbow, { name: 'Longbow', bonus: 4, ranged: true, damage: [{ dice: '1d8+2', type: 'piercing' }] });
+  assert.deepEqual(longbow, { name: 'Longbow', bonus: 4, ranged: true, damage: [{ dice: '1d8+2', type: 'piercing' }], normal: 150, long: 600 });
   assert.equal(rapier.bonus, 5, 'finesse uses STR 17 over DEX 14');
   assert.equal(heroCombatant('p1', sheet).attacks.length, 3, 'rope is not a weapon');
 });
