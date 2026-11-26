@@ -37,30 +37,6 @@
     {
       "source": "/api/games/:code",
       "destination": "/api/game?code=:code"
-    },
-    {
-      "source": "/api/auth/:action",
-      "destination": "/api/auth?action=:action"
-    },
-    {
-      "source": "/api/oauth/:action",
-      "destination": "/api/oauth?action=:action"
-    },
-    {
-      "source": "/.well-known/oauth-protected-resource",
-      "destination": "/api/oauth?action=resource"
-    },
-    {
-      "source": "/.well-known/oauth-protected-resource/:path*",
-      "destination": "/api/oauth?action=resource"
-    },
-    {
-      "source": "/.well-known/oauth-authorization-server",
-      "destination": "/api/oauth?action=server"
-    },
-    {
-      "source": "/.well-known/oauth-authorization-server/:path*",
-      "destination": "/api/oauth?action=server"
     }
   ]
 }

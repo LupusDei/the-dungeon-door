@@ -74,17 +74,21 @@ The Dungeon Door is a tabletop-style fantasy game with an AI dungeon master. Pla
 
 ## Where tasks live
 
-The team's shared board is the quest log: https://the-dungeon-door.vercel.app/quest-log. Keep it
-truthful as you work: set a task to `doing` when you start it and `done` when it lands (with a link
-to the pull request), and add tasks for team-level work you discover.
+The team's shared board is the quest log (https://the-dungeon-door.vercel.app/quest-log), and you
+are expected to keep it current through its MCP server, `dungeon-door`
+(`https://the-dungeon-door.vercel.app/api/mcp`; this repository's `.mcp.json` configures it and
+reads your quest key from `QUEST_KEY`).
 
-- **Best: the MCP server** at `https://the-dungeon-door.vercel.app/api/mcp` (tools `quest_get_board`,
-  `quest_list_tasks`, `quest_add_task`, `quest_update_task`, …). If it is connected in your session,
-  use it. Setup: `docs/quest-log.md`.
-- **Otherwise the REST API**: `GET /api/quests`, and `POST`/`PATCH`/`DELETE` with the `x-quest-key`
-  header, if you have been given a quest key (in the `QUEST_KEY` environment variable when you have
-  one; never print it or commit it).
+The agreement, in short (the full version, with every tool, is the README section
+"For AI agents: tracking work on the quest log"):
 
+1. Start of session: `quest_get_board`, then `quest_list_tasks` for your owner's open work.
+2. Before starting work: find its task or create it (`quest_add_task`), then set it to `doing`.
+3. Record follow-ups and discovered work as new `todo` tasks.
+4. When it lands: `quest_update_task` with `status: "done"`, the pull request in `link`, and a line of `notes`.
+5. Never print or commit the quest key; notes are public, so no secrets in them.
+
+If the MCP server isn't connected, use the REST API with the `x-quest-key` header (README, step 4).
 `bd` is for your own working notes inside this repository, not for coordinating with the team.
 
 ## Build & Test

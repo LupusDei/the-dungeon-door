@@ -173,7 +173,6 @@ dialog::backdrop { background: var(--scrim); }
       <button class="btn quiet small" id="clear-filters" type="button" hidden>Clear filters</button>
       <span class="spacer"></span>
       <span class="whoami" id="whoami" hidden></span>
-      <button class="btn quiet small" id="use-key" type="button" hidden>Use a quest key</button>
       <button class="btn small" id="sign-in" type="button">Team sign-in</button>
       <button class="btn primary small" id="add-task" type="button" hidden>Add a task</button>
     </div>
@@ -182,11 +181,8 @@ dialog::backdrop { background: var(--scrim); }
   </section>
 
   <section class="howto" aria-label="Other ways to manage the board">
-    <div><strong style="color:var(--fg)">On the team?</strong> Sign in to add and move tasks here, or use the <a href="/admin">admin portal</a> to manage everything, including levels and workstreams.</div>
-    <div>Assistants can manage the board too. It is an MCP server at <span class="num">/api/mcp</span>; the admin portal's “Connect an assistant” tab has the setup. Scripts can use the API with a personal quest key:</div>
-    <code>curl -X POST https://the-dungeon-door.vercel.app/api/quests \
-  -H "x-quest-key: $QUEST_KEY" -H "content-type: application/json" \
-  -d '{"title": "What needs doing", "area": "rules", "milestone": "armory", "owner": "unclebob"}'</code>
+    <div><strong style="color:var(--fg)">On the team?</strong> Sign in with your personal quest key to add and move tasks here, or use the <a href="/admin">admin portal</a> to manage everything, including levels and workstreams.</div>
+    <div>Assistants manage the board too: it is an MCP server at <span class="num">/api/mcp</span>. Setup and the working agreement for assistants are in the <a href="https://github.com/LupusDei/the-dungeon-door#for-ai-agents-tracking-work-on-the-quest-log" rel="noopener">README</a>.</div>
   </section>
 </main>
 
@@ -254,7 +250,7 @@ dialog::backdrop { background: var(--scrim); }
   const REFRESH_MS = 20000;
 
   const state = {
-    tasks: [], meta: null, people: [], loaded: false, problem: null, me: null, key: null, auth: null,
+    tasks: [], meta: null, people: [], loaded: false, problem: null, me: null, key: null,
     filter: { area: "", owner: "", level: "", q: "" }, showAllDone: false, busy: new Set(),
     editing: null, confirmDelete: false,
   };
@@ -482,14 +478,10 @@ dialog::backdrop { background: var(--scrim); }
 
   function renderWho() {
     const who = $("whoami");
-    const github = !!(state.auth && state.auth.githubSignIn);
-    const outsider = state.auth && state.auth.signedInAs && !state.me ? state.auth.signedInAs : null;
     who.replaceChildren();
-    who.hidden = !state.me && !outsider;
-    $("sign-in").textContent = state.me || outsider ? "Sign out" : github ? "Sign in with GitHub" : "Team sign-in";
-    $("use-key").hidden = !!state.me || !!outsider || !github;
+    who.hidden = !state.me;
+    $("sign-in").textContent = state.me ? "Sign out" : "Team sign-in";
     if (state.me) who.append(avatar(state.me), el("a", { href: "/admin", text: state.me.name, title: "Open the admin portal", style: "color:inherit" }));
-    else if (outsider) who.append(el("span", { text: outsider + " isn't on the team" }));
   }
 
   function fillSelect(select, options, value, placeholder) {
@@ -524,7 +516,7 @@ dialog::backdrop { background: var(--scrim); }
   // ---------- Talking to the server ----------
 
   async function api(method, path, body) {
-    const headers = { "x-requested-with": "dungeon-door" };
+    const headers = {};
     if (body) headers["content-type"] = "application/json";
     if (state.key) headers["x-quest-key"] = state.key;
     const response = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
@@ -656,21 +648,11 @@ dialog::backdrop { background: var(--scrim); }
     }
   }
 
-  async function signOut() {
+  function signOut() {
     state.key = null;
     state.me = null;
     remember(null);
-    await api("POST", "/api/auth/logout").catch(() => {});
-    state.auth = await api("GET", "/api/auth/me").catch(() => state.auth);
     renderAll();
-  }
-
-  /** A GitHub session (cookie) if there is one; otherwise a quest key remembered in this browser. */
-  async function restoreSignIn() {
-    state.auth = await api("GET", "/api/auth/me").catch(() => null);
-    if (state.auth && state.auth.person) { state.me = state.auth.person; return; }
-    const saved = remembered();
-    if (saved) await signIn(saved);
   }
 
   const openKeyDialog = () => {
@@ -706,19 +688,18 @@ dialog::backdrop { background: var(--scrim); }
   $("task-form").addEventListener("submit", saveDialog);
   $("f-cancel").addEventListener("click", () => $("task-dialog").close());
   $("f-delete").addEventListener("click", deleteFromDialog);
-  $("sign-in").addEventListener("click", async () => {
-    if (state.me || (state.auth && state.auth.signedInAs)) { await signOut(); toast("Signed out."); return; }
-    if (state.auth && state.auth.githubSignIn) { location.href = "/api/auth/login?return=/quest-log"; return; }
+  $("sign-in").addEventListener("click", () => {
+    if (state.me) { signOut(); toast("Signed out."); return; }
     openKeyDialog();
   });
-  $("use-key").addEventListener("click", openKeyDialog);
   $("key-form").addEventListener("submit", submitKey);
   $("k-cancel").addEventListener("click", () => $("key-dialog").close());
 
   (async () => {
     renderFilters();
     renderAll();
-    await Promise.all([refresh(), restoreSignIn()]);
+    const saved = remembered();
+    await Promise.all([refresh(), saved ? signIn(saved) : null]);
     renderAll();
     setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });

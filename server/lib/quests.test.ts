@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
+import { PUT as PUT_META } from '../api/quest-meta.ts';
 import { GET, POST, PATCH, DELETE } from '../api/quests.ts';
 import { GET as ME } from '../api/quest-me.ts';
 import { quests, resetQuests } from './quests.ts';
@@ -66,4 +67,30 @@ test('with QUEST_KEYS set, only hashed keys from the table work', async () => {
   assert.equal((await post(as('slagyr'), { title: 'x' })).status, 401, 'dev keys stop working');
   const ok = await post({ 'x-quest-key': 's3cret', 'content-type': 'application/json' }, { title: 'x' });
   assert.equal((await ok.json()).createdBy, 'slagyr');
+});
+
+test('a key works as a bearer token as well as in its own header', async () => {
+  const bearer = await POST(new Request(base, { method: 'POST', headers: { authorization: 'Bearer dev-unclebob', 'content-type': 'application/json' }, body: '{"title":"x"}' }));
+  assert.equal((await bearer.json()).createdBy, 'unclebob');
+});
+
+test('admins reshape the board; members cannot; removing a level frees its tasks', async () => {
+  const put = (person: string, body: unknown) => PUT_META(new Request('http://localhost/api/quest-meta', { method: 'PUT', headers: as(person), body: JSON.stringify(body) }));
+  assert.equal((await put('slagyr-assistant', { summary: 'nope' })).status, 403);
+
+  const task = await (await post(as('unclebob'), { title: 'In the armory', area: 'rules', milestone: 'armory' })).json();
+  const saved = await put('LupusDei', {
+    summary: 'New headline',
+    milestones: [{ name: 'The Hall of Voices', blurb: 'new' }],
+    facts: [{ label: 'Latest build', value: 'TestFlight 0.1 (4)' }],
+  });
+  assert.equal(saved.status, 200);
+  const board = await saved.json();
+  assert.deepEqual(board.meta.milestones.map((m: { id: string }) => m.id), ['the-hall-of-voices']);
+  assert.equal(board.meta.areas.length, 1, 'sections not sent are left alone');
+  const moved = board.tasks.find((t: { id: string }) => t.id === task.id);
+  assert.equal(moved.milestone, '', 'the removed level no longer holds the task');
+  assert.equal(moved.area, 'rules');
+
+  assert.equal((await put('LupusDei', { facts: [{ label: 'x', value: 'y', href: 'http://insecure' }] })).status, 400);
 });

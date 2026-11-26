@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dungeon-door": {
+      "type": "http",
+      "url": "https://the-dungeon-door.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${QUEST_KEY:-set-QUEST_KEY-in-your-shell}"
+      }
+    }
+  }
+}

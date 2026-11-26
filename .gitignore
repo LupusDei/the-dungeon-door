@@ -7,3 +7,4 @@
 
 # Personal quest keys for the website tracker (never commit)
 .quest-keys.local
+.quest-keys/

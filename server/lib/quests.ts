@@ -6,11 +6,10 @@ import { badRequest, forbidden, notFound } from './http.ts';
  * The quest log: the team's progress board, shown on the website at /quest-log and managed from
  * /admin, the REST API (api/quests.ts) and the MCP server (api/mcp.ts).
  *
- * Anyone can read it. Writing needs to be one of the team (see lib/identity.ts for the ways to
- * prove that: GitHub sign-in, an MCP access token, or a personal quest key). Quest keys are listed
- * in the QUEST_KEYS environment variable as `{ "<sha256 of the key, hex>": "<person id>" }`, so the
- * keys themselves are never stored. With no QUEST_KEYS and no database (plain local dev) the key
- * `dev-<person id>` works.
+ * Anyone can read it. Writing needs a personal quest key, one per team member, so every change
+ * carries a name (see lib/identity.ts). Keys are listed in the QUEST_KEYS environment variable as
+ * `{ "<sha256 of the key, hex>": "<person id>" }`, so the keys themselves are never stored. With no
+ * QUEST_KEYS and no database (plain local dev) the key `dev-<person id>` works.
  */
 
 export interface Person {

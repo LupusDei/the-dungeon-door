@@ -9,7 +9,7 @@ import { board, saveMeta } from '../lib/quests.ts';
  */
 export async function PUT(request: Request): Promise<Response> {
   return handle(async () => {
-    const person = await requirePerson(request);
+    const person = requirePerson(request);
     await saveMeta(person, await readBody(request));
     return Response.json(await board(), { headers: { 'cache-control': 'no-store' } });
   });

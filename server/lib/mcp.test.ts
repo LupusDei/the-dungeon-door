@@ -2,18 +2,14 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import * as mcp from '../api/mcp.ts';
-import * as oauth from '../api/oauth.ts';
-import { resetAuthStore } from './authstore.ts';
 import { quests, resetQuests } from './quests.ts';
 
 const SITE = 'https://quest.test';
 
-/** The site, as far as an MCP client can see it: requests go straight to the function handlers. */
+/** The site, as far as an MCP client can see it: requests go straight to the function handler. */
 const site: typeof fetch = async (input, init) => {
   const request = new Request(input, init);
-  const path = new URL(request.url).pathname;
-  const handlers = (path === '/api/mcp' ? mcp : oauth) as unknown as Record<string, (r: Request) => Promise<Response>>;
-  const handler = handlers[request.method];
+  const handler = (mcp as unknown as Record<string, (r: Request) => Promise<Response>>)[request.method];
   return handler ? handler(request) : new Response(null, { status: 405 });
 };
 
@@ -29,7 +25,6 @@ const errorText = (result: any) => (result.isError ? String(result.content?.[0]?
 beforeEach(async () => {
   delete process.env.DATABASE_URL;
   delete process.env.QUEST_KEYS;
-  resetAuthStore();
   resetQuests();
   await quests().setMeta({
     summary: 'A test board', facts: [{ label: 'Latest build', value: 'TestFlight 0.1 (3)' }],
@@ -40,18 +35,17 @@ beforeEach(async () => {
     createdAt: '2026-11-25T00:00:00Z', updatedAt: '2026-11-25T00:00:00Z', lastChange: 'finished', createdBy: 'unclebob', updatedBy: 'unclebob' });
 });
 
-test('without a token the server answers 401 and points at the sign-in', async () => {
-  const response = await site(`${SITE}/api/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+test('without a valid quest key the server answers 401 and says what to send', async () => {
+  const post = (headers: Record<string, string>) => site(`${SITE}/api/mcp`, {
+    method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
-  assert.equal(response.status, 401);
-  const challenge = response.headers.get('www-authenticate') ?? '';
-  const metadataUrl = challenge.match(/resource_metadata="([^"]+)"/)?.[1];
-  assert.equal(metadataUrl, `${SITE}/.well-known/oauth-protected-resource/api/mcp`);
-  const metadata = await (await site(metadataUrl!)).json();
-  assert.deepEqual(metadata.authorization_servers, [SITE]);
-
-  const wrong = await site(`${SITE}/api/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer nope' }, body: '{}' });
-  assert.equal(wrong.status, 401);
+  const none = await post({});
+  assert.equal(none.status, 401);
+  assert.match((await none.json()).message, /Authorization: Bearer/);
+  assert.match(none.headers.get('www-authenticate') ?? '', /^Bearer /);
+  assert.equal((await post({ authorization: 'Bearer nope' })).status, 401);
+  assert.equal((await post({ authorization: 'Bearer dev-mallory' })).status, 401, 'a key for someone not on the team is no key');
+  assert.notEqual((await post({ 'x-quest-key': 'dev-slagyr' })).status, 401, 'the x-quest-key header works too');
 });
 
 test('a real MCP client can read the board and manage tasks', async () => {
