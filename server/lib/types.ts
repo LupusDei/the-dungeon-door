@@ -104,6 +104,8 @@ export interface StoredScene {
   outcome: string | null;
   /** The choice the party went with: most votes, ties broken by the DM. Set on resolution. */
   chosenChoiceId: ChoiceId | null;
+  /** In-character lines this turn, oldest first. Absent on scenes from before players could speak in character. */
+  roleplay?: RoleplayLine[];
   createdAt: string;
 }
 
@@ -134,6 +136,13 @@ export interface Game {
 }
 
 export type MessageKind = 'chat' | 'system' | 'dm';
+
+/** Something a player said or did in character this turn. No roll, and the engine does not adjudicate it. */
+export interface RoleplayLine {
+  playerId: string;
+  characterName: string;
+  text: string;
+}
 
 export interface Message {
   id: number;
@@ -173,6 +182,8 @@ export interface SceneView {
   /** The caller's written check, or null. */
   myFreeform: { text: string; roll: number } | null;
   outcome: string | null;
+  /** In-character lines this turn, oldest first. Empty when nobody has spoken. */
+  roleplay: RoleplayLine[];
 }
 
 export interface ChronicleEntry {
@@ -186,6 +197,8 @@ export interface ChronicleEntry {
   outcome: string;
   /** A combat round: every hero took their own action, so `choiceLabel` is empty. */
   combat: boolean;
+  /** What the heroes said and did in character that turn. */
+  roleplay: RoleplayLine[];
 }
 
 export interface GameState {

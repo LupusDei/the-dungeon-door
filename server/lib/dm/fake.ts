@@ -51,28 +51,17 @@ function choicesFor(place: string, ctx: DMContext): DMChoice[] {
   return choices.map((c, i) => ({ ...c, rules: hooks[i] }));
 }
 
-function resolve(ctx: DMContext, r: Resolution) {
+function resolve(r: Resolution) {
   const chosenChoiceId = r.leaders[0];
   const label = r.scene.choices.find((c) => c.id === chosenChoiceId)?.label ?? 'their plan';
-  const notes = r.votes.flatMap((v) =>
-    v.roll === 20 ? [`${v.characterName} pulls it off brilliantly`] :
-    v.roll === 1 ? [`${v.characterName} trips over their own boots`] :
-    v.choiceId !== chosenChoiceId ? [`${v.characterName} grumbles but follows`] : []);
-  const outcome = `The party chose to ${label.toLowerCase()}` +
-    (r.leaders.length > 1 ? ' after a heated, tied debate' : '') +
-    (notes.length ? `; ${notes.join(', ')}.` : '.') +
-    (r.abstained.length ? ` ${r.abstained.join(' and ')} lagged behind.` : '');
-  return { outcome, chosenChoiceId };
+  const flair = r.votes.some((v) => v.roll === 20) ? ' It comes off brilliantly.' : r.votes.some((v) => v.roll === 1) ? ' It goes badly wrong.' : '';
+  return { outcome: `The party chose to ${label.toLowerCase()}.${flair}`, chosenChoiceId };
 }
 
-/** A stretch of the road to the door, told; null off the road. */
+/** A stretch of the road to the door, told as the world, not as something the heroes decided. Null off the road. */
 function road(ctx: DMContext, opening: string): string | null {
   const t = ctx.rules?.trek;
-  return t ? `${opening} ${t.terrain}: ${ROAD_EVENTS[t.event]}.\n\nThe dungeon door lies somewhere ahead.` : null;
-}
-
-function names(ctx: DMContext) {
-  return ctx.party.map((p) => p.name).join(', ') || 'The party';
+  return t ? `${opening} ${t.terrain}: ${ROAD_EVENTS[t.event]}.\n\nThe dungeon door lies somewhere ahead. What do you do?` : null;
 }
 
 const empty = { action: '', ability: 'none', skill: '', tier: 'none', effect: 'none', severity: 'none', damageType: '', condition: 'none', save: 'none', narration: '' };
@@ -103,8 +92,8 @@ export const fakeDungeonMaster: DungeonMaster = {
     return {
       adventureTitle: `The Secret of ${ctx.archetype.name.replace(/^The /, '')}'s Door`,
       title: 'Behind the Dungeon Door',
-      narration: road(ctx, `${names(ctx)} set out from the tavern along`) ??
-        `${names(ctx)} stand before an old oak door carved with runes.\n\nBeyond it lies ${place}, and something inside is humming a song you almost remember.`,
+      narration: road(ctx, 'A road leaves the tavern along') ??
+        `An old oak door carved with runes waits, shut.\n\nBeyond it lies ${place}, and something inside is humming a song you almost remember. What do you do?`,
       imagePrompt: `Adventurers before a rune-carved oak door leading to ${place}`,
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: `Welcome, travellers. I am ${ctx.archetype.name}. Mind the door.`,
@@ -116,9 +105,10 @@ export const fakeDungeonMaster: DungeonMaster = {
     await fakeDelay();
     const place = PLACES[ctx.sceneIndex % PLACES.length];
     return {
-      ...resolve(ctx, resolution),
+      ...resolve(resolution),
       title: `Scene ${ctx.sceneIndex + 1}: ${place.replace(/^(a|the) /, '').replace(/^./, (c) => c.toUpperCase())}`,
-      narration: road(ctx, 'The road goes on along') ?? `The path leads ${names(ctx)} to ${place}.\n\nThe air smells of old magic and fresh trouble.`,
+      narration: road(ctx, 'The road goes on along') ??
+        `The path opens onto ${place}.\n\nThe air smells of old magic and fresh trouble. What do you do?`,
       imagePrompt: `The party arriving at ${place}`,
       featuredCharacters: ctx.party.slice(0, 2).map((p) => p.name),
       quip: resolution.votes.some((v) => v.roll === 20) ? 'A natural 20! The dice gods smile.' : 'Onward!',
@@ -129,9 +119,9 @@ export const fakeDungeonMaster: DungeonMaster = {
   async finale(ctx, resolution): Promise<FinaleScene> {
     await fakeDelay();
     return {
-      ...resolve(ctx, resolution),
+      ...resolve(resolution),
       title: 'Epilogue',
-      narration: `And so ${names(ctx)} walk back out through the dungeon door, richer in stories than in gold.\n\nThe door closes softly behind them. It will be waiting.`,
+      narration: `The dungeon door stands open on the way home, the story richer than the gold.\n\nThe door closes softly. It will be waiting.`,
       imagePrompt: 'The party walking into a sunrise, the dungeon door closing behind them',
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: 'Thank you for playing. Until the door opens again…',

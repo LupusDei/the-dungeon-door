@@ -23,6 +23,10 @@
       "destination": "/api/game-messages?code=:code"
     },
     {
+      "source": "/api/games/:code/speak",
+      "destination": "/api/game-speak?code=:code"
+    },
+    {
       "source": "/api/games/:code/dungeon-master",
       "destination": "/api/game-dungeon-master?code=:code"
     },

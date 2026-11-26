@@ -45,7 +45,8 @@ test('the fake DM classifies a written action without inventing a number', () =>
 test('on the road it tells the road and never offers a way on; it buys from a vendor and talks to foes met', async () => {
   const trek = { stretch: 1, of: 2, terrain: 'a forest road', event: 'quiet' as const, wares: [], waiting: null };
   const quiet = await fakeDungeonMaster.openingScene(ctx({ ...rules, trek }));
-  assert.match(quiet.narration, /^The party set out from the tavern along a forest road: a quiet stretch\./);
+  assert.match(quiet.narration, /^A road leaves the tavern along a forest road: a quiet stretch\./);
+  assert.match(quiet.narration, /What do you do\?/);
   assert.ok(quiet.choices.every((c) => (c.rules as { kind: string }).kind !== 'move'));
   const vendor = await fakeDungeonMaster.nextScene({ ...ctx({ ...rules, trek: { ...trek, stretch: 2, event: 'vendor', wares: [{ id: 'rope', name: 'Rope', cost: 1 }] } }), sceneIndex: 1 }, { scene: { choices: [] }, leaders: ['a'], votes: [], abstained: [], tally: { a: 0, b: 0, c: 0 }, rules: null } as unknown as Resolution);
   assert.match(vendor.narration, /^The road goes on along a forest road: a wandering vendor\./);
@@ -54,9 +55,9 @@ test('on the road it tells the road and never offers a way on; it buys from a ve
   assert.deepEqual(met.choices[2].rules, { kind: 'parley' });
 });
 
-test('the fake DM tells how the vote went: the plan chosen, a tied debate, who lagged behind', async () => {
+test('the fake DM tells the plan the party chose, and does not invent a debate or what an abstainer did', async () => {
   const told = async (leaders: string[], abstained: string[]) => (await fakeDungeonMaster.nextScene(ctx(rules),
     { scene: { choices: [{ id: 'a', label: 'Run' }] }, leaders, votes: [], abstained, tally: { a: 0, b: 0, c: 0 }, rules: null } as unknown as Resolution)).outcome;
   assert.equal(await told(['a'], []), 'The party chose to run.');
-  assert.equal(await told(['a', 'b'], ['Cleo']), 'The party chose to run after a heated, tied debate. Cleo lagged behind.');
+  assert.equal(await told(['a', 'b'], ['Cleo']), 'The party chose to run.');
 });

@@ -12,6 +12,7 @@ struct SceneView: View {
     /// Opens the sheet of the hero with this player id (the party strip's taps).
     var openHero: (String) -> Void = { _ in }
     @State private var revealedRoll: Int?
+    @State private var inCharacterDraft = ""
 
     private var state: GameState { session.state }
     private var rules: RulesView? { state.rules }
@@ -29,6 +30,7 @@ struct SceneView: View {
                             CombatView(session: session, scene: scene, combat: combat, openHero: openHero).id("combat")
                             NarratorBar(scene: scene, session: session, narrator: narrator)
                             narration(scene)
+                            inCharacter(scene)
                             IllustrationView(url: scene.imageURL)
                         } else {
                             if let party = rules?.party, !party.isEmpty {
@@ -39,6 +41,7 @@ struct SceneView: View {
                             NarratorBar(scene: scene, session: session, narrator: narrator)
                             whatCameOfIt(scene)
                             narration(scene)
+                            inCharacter(scene)
                             if scene.isFinale {
                                 finale
                             } else {
@@ -60,6 +63,7 @@ struct SceneView: View {
             }
             .onChange(of: state.scene?.index) { _, _ in
                 revealedRoll = nil
+                inCharacterDraft = ""
                 withAnimation { proxy.scrollTo(state.scene?.index, anchor: .top) }
             }
             .task(id: state.scene?.index) {
@@ -137,6 +141,7 @@ struct SceneView: View {
                             Text(deed).font(.proseSmall.weight(.semibold)).foregroundStyle(Palette.gold)
                         }
                         Text(last.outcome).font(.proseSmall.italic()).foregroundStyle(Palette.parchment.opacity(0.85))
+                        roleplayLines(last.roleplay)
                     }
                     .padding(.leading, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -144,6 +149,49 @@ struct SceneView: View {
                 }
                 DiceLog(lines: dice, heroes: heroNames)
             }
+        }
+    }
+
+    /// What the players said and did in character, then a box to add to this turn. No roll.
+    @ViewBuilder private func inCharacter(_ scene: GameScene) -> some View {
+        if !scene.isFinale {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("In character")
+                if scene.roleplay.isEmpty && state.status == .voting {
+                    Text("Say what your hero says or does. No roll.")
+                        .font(.proseSmall.italic())
+                        .foregroundStyle(Palette.muted)
+                }
+                roleplayLines(scene.roleplay)
+                if state.status == .voting {
+                    HStack(alignment: .bottom, spacing: 10) {
+                        TextField("Say or do…", text: $inCharacterDraft, axis: .vertical)
+                            .font(.prose)
+                            .lineLimit(1...3)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .card()
+                        Button {
+                            let text = inCharacterDraft
+                            inCharacterDraft = ""
+                            Task { await session.speakInCharacter(text) }
+                        } label: {
+                            Image(systemName: "quote.bubble.fill").font(.system(size: 28))
+                        }
+                        .disabled(inCharacterDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.busy)
+                        .accessibilityLabel("Speak in character")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func roleplayLines(_ lines: [RoleplayLine]) -> some View {
+        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+            (Text(line.characterName + ": ").fontWeight(.semibold) + Text(line.text))
+                .font(.proseSmall)
+                .foregroundStyle(Palette.parchment)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

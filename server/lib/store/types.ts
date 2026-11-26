@@ -1,5 +1,5 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, RoleplayLine, StoredScene, Vote } from '../types.ts';
 
 export interface NewGame {
   code: string;
@@ -35,8 +35,8 @@ export interface NewMessage {
   text: string;
 }
 
-/** A scene as written by the DM: everything but its votes and resolution. */
-export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices'>;
+/** A scene as written by the DM: everything but its votes, its in-character lines, and its resolution. */
+export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices' | 'roleplay'>;
 
 /**
  * Persistence for characters, games and chat. Two implementations: Postgres (`postgres.ts`, when
@@ -89,6 +89,11 @@ export interface Store {
    * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.
    */
   setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>): Promise<Vote | null>;
+  /**
+   * Appends an in-character line to the scene, only while the game is voting on it and the turn holds
+   * fewer than 20. Returns the turn's lines, or null when the scene is not open.
+   */
+  appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null>;
 
   /** Appends a chat/system/dm message with the game's next message id. */
   addMessage(code: string, message: NewMessage): Promise<Message>;

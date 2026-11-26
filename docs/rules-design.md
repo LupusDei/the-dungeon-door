@@ -89,7 +89,13 @@ type RulesHook =
 4. The engine applies the result to state (damage, conditions, HP, death saves, XP) and hands the DM
    a structured summary in `Resolution`, for example "Bryn: 17 + 5 = 22 vs AC 15, hit, 9 slashing,
    goblin down".
-5. The DM narrates it. It can colour the result, but it cannot change the numbers.
+5. The DM narrates it. It can colour the result, but it cannot change the numbers, and it cannot play the
+   heroes. The heroes belong to the players: the narrator does not put words in their mouths, decide their
+   feelings, attitudes or choices, or narrate actions they did not take. It describes the world, the NPCs,
+   the monsters and the immediate physical result of the chosen action, then hands the moment back. Whimsical
+   detail of places and items is part of the world. A player may speak or act in character
+   (`POST /api/games/{code}/speak`) with no roll and no adjudication; the line is kept on the turn, and the
+   next narration answers it. Quoted hero speech the player did not write is stripped.
 
 **Exploration scenes** keep the current rule: the party goes with the most-voted choice, and every
 voter's roll still counts (a check is made by each voter; the DM narrates successes and failures).

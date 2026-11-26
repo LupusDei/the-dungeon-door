@@ -91,6 +91,12 @@ struct APIClient: Sendable {
         return try await send("POST", "api/games/\(code)/messages", body: Body(text: text))
     }
 
+    /// A line or a deed in character. No roll. The reply is the game, with the line on the scene.
+    func speak(_ code: String, text: String) async throws -> GameState {
+        struct Body: Encodable { let text: String }
+        return try await send("POST", "api/games/\(code)/speak", body: Body(text: text))
+    }
+
     func setDungeonMaster(_ code: String, id: String) async throws -> GameState {
         struct Body: Encodable { let dungeonMaster: String }
         return try await send("POST", "api/games/\(code)/dungeon-master", body: Body(dungeonMaster: id))
