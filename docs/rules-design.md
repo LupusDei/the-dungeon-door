@@ -246,6 +246,28 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
   Ray, Magic Missile); conditions a failed save imposes (reported, applied by the DM); ritual casting;
   subclass always-prepared spells; concentration ending on incapacitation outside the check.
 
+## Rests and resources (PR F)
+
+- **Class resources** (`resources.ts`): Rage, Bardic Inspiration, Channel Divinity, Wild Shape, Second
+  Wind, Action Surge, Focus Points, Lay On Hands, Sorcery Points, Magical Cunning and Arcane Recovery.
+  A hero has one once its class has given it the feature. The number of uses comes from the class table
+  (`rageCount`, `channelDivinityCharges`, `focusPoints`, `secondWindUses`, `wildShapeUses`,
+  `sorceryPoints`) or from the rule: Lay On Hands is 5 × level, Bardic Inspiration is the CHA modifier
+  (at least 1), and Action Surge counts how many times the hero has gained it (twice at 17). Uses spent
+  live on the sheet as `resourcesUsed`. What a Short Rest gives back comes from each feature's own text:
+  one use, all of them, or none. Font of Inspiration changes Bardic Inspiration from none to all. A Long
+  Rest restores everything.
+- **Short Rest** (`rests.ts`): the hero spends any number of its remaining hit dice (one per level).
+  Each die heals its roll plus the CON modifier, at least 1, and HP never goes above the maximum.
+  Features recharge as above, and a warlock gets its pact slots back. Arcane Recovery and Magical
+  Cunning are separate calls made after it, each once per Long Rest.
+- **Long Rest:** full HP, every spent hit die back (SRD 5.2; `{ hitDice: 'half' }` is the 2014 rule),
+  every slot back, concentration ends, every feature recharges, and exhaustion goes down by 1.
+- **Exhaustion:** levels 0 to 6, stored on the sheet. Each level gives -2 on every d20 test and -5 feet
+  of speed, and level 6 is death. `exhaustionEffects` reports these numbers; the callers apply them.
+- **Both rests need at least 1 HP.** The engine doesn't track the rule of one Long Rest per 24 hours or
+  interrupted rests, because the game has no clock. The DM decides when a rest happens.
+
 ## Integration (later, contract first)
 
 These are proposals, kept out of the engine PRs so Justin's flow stays as it is until he picks them up:
