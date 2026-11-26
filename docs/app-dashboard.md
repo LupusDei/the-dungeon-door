@@ -1,6 +1,9 @@
 # The play dashboard
 
-The game is played from the character sheet. Every region stays in the same place from turn to
+The game is now played from the four-tab shell in [app-tabs.md](app-tabs.md): Story, Sheet, Map and Chat.
+This note describes the dashboard that shell replaced. It is no longer the screen `GameView` opens.
+
+The game was played from the character sheet. Every region stays in the same place from turn to
 turn. What the table is not offering greys out; it is not hidden, and it does not move.
 
 iPhone portrait is the layout this is built for. On a wider phone the map and the freeform box sit

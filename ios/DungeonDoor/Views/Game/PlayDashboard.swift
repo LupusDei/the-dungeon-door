@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// The previous play screen, kept while the tabbed shell settles. `GameView` plays on `PlayShell`.
+///
 /// The game, played from the hero's sheet.
 ///
 /// Vitals stay pinned at the top and the eight common actions stay pinned at the bottom. Between

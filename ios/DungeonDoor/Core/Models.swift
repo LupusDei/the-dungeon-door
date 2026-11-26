@@ -20,6 +20,13 @@ extension KeyedDecodingContainer {
         }
         return Int(loose.rounded())
     }
+
+    /// A whole number when the key is present, or nil when it is absent or null.
+    func optionalWhole(_ key: Key) throws -> Int? {
+        guard contains(key) else { return nil }
+        if try decodeNil(forKey: key) { return nil }
+        return try whole(key)
+    }
 }
 
 // MARK: - Catalog
@@ -568,6 +575,334 @@ struct Vote: Codable, Hashable {
     /// In a round of a fight: what that hero is doing, in their own choice's words ("Cast Fire
     /// Bolt", "Break Free", "Help Ilsa"). The same id means different things for different heroes.
     var label: String? = nil
+    /// Set when the vote named an action from `scene.actions` rather than a letter.
+    var actionId: String? = nil
+    /// Ids from that action's targets. Empty when the vote named nobody.
+    var targets: [String] = []
+    /// A move taken with the vote: a range band, a square, or both.
+    var move: VoteMove? = nil
+}
+
+extension Vote {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playerId = try c.decode(String.self, forKey: .playerId)
+        choiceId = try c.value(.choiceId, or: "")
+        roll = try c.whole(.roll)
+        label = try c.decodeIfPresent(String.self, forKey: .label)
+        actionId = try c.decodeIfPresent(String.self, forKey: .actionId)
+        targets = try c.value(.targets, or: [])
+        move = try? c.decode(VoteMove.self, forKey: .move)
+    }
+}
+
+/// One square of a tactical map. `x` grows east, `y` grows south, both counted from 0.
+struct GridPoint: Codable, Hashable, Identifiable {
+    let x: Int
+    let y: Int
+    var id: String { "\(x),\(y)" }
+
+    init(x: Int, y: Int) {
+        self.x = x
+        self.y = y
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        x = try c.whole(.x)
+        y = try c.whole(.y)
+    }
+}
+
+/// A move sent with a vote. Older servers use a range band (`to`); a tactical map uses a square (`x`, `y`).
+struct VoteMove: Codable, Hashable {
+    var to: String? = nil
+    var engage: [String]? = nil
+    var dash: Bool? = nil
+    var disengage: Bool? = nil
+    var x: Int? = nil
+    var y: Int? = nil
+
+    var square: GridPoint? {
+        guard let x, let y else { return nil }
+        return GridPoint(x: x, y: y)
+    }
+
+    /// False when there is nothing the server can apply.
+    var isSendable: Bool { to != nil || square != nil }
+
+    init(to: String? = nil, engage: [String]? = nil, dash: Bool? = nil, disengage: Bool? = nil, x: Int? = nil, y: Int? = nil) {
+        self.to = to
+        self.engage = engage
+        self.dash = dash
+        self.disengage = disengage
+        self.x = x
+        self.y = y
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        to = try c.decodeIfPresent(String.self, forKey: .to)
+        engage = try c.decodeIfPresent([String].self, forKey: .engage)
+        dash = try c.decodeIfPresent(Bool.self, forKey: .dash)
+        disengage = try c.decodeIfPresent(Bool.self, forKey: .disengage)
+        x = c.contains(.x) ? try c.whole(.x) : nil
+        y = c.contains(.y) ? try c.whole(.y) : nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(to, forKey: .to)
+        if let engage, !engage.isEmpty { try c.encode(engage, forKey: .engage) }
+        if dash == true { try c.encode(true, forKey: .dash) }
+        if disengage == true { try c.encode(true, forKey: .disengage) }
+        try c.encodeIfPresent(x, forKey: .x)
+        try c.encodeIfPresent(y, forKey: .y)
+    }
+}
+
+/// Who or what a legal action may name.
+struct LegalTarget: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+
+    init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.value(.id, or: "")
+        name = try c.value(.name, or: id)
+    }
+}
+
+/// How far an attack or spell reaches, in feet. `long` is the disadvantage band when the server sends one.
+struct ActionRange: Codable, Hashable {
+    let normal: Int
+    var long: Int? = nil
+
+    init(normal: Int, long: Int? = nil) {
+        self.normal = normal
+        self.long = long
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        normal = try c.whole(.normal)
+        long = try c.optionalWhole(.long)
+    }
+}
+
+/// One action this hero may take this turn (`scene.actions`). A kind the app has not met is still shown.
+struct LegalAction: Codable, Hashable, Identifiable {
+    let id: String
+    let label: String
+    /// "attack", "spell", "item", "feature", "common", "choice", "move", or a kind added later.
+    let kind: String
+    let detail: String
+    var targets: [LegalTarget] = []
+    /// "none", "one" or "many".
+    var picks: String = "none"
+    /// For "many": at most this many targets.
+    var limit: Int? = nil
+    var available: Bool = true
+    var reason: String? = nil
+    /// Squares a move may end on. Empty until the tactical map sends them.
+    var squares: [GridPoint] = []
+    /// A ranged attack or spell. Nil on a melee blow and on servers from before range in feet.
+    var rangeFeet: ActionRange? = nil
+    /// Melee or reach, in feet. Nil when this action has no reach.
+    var reachFeet: Int? = nil
+
+    init(id: String, label: String, kind: String, detail: String, targets: [LegalTarget] = [],
+         picks: String = "none", limit: Int? = nil, available: Bool = true, reason: String? = nil,
+         squares: [GridPoint] = [], rangeFeet: ActionRange? = nil, reachFeet: Int? = nil) {
+        self.id = id
+        self.label = label
+        self.kind = kind
+        self.detail = detail
+        self.targets = targets
+        self.picks = picks
+        self.limit = limit
+        self.available = available
+        self.reason = reason
+        self.squares = squares
+        self.rangeFeet = rangeFeet
+        self.reachFeet = reachFeet
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.value(.id, or: "")
+        label = try c.value(.label, or: id)
+        kind = try c.value(.kind, or: "choice")
+        detail = try c.value(.detail, or: "")
+        targets = (try? c.decode([LegalTarget].self, forKey: .targets)) ?? []
+        picks = try c.value(.picks, or: "none")
+        limit = try c.optionalWhole(.limit)
+        available = try c.value(.available, or: true)
+        reason = try c.decodeIfPresent(String.self, forKey: .reason).flatMap { $0.isEmpty ? nil : $0 }
+        squares = (try? c.decode([GridPoint].self, forKey: .squares)) ?? []
+        rangeFeet = try? c.decode(ActionRange.self, forKey: .rangeFeet)
+        reachFeet = try c.optionalWhole(.reachFeet)
+    }
+
+    var namesDash: Bool {
+        id.localizedCaseInsensitiveContains("dash") || label.localizedCaseInsensitiveContains("dash")
+    }
+}
+
+/// A square the battlefield marks as cover.
+struct CoverCell: Codable, Hashable, Identifiable {
+    let x: Int
+    let y: Int
+    /// "half", "three-quarters", or whatever the server called it. Nil when it only marked the square.
+    var kind: String? = nil
+    var id: String { "\(x),\(y)" }
+    var point: GridPoint { GridPoint(x: x, y: y) }
+
+    init(x: Int, y: Int, kind: String? = nil) {
+        self.x = x
+        self.y = y
+        self.kind = kind
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let square = try? c.decodeIfPresent(GridPoint.self, forKey: .square), let square {
+            x = square.x
+            y = square.y
+        } else {
+            x = try c.whole(.x)
+            y = try c.whole(.y)
+        }
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(x, forKey: .x)
+        try c.encode(y, forKey: .y)
+        try c.encodeIfPresent(kind, forKey: .kind)
+    }
+
+    private enum CodingKeys: String, CodingKey { case x, y, kind, square }
+}
+
+/// The room the fight is happening in. Nil on a server from before the tactical map, and outside a fight.
+struct Battlefield: Codable, Hashable {
+    /// Room size. Read as feet when that yields at least a 3-square grid; otherwise as a count of squares.
+    let width: Int
+    let height: Int
+    var squareFeet: Int = 5
+    /// Squares a token cannot enter: pillars, walls.
+    var walls: [GridPoint] = []
+    var cover: [CoverCell] = []
+
+    init(width: Int, height: Int, squareFeet: Int = 5, walls: [GridPoint] = [], cover: [CoverCell] = []) {
+        self.width = width
+        self.height = height
+        self.squareFeet = squareFeet
+        self.walls = walls
+        self.cover = cover
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        width = try c.whole(.width)
+        height = try c.whole(.height)
+        squareFeet = max(1, try c.whole(.squareFeet, or: 5))
+        walls = Self.wallSquares(from: c)
+        cover = (try? c.decode([CoverCell].self, forKey: .cover)) ?? []
+    }
+
+    /// Columns of the grid.
+    var columns: Int { Self.span(width, squareFeet: squareFeet) }
+    /// Rows of the grid.
+    var rows: Int { Self.span(height, squareFeet: squareFeet) }
+
+    /// `length` is feet when dividing by `squareFeet` still leaves a room (3 squares or more).
+    /// A 50 by 40 ft chamber at 5 ft is 10 by 8. A width of 10 that would collapse to two squares
+    /// is already a count of squares, and stays 10.
+    static func span(_ length: Int, squareFeet: Int) -> Int {
+        let feet = max(squareFeet, 1)
+        let cells = Int((Double(max(length, 0)) / Double(feet)).rounded(.up))
+        if cells >= 3 { return cells }
+        return max(length, 1)
+    }
+
+    /// Blocked squares. A segment `{from, to}` blocks the squares at each end. A shape the app
+    /// does not know is skipped, and the room still draws.
+    private static func wallSquares(from c: KeyedDecodingContainer<CodingKeys>) -> [GridPoint] {
+        let raw = (try? c.decode([LooseWall].self, forKey: .walls)) ?? []
+        var points: [GridPoint] = []
+        for wall in raw { points.append(contentsOf: wall.points) }
+        return points
+    }
+
+    private struct LooseWall: Decodable {
+        var x: Int?
+        var y: Int?
+        var from: GridPoint?
+        var to: GridPoint?
+
+        var points: [GridPoint] {
+            var list: [GridPoint] = []
+            if let x, let y { list.append(GridPoint(x: x, y: y)) }
+            if let from { list.append(from) }
+            if let to { list.append(to) }
+            return list
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            x = c.contains(.x) ? try c.whole(.x) : nil
+            y = c.contains(.y) ? try c.whole(.y) : nil
+            from = try? c.decodeIfPresent(GridPoint.self, forKey: .from)
+            to = try? c.decodeIfPresent(GridPoint.self, forKey: .to)
+        }
+
+        private enum CodingKeys: String, CodingKey { case x, y, from, to }
+    }
+}
+
+/// The caller's vote when it named an action (`scene.myAction`).
+struct MyAction: Codable, Hashable {
+    let id: String
+    var targets: [String] = []
+
+    init(id: String, targets: [String] = []) {
+        self.id = id
+        self.targets = targets
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.value(.id, or: "")
+        targets = try c.value(.targets, or: [])
+    }
+}
+
+/// A turn the player wrote in their own words (`scene.myFreeform`, `scene.freeforms`).
+struct FreeformTurn: Codable, Hashable {
+    var playerId: String? = nil
+    let text: String
+    let roll: Int
+
+    init(playerId: String? = nil, text: String, roll: Int) {
+        self.playerId = playerId
+        self.text = text
+        self.roll = roll
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playerId = try c.decodeIfPresent(String.self, forKey: .playerId)
+        text = try c.value(.text, or: "")
+        roll = try c.whole(.roll)
+    }
 }
 
 /// A line or a deed a player gave in character. No roll.
@@ -598,6 +933,16 @@ struct GameScene: Codable, Hashable {
     let outcome: String?
     /// In-character lines this turn, oldest first. Empty on a server from before players could speak so.
     var roleplay: [RoleplayLine] = []
+    /// What this hero may do this turn. Empty on a server from before legal actions, and on the epilogue.
+    var actions: [LegalAction] = []
+    /// The room, when a fight is being played on squares. Nil outside combat and on today's server.
+    var battlefield: Battlefield? = nil
+    /// Written checks this scene. Empty on a server from before written actions.
+    var freeforms: [FreeformTurn] = []
+    /// The caller's written check, or nil.
+    var myFreeform: FreeformTurn? = nil
+    /// The caller's vote as an action. Nil until they vote, and nil for a written check.
+    var myAction: MyAction? = nil
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -636,6 +981,12 @@ extension GameScene {
         myVote = try c.decodeIfPresent(String.self, forKey: .myVote)
         outcome = try c.decodeIfPresent(String.self, forKey: .outcome)
         roleplay = try c.value(.roleplay, or: [])
+        // A list the app cannot read is dropped. The rest of the scene still arrives.
+        actions = (try? c.decode([LegalAction].self, forKey: .actions)) ?? []
+        battlefield = try? c.decode(Battlefield.self, forKey: .battlefield)
+        freeforms = (try? c.decode([FreeformTurn].self, forKey: .freeforms)) ?? []
+        myFreeform = try? c.decode(FreeformTurn.self, forKey: .myFreeform)
+        myAction = try? c.decode(MyAction.self, forKey: .myAction)
     }
 }
 
@@ -684,6 +1035,8 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     /// Feet the hero moves now: their own speed less exhaustion, 5 at most while dragging. Nil from
     /// a server older than that.
     var speed: Int? = nil
+    /// The same speed, under the name the tactical map uses. Nil when the server sent `speed` only.
+    var speedFeet: Int? = nil
     let gp: Double
     let inventory: [EquipmentItem]
     /// Pounds. Over `capacity` the hero is dragging (speed 5 ft), up to `dragLimit`.
@@ -707,6 +1060,8 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     var isUp: Bool { !down && !dead }
     var cannotSee: Bool { sight == "none" }
     var seesDimly: Bool { sight == "dim" }
+    /// Feet the hero can move this turn. `speedFeet` wins when the server sent it.
+    var movementFeet: Int { speedFeet ?? speed ?? 0 }
 
     /// "Standing", "Down" or "Fallen".
     var word: String { dead ? "Fallen" : down ? "Down" : "Standing" }
@@ -732,6 +1087,8 @@ extension HeroStanding {
         passivePerception = try c.whole(.passivePerception, or: 10)
         passiveInsight = try c.whole(.passiveInsight, or: 10)
         speed = (try? c.decodeIfPresent(Double.self, forKey: .speed)).flatMap { $0 }.map { Int($0.rounded()) }
+        let named = (try? c.decodeIfPresent(Double.self, forKey: .speedFeet)).flatMap { $0 }.map { Int($0.rounded()) }
+        speedFeet = named ?? speed
         gp = try c.value(.gp, or: 0)
         inventory = try c.value(.inventory, or: [])
         carried = try c.value(.carried, or: 0)
@@ -815,6 +1172,8 @@ struct Combatant: Codable, Hashable, Identifiable {
     var position: String? = nil
     /// The ids it is in melee with; empty unless engaged.
     var engagedWith: [String] = []
+    /// The square it stands on. Nil when the server has no tactical map, or this combatant is not placed.
+    var square: GridPoint? = nil
 
     /// What its health reads: a foe's wound, or hit points ("7/20").
     var healthText: String { wound ?? "\(hp)/\(maxHp)" }
@@ -847,6 +1206,7 @@ extension Combatant {
         vigor = c.contains(.vigor) ? try c.whole(.vigor) : nil
         position = try c.decodeIfPresent(String.self, forKey: .position)
         engagedWith = try c.value(.engagedWith, or: [])
+        square = try? c.decode(GridPoint.self, forKey: .square)
     }
 }
 

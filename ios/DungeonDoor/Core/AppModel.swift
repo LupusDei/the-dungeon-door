@@ -22,6 +22,10 @@ final class AppModel {
     var joinCode: String?
     /// True once the first refresh has come back (or failed), so launch arguments know the roster is as fresh as it gets.
     private(set) var didRefresh = false
+    #if DEBUG
+    /// When set, refresh and resume do nothing so a screenshot harness can hold fixture state.
+    private var demoFrozen = false
+    #endif
 
     init() {
         playerId = AppConfig.playerId
@@ -32,6 +36,9 @@ final class AppModel {
     }
 
     func refresh() async {
+        #if DEBUG
+        if demoFrozen { return }
+        #endif
         do {
             let fresh = try await api.catalog()
             catalog = fresh
@@ -139,6 +146,9 @@ final class AppModel {
 
     /// Reopens the game this device was last in, if it's still going.
     func resumeIfPossible() async {
+        #if DEBUG
+        if demoFrozen { return }
+        #endif
         guard activeGame == nil else { return }
         // A game named on the command line opens even when it has ended, to look at its finale.
         let asked = AppConfig.openGameArgument
@@ -147,6 +157,19 @@ final class AppModel {
               state.status != .ended || asked != nil, state.player(playerId) != nil else { return }
         enter(state)
     }
+
+    #if DEBUG
+    /// Loads fixture catalog and roster, then ignores the network. Screenshot harness only.
+    func freezeForDemo(catalog: Catalog, characters: [Character], reference: Reference? = nil) {
+        self.catalog = catalog
+        self.characters = characters
+        if let reference { self.reference = reference }
+        referenceIsFresh = true
+        catalogError = nil
+        didRefresh = true
+        demoFrozen = true
+    }
+    #endif
 
     // MARK: Disk cache
 
