@@ -285,6 +285,15 @@ test('outside a fight everyone has a say, the fallen too', async () => {
   assert.equal((await view(code, host)).scene!.index, 1);
 });
 
+test('the chronicle marks a combat round, and names no choice for it', async () => {
+  const { code, players, host } = await intoFight(['fighter', 'fighter'], ['ogre'], 4);
+  for (const p of players) await wound(code, p, 500);
+  for (const p of players) await vote(code, p, 1, 'c');
+  await settle();
+  const { chronicle } = await view(code, host);
+  assert.deepEqual(chronicle.map((e) => [e.index, e.combat, e.choiceLabel]), [[0, false, 'Fight'], [1, true, '']]);
+});
+
 test('the host can move a fight on with no votes in: heroes without one dodge', async () => {
   const { code, host } = await intoFight(['fighter', 'fighter'], ['rat']);
   const { status } = await call(advanceApi.POST, gamePath(code, 'advance'), { player: host, body: {} });

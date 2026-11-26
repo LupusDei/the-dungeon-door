@@ -133,6 +133,8 @@ export interface ChronicleEntry {
   imageUrl: string | null;
   choiceLabel: string;
   outcome: string;
+  /** A combat round: every hero took their own action, so `choiceLabel` is empty. */
+  combat: boolean;
 }
 
 export interface GameState {

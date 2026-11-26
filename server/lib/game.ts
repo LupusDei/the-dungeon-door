@@ -69,6 +69,10 @@ function rulesOf(game: Game): RulesView | null {
   return rulesView(state, results);
 }
 
+/** A stored scene that was a combat round: its choices are the three fixed actions. */
+const wasRound = (scene: StoredScene): boolean =>
+  scene.choices.length === COMBAT_CHOICES.length && scene.choices.every((c, i) => c.label === COMBAT_CHOICES[i].label && !c.hook);
+
 /** The player's character as it stands in this game: its live sheet once the rules engine holds one. */
 function heroInGame(game: Game, { playerId, character }: GamePlayer): Character {
   const live = game.party && Object.hasOwn(game.party.sheets, playerId) ? game.party.sheets[playerId] : character.sheet;
@@ -88,13 +92,18 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
       .filter((s) => s.outcome !== null)
-      .map((s) => ({
-        index: s.index,
-        title: s.title,
-        imageUrl: s.imageUrl,
-        choiceLabel: s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? '',
-        outcome: s.outcome as string,
-      })),
+      .map((s) => {
+        const combat = wasRound(s);
+        return {
+          index: s.index,
+          title: s.title,
+          imageUrl: s.imageUrl,
+          // In a round each hero took their own action: there is no one choice the party made.
+          choiceLabel: combat ? '' : (s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? ''),
+          outcome: s.outcome as string,
+          combat,
+        };
+      }),
     messages,
     rules: rulesOf(game),
     updatedAt: game.updatedAt,

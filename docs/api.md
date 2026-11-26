@@ -180,8 +180,9 @@ Scene {
 
 ChronicleEntry {
   index: number; title: string; imageUrl: string | null
-  choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick)
+  choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
+  combat: boolean                    // a combat round: every hero took their own action
 }
 
 RulesView {                          // SRD 5.2 (2024 rules)
