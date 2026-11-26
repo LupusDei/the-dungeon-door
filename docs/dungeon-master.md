@@ -113,6 +113,13 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   and a third choice (Break Free, Help a dying friend, or Dodge). Monsters use their Multiattack, their
   save abilities when recharged and their attack riders; the lines say what happened. Narrate the round from `resolution.rules.lines` and set up the next one. Still return
   three choices; they are ignored.
+- **Written actions.** A player may write what they do. `classifyAction(ctx, request)` classifies that
+  text and nothing else: a known action (one id from `request.actions` — today's Attack, Cast and Dodge
+  in a fight, or the three choices outside one), a check (ability or skill, tier `easy` / `medium` /
+  `hard`, and an effect category), or impossible. You never name a DC, dice, or any other number. The
+  engine sets them (easy 10, medium 15, hard 20; damage by severity; a condition's save at that same DC).
+  Impossible, and a classification the engine cannot read, is narrated as a no and the turn is not spent.
+  The dice line quotes the player's words; narrate it with the other results.
 
 ## Rules the engine enforces (so you don't have to)
 

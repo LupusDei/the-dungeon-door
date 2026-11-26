@@ -58,6 +58,30 @@ const FinaleSchema = z.object({
   ...sceneFields,
 });
 
+/** A written action, classified. No numbers: empty fields are "" or "none", never null. */
+const NONE = 'none';
+const RulingSchema = z.object({
+  kind: z.enum(['known', 'check', 'impossible']).describe('known: the text is one of the listed actions. check: it could succeed or fail. impossible: the fiction cannot allow it'),
+  action: z.string().describe('known: one id from the list you were given; "" otherwise'),
+  ability: z.enum([NONE, 'str', 'dex', 'con', 'int', 'wis', 'cha']).describe('check: the ability; "none" otherwise'),
+  skill: z.string().describe('check: an SRD skill id such as "athletics", or "" for a plain ability check; "" otherwise'),
+  tier: z.enum([NONE, 'easy', 'medium', 'hard']).describe('check: easy, medium or hard; "none" otherwise. You never name a DC'),
+  effect: z.enum([NONE, 'damage', 'condition']).describe('check: what a success does; "none" when success is its own reward, and otherwise'),
+  severity: z.enum([NONE, 'light', 'moderate', 'severe']).describe('damage: how hard it hits; "none" otherwise. You never name dice'),
+  damageType: z.string().describe('damage: an SRD damage type such as "fire" or "bludgeoning"; "" otherwise'),
+  condition: z.string().describe('condition: an SRD condition id other than exhaustion, such as "prone"; "" otherwise'),
+  save: z.enum([NONE, 'str', 'dex', 'con', 'int', 'wis', 'cha']).describe('condition: the ability of the save; "none" otherwise. You never name the DC'),
+  narration: z.string().describe('impossible: one sentence refusing it, with no numbers; "" otherwise'),
+});
+
+const CLASSIFY = `Classify the player's written action. You never invent a number: no DC, no dice, no damage amount, no bonus.
+- kind "known" when the text is one of the action ids you are given, or clearly the same as one choice on offer. Put that id in action.
+- kind "check" when it could succeed or fail. Name the ability, a skill id or "", a tier (easy, medium or hard) and an effect.
+  effect "none" when success is its own reward. effect "damage" names a severity (light, moderate or severe) and a damage type.
+  effect "condition" names an SRD condition other than exhaustion, and the ability of the save.
+- kind "impossible" when the fiction cannot allow it (not merely when it is difficult). narration is one sentence with no numbers. Their turn is not spent.
+Leave every field you do not use as "" or "none".`;
+
 /** What the model is asked to fill, for the test that keeps them within providers' limits. */
 export const DM_SCHEMAS = { opening: OpeningSchema, next: NextSchema, finale: FinaleSchema };
 
@@ -195,5 +219,22 @@ export const llmDungeonMaster: DungeonMaster = {
       `(scene ${ctx.sceneIndex + 1} of ${ctx.sceneCount}, no choices): how the adventure ends in the world, the ` +
       `consequences of the choices the party actually made, and a closing image. Do not invent what the heroes say, ` +
       `feel or decide. Your quip bids the table farewell, in your own voice.`, false);
+  },
+
+  async classifyAction(ctx, request) {
+    const listed = request.actions.map((id) => {
+      const choice = request.choices.find((c) => c.id === id);
+      return choice ? `${id} ("${choice.label}")` : id;
+    }).join(', ');
+    const { output } = await generateText({
+      model: textModel(),
+      instructions: `${dmInstructions(ctx)}\n\n${CLASSIFY}`,
+      prompt: `${request.characterName} writes: "${request.text}"\n` +
+        `This is ${request.inCombat ? 'a combat round' : 'not a fight'}.\n` +
+        `Actions the text may map onto: ${listed || '(none)'}.\n` +
+        `Choices on offer: ${request.choices.map((c) => `(${c.id}) ${c.label}`).join('; ') || '(none)'}.`,
+      output: Output.object({ schema: RulingSchema }),
+    });
+    return output;
   },
 };

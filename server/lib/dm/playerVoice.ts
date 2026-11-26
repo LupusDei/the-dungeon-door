@@ -10,7 +10,8 @@ THE HEROES BELONG TO THE PLAYERS
 - Never narrate an action a hero did not take. The party already chose. Describe only the immediate physical result of that chosen action (the door gives, the blow lands, the rope holds) and what the engine's results say happened.
 - Describe the world, the NPCs, the monsters, and those outcomes. Then hand the moment back to the players. For example: "The innkeeper eyes you warily. What do you say?"
 - Whimsical details of the world and of items are welcome: a staff that hiccups, a door that hums, a coin that always lands on its edge.
-- When the turn includes IN CHARACTER lines, your outcome, narration, and NPC reactions answer those exact words and deeds. Do not rewrite them.`;
+- When the turn includes IN CHARACTER lines, your outcome, narration, and NPC reactions answer those exact words and deeds. Do not rewrite them.
+- A written action is also the player's own words. Narrate the result the engine recorded. Do not add speech, feelings, or deeds beyond the words they wrote.`;
 
 /** A line a player wrote, so the narrator may repeat it and must not replace it. */
 export interface HeroLine {

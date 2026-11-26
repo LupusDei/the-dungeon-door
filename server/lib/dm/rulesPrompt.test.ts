@@ -66,6 +66,7 @@ test('a hero who sees dimly or not at all is marked, so the story shows only wha
   assert.match(RULES_INSTRUCTIONS, /do not attack at once/);
   assert.match(RULES_INSTRUCTIONS, /Never invent or change a rating/);
   assert.match(RULES_INSTRUCTIONS, /"condition":"poisoned"/);
+  assert.match(RULES_INSTRUCTIONS, /easy 10, medium 15, hard 20/);
 });
 
 test('conditions a hero carries are told with how they end', () => {

@@ -8,6 +8,7 @@ delete process.env.BLOB_READ_WRITE_TOKEN;
 delete process.env.DD_APP_KEY;
 delete process.env.DD_FAKE_DELAY_MS;
 
+import * as actionApi from '../api/game-action.ts';
 import * as gameApi from '../api/game.ts';
 import * as gamesApi from '../api/games.ts';
 import * as joinApi from '../api/game-join.ts';
@@ -128,4 +129,28 @@ test('when the fake DM keeps speaking for a hero, that sentence is stripped and 
   assert.equal(state.messages.some((m) => m.kind === 'dm' && m.text.includes('Let us burn it')), false);
   assert.equal(state.messages.some((m) => m.kind === 'dm' && m.text.includes('Never!')), false);
   assert.equal(state.messages.some((m) => m.kind === 'dm' && m.text.includes('Onward, in my own voice.')), true);
+});
+
+test('a written action is the player\'s own words: invented speech is stripped, their words stay', async () => {
+  const dm: DungeonMaster = {
+    ...fakeDungeonMaster,
+    async nextScene(ctx, resolution) {
+      const scene = await fakeDungeonMaster.nextScene(ctx, resolution);
+      return {
+        ...scene,
+        narration: 'Hero 1 says, "Die, goblins!" The brazier tips. Hero 1 says, "I kick the brazier onto the goblins."',
+      };
+    },
+  };
+  registerDungeonMaster('chronicler', dm);
+  const { code, host } = await table(1);
+  await call(startApi.POST, gamePath(code, 'start'), { player: host, body: { sceneCount: 3 } });
+  await settle();
+  const acted = await call(actionApi.POST, gamePath(code, 'action'), { player: host, body: { sceneIndex: 0, text: 'I kick the brazier onto the goblins' } });
+  assert.equal(acted.status, 200);
+  await settle();
+  const state = await view(code, host);
+  assert.equal(state.scene?.narration.includes('Die, goblins'), false);
+  assert.match(state.scene?.narration ?? '', /I kick the brazier onto the goblins/);
+  assert.match(state.scene?.narration ?? '', /The brazier tips/);
 });
