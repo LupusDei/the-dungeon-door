@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { gameCodeOf } from './http.ts';
 import { MemoryStore } from './store/memory.ts';
-import type { Character } from './types.ts';
+import type { StoredCharacter as Character } from './types.ts';
 
 const character = (id: string, ownerId: string): Character => ({
   id, ownerId, name: id, race: 'elf', characterClass: 'wizard', gender: 'female', temperament: 'kind', alignment: 'true-neutral',

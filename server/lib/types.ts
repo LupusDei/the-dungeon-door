@@ -1,4 +1,5 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
+import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
   id: string;
@@ -13,9 +14,14 @@ export interface Character {
   description: string;
   appearance: string | null;
   portraitUrl: string | null;
+  /** The rules engine's numbers (SRD 5.2), built and kept by the server. */
+  sheet: CharacterSheet;
   createdAt: string;
   updatedAt: string;
 }
+
+/** A character as stored: heroes saved before the rules engine have no sheet (and may be a half-orc or half-elf). */
+export type StoredCharacter = Omit<Character, 'sheet'> & { sheet?: CharacterSheet };
 
 export type GameStatus = 'lobby' | 'preparing' | 'voting' | 'resolving' | 'ended';
 export type ChoiceId = 'a' | 'b' | 'c';
@@ -52,7 +58,7 @@ export interface StoredScene {
 
 export interface GamePlayer {
   playerId: string;
-  character: Character;
+  character: StoredCharacter;
   joinedAt: string;
 }
 
@@ -112,7 +118,7 @@ export interface GameState {
   dungeonMaster: string;
   title: string | null;
   sceneCount: number;
-  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string }[];
+  players: { playerId: string; character: StoredCharacter; isHost: boolean; joinedAt: string }[];
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];

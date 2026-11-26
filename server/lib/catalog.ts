@@ -1,3 +1,5 @@
+import { srd } from './rules/srd.ts';
+
 /**
  * The option lists the character forge and lobby show (GET /api/catalog). Server-owned so the DM team
  * can add archetypes without an app release. Dungeon-master archetypes also carry server-only fields
@@ -181,6 +183,7 @@ export function publicCatalog() {
     temperaments: TEMPERAMENTS,
     genders: GENDERS,
     alignments: ALIGNMENTS,
+    backgrounds: [...srd().backgrounds.values()].map(({ id, name }) => ({ id, name })),
     dungeonMasters: DUNGEON_MASTERS.map(({ id, name, tagline, description, symbol, accent }) => ({
       id, name, tagline, description, symbol, accent,
     })),

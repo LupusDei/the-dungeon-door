@@ -1,5 +1,5 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import type { Character, Choice, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
 import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 type Row = Record<string, any>;
@@ -35,10 +35,10 @@ export class PostgresStore implements Store {
 
   async getCharacter(id: string) {
     const [row] = await this.q('SELECT data FROM characters WHERE id = $1', [id]);
-    return row ? (row.data as Character) : null;
+    return row ? (row.data as StoredCharacter) : null;
   }
 
-  async saveCharacter(character: Character) {
+  async saveCharacter(character: StoredCharacter) {
     await this.q(
       `INSERT INTO characters (id, owner_id, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE SET owner_id = EXCLUDED.owner_id, data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
@@ -49,7 +49,7 @@ export class PostgresStore implements Store {
 
   async listCharacters(ownerId: string) {
     const rows = await this.q('SELECT data FROM characters WHERE owner_id = $1 ORDER BY created_at DESC', [ownerId]);
-    return rows.map((r) => r.data as Character);
+    return rows.map((r) => r.data as StoredCharacter);
   }
 
   async deleteCharacter(id: string) {
@@ -91,7 +91,7 @@ export class PostgresStore implements Store {
       title: row.title,
       sceneCount: row.scene_count,
       sceneIndex: row.scene_index,
-      players: (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as Character, joinedAt: iso(p.joined_at) })),
+      players: (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) })),
       scenes: (row.scenes as Row[]).map((s): StoredScene => ({
         index: s.idx,
         title: s.title,

@@ -1,4 +1,4 @@
-import type { Character, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
 
 export interface NewGame {
   code: string;
@@ -40,11 +40,11 @@ export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenCh
  * step, so concurrent requests can't lose each other's writes; the game rules live in lib/game.ts.
  */
 export interface Store {
-  getCharacter(id: string): Promise<Character | null>;
+  getCharacter(id: string): Promise<StoredCharacter | null>;
   /** Insert or replace by id. */
-  saveCharacter(character: Character): Promise<Character>;
+  saveCharacter(character: StoredCharacter): Promise<StoredCharacter>;
   /** The owner's characters, newest first. */
-  listCharacters(ownerId: string): Promise<Character[]>;
+  listCharacters(ownerId: string): Promise<StoredCharacter[]>;
   deleteCharacter(id: string): Promise<void>;
 
   /** Creates a game with its host as the first player. False when the code is already taken. */
