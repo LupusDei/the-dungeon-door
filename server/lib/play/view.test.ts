@@ -5,6 +5,7 @@ import { load } from '../rules/inventory.ts';
 import { candidates, temperedBudget } from '../rules/encounter.ts';
 import { habitat, kindIdOf } from '../rules/habitats.ts';
 import { encounterBudget, monsters } from '../rules/monsters.ts';
+import { fillOf } from '../rules/wounds.ts';
 import { habitatOf, startDungeon, enter } from './delve.ts';
 import { startFight } from './fight.ts';
 import { items } from '../rules/items.ts';
@@ -42,7 +43,7 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
   assert.deepEqual([view.party[1].slotsLeft.slice(0, 2), view.party[1].down], [[1, 0], false]);
   assert.deepEqual(view.combat!.combatants.map((c) => c.id), combat.order);
   assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'party')!), ['id', 'name', 'side', 'hp', 'maxHp', 'status', 'conditions', 'toughness', 'position', 'engagedWith']);
-  assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'foes')!), ['id', 'name', 'side', 'wound', 'vigor', 'status', 'conditions', 'toughness', 'position', 'engagedWith']);
+  assert.deepEqual(Object.keys(view.combat!.combatants.find((c) => c.side === 'foes')!), ['id', 'name', 'side', 'wound', 'fill', 'status', 'conditions', 'toughness', 'position', 'engagedWith']);
   assert.deepEqual(view.combat!.combatants.map((c) => [c.position, c.engagedWith]), view.combat!.combatants.map(() => ['near', []]), 'a fight begins with both sides near');
   assert.deepEqual([view.combat!.round, view.combat!.outcome], [1, 'ongoing']);
   assert.deepEqual([view.dungeon!.mode, view.dungeon!.kind, view.dungeon!.at], ['fixed', d.map.kind, 'r4']);
@@ -163,16 +164,19 @@ test('on the road: no dungeon yet; the stretch, its terrain, what is on it (ware
   assert.ok(rulesContext(door).monsters.every((m) => habitatOf(party, door.dungeon)!.includes(m)), 'at the door, the dungeon’s own');
 });
 
-test('a foe’s hit points are hidden from the players and the DM: they see its wound and vigor; a hero’s HP shows', () => {
+test('a foe’s hit points are hidden from the players and the DM: they see its wound, and the app a fuzzy gauge (fill) for it in this fight; a hero’s HP shows', () => {
   const { combat } = startFight(party, ['zombie', 'goblin-warrior']);
   const zombie = combat.combatants['foe-1'];
   const hurt = { ...combat, combatants: { ...combat.combatants, 'foe-1': { ...zombie, hp: Math.floor(zombie.maxHp / 2) } } };
   const s = { party, combat: hurt, dungeon: null };
   const shown = rulesView(s, []).combat!.combatants;
   const byName = <T extends { name: string }>(xs: T[]) => [...xs].sort((a, b) => a.name.localeCompare(b.name));
-  assert.deepEqual(byName(shown.filter((c) => c.side === 'foes')).map((c) => [c.name, c.wound, c.vigor, c.hp, c.maxHp]), [['Goblin Warrior', 'Unhurt', 6, undefined, undefined], ['Zombie', 'Crumbling', 3, undefined, undefined]]);
+  const fill = fillOf(zombie.maxHp >> 1, zombie.maxHp, `${hurt.order.join(',')}|foe-1`);
+  assert.ok(fill > 0.25 && fill <= 0.5, `${fill}`);
+  assert.deepEqual(byName(shown.filter((c) => c.side === 'foes')).map((c) => [c.name, c.wound, c.fill, c.hp, c.maxHp]), [['Goblin Warrior', 'Unhurt', 1, undefined, undefined], ['Zombie', 'Crumbling', fill, undefined, undefined]]);
+  assert.ok(shown.every((c) => !('vigor' in c)), 'no rungs to count');
   assert.deepEqual(byName(shown.filter((c) => c.side === 'party')).map((c) => [c.hp, c.wound]), [[0, undefined], [wizard.hp, undefined]]);
   const told = rulesContext(s).combat!.combatants;
-  assert.deepEqual(byName(told.filter((c) => c.side === 'foes')).map((c) => [c.wound, c.hp]), [['Unhurt', undefined], ['Crumbling', undefined]]);
+  assert.deepEqual(byName(told.filter((c) => c.side === 'foes')).map((c) => [c.wound, c.hp, 'fill' in c]), [['Unhurt', undefined, false], ['Crumbling', undefined, false]]);
   assert.equal(told.find((c) => c.name === 'Cleo')!.hp, wizard.hp);
 });

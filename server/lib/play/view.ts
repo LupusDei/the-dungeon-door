@@ -13,7 +13,7 @@ import { candidates, fightBand, rateEncounter, temperedBudget, toughnessFor, typ
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
-import { vigorOf, woundOf } from '../rules/wounds.ts';
+import { fillOf, woundOf } from '../rules/wounds.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import { dungeonLevel, foeLevels, foesMet, habitatOf } from './delve.ts';
 import { foesNamed } from './hooks.ts';
@@ -66,16 +66,16 @@ function trekView(state: RulesState): TrekView | null {
 const inDungeon = ({ party, dungeon }: RulesState) => (party.trek ? null : dungeon);
 
 /**
- * A hero's hit points; a foe's are hidden (rules/wounds.ts): its wound, and for the app its vigor (6 unhurt
- * … 0) for a gauge.
+ * A hero's hit points; a foe's are hidden (rules/wounds.ts): its wound, and for the app's gauge a fuzzy fill
+ * (0–1), seeded by the foe in this fight (`fight`: the fight's turn order). The DM gets no gauge.
  */
-function health(c: Combatant, gauge: boolean): Health {
+function health(c: Combatant, fight: string | null): Health {
   if (c.side === 'party') return { hp: c.hp, maxHp: c.maxHp };
-  return gauge ? { wound: woundOf(c), vigor: vigorOf(c.hp, c.maxHp) } : { wound: woundOf(c) };
+  return fight === null ? { wound: woundOf(c) } : { wound: woundOf(c), fill: fillOf(c.hp, c.maxHp, `${fight}|${c.id}`) };
 }
 
-/** A hero's hit points, or a foe's wound ("Bloodied") and vigor. */
-export interface Health { hp?: number; maxHp?: number; wound?: string; vigor?: number }
+/** A hero's hit points, or a foe's wound ("Bloodied") and, for the app, its fuzzy gauge. */
+export interface Health { hp?: number; maxHp?: number; wound?: string; fill?: number }
 
 function ratedCombat(state: RulesState, combat: NonNullable<RulesState['combat']>) {
   const levels = foeLevels(state.party, state.dungeon);
@@ -134,7 +134,7 @@ export interface RulesView {
     round: number; outcome: 'ongoing' | 'victory' | 'defeat';
     /** The fight against the current party: low, moderate, high, or deadly above high. */
     band: FightBand;
-    /** A hero has hp and maxHp; a foe has wound and vigor instead (its hit points are hidden). */
+    /** A hero has hp and maxHp; a foe has wound and a fuzzy fill (0–1) instead (its hit points are hidden). */
     combatants: ({ id: string; name: string; side: 'party' | 'foes'; status: string; conditions: string[]; toughness: Toughness | null;
       /** Range band: engaged (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). */
       position: 'engaged' | 'near' | 'far';
@@ -211,7 +211,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
         outcome: combat.outcome,
         band: rated.band,
         combatants: rated.ordered.map((c) => ({
-          id: c.id, name: c.name, side: c.side, ...health(c, true), status: c.status,
+          id: c.id, name: c.name, side: c.side, ...health(c, combat.order.join(',')), status: c.status,
           conditions: [...c.conditions], toughness: rated.toughness(c),
           position: c.place?.band ?? 'near', engagedWith: [...(c.place?.with ?? [])],
         })),
@@ -242,7 +242,7 @@ export interface RulesContext {
     round: number;     band: FightBand;
     combatants: ({ name: string; side: 'party' | 'foes'; status: string; toughness: Toughness | null;
       position: 'engaged' | 'near' | 'far'; engagedWith: string[];
-    } & Omit<Health, 'vigor'>)[];
+    } & Omit<Health, 'fill'>)[];
   };
   trek: TrekView | null;
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
@@ -292,7 +292,7 @@ export function rulesContext(state: RulesState): RulesContext {
         round: combat.round,
         band: rated.band,
         combatants: rated.ordered.map((c) => ({
-          name: c.name, side: c.side, ...health(c, false), status: c.status, toughness: rated.toughness(c),
+          name: c.name, side: c.side, ...health(c, null), status: c.status, toughness: rated.toughness(c),
           position: c.place?.band ?? 'near', engagedWith: (c.place?.with ?? []).map((id) => combat.combatants[id]?.name ?? id),
         })),
       };
