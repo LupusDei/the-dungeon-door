@@ -66,12 +66,17 @@ export function sell(sheet: CharacterSheet, id: string, count = 1): CharacterShe
   return { ...without, gp: cents(sheet.gp + price * count) };
 }
 
-/** Drinks a Potion of Healing (5.2): the HP it restores, never above the maximum. */
+/** A Potion of Healing takes effect (5.2): the HP it restores, never above the maximum. Whose it was is the caller's business. */
+export function drink(rng: Rng, sheet: CharacterSheet, id: string): { sheet: CharacterSheet; healed: number } {
+  require(!sheet.dead, `${sheet.name} is dead`);
+  require(Object.hasOwn(HEALING_POTIONS, id), `${item(id).name} cannot be used that way`);
+  const hp = Math.min(sheet.maxHp, sheet.hp + rollDice(rng, parseDice(HEALING_POTIONS[id])).total);
+  return { sheet: { ...sheet, hp }, healed: hp - sheet.hp };
+}
+
+/** The hero drinks a Potion of Healing from their own pack. */
 export function useItem(rng: Rng, sheet: CharacterSheet, id: string): { sheet: CharacterSheet; healed: number } {
   require(!sheet.dead, `${sheet.name} is dead`);
-  const { name } = item(id);
-  require(Object.hasOwn(HEALING_POTIONS, id), `${name} cannot be used that way`);
-  const without = removeItem(sheet, id);
-  const hp = Math.min(sheet.maxHp, sheet.hp + rollDice(rng, parseDice(HEALING_POTIONS[id])).total);
-  return { sheet: { ...without, hp }, healed: hp - sheet.hp };
+  require(Object.hasOwn(HEALING_POTIONS, id), `${item(id).name} cannot be used that way`);
+  return drink(rng, removeItem(sheet, id), id);
 }

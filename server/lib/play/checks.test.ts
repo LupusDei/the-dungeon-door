@@ -145,3 +145,14 @@ test('labels for the extended hooks', () => {
   assert.equal(hookLabel({ kind: 'save', ability: 'con', dc: 12, disadvantage: true }), 'Constitution save, DC 12, with Disadvantage');
   assert.equal(hookLabel({ kind: 'save', ability: 'con', dc: 12, advantage: true, disadvantage: true }), 'Constitution save, DC 12');
 });
+
+test('trade hooks: items must be in the SRD catalog; only Potions of Healing can be drunk', () => {
+  assert.deepEqual(parseHook({ kind: 'buy', items: ['potion-of-healing', 'spoon'] }), { kind: 'buy', items: ['potion-of-healing'] });
+  assert.equal(parseHook({ kind: 'sell', items: ['spoon'] }), null);
+  assert.deepEqual(parseHook({ kind: 'sell', items: ['gemstone'] }), { kind: 'sell', items: ['gemstone'] });
+  assert.deepEqual(parseHook({ kind: 'use', item: 'potion-of-greater-healing' }), { kind: 'use', item: 'potion-of-greater-healing' });
+  assert.equal(parseHook({ kind: 'use', item: 'torch' }), null);
+  assert.equal(hookLabel({ kind: 'buy', items: ['potion-of-healing', 'potion-of-healing', 'rope'] }), 'Buy Potion of Healing ×2, Rope');
+  assert.equal(hookLabel({ kind: 'sell', items: ['gemstone', 'gemstone'] }), 'Sell Gemstone ×2');
+  assert.equal(hookLabel({ kind: 'use', item: 'potion-of-healing' }), 'Drink a Potion of Healing');
+});

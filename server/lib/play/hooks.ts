@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { ABILITIES, type Ability } from '../rules/abilities.ts';
-import { items } from '../rules/items.ts';
+import { HEALING_POTIONS, items } from '../rules/items.ts';
 import { monsters } from '../rules/monsters.ts';
 import { modeOf } from '../rules/resolve.ts';
 import { srd } from '../rules/srd.ts';
@@ -20,7 +20,13 @@ export type RulesHook =
   | { kind: 'save'; ability: Ability; dc: number; damage?: string | null; damageType?: string | null } & Edge
   | { kind: 'fight'; monsters: string[] }
   | { kind: 'rest'; rest: 'short' | 'long' }
-  | { kind: 'move'; exit: string };
+  | { kind: 'move'; exit: string }
+  /** Each item is bought by the richest hero who can pay (a shop scene). */
+  | { kind: 'buy'; items: string[] }
+  /** Every hero sells all they hold of each item. */
+  | { kind: 'sell'; items: string[] }
+  /** The most hurt hero drinks a Potion of Healing. */
+  | { kind: 'use'; item: string };
 
 interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
 
@@ -33,6 +39,7 @@ const DICE = /^\d+d\d+([+-]\d+)?$/;
 
 const edge = { advantage: z.boolean().nullish(), disadvantage: z.boolean().nullish() };
 const isMonster = (id: string) => monsters().has(id);
+const itemList = z.array(z.string()).transform((ids) => ids.filter((id) => items().has(id))).refine((ids) => ids.length > 0);
 
 const HookSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -44,6 +51,9 @@ const HookSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('fight'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).refine((ids) => ids.length > 0) }),
   z.object({ kind: z.literal('rest'), rest: z.enum(['short', 'long']) }),
   z.object({ kind: z.literal('move'), exit: z.string().min(1) }),
+  z.object({ kind: z.literal('buy'), items: itemList }),
+  z.object({ kind: z.literal('sell'), items: itemList }),
+  z.object({ kind: z.literal('use'), item: z.string().refine((id) => Object.hasOwn(HEALING_POTIONS, id)) }),
 ]);
 
 /** The hook, or null when there is none or it doesn't hold up (unknown skill or monster, DC out of 1–30…). */
@@ -60,9 +70,12 @@ export const ABILITY_NAMES: Readonly<Record<Ability, string>> = {
 export const titleCase = (id: string) => id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 /** "2 Goblin Warriors, Bugbear Warrior". */
-function monsterList(ids: readonly string[]): string {
-  return [...new Set(ids)].map((id): [string, number] => [id, ids.filter((x) => x === id).length]).map(([id, n]) => (n > 1 ? `${n} ${monsters().get(id)!.name}s` : monsters().get(id)!.name)).join(', ');
+function countedList(ids: readonly string[], nameOf: (id: string) => string, many: (n: number, name: string) => string): string {
+  return [...new Set(ids)].map((id): [string, number] => [id, ids.filter((x) => x === id).length]).map(([id, n]) => (n > 1 ? many(n, nameOf(id)) : nameOf(id))).join(', ');
 }
+const monsterName = (id: string) => monsters().get(id)!.name;
+const itemName = (id: string) => items().get(id)!.name;
+const times = (n: number, name: string) => `${name} ×${n}`;
 
 /** "Sleight Of Hand with Thieves' Tools", "Thieves' Tools", "Athletics", "Dexterity save". */
 export function rollName(hook: RollHook): string {
@@ -79,9 +92,12 @@ const target = (h: Extract<RulesHook, { kind: 'check' }>) => (typeof h.dc === 'n
 const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>) => string } = {
   check: (h) => `${rollName(h)} check${target(h)}${h.mode === 'best' ? ', one hero with help' : ''}${edgeLabel(h)}`,
   save: (h) => `${rollName(h)}, DC ${h.dc}${edgeLabel(h)}`,
-  fight: (h) => `Fight: ${monsterList(h.monsters)}`,
+  fight: (h) => `Fight: ${countedList(h.monsters, monsterName, (n, name) => `${n} ${name}s`)}`,
   rest: (h) => (h.rest === 'short' ? 'Short rest' : 'Long rest'),
   move: (h) => `Go on (${h.exit})`,
+  buy: (h) => `Buy ${countedList(h.items, itemName, times)}`,
+  sell: (h) => `Sell ${countedList(h.items, itemName, times)}`,
+  use: (h) => `Drink a ${itemName(h.item)}`,
 };
 
 /** What the app shows under the choice. */

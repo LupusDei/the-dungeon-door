@@ -46,11 +46,16 @@ test('traps use the SRD 5.2 scaling: DC and damage by the party’s level', () =
   assert.deepEqual(trapHook([17, 20]), { kind: 'save', ability: 'dex', dc: 19, damage: '18d10', damageType: 'bludgeoning' });
 });
 
-test('treasure: the coins are shared out as gold; gems, jewellery and magic items are named', () => {
-  const party: PartyState = { version: 1, rng: 1, sheets: { p1: { ...SAMPLE, gp: 1 }, p2: { ...SAMPLE, gp: 0 } } };
+test('treasure: the coins are shared out as gold; gems, jewellery and the magic item go into packs', () => {
+  const party: PartyState = { version: 1, rng: 1, sheets: { p1: { ...SAMPLE, gp: 1 }, p2: { ...SAMPLE, name: 'Cleo', gp: 0 } } };
   const { party: rich, lines } = claimTreasure(party, { sp: 25, gp: 10, gems: 2, jewellery: 1, magicItem: 'Potion of Healing' });
   assert.deepEqual([rich.sheets.p1.gp, rich.sheets.p2.gp], [7.25, 6.25]);
-  assert.deepEqual(lines, ['Treasure: 12.5 gp in coin (6.25 each), 2 gems, 1 piece of jewellery, Potion of Healing.']);
+  assert.deepEqual(lines, [
+    'Treasure: 12.5 gp in coin (6.25 each), 2 gems, 1 piece of jewellery, Potion of Healing.',
+    'Cleo takes 2 Gemstone, Piece of Jewellery.', 'Bryn takes Potion of Healing.',
+  ]);
+  assert.deepEqual(rich.sheets.p2.equipment.slice(1).map((e) => [e.id, e.count]), [['gemstone', 2], ['jewellery', 1]]);
+  assert.deepEqual(claimTreasure(party, { sp: 0, gp: 0, gems: 0, jewellery: 0, magicItem: 'Spoon of Destiny' }).lines, ['Treasure: 0 gp in coin (0 each), Spoon of Destiny.'], 'an item the SRD does not list is only named');
   assert.deepEqual(claimTreasure(party, { sp: 0, gp: 4, gems: 0, jewellery: 0, magicItem: null }).lines, ['Treasure: 4 gp in coin (2 each).']);
 });
 

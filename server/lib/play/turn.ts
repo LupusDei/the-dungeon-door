@@ -10,6 +10,7 @@ import { fightRound, startFight, type FightEnd } from './fight.ts';
 import type { RollHook, RulesHook } from './hooks.ts';
 import { partyRest } from './rest.ts';
 import type { CombatState, DungeonState, PartyState } from './state.ts';
+import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
 export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number }
@@ -69,12 +70,17 @@ function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTur
   return { ...trapped, ...cleared.state, lines: cleared.lines };
 }
 
+const traded = (s: RulesState, t: Traded) => done({ ...s, party: t.party }, t.lines);
+
 const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook, { kind: K }>, ballots: readonly Ballot[]) => RulesTurn } = {
   check: (s, hook, ballots) => roll(s, hook, ballots),
   save: (s, hook, ballots) => roll(s, hook, ballots),
   fight: (s, hook) => fight(s, hook.monsters),
   rest: (s, hook) => { const r = partyRest(s.party, hook.rest); return done({ ...s, party: r.party }, r.lines); },
   move: (s, hook, ballots) => move(s, hook.exit, ballots),
+  buy: (s, hook) => traded(s, buyItems(s.party, hook.items)),
+  sell: (s, hook) => traded(s, sellItems(s.party, hook.items)),
+  use: (s, hook) => traded(s, usePotion(s.party, hook.item)),
 };
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */

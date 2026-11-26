@@ -9,6 +9,7 @@ import type { MapSize } from '../rules/dungeonTables.ts';
 import { expand, startExplore } from '../rules/explore.ts';
 import type { RollHook } from './hooks.ts';
 import type { DungeonState, PartyState } from './state.ts';
+import { itemIdOf, stow } from './trade.ts';
 
 /** Short adventures get small maps. */
 export const mapSize = (sceneCount: number): MapSize => (sceneCount <= 4 ? 'short' : sceneCount <= 6 ? 'standard' : 'delve');
@@ -63,7 +64,7 @@ export function arrival(dungeon: DungeonState, node: DungeonNode): Arrival {
 const SP_PER_GP = 10;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** Coins are shared out evenly as gold; gems, jewellery and magic items are named for the DM. */
+/** Coins are shared out evenly as gold; gems, jewellery and the magic item go to whoever has room. */
 export function claimTreasure(party: PartyState, treasure: Treasure): { party: PartyState; lines: string[] } {
   const coin = treasure.gp + treasure.sp / SP_PER_GP;
   const ids = Object.keys(party.sheets);
@@ -74,5 +75,8 @@ export function claimTreasure(party: PartyState, treasure: Treasure): { party: P
     treasure.jewellery ? plural(treasure.jewellery, 'piece of jewellery', 'pieces of jewellery') : '',
     treasure.magicItem,
   ].filter((x) => x);
-  return { party: { ...party, sheets }, lines: [`Treasure: ${[`${coin} gp in coin (${share} each)`, ...extras].join(', ')}.`] };
+  const magic = treasure.magicItem ? itemIdOf(treasure.magicItem) : null;
+  const found = [...Array<string>(treasure.gems).fill('gemstone'), ...Array<string>(treasure.jewellery).fill('jewellery'), ...(magic ? [magic] : [])];
+  const stowed = stow({ ...party, sheets }, found);
+  return { party: stowed.party, lines: [`Treasure: ${[`${coin} gp in coin (${share} each)`, ...extras].join(', ')}.`, ...stowed.lines] };
 }

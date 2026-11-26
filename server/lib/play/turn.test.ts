@@ -98,3 +98,15 @@ test('a way that is not there, or no dungeon at all: nothing happens but a line 
   assert.deepEqual(playTurn(state({ dungeon: d }), { kind: 'move', exit: 'r3' }, []).lines, ['That way is closed.']);
   assert.deepEqual(playTurn(state(), { kind: 'move', exit: 'r1' }, []).lines, ['That way is closed.']);
 });
+
+test('trade hooks: buying, selling and drinking a potion change the sheets and say what happened', () => {
+  const rich = state({ party: party({ p1: { ...fighter, gp: 100 }, p2: { ...rogue, gp: 0 } }) });
+  const bought = playTurn(rich, { kind: 'buy', items: ['potion-of-healing'] }, ballots(5, 5));
+  assert.deepEqual([bought.party.sheets.p1.gp, bought.lines, bought.success], [50, ['Bryn buys Potion of Healing for 50 GP.'], null]);
+  const sold = playTurn(bought, { kind: 'sell', items: ['potion-of-healing'] }, ballots(5, 5));
+  assert.deepEqual([sold.party.sheets.p1.gp, sold.lines], [75, ['Bryn sells 1 Potion of Healing for 25 GP.']]);
+  const hurt = { ...bought, party: { ...bought.party, sheets: { ...bought.party.sheets, p2: { ...rogue, hp: 1 } } } };
+  const drunk = playTurn(hurt, { kind: 'use', item: 'potion-of-healing' }, ballots(5, 5));
+  assert.ok(drunk.party.sheets.p2.hp > 1);
+  assert.match(drunk.lines[0], /^Bryn gives Cleo a Potion of Healing: \d+ HP back\.$/);
+});
