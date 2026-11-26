@@ -44,6 +44,32 @@ export interface Vote {
   choiceId: ChoiceId;
   /** d20, rolled by the server on the first vote and kept when the vote changes. */
   roll: number;
+  /** Set when the vote named a legal action rather than a choice letter. */
+  actionId?: string;
+  /** Ids from that action's targets. Absent when the action needs none. */
+  targets?: string[];
+  /**
+   * Set when the player wrote a check instead of choosing. `choiceId` and `actionId` are then ignored:
+   * the row counts as having acted, and it does not add to the tally.
+   */
+  freeform?: { text: string; ruling: import('./play/actions.ts').CheckRuling };
+}
+
+/** One thing the caller's hero might do this turn. See docs/api.md, LegalAction. */
+export interface LegalAction {
+  id: string;
+  label: string;
+  /** "attack", "spell", "item", "feature", "common", "choice", or a later kind such as "move". */
+  kind: string;
+  detail: string;
+  targets: { id: string; name: string }[];
+  /** "none": no target. "one": exactly one of targets. "many": one or more, at most `limit`. */
+  picks: 'none' | 'one' | 'many';
+  /** For picks "many": how many targets a vote may name. */
+  limit?: number;
+  available: boolean;
+  /** Why it cannot be taken; null when available. */
+  reason: string | null;
 }
 
 /** A vote as the app sees it. In a combat round `label` is what that hero is doing, in their own choice's words: "Cast Fire Bolt", "Break Free", "Help Ilsa". */
@@ -173,13 +199,22 @@ export interface SceneView {
   /** The default narrator's reading, or null: what apps from before the voice picker play. */
   voiceUrl: string | null;
   choices: ChoiceView[];
+  /** What the caller's hero can take this turn. Empty for the epilogue and a resolved scene. */
+  actions: LegalAction[];
   /** A combat round: each vote is that player's own hero's action, and the choices are written for the caller's hero. */
   combat: boolean;
   /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
   canAct: boolean;
   isFinale: boolean;
+  /** Votes for a, b or c, or a named legal action. A written check is in `freeforms`, not here. */
   votes: VoteView[];
   myVote: ChoiceId | null;
+  /** The caller's vote as an action id. A letter vote is "choice:a" and so on. Null until they vote, and null for a written check. */
+  myAction: { id: string; targets: string[] } | null;
+  /** Written checks this scene: the player's words and the d20. Each of these players has acted. */
+  freeforms: { playerId: string; text: string; roll: number }[];
+  /** The caller's written check, or null. */
+  myFreeform: { text: string; roll: number } | null;
   outcome: string | null;
 }
 

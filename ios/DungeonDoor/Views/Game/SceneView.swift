@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// One scene: the art, the dungeon master's narration, and what the party does about it. A told
-/// scene offers three choices to vote on, each with what the rules will make of it; a round of a
-/// fight hands over to `CombatView`. Also the finale, which has no choices.
+/// One scene as it was drawn before the play dashboard: the art, the narration, and the choices.
+/// `GameView` now plays on `PlayDashboard`. This screen stays because the dashboard still uses the
+/// narrator bar, the time and light line, the waiting-foes notice, and the resolving and level-up
+/// covers that live here.
 struct SceneView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -351,7 +352,7 @@ enum ChoiceLetter {
 
 /// The hour and what the party sees by: "Day 1, 08:40", "Torch, 40 min left (Bryn)" or "Dark, and
 /// no light". Under it, what the caller's own hero can make out when that is less than everything.
-private struct TimeAndLight: View {
+struct TimeAndLight: View {
     let clock: GameClock?
     let light: PartyLight?
     let mine: HeroStanding?
@@ -431,7 +432,7 @@ private struct TimeAndLight: View {
 
 /// The narrator's controls above a scene's telling: hear it read, and whether every scene is read
 /// as it arrives.
-private struct NarratorBar: View {
+struct NarratorBar: View {
     let scene: GameScene
     let session: GameSession
     @Bindable var narrator: Narrator
@@ -519,7 +520,7 @@ private struct NarratorBar: View {
 }
 
 /// Foes the party is facing: who they are, how hard they are, how they take to the party.
-private struct WaitingFoesNotice: View {
+struct WaitingFoesNotice: View {
     let waiting: WaitingFoes
 
     private var tint: Color { waiting.isHostile ? Palette.ember : Palette.verdigris }
@@ -672,7 +673,7 @@ private struct ChoiceCard: View {
 
 /// While the dungeon master weighs the votes (or tells the round of a fight): everyone's d20, laid
 /// out on the table.
-private struct ResolvingOverlay: View {
+struct ResolvingOverlay: View {
     let scene: GameScene
     let players: [GamePlayer]
 
@@ -720,7 +721,7 @@ private struct ResolvingOverlay: View {
 }
 
 /// The moment the caller's hero gains a level: stays up until they send it away.
-private struct LevelUpOverlay: View {
+struct LevelUpOverlay: View {
     let notice: LevelUp
     let dismiss: () -> Void
     let showSheet: () -> Void

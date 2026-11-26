@@ -1,5 +1,5 @@
 import { fakeDelay } from '../models.ts';
-import type { DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
+import type { ActionRequest, DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
 
 /**
  * A deterministic, offline DM for DD_FAKE_AI=1 (local dev and tests). It still reads the votes and rolls
@@ -58,6 +58,27 @@ function names(ctx: DMContext) {
   return ctx.party.map((p) => p.name).join(', ') || 'The party';
 }
 
+const empty = { action: '', ability: 'none', skill: '', tier: 'none', effect: 'none', severity: 'none', damageType: '', condition: 'none', save: 'none', narration: '' };
+
+/**
+ * The offline classification. "I fly to the moon" cannot be done. A word that is one of today's actions,
+ * or that repeats a choice's label, maps onto it. Kicking, shoving or a brazier is a medium Athletics
+ * check with moderate damage. Anything else is an easy Perception check with no effect.
+ */
+export function classifyFreeform(request: ActionRequest): Record<string, string> {
+  const text = request.text.trim();
+  const lower = text.toLowerCase();
+  if (/^impossible\b|fly to the moon/i.test(lower)) return { ...empty, kind: 'impossible', narration: 'That cannot be done.' };
+  const byId = request.actions.find((id) => lower === id || lower.startsWith(`${id} `) || lower === `i ${id}`);
+  if (byId) return { ...empty, kind: 'known', action: byId };
+  const byLabel = request.choices.find((c) => c.label.length > 0 && lower.includes(c.label.toLowerCase()));
+  if (byLabel && request.actions.includes(byLabel.id)) return { ...empty, kind: 'known', action: byLabel.id };
+  if (/kick|brazier|shove|hurl|smash|throw/.test(lower)) {
+    return { ...empty, kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'damage', severity: 'moderate', damageType: 'bludgeoning' };
+  }
+  return { ...empty, kind: 'check', ability: 'wis', skill: 'perception', tier: 'easy', effect: 'none' };
+}
+
 export const fakeDungeonMaster: DungeonMaster = {
   async openingScene(ctx): Promise<OpeningScene> {
     await fakeDelay();
@@ -97,5 +118,10 @@ export const fakeDungeonMaster: DungeonMaster = {
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: 'Thank you for playing. Until the door opens again…',
     };
+  },
+
+  async classifyAction(_ctx, request) {
+    await fakeDelay();
+    return classifyFreeform(request);
   },
 };

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { archetype } from '../catalog.ts';
-import { fakeDungeonMaster } from './fake.ts';
+import { classifyFreeform, fakeDungeonMaster } from './fake.ts';
 import type { DMContext, RulesContext } from './types.ts';
 
 process.env.DD_FAKE_DELAY_MS = '0';
@@ -30,4 +30,14 @@ test('in a dungeon its first choice takes the first exit; before the engine its 
   assert.deepEqual(met[2].rules, { kind: 'parley' }, 'foes waiting: talk to them');
   const { choices: legacy } = await fakeDungeonMaster.openingScene(ctx(null));
   assert.ok(legacy.every((c) => c.rules === undefined));
+});
+
+test('the fake DM classifies a written action without inventing a number', () => {
+  const request = { characterName: 'Bryn', text: '', inCombat: true, actions: ['attack', 'cast', 'dodge'], choices: [{ id: 'attack', label: 'Attack' }] };
+  assert.equal(classifyFreeform({ ...request, text: 'attack' }).kind, 'known');
+  assert.equal(classifyFreeform({ ...request, text: 'attack' }).action, 'attack');
+  const kick = classifyFreeform({ ...request, text: 'I kick the brazier onto the goblins' });
+  assert.deepEqual([kick.kind, kick.tier, kick.severity, kick.skill], ['check', 'medium', 'moderate', 'athletics']);
+  assert.equal(classifyFreeform({ ...request, text: 'I fly to the moon' }).kind, 'impossible');
+  assert.equal(JSON.stringify(kick).match(/\d/g), null, 'no digits');
 });

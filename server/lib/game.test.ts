@@ -180,6 +180,7 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.ok(state.title);
   assert.equal(state.scene?.index, 0);
   assert.deepEqual(state.scene?.choices.map((c) => c.id), ['a', 'b', 'c']);
+  assert.ok(state.scene?.actions.some((a) => a.id === 'choice:a' && a.kind === 'choice' && a.available));
   assert.ok(state.scene?.imageUrl, 'scene art painted');
   assert.equal(state.scene?.isFinale, false);
   assert.equal(state.scene?.myVote, null);
@@ -193,6 +194,10 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
 
   // Votes: validation, wrong scene, vote changes keep the roll
   assert.equal((await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, choiceId: 'd' } })).status, 400);
+  assert.equal((await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, actionId: 'nope' } })).status, 400);
+  const refused = await call<{ error: string }>(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, actionId: 'common:dodge' } });
+  assert.equal(refused.status, 400);
+  assert.match(refused.body.error, /Not in a fight/);
   assert.equal((await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 1, choiceId: 'a' } })).status, 409);
   assert.equal((await call(voteApi.POST, gamePath(code, 'vote'), { player: outsider, body: { sceneIndex: 0, choiceId: 'a' } })).status, 403);
   // Advance needs at least one vote
@@ -200,10 +205,12 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
 
   state = (await call<GameState>(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, choiceId: 'a' } })).body;
   assert.equal(state.scene?.myVote, 'a');
+  assert.deepEqual(state.scene?.myAction, { id: 'choice:a', targets: [] });
   const roll = state.scene!.votes[0].roll;
   assert.ok(roll >= 1 && roll <= 20);
-  state = (await call<GameState>(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, choiceId: 'b' } })).body;
+  state = (await call<GameState>(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, actionId: 'choice:b' } })).body;
   assert.equal(state.scene?.myVote, 'b');
+  assert.deepEqual(state.scene?.myAction, { id: 'choice:b', targets: [] });
   assert.equal(state.scene?.votes.length, 1);
   assert.equal(state.scene?.votes[0].roll, roll);
   assert.equal(state.status, 'voting');

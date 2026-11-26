@@ -62,6 +62,12 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   Make the deeper level feel it: older stone, colder air, stranger signs.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
+- A player may write their own action instead of choosing. You classify those words in a separate call, and
+  you still never invent a number: a known action is one of the ids you are given, a check names an ability
+  or skill, a tier (easy, medium or hard) and an effect (none, damage of a severity, or a condition with a
+  save), and impossible means the fiction cannot allow it. The engine sets the DC (easy 10, medium 15, hard 20),
+  the damage and the save. An impossible action does not spend their turn. When you narrate, the
+  engine's lines already include any written action, quoting their words: colour them, never change them.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
   next one (still write three choices; they are ignored).`;
 
