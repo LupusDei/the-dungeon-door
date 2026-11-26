@@ -16,10 +16,12 @@ import { HEALING_POTIONS, item } from '../rules/items.ts';
 import { held, removeItem } from '../rules/inventory.ts';
 import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { beamsAt, castSpell, slotsLeft, spellDamageDice } from '../rules/spells.ts';
+import { beamsAt, castSpell, endConcentration, slotsLeft, spellDamageDice } from '../rules/spells.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
+import { keepConcentration } from './concentration.ts';
+import { shakeOff } from './conditions.ts';
 import { afterFight } from './dying.ts';
 import { type Break, morale } from './morale.ts';
 import { newlyDead, revivify } from './revive.ts';
@@ -52,7 +54,7 @@ function foes(ids: readonly string[], light: LightLevel): Combatant[] {
 /** The hero as a combatant, with the conditions it carries (rules/conditions.ts). */
 function heroOf(playerId: string, sheet: CharacterSheet, light: LightLevel): Combatant {
   const carried = conditionsOf(sheet).map((c) => c.condition);
-  const c = { ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' as const : 'up' as const, conditions: carried };
+  const c = { ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' as const : 'up' as const, conditions: carried, ...(carried.length ? { carried } : {}) };
   return blindedIf(c, !carried.includes('blinded') && sightOf(sheet, light) === 'none');
 }
 
@@ -239,21 +241,37 @@ function settleFight(party: PartyState, combat: CombatState, lines: string[], br
     fled: () => award(party, combat, xpEarned(combat), 'The foes flee.'),
     defeat: () => ({ party, lines: [] }),
   }[ended]();
-  const settled = afterFight(won.party, combat);
+  const calm = { ...won.party, sheets: Object.fromEntries(Object.entries(won.party.sheets).map(([id, sh]) => [id, endConcentration(sh)])) };
+  const settled = afterFight(calm, combat);
   const back = revivify(settled.party, newlyDead(won.party, settled.party));
   return { party: back.party, combat, lines: [...lines, ...won.lines, ...settled.lines, ...back.lines], ended };
 }
 
-/** Plays one round: each hero by their vote, monsters by rule; then settles the fight if it ended. */
+/** The carried conditions a hero's sheet no longer has (it broke free, or shook one off) leave its combatant too. */
+function freedFrom(combat: CombatState, sheets: Record<string, CharacterSheet>): CombatState {
+  const combatants = Object.fromEntries(Object.entries(combat.combatants).map(([id, c]) => {
+    const gone = (c.carried ?? []).filter((x) => !conditionsOf(sheets[id]).some((t) => t.condition === x));
+    return [id, gone.length ? { ...c, conditions: c.conditions.filter((x) => !gone.includes(x)), carried: c.carried!.filter((x) => !gone.includes(x)) } : c];
+  }));
+  return { ...combat, combatants };
+}
+
+/**
+ * Plays one round: first each hero tries to end what a save or check ends (play/conditions.ts), then each
+ * acts by its vote and the monsters by rule; the hurt keep concentrating or not; then the fight is settled if it ended.
+ */
 export function fightRound(party: PartyState, combat: CombatState, votes: CombatVotes): Round {
-  let state = combat;
-  let sheets = party.sheets;
-  while (state.outcome === 'ongoing' && state.round === combat.round) {
+  const freed = shakeOff(party);
+  const start = freedFrom(combat, freed.party.sheets);
+  let state = start;
+  let sheets = freed.party.sheets;
+  while (state.outcome === 'ongoing' && state.round === start.round) {
     const turn = turnAction(state, sheets, votes);
     sheets = turn.sheets;
     state = act(turn.state, turn.action);
   }
-  const shaken = morale(combat, state);
-  const lines = [...tell(combat, state), ...shaken.lines, ...tell(state, shaken.combat)];
-  return settleFight(synced({ ...party, sheets }, shaken.combat), shaken.combat, lines, shaken.broke);
+  const shaken = morale(start, state);
+  const kept = keepConcentration(start, shaken.combat, sheets);
+  const lines = [...freed.lines, ...tell(start, state), ...shaken.lines, ...tell(state, shaken.combat), ...kept.lines];
+  return settleFight(synced({ ...freed.party, sheets: kept.sheets }, kept.combat), kept.combat, lines, shaken.broke);
 }

@@ -276,3 +276,30 @@ test('a hero brings its conditions into a fight (a Poisoned hero attacks with Di
   const blind = { ...sick, conditions: [{ condition: 'blinded' as const, until: { kind: 'long-rest' as const } }] };
   assert.deepEqual(startFight({ version: 1, rng: 3, sheets: { p1: blind } }, ['bandit'], 'dark').combat.combatants.p1.conditions, ['blinded'], 'not twice');
 });
+
+test('each round a hero first tries to end what a save or check ends; what its sheet loses, its combatant loses too', () => {
+  const netted = { ...fighter, conditions: [{ condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'athletics' as const, dc: 10 } }] };
+  const start = startFight(party({ p1: netted, p2: wizard }), ['goblin-warrior']);
+  assert.deepEqual(start.combat.combatants.p1.carried, ['restrained']);
+  assert.equal(start.combat.combatants.p2.carried, undefined, 'nothing carried, nothing kept');
+  const easy = { ...netted, conditions: [{ ...netted.conditions[0], until: { ...netted.conditions[0].until, dc: -50 } }] };
+  const free = fightRound({ ...start.party, sheets: { p1: easy, p2: wizard } }, patch(start.combat, { 'foe-1': { attacks: harmless } }), {});
+  assert.match(free.lines[0], /^Bryn breaks free \(Athletics -?\d+ vs DC -50\)\.$/);
+  assert.deepEqual(free.combat.combatants.p1.conditions, []);
+  assert.deepEqual(free.combat.combatants.p1.carried, []);
+  const hard = { ...netted, conditions: [{ ...netted.conditions[0], until: { ...netted.conditions[0].until, dc: 99 } }] };
+  const stuck = fightRound({ ...start.party, sheets: { p1: hard, p2: wizard } }, patch(start.combat, { 'foe-1': { attacks: harmless } }), {});
+  assert.match(stuck.lines[0], /^Bryn is still Restrained/);
+  assert.deepEqual(stuck.combat.combatants.p1.conditions, ['restrained']);
+});
+
+test('a concentrating hero who is hurt saves to keep it; when the fight ends, so does any concentration', () => {
+  const focused = { ...wizard, spellcasting: { ...wizard.spellcasting!, concentratingOn: 'sleep' } };
+  const start = startFight(party({ p1: fighter, p2: focused }), ['goblin-warrior']);
+  const sting = [{ name: 'Sting', bonus: 30, ranged: false, damage: [{ dice: '1', type: 'piercing' }] }];
+  const round = fightRound(start.party, patch(start.combat, { 'foe-1': { attacks: sting, hp: 500, maxHp: 500 }, p1: { hp: 500, maxHp: 500 }, p2: { hp: 400, maxHp: 500 } }), {});
+  assert.ok(round.lines.some((l) => /^Cleo (keeps concentrating|loses concentration) on Sleep \(CON save -?\d+ vs DC 10\)\.$/.test(l)), round.lines.join('\n'));
+  const won = fightRound(start.party, patch(start.combat, { 'foe-1': { hp: 1, attacks: harmless }, p1: { attacks: deadly }, p2: { attacks: deadly } }), { p1: { choiceId: 'a', roll: 15 }, p2: { choiceId: 'a', roll: 15 } });
+  assert.equal(won.ended, 'victory');
+  assert.equal(won.party.sheets.p2.spellcasting!.concentratingOn, null);
+});

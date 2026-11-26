@@ -31,6 +31,8 @@ export interface Combatant {
   immunities: string[];
   conditionImmunities: string[];
   conditions: Condition[];
+  /** A hero's conditions it brought from its sheet (rules/conditions.ts); they end when the sheet's do. */
+  carried?: Condition[];
   deathSaves: { successes: number; failures: number };
   status: Status;
   /** What defeating it is worth (monsters); 0 for heroes. */
