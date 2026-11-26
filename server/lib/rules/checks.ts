@@ -6,7 +6,7 @@
  */
 import { type Ability, abilityModifier } from './abilities.ts';
 import type { Monster } from './monsters.ts';
-import { exhaustionEffects } from './rests.ts';
+import { d20Modifier } from './rests.ts';
 import { type D20, type Mode, modeOf, rollD20 } from './resolve.ts';
 import type { Rng } from './rng.ts';
 import type { CharacterSheet } from './sheet.ts';
@@ -25,7 +25,7 @@ export function checkBonus(sheet: CharacterSheet, spec: CheckSpec): { bonus: num
   const tool = !!spec.tool && hasTool(sheet, spec.tool);
   const base = skilled ? sheet.skillBonuses[spec.skill!] : abilityModifier(sheet.abilityScores[spec.ability]);
   const toolBonus = tool && !proficientSkill ? sheet.proficiencyBonus : 0;
-  return { bonus: base + toolBonus + exhaustionEffects(sheet).d20, advantage: tool && proficientSkill };
+  return { bonus: base + toolBonus + d20Modifier(sheet), advantage: tool && proficientSkill };
 }
 
 export function abilityCheck(rng: Rng, sheet: CharacterSheet, spec: CheckSpec, options: CheckOptions = {}): Check {

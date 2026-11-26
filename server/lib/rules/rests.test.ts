@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { buildCharacter, quickChoices } from './character.ts';
 import { climb } from './leveling.fixture.ts';
 import { useResource } from './resources.ts';
-import { arcaneRecovery, exhaustionEffects, gainExhaustion, longRest, magicalCunning, shortRest } from './rests.ts';
+import { arcaneRecovery, d20Modifier, exhaustionEffects, gainExhaustion, longRest, magicalCunning, shortRest } from './rests.ts';
 import { scriptedRng, seededRng } from './rng.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { castSpell } from './spells.ts';
@@ -61,6 +61,13 @@ test('a Long Rest restores hit points, all hit dice, slots and features, ends co
   );
   assert.equal(longRest({ ...worn, exhaustion: 0 }).exhaustion, 0);
   assert.equal(longRest(fighter()).spellcasting, null);
+});
+
+test('every D20 Test loses 2 per exhaustion level and the revival penalty; a Long Rest eases that by 1', () => {
+  assert.deepEqual([d20Modifier(fighter()), d20Modifier({ ...fighter(), exhaustion: 2 }), d20Modifier({ ...fighter(), exhaustion: 1, revivalPenalty: 4 })], [0, -4, -6]);
+  const raised = { ...fighter(), revivalPenalty: 4 };
+  assert.deepEqual([longRest(raised).revivalPenalty, longRest({ ...raised, revivalPenalty: 1 }).revivalPenalty], [3, 0]);
+  assert.equal(Object.hasOwn(longRest(fighter()), 'revivalPenalty'), false, 'nobody else gets one');
 });
 
 test('exhaustion stacks to 6; each level is -2 on d20 tests and -5 feet of speed; at 6 the hero dies', () => {

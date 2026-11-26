@@ -6,7 +6,7 @@
 import { abilityModifier } from './abilities.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { damageHero } from './dying.ts';
-import { exhaustionEffects, gainExhaustion } from './rests.ts';
+import { d20Modifier, gainExhaustion } from './rests.ts';
 import { rollD20 } from './resolve.ts';
 import type { Rng } from './rng.ts';
 import { type CharacterSheet, MAX_EXHAUSTION } from './sheet.ts';
@@ -75,7 +75,7 @@ function exposure(rng: Rng, s: CharacterSheet, kind: 'extreme-cold' | 'extreme-h
   let failed = 0;
   for (let hour = 0; hour < hours; hour++) {
     const dc = heat ? 5 + hour : 10;
-    if (rollD20(rng, sheet.saveBonuses.con + exhaustionEffects(sheet).d20, mode).total < dc) { failed++; sheet = gainExhaustion(sheet); }
+    if (rollD20(rng, sheet.saveBonuses.con + d20Modifier(sheet), mode).total < dc) { failed++; sheet = gainExhaustion(sheet); }
   }
   const what = `${s.name} endures ${hours} ${hours === 1 ? 'hour' : 'hours'} of ${kind.replace('-', ' ')}`;
   if (failed === 0) return { sheet, line: `${what} and fails no Constitution save` };

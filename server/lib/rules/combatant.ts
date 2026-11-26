@@ -1,6 +1,7 @@
 /** Heroes and monsters in one shape for combat. A Combatant is plain JSON, stored inside the combat state. */
 import { type Ability, abilityModifier } from './abilities.ts';
 import type { DamageRoll, Monster } from './monsters.ts';
+import { d20Modifier } from './rests.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { type Srd, type SrdWeapon, srd as bundledSrd } from './srd.ts';
 
@@ -72,10 +73,12 @@ const fresh = (): Pick<Combatant, 'conditions' | 'deathSaves' | 'status'> => ({ 
 export function heroCombatant(id: string, sheet: CharacterSheet, data: Srd = bundledSrd()): Combatant {
   const weapons = sheet.equipment.map((i) => data.weapons.get(i.id)).filter((w) => w !== undefined);
   const attacks = weapons.map((w) => weaponAttack(w, sheet));
+  const worn = d20Modifier(sheet); // exhaustion and a revival's penalty hit every D20 Test
+  const saveBonuses = Object.fromEntries(Object.entries(sheet.saveBonuses).map(([a, n]) => [a, n + worn])) as Record<Ability, number>;
   return {
     id, name: sheet.name, side: 'party', ac: sheet.armorClass, hp: sheet.hp, maxHp: sheet.maxHp,
-    initiative: abilityModifier(sheet.abilityScores.dex), saveBonuses: { ...sheet.saveBonuses },
-    attacks: attacks.length > 0 ? attacks : [unarmedStrike(sheet)],
+    initiative: abilityModifier(sheet.abilityScores.dex) + worn, saveBonuses,
+    attacks: (attacks.length > 0 ? attacks : [unarmedStrike(sheet)]).map((a) => ({ ...a, bonus: a.bonus + worn })),
     resistances: [], vulnerabilities: [], immunities: [], conditionImmunities: [],
     ...fresh(), xp: 0,
   };

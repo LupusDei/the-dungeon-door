@@ -24,6 +24,16 @@ test('a hero enters combat with its sheet numbers', () => {
   assert.deepEqual(hero.deathSaves, { successes: 0, failures: 0 });
 });
 
+test('exhaustion and a revival penalty come off the hero’s attacks, saves and initiative (every D20 Test)', () => {
+  const fresh = heroCombatant('p1', SAMPLE);
+  const worn = heroCombatant('p1', { ...SAMPLE, exhaustion: 1, revivalPenalty: 2 });
+  assert.equal(worn.initiative, fresh.initiative - 4);
+  assert.deepEqual(worn.attacks.map((a) => a.bonus), fresh.attacks.map((a) => a.bonus - 4));
+  assert.deepEqual(Object.values(worn.saveBonuses), Object.values(fresh.saveBonuses).map((n) => n - 4));
+  const bare = heroCombatant('p1', { ...SAMPLE, equipment: [], revivalPenalty: 1 });
+  assert.equal(bare.attacks[0].bonus, heroCombatant('p1', { ...SAMPLE, equipment: [] }).attacks[0].bonus - 1, 'unarmed too');
+});
+
 test('a hero attacks with each weapon it carries: STR for melee, DEX for ranged, the better for finesse', () => {
   const sheet = { ...SAMPLE, equipment: [
     { id: 'greatsword', name: 'Greatsword', count: 1 },

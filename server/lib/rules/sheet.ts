@@ -49,6 +49,8 @@ export const CharacterSheetSchema = z.object({
   expertise: z.array(z.string()).optional(),
   /** The hero died (three failed death saves, massive damage or exhaustion 6) and stays dead until revived. */
   dead: z.boolean().optional(),
+  /** Raised from the dead (Raise Dead): this much off every D20 Test, one less after each Long Rest (5.2). */
+  revivalPenalty: int.min(0).max(4).optional(),
   /** Every skill's check bonus, proficient or not. */
   skillBonuses: z.record(z.string(), int),
   passivePerception: int,

@@ -43,7 +43,7 @@ export function shortRest(sheet: CharacterSheet, rng: Rng, { hitDice = 0 } = {},
   return { sheet: isPactCaster(sheet, data) ? withCasting(rested, { expended: NO_SLOTS_SPENT }) : rested, rolls, healed };
 }
 
-/** A Long Rest (SRD 5.2): every spent hit die comes back, not half of them as in 2014. */
+/** A Long Rest (SRD 5.2): every spent hit die comes back, not half of them as in 2014; a revival's penalty eases by 1. */
 export function longRest(sheet: CharacterSheet, data: Srd = bundledSrd()): CharacterSheet {
   requireConscious(sheet);
   const rested = rechargeResources({
@@ -51,6 +51,7 @@ export function longRest(sheet: CharacterSheet, data: Srd = bundledSrd()): Chara
     hp: sheet.maxHp,
     hitDiceSpent: 0,
     exhaustion: Math.max(0, sheet.exhaustion - 1),
+    ...(sheet.revivalPenalty ? { revivalPenalty: sheet.revivalPenalty - 1 } : {}),
   }, 'long', data);
   return withCasting(rested, { expended: NO_SLOTS_SPENT, concentratingOn: null });
 }
@@ -63,6 +64,9 @@ export function gainExhaustion(sheet: CharacterSheet, levels = 1): CharacterShee
 /** Each level: -2 on every d20 test and -5 feet of speed. At level 6 the hero dies. */
 export const exhaustionEffects = ({ exhaustion }: CharacterSheet) =>
   ({ d20: EXHAUSTION_D20 * exhaustion, speed: EXHAUSTION_SPEED * exhaustion, dead: exhaustion === MAX_EXHAUSTION });
+
+/** What every D20 Test (attack, save, check, initiative) loses: exhaustion and a revival's ordeal (5.2). */
+export const d20Modifier = ({ exhaustion, revivalPenalty = 0 }: CharacterSheet) => 0 - revivalPenalty + EXHAUSTION_D20 * exhaustion; // 0 - …: never -0
 
 function regainSlots(sheet: CharacterSheet, slotLevels: readonly number[]): CharacterSheet {
   const expended = [...sheet.spellcasting!.expended];

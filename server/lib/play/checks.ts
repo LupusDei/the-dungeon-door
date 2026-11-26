@@ -9,7 +9,7 @@ import { abilityCheck, checkBonus, dcAgainst, hasTool } from '../rules/checks.ts
 import { parseDice, rollDice } from '../rules/dice.ts';
 import { damageHero } from '../rules/dying.ts';
 import { monster } from '../rules/monsters.ts';
-import { exhaustionEffects } from '../rules/rests.ts';
+import { d20Modifier } from '../rules/rests.ts';
 import { type D20, type Mode, modeOf, rollD20 } from '../rules/resolve.ts';
 import type { Rng } from '../rules/rng.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
@@ -34,7 +34,7 @@ function dcOf(hook: RollHook): number {
 
 function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: boolean): D20 & { bonus: number; mode: Mode } {
   if (hook.kind === 'check') return abilityCheck(rng, hero.sheet, hook, { natural, advantage: helped || !!hook.advantage, disadvantage: !!hook.disadvantage });
-  const bonus = hero.sheet.saveBonuses[hook.ability] + exhaustionEffects(hero.sheet).d20;
+  const bonus = hero.sheet.saveBonuses[hook.ability] + d20Modifier(hero.sheet);
   const mode = modeOf(!!hook.advantage, !!hook.disadvantage);
   return { ...rollD20(rng, bonus, mode, natural), bonus, mode };
 }
