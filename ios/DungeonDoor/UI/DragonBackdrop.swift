@@ -2,13 +2,17 @@ import AVFoundation
 import SwiftUI
 
 /// The home screen's living background: the old dragon flies in and lands on his summit once per
-/// launch ("dragon-return"), then sits watching in a seamless loop ("dragon-watcher").
+/// launch ("dragon-return"), then sits watching in a seamless loop ("dragon-watcher"). Poke him and
+/// a reaction clip plays over the loop (see `DragonDirector`).
 /// With Reduce Motion on, it's a still painting of the same frame.
 struct DragonBackdrop: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    /// False while something covers the home screen, so the players rest.
+    let director: DragonDirector
+    /// False while something covers the home screen, so the players and the sound rest.
     var playing = true
+
+    private var active: Bool { playing && scenePhase == .active }
 
     var body: some View {
         // Sized by the screen, never by the artwork: the painting and video fill and are clipped,
@@ -21,10 +25,14 @@ struct DragonBackdrop: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
                 if !reduceMotion {
-                    DragonVideoView(playing: playing && scenePhase == .active)
+                    DragonVideoView(director: director, playing: active)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            // A touch of overscan so a roar can shake the picture without baring its edges.
+            .scaleEffect(1.03)
+            .modifier(ShakeEffect(travel: 7, animatableData: CGFloat(director.shakes)))
+            .animation(.linear(duration: 0.9), value: director.shakes)
             // Feather the top edge so the shifted picture melts into the night above it.
             .mask(LinearGradient(stops: [.init(color: .clear, location: 0),
                                          .init(color: .black, location: 0.16),
@@ -36,13 +44,34 @@ struct DragonBackdrop: View {
         .clipped()
         .ignoresSafeArea()
         .accessibilityHidden(true)
+        .onAppear { director.setActive(active) }
+        .onChange(of: active) { _, now in director.setActive(now) }
+        .onDisappear { director.setActive(false) }
+    }
+}
+
+/// Rattles a view sideways while its value animates from one whole number to the next.
+private struct ShakeEffect: GeometryEffect {
+    var travel: CGFloat
+    var animatableData: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let phase = animatableData - animatableData.rounded(.down)
+        let decay = 1 - phase
+        return ProjectionTransform(CGAffineTransform(translationX: travel * decay * sin(phase * .pi * 14),
+                                                     y: travel * 0.5 * decay * sin(phase * .pi * 9)))
     }
 }
 
 private struct DragonVideoView: UIViewRepresentable {
+    let director: DragonDirector
     let playing: Bool
 
-    func makeUIView(context: Context) -> DragonPlayerView { DragonPlayerView() }
+    func makeUIView(context: Context) -> DragonPlayerView {
+        let view = DragonPlayerView()
+        director.attach(view)
+        return view
+    }
 
     func updateUIView(_ view: DragonPlayerView, context: Context) {
         view.setPlaying(playing)
@@ -53,11 +82,17 @@ private struct DragonVideoView: UIViewRepresentable {
     }
 }
 
-/// Two stacked video layers: the watcher loop underneath, and the one-time arrival on top, which
-/// fades away when it ends to reveal the loop already sitting on the same frame.
+/// Stacked video layers: the watcher loop underneath; the one-time arrival on top, which fades away
+/// when it ends to reveal the loop already sitting on the same frame; and, when he's poked, a
+/// reaction clip that starts and ends on that same frame so it can fade in and out over the loop.
 final class DragonPlayerView: UIView {
     /// The arrival plays once per app launch, not every time the home screen reappears.
     private static var arrivalShown = false
+
+    var onArrivalBegan: (() -> Void)?
+    var onArrivalEnded: (() -> Void)?
+    /// True once he's on his perch and the loop is what's showing.
+    var isSettled: Bool { arrivalPlayer == nil }
 
     private let loopPlayer = AVQueuePlayer()
     private var looper: AVPlayerLooper?
@@ -66,6 +101,13 @@ final class DragonPlayerView: UIView {
     private var arrivalPlayer: AVPlayer?
     private var arrivalLayer: AVPlayerLayer?
     private var arrivalObserver: NSObjectProtocol?
+    private var arrivalAnnounced = false
+
+    private var reactionPlayer: AVPlayer?
+    private var reactionLayer: AVPlayerLayer?
+    private var reactionObserver: NSObjectProtocol?
+    private var reactionReady: NSKeyValueObservation?
+    private var reactionEnded: (() -> Void)?
 
     private var wantsPlayback = false
 
@@ -105,6 +147,7 @@ final class DragonPlayerView: UIView {
 
     deinit {
         if let arrivalObserver { NotificationCenter.default.removeObserver(arrivalObserver) }
+        if let reactionObserver { NotificationCenter.default.removeObserver(reactionObserver) }
     }
 
     override func layoutSubviews() {
@@ -113,6 +156,7 @@ final class DragonPlayerView: UIView {
         CATransaction.setDisableActions(true)
         loopLayer.frame = bounds
         arrivalLayer?.frame = bounds
+        reactionLayer?.frame = bounds
         CATransaction.commit()
     }
 
@@ -121,17 +165,54 @@ final class DragonPlayerView: UIView {
         guard playing else {
             loopPlayer.pause()
             arrivalPlayer?.pause()
+            reactionPlayer?.pause()
             return
         }
         if let arrivalPlayer {
             arrivalPlayer.play()
+            if !arrivalAnnounced {
+                arrivalAnnounced = true
+                onArrivalBegan?()
+            }
+        } else if let reactionPlayer, reactionReady == nil {
+            reactionPlayer.play()
         } else {
             loopPlayer.play()
         }
     }
 
+    /// Plays "dragon-react-<name>" over the loop. Returns false when he can't react right now
+    /// (still arriving, already reacting, or paused). `onStart` fires when its first frame shows.
+    func playReaction(_ name: String, onStart: @escaping () -> Void, onEnd: @escaping () -> Void) -> Bool {
+        guard wantsPlayback, arrivalPlayer == nil, reactionPlayer == nil,
+              let url = Bundle.main.url(forResource: "dragon-react-\(name)", withExtension: "mp4") else { return false }
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
+        configure(player)
+        player.actionAtItemEnd = .pause
+        let top = AVPlayerLayer(player: player)
+        top.videoGravity = .resizeAspectFill
+        top.frame = bounds
+        top.opacity = 0
+        layer.addSublayer(top)
+        reactionPlayer = player
+        reactionLayer = top
+        reactionEnded = onEnd
+        reactionObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+        ) { [weak self] _ in
+            self?.finishReaction()
+        }
+        // Wait for the first decoded frame before fading in, so there's never a blank flash.
+        reactionReady = top.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] layer, _ in
+            guard layer.isReadyForDisplay else { return }
+            DispatchQueue.main.async { self?.beginReaction(onStart) }
+        }
+        return true
+    }
+
     private func configure(_ player: AVPlayer) {
-        // Silent scenery: never take over the audio session or keep the screen awake.
+        // Silent scenery: sound is handled separately, and video never keeps the screen awake.
         player.isMuted = true
         player.preventsDisplaySleepDuringVideoPlayback = false
         player.allowsExternalPlayback = false
@@ -143,10 +224,42 @@ final class DragonPlayerView: UIView {
         let leaving = arrivalLayer
         arrivalPlayer = nil
         arrivalLayer = nil
+        fade(leaving, to: 0, over: 0.6) { leaving?.removeFromSuperlayer() }
+        onArrivalEnded?()
+    }
+
+    private func beginReaction(_ onStart: () -> Void) {
+        guard reactionReady != nil, let player = reactionPlayer else { return }
+        reactionReady = nil
+        if wantsPlayback { player.play() }
+        fade(reactionLayer, to: 1, over: 0.3) { [weak self] in
+            // The loop is hidden now; let it rest until the reaction hands back.
+            if self?.reactionPlayer != nil { self?.loopPlayer.pause() }
+        }
+        onStart()
+    }
+
+    private func finishReaction() {
+        // Every reaction ends on the loop's first frame, so restart the loop there and fade across.
+        loopPlayer.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        if wantsPlayback { loopPlayer.play() }
+        let leaving = reactionLayer
+        if let reactionObserver { NotificationCenter.default.removeObserver(reactionObserver) }
+        reactionObserver = nil
+        reactionReady = nil
+        reactionPlayer = nil
+        reactionLayer = nil
+        fade(leaving, to: 0, over: 0.45) { leaving?.removeFromSuperlayer() }
+        let ended = reactionEnded
+        reactionEnded = nil
+        ended?()
+    }
+
+    private func fade(_ layer: CALayer?, to opacity: Float, over seconds: CFTimeInterval, then: @escaping () -> Void) {
         CATransaction.begin()
-        CATransaction.setAnimationDuration(0.6)
-        CATransaction.setCompletionBlock { leaving?.removeFromSuperlayer() }
-        leaving?.opacity = 0
+        CATransaction.setAnimationDuration(seconds)
+        CATransaction.setCompletionBlock(then)
+        layer?.opacity = opacity
         CATransaction.commit()
     }
 }
@@ -156,6 +269,8 @@ final class DragonPlayerView: UIView {
 struct EmberField: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var count = 64
+    /// Sparks thrown from wherever the dragon was poked, in this view's coordinates.
+    var bursts: [DragonDirector.Burst] = []
 
     private struct Mote {
         let x: Double        // 0–1 start column
@@ -170,8 +285,9 @@ struct EmberField: View {
 
     private let motes: [Mote]
 
-    init(count: Int = 64) {
+    init(count: Int = 64, bursts: [DragonDirector.Burst] = []) {
         self.count = count
+        self.bursts = bursts
         var rng = SeededGenerator(seed: 0xD4A60)
         motes = (0..<count).map { _ in
             Mote(x: .random(in: 0...1, using: &rng),
@@ -186,7 +302,7 @@ struct EmberField: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion && bursts.isEmpty)) { timeline in
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 context.blendMode = .plusLighter
@@ -212,10 +328,42 @@ struct EmberField: View {
                             ]),
                             center: CGPoint(x: x, y: y), startRadius: 0, endRadius: glow))
                 }
+                for burst in bursts {
+                    drawBurst(burst, at: timeline.date, in: &context)
+                }
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// A ring of sparks flying out from a poke, slowing and fading over about a second.
+    private func drawBurst(_ burst: DragonDirector.Burst, at now: Date, in context: inout GraphicsContext) {
+        let age = now.timeIntervalSince(burst.start)
+        let life = 1.15
+        guard age >= 0, age < life else { return }
+        let progress = age / life
+        let ease = 1 - pow(1 - progress, 3)
+        for i in 0..<26 {
+            // Cheap per-spark variety from the index; no stored state.
+            let a = Double(i) * 2.399963 + Double(burst.seed)
+            let wobble = sin(Double(i) * 12.9898 + Double(burst.seed)) * 0.5 + 0.5
+            let reach = 46 + wobble * 120
+            let x = burst.origin.x + cos(a) * reach * ease
+            let y = burst.origin.y + sin(a) * reach * ease - 34 * progress
+            let alpha = pow(1 - progress, 1.6)
+            let radius = (1.4 + wobble * 2.2) * 3.2
+            let arcane = i % 5 == 0
+            let core = arcane ? Color(hex: "#8FD3FF") : Color(hex: "#FFD98A")
+            let halo = arcane ? Color(hex: "#3B7BFF") : Color(hex: "#FF7A2E")
+            context.fill(
+                Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
+                with: .radialGradient(
+                    Gradient(stops: [.init(color: core.opacity(alpha), location: 0),
+                                     .init(color: halo.opacity(alpha * 0.4), location: 0.3),
+                                     .init(color: .clear, location: 1)]),
+                    center: CGPoint(x: x, y: y), startRadius: 0, endRadius: radius))
+        }
     }
 }
 
