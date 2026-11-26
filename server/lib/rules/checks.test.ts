@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { heroSheet } from '../characters.ts';
 import { abilityModifier } from './abilities.ts';
-import { abilityCheck, checkBonus, passiveScore } from './checks.ts';
+import { abilityCheck, checkBonus, dcAgainst, passiveScore } from './checks.ts';
+import { monster } from './monsters.ts';
 import { scriptedRng } from './rng.ts';
 
 const rogue = heroSheet({ id: 'r', name: 'Vex', race: 'halfling', characterClass: 'rogue', backgroundId: 'criminal' });
@@ -45,4 +46,22 @@ test('passive scores: 10 + the bonus, +5 with Advantage, -5 with Disadvantage', 
   assert.equal(passiveScore(rogue, { ability: 'wis', skill: 'perception' }), 10 + rogue.skillBonuses.perception);
   assert.equal(passiveScore(rogue, { ability: 'wis', skill: 'insight' }, 'advantage'), 15 + rogue.skillBonuses.insight);
   assert.equal(passiveScore(rogue, { ability: 'int', skill: 'investigation' }, 'disadvantage'), 5 + rogue.skillBonuses.investigation);
+});
+
+test('5.2 has no contests: a check against a creature beats its passive score, or its Influence DC', () => {
+  const goblin = monster('goblin-warrior');
+  assert.equal(dcAgainst(goblin, { ability: 'dex', skill: 'stealth' }), 9, 'hiding: its passive Perception');
+  assert.equal(dcAgainst(goblin, { ability: 'dex', skill: 'sleight-of-hand' }), 9);
+  assert.equal(dcAgainst(goblin, { ability: 'wis', skill: 'perception' }), 16, 'finding it: 10 + its Stealth');
+  assert.equal(dcAgainst(goblin, { ability: 'int', skill: 'investigation' }), 16);
+  assert.equal(dcAgainst(goblin, { ability: 'wis', skill: 'insight' }), 9, 'reading it: 10 + its Deception (CHA 8)');
+  assert.equal(dcAgainst(goblin, { ability: 'str', skill: 'athletics' }), 9, '10 + its Athletics (STR 8)');
+  assert.equal(dcAgainst(goblin, { ability: 'dex' }), 12, 'a plain check: 10 + the same ability (DEX 15)');
+  assert.equal(dcAgainst(monster('aboleth'), { ability: 'wis', skill: 'insight' }), 14);
+});
+
+test('Influence (5.2): DC 15 or the monster\'s Intelligence, whichever is higher', () => {
+  assert.equal(dcAgainst(monster('goblin-warrior'), { ability: 'cha', skill: 'persuasion' }), 15);
+  for (const skill of ['deception', 'intimidation', 'performance', 'persuasion']) assert.equal(dcAgainst(monster('aboleth'), { ability: 'cha', skill }), 18);
+  assert.equal(dcAgainst(monster('aboleth'), { ability: 'wis', skill: 'animal-handling' }), 18);
 });

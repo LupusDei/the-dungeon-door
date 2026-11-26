@@ -5,16 +5,18 @@
  * Disadvantage. 5.2 has no contests: a check against a creature uses its passive score as the DC.
  */
 import { type Ability, abilityModifier } from './abilities.ts';
+import type { Monster } from './monsters.ts';
 import { exhaustionEffects } from './rests.ts';
 import { type D20, type Mode, modeOf, rollD20 } from './resolve.ts';
 import type { Rng } from './rng.ts';
 import type { CharacterSheet } from './sheet.ts';
+import { srd } from './srd.ts';
 
 export interface CheckSpec { ability: Ability; skill?: string | null; tool?: string | null }
 export interface CheckOptions { advantage?: boolean; disadvantage?: boolean; natural?: number }
 export interface Check extends D20 { bonus: number; mode: Mode }
 
-const hasTool = (sheet: CharacterSheet, tool: string) =>
+export const hasTool = (sheet: CharacterSheet, tool: string) =>
   sheet.otherProficiencies.includes(tool) || sheet.otherProficiencies.includes(`tool-${tool}`);
 
 export function checkBonus(sheet: CharacterSheet, spec: CheckSpec): { bonus: number; advantage: boolean } {
@@ -36,3 +38,22 @@ const PASSIVE_SHIFT: Readonly<Record<Mode, number>> = { normal: 0, advantage: 5,
 
 export const passiveScore = (sheet: CharacterSheet, spec: CheckSpec, mode: Mode = 'normal'): number =>
   10 + checkBonus(sheet, spec).bonus + PASSIVE_SHIFT[mode];
+
+/** The Influence action's skills (5.2): DC 15 or the monster's Intelligence score, whichever is higher. */
+export const INFLUENCE_SKILLS: ReadonlySet<string> = new Set(['animal-handling', 'deception', 'intimidation', 'performance', 'persuasion']);
+/** The monster's skill a hero's check is measured against. */
+const OPPOSED: Readonly<Record<string, string>> = {
+  stealth: 'perception', 'sleight-of-hand': 'perception', perception: 'stealth', investigation: 'stealth', insight: 'deception',
+};
+
+function monsterPassive(m: Monster, skill: string): number {
+  if (skill === 'perception') return m.passivePerception;
+  return 10 + (Object.hasOwn(m.skills, skill) ? m.skills[skill] : abilityModifier(m.abilities[srd().skills.get(skill)!]));
+}
+
+/** The DC of a hero's check against a monster. */
+export function dcAgainst(m: Monster, spec: CheckSpec): number {
+  if (!spec.skill) return 10 + abilityModifier(m.abilities[spec.ability]);
+  if (INFLUENCE_SKILLS.has(spec.skill)) return Math.max(15, m.abilities.int);
+  return monsterPassive(m, Object.hasOwn(OPPOSED, spec.skill) ? OPPOSED[spec.skill] : spec.skill);
+}
