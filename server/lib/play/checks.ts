@@ -1,39 +1,60 @@
 /**
- * Checks and saving throws outside combat (SRD 5.2): every hero rolls, with their vote's d20 when they
- * voted; a natural 20 or 1 is not automatic; the party succeeds if at least half the heroes do (Group
- * Check). Exhaustion costs 2 a level on every d20 test.
+ * Checks and saving throws outside combat (SRD 5.2). In a group check every hero rolls, with their
+ * vote's d20 when they voted, and the party succeeds if at least half do; in "best" mode the hero with the
+ * best bonus rolls and anyone proficient in the skill or tool Helps (Advantage). A natural 20 or 1 is not
+ * automatic. A check against a monster takes its DC from the monster (5.2 has no contests). Tools,
+ * Expertise, Advantage, Disadvantage and Exhaustion come from lib/rules/checks.ts.
  */
-import { abilityModifier } from '../rules/abilities.ts';
+import { abilityCheck, checkBonus, dcAgainst, hasTool } from '../rules/checks.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
+import { monster } from '../rules/monsters.ts';
 import { exhaustionEffects } from '../rules/rests.ts';
+import { type D20, modeOf, rollD20 } from '../rules/resolve.ts';
 import type { Rng } from '../rules/rng.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { ABILITY_NAMES, type RollHook, titleCase } from './hooks.ts';
+import { type RollHook, rollName } from './hooks.ts';
 
 export interface Hero { playerId: string; sheet: CharacterSheet }
-export interface Roll { playerId: string; name: string; natural: number | null; bonus: number; total: number | null; success: boolean }
+export interface Roll {
+  playerId: string; name: string;
+  /** The d20 kept; null for a hero who is down. */
+  natural: number | null; dice: number[]; bonus: number; total: number | null; success: boolean;
+}
 export interface GroupRoll { rolls: Roll[]; success: boolean; sheets: Hero[]; lines: string[] }
 
-function bonusFor(sheet: CharacterSheet, hook: RollHook): number {
-  const { d20 } = exhaustionEffects(sheet);
-  if (hook.kind === 'save') return sheet.saveBonuses[hook.ability] + d20;
-  const skilled = hook.skill && Object.hasOwn(sheet.skillBonuses, hook.skill);
-  return (skilled ? sheet.skillBonuses[hook.skill!] : abilityModifier(sheet.abilityScores[hook.ability])) + d20;
+const signed = (n: number) => (n < 0 ? `- ${-n}` : `+ ${n}`);
+const standing = (h: Hero) => h.sheet.hp > 0;
+
+/** The DC: the DM's, or the monster's when the check is against one. */
+function dcOf(hook: RollHook): number {
+  if (hook.kind === 'save') return hook.dc;
+  return typeof hook.dc === 'number' ? hook.dc : dcAgainst(monster(hook.against!), hook);
 }
 
-const what = (hook: RollHook) =>
-  hook.kind === 'save' ? `${ABILITY_NAMES[hook.ability]} save` : hook.skill ? titleCase(hook.skill) : ABILITY_NAMES[hook.ability];
-const signed = (n: number) => (n < 0 ? `- ${-n}` : `+ ${n}`);
+function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: boolean): D20 & { bonus: number } {
+  if (hook.kind === 'check') return abilityCheck(rng, hero.sheet, hook, { natural, advantage: helped || !!hook.advantage, disadvantage: !!hook.disadvantage });
+  const bonus = hero.sheet.saveBonuses[hook.ability] + exhaustionEffects(hero.sheet).d20;
+  return { ...rollD20(rng, bonus, modeOf(!!hook.advantage, !!hook.disadvantage), natural), bonus };
+}
 
-function rollFor(hero: Hero, hook: RollHook, natural: number): Roll {
-  const bonus = bonusFor(hero.sheet, hook);
-  const total = natural + bonus;
-  return { playerId: hero.playerId, name: hero.sheet.name, natural, bonus, total, success: total >= hook.dc };
+function rollFor(hero: Hero, hook: RollHook, vote: number, rng: Rng, helped = false): Roll {
+  const { natural, rolls, total, bonus } = d20For(hero, hook, vote, rng, helped);
+  return { playerId: hero.playerId, name: hero.sheet.name, natural, dice: rolls, bonus, total, success: total >= dcOf(hook) };
+}
+
+const downRoll = (h: Hero): Roll => ({ playerId: h.playerId, name: h.sheet.name, natural: null, dice: [], bonus: 0, total: null, success: false });
+
+/** "14 (Advantage over 3)". */
+function diceText(roll: Roll): string {
+  if (roll.dice.length === 1) return `${roll.natural}`;
+  const [first, second] = roll.dice;
+  const dropped = first === roll.natural ? second : first;
+  return `${roll.natural} (${dropped < roll.natural! ? 'Advantage' : 'Disadvantage'} over ${dropped})`;
 }
 
 function lineOf(roll: Roll, hook: RollHook): string {
   if (roll.natural === null) return `${roll.name} is down and fails`;
-  return `${roll.name}: ${what(hook)} ${roll.natural} ${signed(roll.bonus)} = ${roll.total} vs DC ${hook.dc}, ${roll.success ? 'success' : 'failure'}`;
+  return `${roll.name}: ${rollName(hook)} ${diceText(roll)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dcOf(hook)}, ${roll.success ? 'success' : 'failure'}`;
 }
 
 /** Damage from a save: rolled once; a failure takes it all, a success half. */
@@ -46,11 +67,26 @@ function applyDamage(heroes: Hero[], rolls: Roll[], hook: RollHook, rng: Rng): {
   return { sheets, line: `Damage ${damage}${hook.damageType ? ` ${hook.damageType}` : ''}: ${taken.join(', ')}` };
 }
 
-/** Every hero makes the check or save: with `votes[playerId]` as the d20, or a fresh one from `rng`. */
+const voteOf = (votes: Readonly<Record<string, number>>, hero: Hero, rng: Rng) => (Object.hasOwn(votes, hero.playerId) ? votes[hero.playerId] : rng.die(20));
+
+/** Help (5.2): a hero proficient in the skill or tool gives the one who rolls Advantage. */
+const canHelp = (hero: Hero, hook: Extract<RollHook, { kind: 'check' }>) =>
+  (!!hook.skill && hero.sheet.skills.includes(hook.skill)) || (!!hook.tool && hasTool(hero.sheet, hook.tool));
+
+function bestRoll(heroes: Hero[], hook: Extract<RollHook, { kind: 'check' }>, votes: Readonly<Record<string, number>>, rng: Rng): GroupRoll {
+  const up = heroes.filter(standing);
+  if (up.length === 0) return { rolls: heroes.map(downRoll), success: false, sheets: heroes, lines: heroes.map((h) => `${h.sheet.name} is down and fails`) };
+  const roller = up.reduce((best, h) => (checkBonus(h.sheet, hook).bonus > checkBonus(best.sheet, hook).bonus ? h : best));
+  const helpers = up.filter((h) => h !== roller && canHelp(h, hook));
+  const roll = rollFor(roller, hook, voteOf(votes, roller, rng), rng, helpers.length > 0);
+  const help = helpers.length ? [`${helpers.map((h) => h.sheet.name).join(', ')} ${helpers.length > 1 ? 'help' : 'helps'}: Advantage`] : [];
+  return { rolls: [roll], success: roll.success, sheets: heroes, lines: [...help, lineOf(roll, hook)] };
+}
+
+/** The heroes make the check or save: with `votes[playerId]` as the d20, or a fresh one from `rng`. */
 export function groupRoll(heroes: Hero[], hook: RollHook, votes: Readonly<Record<string, number>>, rng: Rng): GroupRoll {
-  const rolls = heroes.map((h): Roll => (h.sheet.hp === 0
-    ? { playerId: h.playerId, name: h.sheet.name, natural: null, bonus: 0, total: null, success: false }
-    : rollFor(h, hook, Object.hasOwn(votes, h.playerId) ? votes[h.playerId] : rng.die(20))));
+  if (hook.kind === 'check' && hook.mode === 'best') return bestRoll(heroes, hook, votes, rng);
+  const rolls = heroes.map((h): Roll => (standing(h) ? rollFor(h, hook, voteOf(votes, h, rng), rng) : downRoll(h)));
   const { sheets, line } = applyDamage(heroes, rolls, hook, rng);
   const successes = rolls.filter((r) => r.success).length;
   return { rolls, success: successes * 2 >= heroes.length, sheets, lines: [...rolls.map((r) => lineOf(r, hook)), ...(line ? [line] : [])] };

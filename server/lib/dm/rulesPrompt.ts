@@ -12,6 +12,10 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   are given), {"kind":"rest","rest":"short"} or "long", or {"kind":"move","exit":"r2"} (an exit id, in a
   dungeon). Leave "rules" null for a pure story choice. DCs: 5 very easy, 10 easy, 15 medium, 20 hard, 25 very
   hard, 30 nearly impossible.
+- Checks: pick the skill (an SRD 5.2 skill id) and, where a tool does the work, "tool" ("thieves-tools"). Use
+  "mode":"best" when one hero acts and the others can only help (picking a lock), "group" when everyone must
+  (sneaking past together). Set "advantage" or "disadvantage" for circumstances. Against a creature, give
+  "against": its monster id and leave "dc" null: the engine uses its passive score or the Influence DC.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
