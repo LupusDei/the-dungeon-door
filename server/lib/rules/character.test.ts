@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { RACES } from '../catalog.ts';
 import { armorClass, buildCharacter, type CharacterChoices, quickChoices } from './character.ts';
 import { seededRng } from './rng.ts';
 import { srd } from './srd.ts';
@@ -120,6 +121,12 @@ test('unknown classes, species and backgrounds are refused', () => {
   refuses({ classId: 'necromancer' }, /no class necromancer/);
   refuses({ speciesId: 'half-orc' }, /no species half-orc/);
   refuses({ backgroundId: 'pirate' }, /no background pirate/);
+});
+
+test('the forge offers exactly the SRD 5.2 species, so every hero can be built', () => {
+  assert.deepEqual(RACES.map((r) => r.id).sort(), [...srd().species.keys()].sort());
+  for (const race of RACES) assert.equal(race.name, srd().species.get(race.id)!.name, race.id);
+  for (const race of RACES) assert.equal(buildCharacter({ ...BRYN, speciesId: race.id, size: srd().species.get(race.id)!.sizes[0] }, rng()).speciesId, race.id);
 });
 
 test('class skill choices must come from the list, in the right number, without repeats', () => {
