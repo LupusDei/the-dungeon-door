@@ -64,8 +64,9 @@ Character {
 
 Attack {
   name: string                    // "Greatsword", "Fire Bolt"
-  bonus: number                   // added to the d20 to hit; 0 for a spell the target saves against
-  damage: string                  // "2d6+3 slashing"
+  bonus: number                   // added to the d20 to hit; 0 for a spell the target saves against, or
+                                  // one that never misses (Magic Missile: save null too)
+  damage: string                  // "2d6+3 slashing"; "3 × 1d4+1 force" for Magic Missile's darts
   ranged: boolean
   kind: "weapon" | "spell"
   save: string | null             // spells only: the save the target makes instead ("dex"), with the hero's spell save DC

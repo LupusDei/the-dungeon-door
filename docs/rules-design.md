@@ -238,12 +238,15 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
 - **Resolution** (`spellEffects.ts`) reuses PR B's resolver: a spell attack is `attackRoll` with the
   spell attack bonus (one per beam), a save spell rolls its damage once and each target makes
   `savingThrow` (half or nothing on a success, then resistances), healing is rolled once plus the
-  spellcasting modifier. A spell with no attack, save or healing (Bless) changes nothing; the DM
+  spellcasting modifier. Magic Missile's darts (read from its text: three of 1d4 + 1 force, one more per
+  slot level above 1st) never miss: each rolls its own damage, and darts may share a target. In a
+  fight the hero's Cast sends one at each foe it would drop on average, most wounded first, and the rest
+  at the most wounded (`splitDarts`). A new wizard or sorcerer prepares it first. A spell with no
+  attack, save, darts or healing (Bless) changes nothing; the DM
   narrates it. Targets are passed in; `targetsInRadius` picks them for spheres, cylinders and
   emanations on a 5-foot grid (diagonals 5 ft). Cones, cubes and lines are placed by whoever casts.
 - **Deferred:** the multiclass spellcaster table (the sheet is single-class); upcast dice of a
-  different die than the base (Ice Knife's cold burst); extra rays or darts by slot level (Scorching
-  Ray, Magic Missile); conditions a failed save imposes (reported, applied by the DM); ritual casting;
+  different die than the base (Ice Knife's cold burst); Scorching Ray's extra rays by slot level; conditions a failed save imposes (reported, applied by the DM); ritual casting;
   subclass always-prepared spells; concentration ending on incapacitation outside the check.
 
 ## Rests and resources (PR F)
