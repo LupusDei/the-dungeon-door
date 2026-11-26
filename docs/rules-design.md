@@ -268,18 +268,22 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
 - **Both rests need at least 1 HP.** The engine doesn't track the rule of one Long Rest per 24 hours or
   interrupted rests, because the game has no clock. The DM decides when a rest happens.
 
-## Integration (later, contract first)
+## Integration (done)
 
-These are proposals, kept out of the engine PRs so Justin's flow stays as it is until he picks them up:
+Wired in after Justin merged the engine PRs (see docs/api.md and docs/dungeon-master.md):
 
-1. `docs/api.md`: `Character.sheet: CharacterSheet | null`; `PUT /api/characters` accepts build
-   choices and stores the sheet the engine returns.
-2. Done in this PR (Robert's call): the forge's race list is now exactly the SRD 5.2 species, with
-   Goliath and Orc in place of Half-Elf and Half-Orc, so every hero the forge makes can be built. A
-   test holds the catalog and the SRD together. Heroes already stored as `half-elf` or `half-orc`
-   still load and show their id, but must pick a new race before they can be saved again.
-3. `PartyMember` gains the numbers the DM needs to narrate fairly (HP, AC, conditions).
-4. `Choice` gains an optional `RulesHook`; `Resolution` gains the engine's roll results.
+1. `Character.sheet` is stored. New heroes get an engine-built sheet; heroes saved before the engine get
+   one when they are read. Stored `half-orc` heroes become `orc` and `half-elf` heroes become `elf`;
+   the player can change race freely while the hero is level 1.
+2. Games keep `party`, `combat` and `dungeon` as JSON columns (`db/schema.sql`; run `npm run migrate`
+   before deploying).
+3. The DM proposes hooks and narrates the engine's results; votes resolve through the engine (checks,
+   saves, fights, rests, moves); fights run as rounds; XP and level-ups follow a won fight; the sheets
+   go home to the characters when the adventure ends.
+4. The API shows `GameState.rules`, `Choice.rules` and `Scene.combat`.
+
+Still to come: area spells hit one target; the trap names come from the SRD 5.1 table (the numbers use
+the 5.2 scaling); a fallen hero is not kept dead.
 
 ## Glossary
 

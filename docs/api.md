@@ -149,7 +149,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
   }]
   combat: null | {
     round: number
-    outcome: "ongoing" | "victory" | "defeat" | "fled"
+    outcome: "ongoing"                // a settled fight is gone (combat: null); its end is in results
     combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[] }]   // initiative order
   }
@@ -219,6 +219,21 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   12, success"), so the current app shows them without an update. The same lines are in `rules.results`.
 - **When it ends.** The heroes' sheets (level, XP, features; HP and slots restored) are saved back to
   each player's character, so the next adventure starts where this one left off.
+
+- **Older games and apps.** A game started before the engine has `rules: null`, choices with `rules:
+  null` and `combat: false`, and plays as it always did (the DM breaks ties). The current app decodes
+  `GameState` and ignores the new keys, so it keeps working; dice show up as system messages.
+
+### iOS follow-ups (not in this change)
+
+- Decode `GameState.rules`, `Choice.rules` and `Scene.combat` (all optional to the decoder).
+- A sheet screen for each hero (`Character.sheet`, live numbers from `rules.party`).
+- A combat HUD in combat rounds: combatants in initiative order with HP and status, and the three
+  fixed actions labelled as "your hero's action".
+- A dungeon map from `rules.dungeon.areas` (visited areas and their exits).
+- The rules label under each choice ("Athletics check, DC 12").
+- A background picker in the forge (`backgroundId`, from `catalog.backgrounds`).
+- A dungeon-mode picker on the start screen (`dungeon`: none, fixed or explore).
 
 Images may arrive after their text: a scene can be `voting` with `imageUrl: null`; keep polling.
 
