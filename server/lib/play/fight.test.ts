@@ -10,6 +10,8 @@ import type { PartyState } from './state.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const wizard = heroSheet({ id: 'w', name: 'Cleo', race: 'elf', characterClass: 'wizard' });
+/** A fighter with no Second Wind left. */
+const winded = { ...fighter, resourcesUsed: { 'second-wind': 2 } };
 const party = (sheets: Record<string, CharacterSheet> = { p1: fighter, p2: wizard }): PartyState => ({ version: 1, rng: 42, sheets });
 const deadly = [{ name: 'Doom', bonus: 30, ranged: false, damage: [{ dice: '100', type: 'force' }] }];
 const harmless = [{ name: 'Poke', bonus: -100, ranged: false, damage: [{ dice: '0', type: 'force' }] }];
@@ -215,7 +217,7 @@ test('morale in the fight: the shaken foes stand, flee (XP for the slain, Opport
 });
 
 test('a hero at half HP or less drinks its least healing potion as a Bonus Action, then acts', () => {
-  const stocked = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-greater-healing', name: 'Potion of Greater Healing', count: 1 }, { id: 'potion-of-healing', name: 'Potion of Healing', count: 2 }] };
+  const stocked = { ...winded, equipment: [...fighter.equipment, { id: 'potion-of-greater-healing', name: 'Potion of Greater Healing', count: 1 }, { id: 'potion-of-healing', name: 'Potion of Healing', count: 2 }] };
   const { combat, party: p } = startFight(party({ p1: stocked, p2: wizard }), ['goblin-warrior']);
   const half = Math.floor(stocked.maxHp / 2);
   const calm = patch(combat, { p1: { hp: half }, 'foe-1': { attacks: harmless } });
@@ -231,7 +233,7 @@ test('a hero at half HP or less drinks its least healing potion as a Bonus Actio
   assert.ok(!fine.lines.some((l) => l.includes('drinks')), 'above half: no potion');
   const exact = fightRound(p, patch(combat, { p1: { hp: 6, maxHp: 12 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
   assert.ok(exact.lines.some((l) => l.startsWith('Bryn drinks')), 'exactly half: a potion');
-  const one = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
+  const one = { ...winded, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
   const single = startFight(party({ p1: one, p2: wizard }), ['goblin-warrior']);
   const last = fightRound(single.party, patch(single.combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
   assert.ok(last.lines.some((l) => l.startsWith('Bryn drinks')), 'the last potion too');
@@ -240,6 +242,29 @@ test('a hero at half HP or less drinks its least healing potion as a Bonus Actio
   assert.ok(!dry.lines.some((l) => l.includes('drinks')), 'no potion, none drunk');
   const unvoted = fightRound(p, calm, {});
   assert.ok(unvoted.lines.some((l) => l.startsWith('Bryn drinks')), 'without a vote they still drink, then Dodge');
+});
+
+test('a fighter at half HP or less uses Second Wind as its Bonus Action (1d10 + Fighter level), before any potion', () => {
+  const stocked = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
+  const { combat, party: p } = startFight(party({ p1: stocked, p2: wizard }), ['goblin-warrior']);
+  const half = Math.floor(stocked.maxHp / 2);
+  const result = fightRound(p, patch(combat, { p1: { hp: half }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
+  const wind = result.lines.find((l) => l.startsWith('Bryn uses Second Wind'))!;
+  assert.match(wind, /^Bryn uses Second Wind as a Bonus Action: (\d+) HP back\.$/);
+  const healed = Number(/: (\d+) HP/.exec(wind)![1]);
+  assert.ok(healed >= 2 && healed <= 11, `${healed}`);
+  assert.ok(result.lines.indexOf(wind) < result.lines.indexOf('Bryn dodges.'), 'Second Wind, then the action');
+  assert.equal(result.party.sheets.p1.hp, half + healed);
+  assert.equal(result.party.sheets.p1.resourcesUsed['second-wind'], 1);
+  assert.ok(!result.lines.some((l) => l.includes('drinks')), 'one Bonus Action a turn: no potion as well');
+  assert.equal(result.party.sheets.p1.equipment.find((e) => e.id === 'potion-of-healing')!.count, 1);
+  const fine = fightRound(p, patch(combat, { p1: { hp: half + 1 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
+  assert.ok(!fine.lines.some((l) => l.includes('Second Wind')), 'above half: not yet');
+  const spent = startFight(party({ p1: { ...stocked, resourcesUsed: { 'second-wind': 2 } }, p2: wizard }), ['goblin-warrior']);
+  const out = fightRound(spent.party, patch(spent.combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
+  assert.ok(!out.lines.some((l) => l.includes('Second Wind')) && out.lines.some((l) => l.startsWith('Bryn drinks')), 'no uses left: the potion');
+  const cleo = startFight(party({ p1: { ...wizard, name: 'Ann' }, p2: wizard }), ['goblin-warrior']);
+  assert.ok(!fightRound(cleo.party, patch(cleo.combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), {}).lines.some((l) => l.includes('Second Wind')), 'not a fighter: none');
 });
 
 test('a hero slain in the fight is Revivified at its end by a party caster with the spell, a slot and the gold', () => {

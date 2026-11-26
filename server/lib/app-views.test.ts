@@ -255,7 +255,7 @@ test('a combat round is written for each player: what their own hero will do', a
 test('a hero at half its hit points or less is told it will drink its potion first, and the engine has it do so', async () => {
   const { code, players } = await intoFight(['fighter', 'fighter'], ['goblin-warrior']);
   const game = (await getStore().getGame(code))!;
-  const carrying = Object.fromEntries(players.map((p) => [p, addItem(game.party!.sheets[p], 'potion-of-healing')]));
+  const carrying = Object.fromEntries(players.map((p) => [p, { ...addItem(game.party!.sheets[p], 'potion-of-healing'), resourcesUsed: { 'second-wind': 2 } }])); // Second Wind spent: the potion is next
   await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: carrying } });
   await wound(code, players[0], 4);
   const [hurt, hale] = await Promise.all(players.map((p) => view(code, p)));

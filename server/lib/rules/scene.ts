@@ -33,7 +33,9 @@ export type CombatEvent =
   | { kind: 'deathSave'; round: number; actor: string; status: Status }
   | { kind: 'skip'; round: number; actor: string }
   /** A healing potion drunk as a Bonus Action before the turn's action. */
-  | { kind: 'potion'; round: number; actor: string; item: string; healed: number };
+  | { kind: 'potion'; round: number; actor: string; item: string; healed: number }
+  /** A fighter's Second Wind, a Bonus Action before the turn's action. */
+  | { kind: 'secondWind'; round: number; actor: string; healed: number };
 export interface Choice { label: string; action: Action }
 export interface RiderOutcome { dc: number; ability: string; roll: D20 | null; success: boolean; condition: Condition | null }
 /** `condition`: what the failed save brought (none if it is immune). */
@@ -223,14 +225,21 @@ export function reactionAttack(state: CombatState, actor: string, attack: string
   return { ...done, log: [...done.log.slice(0, -1), event], rng: rng.state() };
 }
 
-/** The current combatant drinks a healing potion (`dice`) as a Bonus Action; its action is still to come. */
-export function drinkPotion(state: CombatState, item: string, dice: string): CombatState {
+/** The current combatant heals itself by `dice` as a Bonus Action, told by `told`; its action is still to come. */
+function bonusHeal(state: CombatState, dice: string, told: (actor: string, healed: number) => CombatEvent): CombatState {
   const rng = seededRng(state.rng);
   const me = state.combatants[currentActor(state)];
   const healed = heal(me, rollDice(rng, parseDice(dice)).total);
-  const event: CombatEvent = { kind: 'potion', round: state.round, actor: me.id, item, healed: healed.hp - me.hp };
-  return { ...withEvent(state, event, healed), rng: rng.state() };
+  return { ...withEvent(state, told(me.id, healed.hp - me.hp), healed), rng: rng.state() };
 }
+
+/** The current combatant drinks a healing potion (`dice`) as a Bonus Action. */
+export const drinkPotion = (state: CombatState, item: string, dice: string): CombatState =>
+  bonusHeal(state, dice, (actor, healed) => ({ kind: 'potion', round: state.round, actor, item, healed }));
+
+/** The current combatant, a fighter, uses Second Wind as a Bonus Action: 1d10 + its Fighter level (5.2). */
+export const secondWind = (state: CombatState, fighterLevel: number): CombatState =>
+  bonusHeal(state, `1d10+${fighterLevel}`, (actor, healed) => ({ kind: 'secondWind', round: state.round, actor, healed }));
 
 /** Whether a power can be used now: at will, not spent while it recharges, or with uses left. */
 function ready(me: Combatant, p: Power): boolean {

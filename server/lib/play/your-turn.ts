@@ -2,19 +2,18 @@
  * A combat round as one player sees it (docs/api.md, "Written for you"): the same three choices, saying
  * what that player's own hero will do with them. The words follow play/fight.ts, which decides the action:
  * the best weapon, the best damaging spell, the most wounded foe (several of them for an area spell), and
- * a healing potion first for a hero at half its hit points or less.
+ * Second Wind or a healing potion first for a hero at half its hit points or less.
  */
 import { spellDamage } from '../attacks.ts';
 import type { Combatant } from '../rules/combatant.ts';
-import { held } from '../rules/inventory.ts';
-import { HEALING_POTIONS, item } from '../rules/items.ts';
+import { item } from '../rules/items.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
 import { slotsLeft } from '../rules/spells.ts';
 import type { SrdSpell } from '../rules/srd.ts';
 import { CHOICE_IDS, type ChoiceView } from '../types.ts';
 import { thirdChoice, thirdWords } from './actions.ts';
-import { bestSpell, bestWeapon, caught, COMBAT_CHOICES, mostWounded } from './fight.ts';
+import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, mostWounded } from './fight.ts';
 import { ABILITY_NAMES } from './hooks.ts';
 import type { CombatState } from './state.ts';
 
@@ -64,10 +63,11 @@ function cast(spell: SrdSpell, sheet: CharacterSheet, foes: string) {
   return { label: `Cast ${spell.name}`, detail: `${how}, at ${foes}.${slotNote(spell, sheet)}` };
 }
 
-/** " First drinks a Potion of Healing." when the engine will have this hero drink one before it acts. */
-function potionNote(me: Combatant, sheet: CharacterSheet): string {
-  const potion = Object.keys(HEALING_POTIONS).find((id) => held(sheet, id) > 0);
-  return me.hp * 2 > me.maxHp || potion === undefined ? '' : ` First drinks a ${item(potion).name}.`;
+/** " First uses Second Wind." or " First drinks a Potion of Healing." when the engine will do that before the hero acts. */
+function bonusNote(me: Combatant, sheet: CharacterSheet): string {
+  const bonus = bonusHeal(me, sheet);
+  if (bonus === null) return '';
+  return bonus.kind === 'second-wind' ? ' First uses Second Wind.' : ` First drinks a ${item(bonus.id).name}.`;
 }
 
 /** Attack, Cast and the third choice (Dodge, Break Free or Help: play/actions.ts) as this hero would do them now. */
@@ -75,7 +75,7 @@ export function yourChoices(combat: CombatState, sheet: CharacterSheet, playerId
   const me = combat.combatants[playerId];
   const attack = strike(me, mostWounded(combat, me.side).name);
   const spell = bestSpell(sheet);
-  const potion = potionNote(me, sheet);
+  const bonus = bonusNote(me, sheet);
   const third = thirdWords(thirdChoice(combat, sheet, playerId), combat, sheet, COMBAT_CHOICES[2]);
-  return view([attack, spell ? cast(spell, sheet, aim(spell, combat, me)) : attack, third].map((c) => ({ ...c, detail: c.detail + potion })));
+  return view([attack, spell ? cast(spell, sheet, aim(spell, combat, me)) : attack, third].map((c) => ({ ...c, detail: c.detail + bonus })));
 }

@@ -330,8 +330,9 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     ends with the fight. Species resistances halve damage of their types.
   - **Area spells** catch several foes, the most wounded first: 1 + radius/5 for a sphere, cylinder or
     emanation, 1 + size/10 for a cone or cube, 1 + length/30 for a line. Each makes its own save.
-  - **Potions.** A hero at half HP or less who carries a healing potion drinks the least of them first,
-    as a Bonus Action, then takes their voted action.
+  - **Second Wind and potions.** A hero at half HP or less takes one Bonus Action to heal before their
+    voted action: a fighter with Second Wind left uses it (1d10 + Fighter level), anyone else (or a fighter
+    out of uses) drinks the least of their healing potions.
   - **Morale.** Foes are shaken by their first death, by losing half their total HP, or by their leader
     falling; they roll d20 + their best WIS save vs DC 10. Below 10 they flee and every standing hero with
     a melee weapon gets an Opportunity Attack; 5 or less and they surrender. Fleeing foes leave the XP of
@@ -345,8 +346,8 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     `label` and `detail` saying what their hero will do ("Attack with Greatsword" / "+5 to hit, 2d6+3
     slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them. An area spell names
     every foe it will catch ("3d6 fire, Dexterity save DC 12 for half, at Goblin Warrior 2 and Goblin
-    Warrior 1."), and a hero about to drink a potion is told so on all three (the detail ends " First
-    drinks a Potion of Healing.").
+    Warrior 1."), and a hero about to use Second Wind or drink a potion is told so on all three (the
+    detail ends " First uses Second Wind." or " First drinks a Potion of Healing.").
   - **Who must act.** A hero that is down or dead has no action: `scene.canAct` is false for its player,
     a vote from them is accepted and changes nothing, and the round resolves when every hero that can act has voted.
     If no hero can act the round resolves at once. The host can still `advance` with no votes in.

@@ -319,7 +319,8 @@ All SRD 5.2 unless marked **original** (our own rules, CC0, for what 5.2 leaves 
   1 + radius/5 foes for a sphere, cylinder or emanation, 1 + size/10 for a cone or cube, 1 + length/30
   for a line; the most wounded first. Damage is rolled once and each target saves.
 - **Potions in combat.** Drinking a potion is a Bonus Action (5.2): a hero at half HP or less drinks the
-  least of its healing potions before its action.
+  least of its healing potions before its action. (Phase 4: a fighter with Second Wind left uses that
+  Bonus Action instead, 1d10 + Fighter level; one Bonus Action a turn.)
 - **Death and dying** (`rules/dying.ts`, `play/dying.ts`). Massive damage kills outright; at 0 HP a hero
   is dying. Outside a fight, and when a fight ends, the dying are settled at once: Spare the Dying or a
   Healer's Kit stabilizes, else the best healer tries DC 10 Medicine (up to three tries, Help), with a

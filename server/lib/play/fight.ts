@@ -15,7 +15,8 @@ import { monster } from '../rules/monsters.ts';
 import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { HEALING_POTIONS, item } from '../rules/items.ts';
 import { held, removeItem } from '../rules/inventory.ts';
-import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
+import { resourcesOf, useResource } from '../rules/resources.ts';
+import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { beamsAt, castSpell, endConcentration, slotsLeft, spellDamageDice } from '../rules/spells.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
@@ -155,6 +156,7 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
   deathSave: ({ actor, status }, name) => `${name(actor)} makes a death save: ${status}.`,
   skip: ({ actor }, name) => `${name(actor)} cannot act.`,
   potion: ({ actor, item: id, healed }, name) => `${name(actor)} drinks a ${item(id).name} as a Bonus Action: ${healed} HP back.`,
+  secondWind: ({ actor, healed }, name) => `${name(actor)} uses Second Wind as a Bonus Action: ${healed} HP back.`,
 };
 
 function tell(before: CombatState, after: CombatState): string[] {
@@ -230,12 +232,28 @@ const synced = (party: PartyState, combat: CombatState): PartyState => ({
 
 interface Turn { action: Action; state: CombatState; sheets: Record<string, CharacterSheet> }
 
-/** A hero at half HP or less drinks the least of its healing potions first, as a Bonus Action (5.2). */
+const SECOND_WIND = 'second-wind';
+const windLeft = (sheet: CharacterSheet) => resourcesOf(sheet).some((r) => r.id === SECOND_WIND && r.left > 0);
+
+export type BonusHeal = { kind: 'second-wind' } | { kind: 'potion'; id: string };
+
+/**
+ * The one Bonus Action a hero at half HP or less takes to heal (5.2): a fighter's Second Wind while it has
+ * a use, else the least of its healing potions; null when it needs or has neither.
+ */
+export function bonusHeal(me: Combatant, sheet: CharacterSheet): BonusHeal | null {
+  if (me.hp * 2 > me.maxHp) return null;
+  if (windLeft(sheet)) return { kind: 'second-wind' };
+  const potion = Object.keys(HEALING_POTIONS).find((p) => held(sheet, p) > 0);
+  return potion === undefined ? null : { kind: 'potion', id: potion };
+}
+
 function bonusAction(state: CombatState, sheets: Record<string, CharacterSheet>, id: string): { state: CombatState; sheets: Record<string, CharacterSheet> } {
-  const me = state.combatants[id];
-  const potion = Object.keys(HEALING_POTIONS).find((p) => held(sheets[id], p) > 0);
-  if (me.hp * 2 > me.maxHp || potion === undefined) return { state, sheets };
-  return { state: drinkPotion(state, potion, HEALING_POTIONS[potion]), sheets: { ...sheets, [id]: removeItem(sheets[id], potion) } };
+  const sheet = sheets[id];
+  const bonus = bonusHeal(state.combatants[id], sheet);
+  if (bonus === null) return { state, sheets };
+  if (bonus.kind === 'second-wind') return { state: secondWind(state, sheet.level), sheets: { ...sheets, [id]: useResource(sheet, SECOND_WIND) } };
+  return { state: drinkPotion(state, bonus.id, HEALING_POTIONS[bonus.id]), sheets: { ...sheets, [id]: removeItem(sheet, bonus.id) } };
 }
 
 /** The current combatant's turn: a monster's action by rule; a hero's potion if it needs one, then its vote (Dodge without one). */

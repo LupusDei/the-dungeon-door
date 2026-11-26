@@ -49,11 +49,19 @@ test('an area spell names everyone it catches: A, B and C', () => {
 
 test('a hero at half its HP or less, with a potion (even one), drinks it first; above half, not', () => {
   const combat = fight({ p1: fighter });
-  const one = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
+  const one = { ...fighter, resourcesUsed: { 'second-wind': 2 }, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
   const max = combat.combatants.p1.maxHp;
   const at = (hp: number) => yourChoices(patch(combat, { p1: { hp, maxHp: 2 * Math.ceil(max / 2) } }), one, 'p1')[0].detail;
   const half = Math.ceil(max / 2);
   assert.match(at(half), / First drinks a Potion of Healing\.$/);
   assert.doesNotMatch(at(half + 1), /First drinks/);
-  assert.doesNotMatch(yourChoices(patch(combat, { p1: { hp: 1 } }), fighter, 'p1')[0].detail, /First drinks/, 'no potion');
+  assert.doesNotMatch(yourChoices(patch(combat, { p1: { hp: 1 } }), { ...fighter, resourcesUsed: { 'second-wind': 2 } }, 'p1')[0].detail, /First/, 'no potion');
+});
+
+test('a fighter at half its HP or less with Second Wind left uses it first, before any potion', () => {
+  const combat = fight({ p1: fighter });
+  const stocked = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
+  const choices = yourChoices(patch(combat, { p1: { hp: 1 } }), stocked, 'p1');
+  assert.deepEqual(choices.map((c) => c.detail.endsWith(' First uses Second Wind.')), [true, true, true]);
+  assert.doesNotMatch(choices[0].detail, /drinks/);
 });
