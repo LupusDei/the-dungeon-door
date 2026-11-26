@@ -15,6 +15,8 @@ export type Action =
   /** `then`: the turn's further attacks (Multiattack, Extra Attack), each at the most wounded foe still up. */
   | { kind: 'attack'; attack: string; target: string; natural?: number; cover?: Cover; advantage?: boolean; disadvantage?: boolean; then?: string[] }
   | { kind: 'dodge' }
+  /** Any other action, already resolved by the caller (play/actions.ts): it is told and spends the turn. */
+  | { kind: 'other'; text: string }
   /** A monster's save ability (powers.ts) at these targets. */
   | { kind: 'power'; power: string; targets: string[] }
   /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
@@ -24,6 +26,7 @@ export type CombatEvent =
   | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true; rider?: RiderOutcome }
   | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
   | { kind: 'dodge'; round: number; actor: string }
+  | { kind: 'other'; round: number; actor: string; text: string }
   | { kind: 'power'; round: number; actor: string; power: string; dc: number; ability: string; outcomes: PowerOutcome[] }
   /** A spent power comes back on its d6 at the start of the monster's turn. */
   | { kind: 'recharge'; round: number; actor: string; power: string; roll: number }
@@ -199,6 +202,7 @@ const ACTIONS: { [K in Action['kind']]: (state: CombatState, actor: Combatant, a
   spell: resolveCast,
   dodge: (state, actor) => dodge(state, actor),
   power: resolvePower,
+  other: (state, actor, action) => withEvent(state, { kind: 'other', round: state.round, actor: actor.id, text: action.text }, actor),
 };
 
 /** The current combatant takes `action`; then the turn passes on. */

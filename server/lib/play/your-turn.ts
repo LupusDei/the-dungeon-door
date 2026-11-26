@@ -13,6 +13,7 @@ import { areaCatch } from '../rules/spellEffects.ts';
 import { slotsLeft } from '../rules/spells.ts';
 import type { SrdSpell } from '../rules/srd.ts';
 import { CHOICE_IDS, type ChoiceView } from '../types.ts';
+import { thirdChoice, thirdWords } from './actions.ts';
 import { bestSpell, bestWeapon, caught, COMBAT_CHOICES, mostWounded } from './fight.ts';
 import { ABILITY_NAMES } from './hooks.ts';
 import type { CombatState } from './state.ts';
@@ -69,11 +70,12 @@ function potionNote(me: Combatant, sheet: CharacterSheet): string {
   return me.hp * 2 > me.maxHp || potion === undefined ? '' : ` First drinks a ${item(potion).name}.`;
 }
 
-/** Attack, Cast and Dodge as this hero would do them now. */
+/** Attack, Cast and the third choice (Dodge, Break Free or Help: play/actions.ts) as this hero would do them now. */
 export function yourChoices(combat: CombatState, sheet: CharacterSheet, playerId: string): ChoiceView[] {
   const me = combat.combatants[playerId];
   const attack = strike(me, mostWounded(combat, me.side).name);
   const spell = bestSpell(sheet);
   const potion = potionNote(me, sheet);
-  return view([attack, spell ? cast(spell, sheet, aim(spell, combat, me)) : attack, COMBAT_CHOICES[2]].map((c) => ({ ...c, detail: c.detail + potion })));
+  const third = thirdWords(thirdChoice(combat, sheet, playerId), combat, sheet, COMBAT_CHOICES[2]);
+  return view([attack, spell ? cast(spell, sheet, aim(spell, combat, me)) : attack, third].map((c) => ({ ...c, detail: c.detail + potion })));
 }

@@ -1,6 +1,6 @@
 /**
  * Combat in the voting flow: a fight is a run of scenes, one per round. Each player's vote is their own
- * hero's action: (a) Attack, (b) Cast, (c) Dodge; the vote's d20 is the attack roll. Monsters act by the
+ * hero's action: (a) Attack, (b) Cast, (c) Dodge, or Break Free or Help when that is called for (actions.ts); the vote's d20 is the attack roll. Monsters act by the
  * engine's rules. Shaken foes check morale (morale.ts). When it ends the living heroes split the XP and level
  * up: all of it on a victory or surrender, the slain foes' when the rest flee. See docs/api.md.
  */
@@ -21,6 +21,7 @@ import { beamsAt, castSpell, endConcentration, slotsLeft, spellDamageDice } from
 import { areaCatch } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
+import { takeThird } from './actions.ts';
 import { keepConcentration } from './concentration.ts';
 import { shakeOff } from './conditions.ts';
 import { afterFight } from './dying.ts';
@@ -32,7 +33,7 @@ export const MAX_ROUNDS = 10;
 export const COMBAT_CHOICES = [
   { label: 'Attack', detail: 'Strike the most wounded foe with your best weapon.' },
   { label: 'Cast', detail: 'Hurl your best attack spell at the most wounded foe; an area spell catches several (or strike, if you have none).' },
-  { label: 'Dodge', detail: 'Keep your guard up: attacks against you have disadvantage until your next turn.' },
+  { label: 'Dodge', detail: 'Keep your guard up: attacks against you have disadvantage until your next turn. (Held fast, you try to break free instead; beside a dying friend, you help them.)' },
 ];
 
 export type FightEnd = 'victory' | 'defeat' | 'fled';
@@ -146,6 +147,7 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
       `${name(o.target)} ${o.attack ? (o.attack.hit ? 'is hit' : 'is missed') : o.save!.success ? 'saves' : 'fails the save'}` +
       (o.damage > 0 ? `, ${o.damage} damage` : '')).join('; ') + '.',
   dodge: ({ actor }, name) => `${name(actor)} dodges.`,
+  other: ({ text }) => text,
   power: ({ actor, power, dc, ability, outcomes }, name) =>
     `${name(actor)} uses ${power} (DC ${dc} ${ability.toUpperCase()} save): ` + outcomes.map((o) =>
       `${name(o.target)} ${o.success ? 'saves' : 'fails'}${o.damage > 0 ? `, ${o.damage} damage` : ''}${o.condition ? `, ${titled(o.condition)}` : ''}`).join('; ') + '.',
@@ -244,6 +246,10 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   const drunk = bonusAction(state, sheets, id);
   const vote = votes[id];
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
+  if (vote.choiceId === 'c') {
+    const third = takeThird(drunk.state, drunk.sheets[id], id);
+    return { action: third.action, state: third.combat, sheets: { ...drunk.sheets, [id]: third.sheet } };
+  }
   const { action, sheet } = heroAction(drunk.state, drunk.sheets[id], id, vote.choiceId, vote.roll);
   return { action, state: drunk.state, sheets: { ...drunk.sheets, [id]: sheet } };
 }
@@ -295,11 +301,11 @@ function lastingOnSheets(before: CombatState, after: CombatState, sheets: Record
 }
 
 /**
- * Plays one round: first each hero tries to end what a save or check ends (play/conditions.ts), then each
+ * Plays one round: first each hero saves against what a save ends (play/conditions.ts), then each
  * acts by its vote and the monsters by rule; the hurt keep concentrating or not; then the fight is settled if it ended.
  */
 export function fightRound(party: PartyState, combat: CombatState, votes: CombatVotes): Round {
-  const freed = shakeOff(party);
+  const freed = shakeOff(party, ['save']); // breaking free takes an action in a fight (play/actions.ts)
   const start = freedFrom(combat, freed.party.sheets);
   let state = start;
   let sheets = freed.party.sheets;

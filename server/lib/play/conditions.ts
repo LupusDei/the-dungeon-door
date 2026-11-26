@@ -20,24 +20,27 @@ function attempt(rng: Rng, sheet: CharacterSheet, until: Tried): { total: number
   return { total: rollD20(rng, sheet.saveBonuses[until.ability] + d20Modifier(sheet), 'normal').total, what: `${until.ability.toUpperCase()} save` };
 }
 
-function tryEach(rng: Rng, sheet: CharacterSheet, lines: string[]): CharacterSheet {
+type Kind = Tried['kind'];
+
+function tryEach(rng: Rng, sheet: CharacterSheet, lines: string[], kinds: readonly Kind[]): CharacterSheet {
   return conditionsOf(sheet).reduce((s, c) => {
-    if (c.until.kind !== 'save' && c.until.kind !== 'escape') return s;
-    const { total, what } = attempt(rng, s, c.until);
-    const roll = `(${what} ${total} vs DC ${c.until.dc})`;
-    if (total < c.until.dc) { lines.push(`${s.name} is still ${title(c.condition)} ${roll}.`); return s; }
-    lines.push(c.until.kind === 'escape' ? `${s.name} breaks free ${roll}.` : `${s.name} shakes off ${title(c.condition)} ${roll}.`);
+    if (!(kinds as readonly string[]).includes(c.until.kind)) return s;
+    const until = c.until as Tried;
+    const { total, what } = attempt(rng, s, until);
+    const roll = `(${what} ${total} vs DC ${until.dc})`;
+    if (total < until.dc) { lines.push(`${s.name} is still ${title(c.condition)} ${roll}.`); return s; }
+    lines.push(until.kind === 'escape' ? `${s.name} breaks free ${roll}.` : `${s.name} shakes off ${title(c.condition)} ${roll}.`);
     return withoutCondition(s, c.condition);
   }, sheet);
 }
 
-const tries = (s: CharacterSheet) => !s.dead && conditionsOf(s).some((c) => c.until.kind === 'save' || c.until.kind === 'escape');
+const tries = (s: CharacterSheet, kinds: readonly Kind[]) => !s.dead && conditionsOf(s).some((c) => (kinds as readonly string[]).includes(c.until.kind));
 
-/** Each living hero tries once to end each condition a save or check ends. */
-export function shakeOff(party: PartyState): { party: PartyState; lines: string[] } {
-  if (!Object.values(party.sheets).some(tries)) return { party, lines: [] };
+/** Each living hero tries once to end each condition a save or check ends (in a fight, only the saves: escaping takes an action). */
+export function shakeOff(party: PartyState, kinds: readonly Kind[] = ['save', 'escape']): { party: PartyState; lines: string[] } {
+  if (!Object.values(party.sheets).some((s) => tries(s, kinds))) return { party, lines: [] };
   const rng = seededRng(party.rng);
   const lines: string[] = [];
-  const sheets = Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, tries(s) ? tryEach(rng, s, lines) : s]));
+  const sheets = Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, tries(s, kinds) ? tryEach(rng, s, lines, kinds) : s]));
   return { party: { ...party, rng: rng.state(), sheets }, lines };
 }

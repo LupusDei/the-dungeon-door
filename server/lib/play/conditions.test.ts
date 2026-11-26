@@ -27,3 +27,14 @@ test('nothing to shake off: nothing changes and no dice are rolled', () => {
   const dead = { ...party(7, netted), sheets: { p1: { ...SAMPLE, dead: true, conditions: [netted] } } };
   assert.deepEqual(shakeOff(dead).lines, []);
 });
+
+test('meeting the DC exactly ends it; in a fight only the saves are tried', () => {
+  const at = (dc: number) => shakeOff(party(7, { ...held, until: { ...held.until, dc } }));
+  const total = Number(/CON save (-?\d+)/.exec(at(99).lines[0])![1]);
+  assert.match(at(total).lines[0], /^Bryn shakes off Paralyzed/);
+  assert.match(at(total + 1).lines[0], /^Bryn is still Paralyzed/);
+  const inFight = shakeOff(party(3, netted, held), ['save']);
+  assert.equal(inFight.lines.length, 1);
+  assert.match(inFight.lines[0], /Paralyzed/);
+  assert.deepEqual(shakeOff(party(3, netted), ['save']), { party: party(3, netted), lines: [] }, 'nothing a save ends: no dice');
+});

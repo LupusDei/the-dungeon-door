@@ -277,20 +277,24 @@ test('a hero brings its conditions into a fight (a Poisoned hero attacks with Di
   assert.deepEqual(startFight({ version: 1, rng: 3, sheets: { p1: blind } }, ['bandit'], 'dark').combat.combatants.p1.conditions, ['blinded'], 'not twice');
 });
 
-test('each round a hero first tries to end what a save or check ends; what its sheet loses, its combatant loses too', () => {
-  const netted = { ...fighter, conditions: [{ condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'athletics' as const, dc: 10 } }] };
-  const start = startFight(party({ p1: netted, p2: wizard }), ['goblin-warrior']);
-  assert.deepEqual(start.combat.combatants.p1.carried, ['restrained']);
+test('each round a hero first saves against what a save ends; what its sheet loses, its combatant loses too', () => {
+  const scared = { ...fighter, conditions: [{ condition: 'frightened' as const, until: { kind: 'save' as const, ability: 'wis' as const, dc: 10 } }] };
+  const start = startFight(party({ p1: scared, p2: wizard }), ['goblin-warrior']);
+  assert.deepEqual(start.combat.combatants.p1.carried, ['frightened']);
   assert.equal(start.combat.combatants.p2.carried, undefined, 'nothing carried, nothing kept');
-  const easy = { ...netted, conditions: [{ ...netted.conditions[0], until: { ...netted.conditions[0].until, dc: -50 } }] };
+  const easy = { ...scared, conditions: [{ ...scared.conditions[0], until: { ...scared.conditions[0].until, dc: -50 } }] };
   const free = fightRound({ ...start.party, sheets: { p1: easy, p2: wizard } }, patch(start.combat, { 'foe-1': { attacks: harmless } }), {});
-  assert.match(free.lines[0], /^Bryn breaks free \(Athletics -?\d+ vs DC -50\)\.$/);
+  assert.match(free.lines[0], /^Bryn shakes off Frightened \(WIS save -?\d+ vs DC -50\)\.$/);
   assert.deepEqual(free.combat.combatants.p1.conditions, []);
   assert.deepEqual(free.combat.combatants.p1.carried, []);
-  const hard = { ...netted, conditions: [{ ...netted.conditions[0], until: { ...netted.conditions[0].until, dc: 99 } }] };
+  const hard = { ...scared, conditions: [{ ...scared.conditions[0], until: { ...scared.conditions[0].until, dc: 99 } }] };
   const stuck = fightRound({ ...start.party, sheets: { p1: hard, p2: wizard } }, patch(start.combat, { 'foe-1': { attacks: harmless } }), {});
-  assert.match(stuck.lines[0], /^Bryn is still Restrained/);
-  assert.deepEqual(stuck.combat.combatants.p1.conditions, ['restrained']);
+  assert.match(stuck.lines[0], /^Bryn is still Frightened/);
+  assert.deepEqual(stuck.combat.combatants.p1.conditions, ['frightened']);
+  const netted = { ...fighter, conditions: [{ condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'athletics' as const, dc: -50 } }] };
+  const held = fightRound(party({ p1: netted, p2: wizard }), patch(startFight(party({ p1: netted, p2: wizard }), ['goblin-warrior']).combat, { 'foe-1': { attacks: harmless } }), {});
+  assert.equal(held.lines.some((l) => l.includes('breaks free')), false, 'in a fight, escaping takes the action');
+  assert.deepEqual(held.party.sheets.p1.conditions, netted.conditions);
 });
 
 test('a concentrating hero who is hurt saves to keep it; when the fight ends, so does any concentration', () => {
