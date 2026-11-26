@@ -21,6 +21,7 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   dice, monsters, combatant, resolve, encounter, scene (PR B): combat
   dungeonTables, dungeon, explore (PR C): fixed room graph or explore-as-you-go, stocking, loot
   leveling (PR D)            XP awards and thresholds, milestones, level-up
+  spells, spellEffects (PR E): preparing, casting, slots, concentration; resolving casts
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
 ```
 
@@ -217,6 +218,33 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
   A feat's +1 options are read from its SRD text where it enters (`srd.ts`).
 - Not yet: new cantrips and prepared spells at higher levels (PR E validates them), class resources
   such as Rage uses (PR F), feats' other benefits, fighting styles, and multiclassing.
+
+## Spellcasting (PR E)
+
+- **Data.** `srd.ts` reads each SRD 5.2 spell's mechanics where the JSON enters: spell attack (melee or
+  ranged), the saving throw its text names, half damage on a save, damage dice and type, upcast dice
+  per slot level, healing dice, area (shape and size) and concentration. Cantrip upgrades come from
+  `cantripScaling.json` (more dice, or Eldritch Blast's beams).
+- **On the sheet** (`spells.ts`): `prepareSpells` takes exactly the class's cantrip and prepared counts
+  for the hero's level, from its list, no higher than its highest slot level. `castSpell` needs the
+  cantrip known or the spell prepared, spends the slot asked for (or the lowest left at or above the
+  spell's level), and returns the dice: cantrips by character level (5, 11, 17), upcasting by slot.
+  Warlock pact slots need no special case: they are all of the pact level, so that is the lowest
+  slot left. `slots` and `expended` live on the sheet; rederive moves spent pact slots up a level when
+  the pact slot level rises.
+- **Concentration.** One spell at a time: a new concentration spell ends the old (the cast reports
+  which). `concentrationCheck` is a CON save at max(10, half the damage), capped at 30, and is lost
+  outright if the caster is down.
+- **Resolution** (`spellEffects.ts`) reuses PR B's resolver: a spell attack is `attackRoll` with the
+  spell attack bonus (one per beam), a save spell rolls its damage once and each target makes
+  `savingThrow` (half or nothing on a success, then resistances), healing is rolled once plus the
+  spellcasting modifier. A spell with no attack, save or healing (Bless) changes nothing; the DM
+  narrates it. Targets are passed in; `targetsInRadius` picks them for spheres, cylinders and
+  emanations on a 5-foot grid (diagonals 5 ft). Cones, cubes and lines are placed by whoever casts.
+- **Deferred:** the multiclass spellcaster table (the sheet is single-class); upcast dice of a
+  different die than the base (Ice Knife's cold burst); extra rays or darts by slot level (Scorching
+  Ray, Magic Missile); conditions a failed save imposes (reported, applied by the DM); ritual casting;
+  subclass always-prepared spells; concentration ending on incapacitation outside the check.
 
 ## Integration (later, contract first)
 
