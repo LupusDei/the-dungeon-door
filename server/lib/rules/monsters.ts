@@ -40,6 +40,13 @@ const action = z.object({
 });
 
 const ADVANTAGE_ONLY = /if the attack roll had Advantage/;
+const FLAT_DAMAGE = /Hit: (\d+) (\w+) damage/;
+
+/** An attack that deals a flat amount ("Hit: 1 Slashing damage") has no dice in the table, only this text. */
+function flatDamage(desc: string): DamageRoll[] {
+  const stated = FLAT_DAMAGE.exec(desc);
+  return stated ? [{ dice: stated[1], type: stated[2].toLowerCase() }] : [];
+}
 
 /** The last roll of an "…plus 2 (1d4) if the attack roll had Advantage" attack only counts with Advantage. */
 function damageRolls(rolls: { damageDice: string; damageType: { index: string } }[], lastNeedsAdvantage: boolean): DamageRoll[] {
@@ -77,7 +84,7 @@ const monsterSchema = z.object({
     passivePerception: m.senses.passivePerception,
     attacks: m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
       name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
-      damage: damageRolls(a.damage ?? [], ADVANTAGE_ONLY.test(a.desc)),
+      damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
     })),
   };
 });

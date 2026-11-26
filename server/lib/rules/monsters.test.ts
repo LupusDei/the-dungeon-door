@@ -10,6 +10,15 @@ test('a monster stat block loads with its AC, HP, CR, XP and attacks', () => {
   assert.equal(goblin.attacks[1].ranged, true);
 });
 
+test('an attack that deals a flat amount keeps its damage, though the table gives it only in the text', () => {
+  // "Hit: 1 Slashing damage." has no damage dice in the table.
+  assert.deepEqual(monster('cat').attacks[0], { name: 'Scratch', bonus: 4, ranged: false, damage: [{ dice: '1', type: 'slashing' }] });
+  assert.deepEqual(monster('giant-fire-beetle').attacks[0].damage, [{ dice: '1', type: 'fire' }]);
+  assert.deepEqual(monster('sprite').attacks.find((a) => a.name === 'Enchanting Bow')!.damage, [{ dice: '1', type: 'piercing' }]);
+  assert.deepEqual(monster('roper').attacks.find((a) => a.name === 'Tentacle')!.damage, [], 'a hit that only grapples deals none');
+  for (const m of monsters().values()) for (const a of m.attacks) for (const d of a.damage) assert.ok(DAMAGE_TYPES.includes(d.type), `${m.id} ${a.name}: ${d.type}`);
+});
+
 test('a monster save is its ability modifier, or its listed bonus when proficient', () => {
   const aboleth = monster('aboleth');
   assert.equal(aboleth.saveBonuses.str, 5);
