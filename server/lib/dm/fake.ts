@@ -8,11 +8,14 @@ import type { DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, Nex
 
 const PLACES = ['a drowned chapel', 'a goblin market under the bridge', 'the clockwork library', 'a frozen lighthouse', 'the hollow hill', 'a ship of bones', 'the moonlit orchard', 'a collapsed dwarven forge'];
 
-/** In a rules-engine game: go on (in a dungeon) or fight the weakest suitable monster, look around, talk. */
+/**
+ * In a rules-engine game: go on (in a dungeon) or force the way, look around, talk. It never picks a fight
+ * itself (tests that want one register a DM that does), so a fake game keeps the length it was given.
+ */
 function hooksFor(rules: RulesContext) {
   const exit = rules.dungeon?.exits[0];
   return [
-    exit ? { kind: 'move' as const, exit: exit.id } : { kind: 'fight' as const, monsters: rules.monsters.slice(-1) },
+    exit ? { kind: 'move' as const, exit: exit.id } : { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', dc: 10 },
     { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 },
     { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
   ];

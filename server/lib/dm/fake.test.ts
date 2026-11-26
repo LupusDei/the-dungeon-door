@@ -5,15 +5,15 @@ import { fakeDungeonMaster } from './fake.ts';
 import type { DMContext, RulesContext } from './types.ts';
 
 process.env.DD_FAKE_DELAY_MS = '0';
-const rules: RulesContext = { party: [], combat: null, dungeon: null, monsters: ['ogre', 'wolf', 'rat'] };
+const rules: RulesContext = { party: [], combat: null, dungeon: null, monsters: ['ogre', 'rat'] };
 const ctx = (r: RulesContext | null): DMContext => ({
   archetype: archetype('chronicler'), adventureTitle: null, party: [], history: [], sceneIndex: 0, sceneCount: 4, recentChat: [], rules: r,
 });
 
-test('the fake DM proposes hooks in a rules-engine game: a fight with the weakest monster, a Perception check, a Persuasion check', async () => {
+test('the fake DM proposes hooks in a rules-engine game: an Athletics check, a Perception check, a Persuasion check', async () => {
   const { choices } = await fakeDungeonMaster.openingScene(ctx(rules));
   assert.deepEqual(choices.map((c) => c.rules), [
-    { kind: 'fight', monsters: ['rat'] },
+    { kind: 'check', ability: 'str', skill: 'athletics', dc: 10 },
     { kind: 'check', ability: 'wis', skill: 'perception', dc: 10 },
     { kind: 'check', ability: 'cha', skill: 'persuasion', dc: 15 },
   ]);
@@ -24,7 +24,7 @@ test('in a dungeon its first choice takes the first exit; before the engine its 
   const { choices } = await fakeDungeonMaster.openingScene(ctx({ ...rules, dungeon }));
   assert.deepEqual(choices[0].rules, { kind: 'move', exit: 'r1' });
   const { choices: none } = await fakeDungeonMaster.openingScene(ctx({ ...rules, dungeon: { ...dungeon, exits: [] } }));
-  assert.deepEqual(none[0].rules, { kind: 'fight', monsters: ['rat'] });
+  assert.deepEqual(none[0].rules, { kind: 'check', ability: 'str', skill: 'athletics', dc: 10 });
   const { choices: legacy } = await fakeDungeonMaster.openingScene(ctx(null));
   assert.ok(legacy.every((c) => c.rules === undefined));
 });
