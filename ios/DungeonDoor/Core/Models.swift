@@ -767,8 +767,14 @@ struct LegalAction: Codable, Hashable, Identifiable {
         case id, label, kind, detail, targets, picks, limit, available, reason, squares, rangeFeet, reachFeet
     }
 
+    /// `move:dash`, or a band move whose id carries `:dash`.
     var namesDash: Bool {
         id.localizedCaseInsensitiveContains("dash") || label.localizedCaseInsensitiveContains("dash")
+    }
+
+    /// A move that leaves an enemy's reach without an opportunity attack.
+    var namesDisengage: Bool {
+        id.localizedCaseInsensitiveContains("disengage") || label.localizedCaseInsensitiveContains("disengage")
     }
 }
 
@@ -811,7 +817,7 @@ struct CoverCell: Codable, Hashable, Identifiable {
 
 /// The room the fight is happening in. Nil on a server from before the tactical map, and outside a fight.
 struct Battlefield: Codable, Hashable {
-    /// Room size. Read as feet when that yields at least a 3-square grid; otherwise as a count of squares.
+    /// Room size in squares. A room is 10 by 8; a road fight is 16 by 6. `squareFeet` is how wide one square is.
     let width: Int
     let height: Int
     var squareFeet: Int = 5
@@ -840,20 +846,10 @@ struct Battlefield: Codable, Hashable {
         case width, height, squareFeet, walls, cover
     }
 
-    /// Columns of the grid.
-    var columns: Int { Self.span(width, squareFeet: squareFeet) }
-    /// Rows of the grid.
-    var rows: Int { Self.span(height, squareFeet: squareFeet) }
-
-    /// `length` is feet when dividing by `squareFeet` still leaves a room (3 squares or more).
-    /// A 50 by 40 ft chamber at 5 ft is 10 by 8. A width of 10 that would collapse to two squares
-    /// is already a count of squares, and stays 10.
-    static func span(_ length: Int, squareFeet: Int) -> Int {
-        let feet = max(squareFeet, 1)
-        let cells = Int((Double(max(length, 0)) / Double(feet)).rounded(.up))
-        if cells >= 3 { return cells }
-        return max(length, 1)
-    }
+    /// Columns. `width` is a count of squares: a room is 10 by 8, a road fight 16 by 6.
+    var columns: Int { max(width, 1) }
+    /// Rows. `height` is a count of squares.
+    var rows: Int { max(height, 1) }
 
     /// Blocked squares. A segment `{from, to}` blocks the squares at each end. A shape the app
     /// does not know is skipped, and the room still draws.
@@ -1203,6 +1199,8 @@ struct Combatant: Codable, Hashable, Identifiable {
     var engagedWith: [String] = []
     /// The square it stands on. Nil when the server has no tactical map, or this combatant is not placed.
     var square: GridPoint? = nil
+    /// Feet this hero can move this turn. Nil for a foe, and from a server from before the grid.
+    var speedFeet: Int? = nil
 
     /// What its health reads: a foe's wound, or hit points ("7/20").
     var healthText: String { wound ?? "\(hp)/\(maxHp)" }
@@ -1243,6 +1241,7 @@ extension Combatant {
         position = try c.decodeIfPresent(String.self, forKey: .position)
         engagedWith = try c.value(.engagedWith, or: [])
         square = try? c.decode(GridPoint.self, forKey: .square)
+        speedFeet = try c.optionalWhole(.speedFeet)
     }
 }
 

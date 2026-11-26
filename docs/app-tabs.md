@@ -92,17 +92,17 @@ During a fight the tab is a room of 5-foot squares.
 - Rings around the caller are engaged (5 ft), near (30 ft) and far (60 ft).
 - Gold squares are where this hero can move. When a `move` action lists `squares`, those are
   the gold squares, and a tap votes that action with `move: {x, y}`. A square listed by both a
-  step and a Dash sends the step. Until the server lists squares, the gold wash is this hero's
-  speed and a tap does not vote; the band moves stay in Story's offers.
-- Tapping a token draws a dashed line and a card: distance in feet, in reach or out of it, and
-  Attack / Cast for the legal action that names that token. Those buttons vote the action with
-  that target.
+  step and a Dash (`move:dash`) sends the step. A Dash square sends `dash: true`. A disengage
+  sends `disengage: true`. Until the server lists squares, the gold wash is this hero's
+  `speedFeet` and a tap does not vote; the band moves stay in Story's offers.
+- Tapping a token draws a dashed line and a card: distance in feet (5 times the squares, and a
+  diagonal counts as one), in reach or out of it, and Attack / Cast for the legal action that
+  names that token. Those buttons vote the action with that target.
 - Walls are squares a token cannot enter. Cover tints a square.
 
-`scene.battlefield` sizes the room. `width` and `height` are feet when dividing by `squareFeet`
-still leaves at least a 3-square room (50 by 40 ft at 5 ft is 10 by 8). A size that would
-collapse to one or two squares is read as a count of squares instead. `x` grows east and `y`
-grows south, from 0. A battlefield the app cannot read is ignored.
+`scene.battlefield` sizes the room in squares. A room is 10 by 8 and a road fight is 16 by 6.
+`squareFeet` is 5. `x` grows east and `y` grows south, from the north-west corner. A battlefield
+the app cannot read is ignored.
 
 When `battlefield` is missing, or a combatant has no `square`, tokens are laid out from
 `position` and `engagedWith`: the party toward the south of the room, foes they are engaged
@@ -130,11 +130,12 @@ one value empty. The rest of the game still loads, including against today's ser
 | `scene.actions[].squares` | Gold squares. A `move` with none is voted from Story as that action id. |
 | `scene.actions[].rangeFeet` `{normal, long}` | Range on the attack card and the target card. |
 | `scene.actions[].reachFeet` | Melee reach, in feet. |
-| `scene.battlefield` `{width, height, squareFeet, walls, cover?}` | The room. `walls` are blocked squares `{x, y}` (a `{from, to}` segment blocks both ends). `cover` is `{x, y, kind?}` or `{square, kind?}`. |
-| `combatant.square` `{x, y}` | Where that token stands. |
-| `rules.party[].speedFeet` | Movement. `speed` is used when `speedFeet` is absent. |
+| `scene.battlefield` `{width, height, squareFeet, walls, cover?}` | The room, in squares. `squareFeet` is 5. `walls` and `cover` are squares `{x, y}`. |
+| `combatant.square` `{x, y}` | Where that token stands. Null when the fight has no grid. |
+| `combatant.speedFeet` | Feet this hero can move. A foe omits it. The party's `speed` is the fallback. |
+| `scene.actions[]` id `move:dash` | The Dash move: its `squares` are double speed, and a tap sends `dash: true`. |
 | vote `actionId`, `targets` | What a tap sends. |
-| vote `move: {x, y}` | A square. The older band move `{to, engage, dash, disengage}` still decodes. |
+| vote `move: {x, y, dash?, disengage?}` | A square. `dash` and `disengage` are sent only when that move is one. The older band move `{to, engage, dash, disengage}` still decodes. |
 | `POST /action` `{sceneIndex, text}` | In your own words. |
 | `POST /speak` `{text}` | In character. |
 | `scene.myAction`, `scene.myFreeform`, `scene.freeforms` | The Act chip and the written line. |

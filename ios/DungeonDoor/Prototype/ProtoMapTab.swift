@@ -409,11 +409,7 @@ struct ProtoToken: Identifiable {
     let combatant: Combatant
 
     var health: String { combatant.healthText }
-    var gauge: CGFloat {
-        let g = combatant.gauge
-        guard g.most > 0 else { return 0 }
-        return CGFloat(g.now) / CGFloat(g.most)
-    }
+    var gauge: CGFloat { CGFloat(combatant.gauge) }
     var ringColor: Color { isFoe ? Palette.ember : Palette.verdigris }
     func center(cell: CGFloat) -> CGPoint {
         CGPoint(x: (CGFloat(col) + 0.5) * cell, y: (CGFloat(row) + 0.5) * cell)

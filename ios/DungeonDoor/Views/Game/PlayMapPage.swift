@@ -53,10 +53,13 @@ struct PlayMapPage: View {
         }
         let hero = tokens.first { $0.id == session.playerId }
         let actions = state.scene?.actions ?? []
-        let speed = state.standing(session.playerId)?.movementFeet ?? session.me?.character.sheet?.speed ?? 30
+        let heroSpeed = state.rules?.combat?.combatant(session.playerId)?.speedFeet
+            ?? state.standing(session.playerId)?.movementFeet
+            ?? session.me?.character.sheet?.speed
+            ?? 30
         let occupied = Set(tokens.map(\.point))
         let legal = Set(actions.filter { $0.kind == "move" && $0.available }.flatMap(\.squares))
-        let highlighted = legal.isEmpty ? BattleLayout.disk(from: hero?.point, speedFeet: speed, room: room, occupied: occupied) : legal
+        let highlighted = legal.isEmpty ? BattleLayout.disk(from: hero?.point, speedFeet: heroSpeed, room: room, occupied: occupied) : legal
 
         return VStack(spacing: 0) {
             initiative(combat)
@@ -188,7 +191,7 @@ struct PlayMapPage: View {
                 Button {
                     guard canSend, PlayTurn.canSend(status: session.state.status, scene: session.state.scene, busy: session.busy),
                           let action = PlayTurn.move(on: point, actions: actions) else { return }
-                    Task { await session.vote(actionId: action.id, square: point) }
+                    Task { await session.vote(actionId: action.id, square: point, dash: action.namesDash, disengage: action.namesDisengage) }
                 } label: {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Palette.gold.opacity(canSend ? 0.22 : 0.12))
@@ -438,11 +441,7 @@ struct BattleToken: Identifiable {
         let text = String(letters.prefix(2))
         return text.isEmpty ? "?" : text
     }
-    var gauge: CGFloat {
-        let reading = combatant.gauge
-        guard reading.most > 0 else { return 0 }
-        return CGFloat(max(0, reading.now)) / CGFloat(reading.most)
-    }
+    var gauge: CGFloat { CGFloat(combatant.gauge) }
 }
 
 enum BattleLayout {
@@ -577,9 +576,8 @@ enum BattleLayout {
         CGPoint(x: (CGFloat(point.x) + 0.5) * cell, y: (CGFloat(point.y) + 0.5) * cell)
     }
 
+    /// Feet between two squares. A diagonal counts as one square, the same as a step north.
     static func feet(from a: GridPoint, to b: GridPoint, squareFeet: Int) -> Int {
-        let dx = Double(a.x - b.x)
-        let dy = Double(a.y - b.y)
-        return Int((sqrt(dx * dx + dy * dy) * Double(max(squareFeet, 1))).rounded())
+        max(abs(a.x - b.x), abs(a.y - b.y)) * max(squareFeet, 1)
     }
 }
