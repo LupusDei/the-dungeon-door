@@ -531,6 +531,43 @@ won and under 5% of heroes dead per fight**.
 
 Not yet: an XP award for finishing a quest, so leveling up still takes many fights.
 
+## The road from the tavern to the door
+
+Robert's design: *"From the tavern to the door there should be a trek through territory with risk of
+bandits, varmints, bands of level 1-2 surface monsters, and wandering vendors. Two scenes before the door
+to the dungeon begins."*
+
+`play/trek.ts`. A dungeon game (`fixed` or `explore`; a tale told has no door) opens on the road: **two
+scenes**, then the door scene as before. The game is two scenes longer than the `sceneCount` asked for (the
+map is still sized for the count asked for).
+
+- **The road is rolled when the game starts**, from the game's seed (`derivedRng(seed, 'trek')`): a terrain
+  (farm road, forest road, moorland track, hill trails, river valley) and, for each stretch, a d12:
+
+  | d12   | On the stretch | Odds |
+  |-------|----------------|------|
+  | 1–3   | bandits: Bandit, Scout, Tough, Bandit Captain | 25% |
+  | 4–6   | wild beasts: Giant Rat, Jackal, Wolf, Boar, Giant Badger, Giant Wolf Spider, … up to Brown Bear and Giant Boar | 25% |
+  | 7–8   | a band of monsters: Goblin Minion, Warrior or Boss, Hobgoblin Warrior, Gnoll Warrior, Worg, Bugbear Warrior | 17% |
+  | 9–10  | a wandering vendor | 17% |
+  | 11–12 | a quiet stretch | 17% |
+
+  So two of three stretches hold foes. They are a **low** fight for the party (`buildEncounter`, the same
+  budget, tempering and party-size cap as a dungeon room), at the levels the dungeon starts at; the
+  tougher ones only appear for parties that can afford them. Bandits and monster bands carry treasure for
+  the dungeon's starting level; beasts carry none.
+- **Foes are met** as in a dungeon room: they roll an attitude (2d6: 2–5 Hostile, about 28%). Hostile ones
+  bar the way: Engage, Run (slip past: no fight, no loot, no XP) or Parley. If a parley fails and they are
+  still Hostile, they attack: there is no way back on the road. Others watch and wait while the party goes on.
+- **A fight** on the road awards XP like any other, and its victors take the stretch's treasure.
+- **A wandering vendor** sells a Potion of Healing (50 gp) and four other SRD adventuring gear items of
+  25 gp or less, at SRD prices, through the `buy` hook.
+- **After each scene** the party goes on by itself (two hours, under the open sky's light) to the next
+  stretch, or, after the second, to the dungeon door ("The party reaches the dungeon door."). On the road
+  there are no exits (`move` is refused), no dungeon wanderers, and no torches needed by day.
+- **The DM** sees `trek` (stretch, terrain, what is on it, wares, who waits) and no `dungeon` until the
+  door; its instructions say to narrate overland travel, with no corridors, rooms or doors.
+
 ## For the app (the game layer on top)
 
 What the game adds around the engine so the app can show it (Justin's side; `docs/api.md` has the shapes):

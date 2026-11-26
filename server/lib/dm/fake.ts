@@ -1,4 +1,5 @@
 import { fakeDelay } from '../models.ts';
+import { ROAD_EVENTS } from '../play/trek.ts';
 import type { ActionRequest, DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
 
 /**
@@ -17,7 +18,17 @@ const STORY_HOOKS = [
   { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
 ];
 
+/** On the road: hike on, look around, and trade with a vendor or talk to the foes met. */
+function roadHooks(t: NonNullable<RulesContext['trek']>) {
+  const third = t.waiting ? { kind: 'parley' as const } : t.wares.length ? { kind: 'buy' as const, items: [t.wares[0].id] } : STORY_HOOKS[1];
+  return [{ kind: 'check' as const, ability: 'wis' as const, skill: 'survival', dc: 10 }, STORY_HOOKS[0], third];
+}
+
 function hooksFor(rules: RulesContext) {
+  return rules.trek ? roadHooks(rules.trek) : placeHooks(rules);
+}
+
+function placeHooks(rules: RulesContext) {
   const exit = rules.dungeon?.exits[0];
   // Local dev only: DD_FAKE_FIGHT=goblin-warrior,goblin-warrior makes the first choice that fight.
   const brawl = process.env.DD_FAKE_FIGHT?.split(',').filter((id) => id);
@@ -54,6 +65,12 @@ function resolve(ctx: DMContext, r: Resolution) {
   return { outcome, chosenChoiceId };
 }
 
+/** A stretch of the road to the door, told; null off the road. */
+function road(ctx: DMContext, opening: string): string | null {
+  const t = ctx.rules?.trek;
+  return t ? `${opening} ${t.terrain}: ${ROAD_EVENTS[t.event]}.\n\nThe dungeon door lies somewhere ahead.` : null;
+}
+
 function names(ctx: DMContext) {
   return ctx.party.map((p) => p.name).join(', ') || 'The party';
 }
@@ -86,7 +103,8 @@ export const fakeDungeonMaster: DungeonMaster = {
     return {
       adventureTitle: `The Secret of ${ctx.archetype.name.replace(/^The /, '')}'s Door`,
       title: 'Behind the Dungeon Door',
-      narration: `${names(ctx)} stand before an old oak door carved with runes.\n\nBeyond it lies ${place}, and something inside is humming a song you almost remember.`,
+      narration: road(ctx, `${names(ctx)} set out from the tavern along`) ??
+        `${names(ctx)} stand before an old oak door carved with runes.\n\nBeyond it lies ${place}, and something inside is humming a song you almost remember.`,
       imagePrompt: `Adventurers before a rune-carved oak door leading to ${place}`,
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: `Welcome, travellers. I am ${ctx.archetype.name}. Mind the door.`,
@@ -100,7 +118,7 @@ export const fakeDungeonMaster: DungeonMaster = {
     return {
       ...resolve(ctx, resolution),
       title: `Scene ${ctx.sceneIndex + 1}: ${place.replace(/^(a|the) /, '').replace(/^./, (c) => c.toUpperCase())}`,
-      narration: `The path leads ${names(ctx)} to ${place}.\n\nThe air smells of old magic and fresh trouble.`,
+      narration: road(ctx, 'The road goes on along') ?? `The path leads ${names(ctx)} to ${place}.\n\nThe air smells of old magic and fresh trouble.`,
       imagePrompt: `The party arriving at ${place}`,
       featuredCharacters: ctx.party.slice(0, 2).map((p) => p.name),
       quip: resolution.votes.some((v) => v.roll === 20) ? 'A natural 20! The dice gods smile.' : 'Onward!',

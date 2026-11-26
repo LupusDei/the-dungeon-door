@@ -2,6 +2,7 @@
  * The rules engine in the LLM DM's prompt: how hooks work, the engine's state, and the dice it rolled.
  * Empty for a game from before the engine.
  */
+import { ROAD_EVENTS } from '../play/trek.ts';
 import type { RulesContext, RulesResults } from './types.ts';
 
 export const RULES_INSTRUCTIONS = `
@@ -57,6 +58,13 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   exits say so), passed on the way and possibly trapped. The engine rolls for wandering monsters every half
   hour in a dungeon and after noise (a fight, a trap going off); when they come, its results say who they
   are and whether they attack or go their way. Don't invent wandering monsters yourself.
+- THE ROAD: a dungeon game begins on the road from the tavern to the dungeon door: two stretches, one a
+  scene (the road block says which, and what is on it). Narrate overland travel: open country, the terrain
+  given, weather and the road itself; no corridors, rooms or doors until the party reaches the dungeon door.
+  The road has no exits and takes no move hooks: the party travels on by itself after each scene. Foes there
+  are met as anywhere (Hostile ones bar the way: Engage, Run to slip past, or Parley; if a parley fails and
+  they are still Hostile, they attack). A wandering vendor sells only the wares listed, at those prices: offer
+  {"kind":"buy"} with their ids. After the last stretch, the next scene opens at the dungeon door.
 - Dungeon levels: the dungeon starts at the party's level and may go a level deeper behind a new door (the
   results say "The way leads deeper"); its monsters, traps and treasure are the engine's, for that level.
   Make the deeper level feel it: older stone, colder air, stranger signs.
@@ -100,11 +108,22 @@ function waitingLine(w: NonNullable<NonNullable<RulesContext['dungeon']>['waitin
   return `. Waiting here, ${stance}: ${w.foes} (${w.attitude})${rated}.`;
 }
 
+function roadLine(t: NonNullable<RulesContext['trek']>): string {
+  const wares = t.wares.map((w) => `${w.name} (${w.id}, ${w.cost} gp)`).join(', ');
+  const what = `${ROAD_EVENTS[t.event]}${wares ? `, selling ${wares}` : ''}`;
+  const next = t.stretch < t.of ? 'more road' : 'the dungeon door';
+  return `THE ROAD (stretch ${t.stretch} of ${t.of}, ${t.terrain}): ${what}${t.waiting ? waitingLine(t.waiting) : '.'} After it: ${next}.`;
+}
+
 function dungeonLine(d: NonNullable<RulesContext['dungeon']>): string {
   const exits = d.exits.map((x) => `${x.id} ${x.connection} to ${x.leadsTo === null ? 'unexplored' : x.leadsTo}`).join('; ') || 'none';
   const foes = d.waiting ? waitingLine(d.waiting) : '';
   return `DUNGEON (${d.kind}, level ${d.level}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}${foes}`;
 }
+
+/** For the opening scene: a dungeon game opens on the road from the tavern (play/trek.ts), not at the door. */
+export const openingNote = (rules: RulesContext | null): string =>
+  (rules?.trek ? 'The party sets out on the road from the tavern to the dungeon door: open on that road (THE ROAD), not at the door. ' : '');
 
 export function rulesBlock(rules: RulesContext | null): string {
   if (!rules) return '';
@@ -113,6 +132,7 @@ export function rulesBlock(rules: RulesContext | null): string {
     ...rules.party.map(heroLine),
     `NOW: ${rules.time}. Light: ${rules.light}`,
     ...(rules.combat ? [combatLine(rules.combat)] : []),
+    ...(rules.trek ? [roadLine(rules.trek)] : []),
     ...(rules.dungeon ? [dungeonLine(rules.dungeon)] : []),
     `Monsters for fights: ${rules.monsters.join(', ')}`,
   ].join('\n');

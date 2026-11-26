@@ -65,7 +65,10 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `time` and `light`: the clock ("Day 1, 08:40") and the light the party carries. Describe only what
     the heroes can see.
   - `combat`: the round and every combatant's HP and status, or null.
-  - `dungeon`: the dungeon's kind and **level**, the area the party is in (its purpose, what is there,
+  - `trek`: in a dungeon game, the road from the tavern to the door (two scenes): the stretch, its
+    terrain, what is on it (bandits, beasts, a monster band, a vendor and their wares, or nothing) and who
+    waits there; null at the door. Narrate overland travel; the party goes on by itself after each scene.
+  - `dungeon`: the dungeon's kind and **level** (null on the road), the area the party is in (its purpose, what is there,
     its exits by id, any foes waiting there and their attitude), or null. The level starts at the living
     heroes' average and can go deeper through a door: deeper means more dangerous, so narrate it (lower,
     older, worse).

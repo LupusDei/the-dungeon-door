@@ -2,7 +2,7 @@ import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { textModel } from '../models.ts';
 import { FlatHook, hookFromFlat } from './hookSchema.ts';
-import { RULES_INSTRUCTIONS, resultsBlock, rulesBlock } from './rulesPrompt.ts';
+import { openingNote, RULES_INSTRUCTIONS, resultsBlock, rulesBlock } from './rulesPrompt.ts';
 import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, PastScene, Resolution } from './types.ts';
 
 /**
@@ -191,7 +191,7 @@ export const llmDungeonMaster: DungeonMaster = {
   async openingScene(ctx): Promise<OpeningScene> {
     return write(ctx, OpeningSchema,
       `${promptFor(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (scene 1 of ${ctx.sceneCount}): ` +
-      `introduce the party together in a vivid place with an immediate hook, and end on three choices. ` +
+      `introduce the party together in a vivid place with an immediate hook, and end on three choices. ${openingNote(ctx.rules)}` +
       `Your quip welcomes the table.`, true);
   },
 
