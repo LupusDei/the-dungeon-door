@@ -3,6 +3,7 @@ import { heroAttacks } from './attacks.ts';
 import { isValid } from './catalog.ts';
 import { badRequest, conflict, forbidden, isUUID, notFound } from './http.ts';
 import { type BuildStyle, buildCharacter, quickChoices } from './rules/character.ts';
+import { asItStands } from './rules/checks.ts';
 import { item } from './rules/items.ts';
 import { revive, TEMPLE_RAISE_DEAD } from './rules/revive.ts';
 import { derivedRng } from './rules/rng.ts';
@@ -37,7 +38,8 @@ export function forgedSheet(build: Build): CharacterSheet {
 /** A stored hero as the API shows it: on its SRD 5.2 species, with a sheet. Not saved until the hero is next saved. */
 export function upgradeCharacter(stored: StoredCharacter): Character {
   const race = currentRace(stored.race) as string;
-  const { sheet = heroSheet({ ...stored, race }, 'classic') } = stored;
+  const { sheet: kept = heroSheet({ ...stored, race }, 'classic') } = stored;
+  const sheet = asItStands(kept); // a stored passive Perception from before exhaustion counted
   return { ...stored, race, sheet, attacks: heroAttacks(sheet) };
 }
 

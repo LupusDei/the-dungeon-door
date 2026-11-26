@@ -9,6 +9,7 @@ import { startDungeon, enter } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 import { rulesContext, rulesView, suitableMonsters } from './view.ts';
+import { asItStands } from '../rules/checks.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const wizard = heroSheet({ id: 'w', name: 'Cleo', race: 'elf', characterClass: 'wizard' });
@@ -22,7 +23,7 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
     playerId: 'p1', name: 'Bryn', level: 1, xp: 0, hp: 0, maxHp: fighter.maxHp, armorClass: fighter.armorClass,
     exhaustion: 0, hitDiceLeft: 0, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0],
     resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true, dead: false,
-    passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight,
+    passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight, speed: fighter.speed,
     gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0, resistances: [], conditions: [], concentratingOn: null,
   });
   assert.deepEqual([view.party[1].sight, view.party[1].darkvision], ['dim', 60], 'an elf sees the dark room dimly');
@@ -122,4 +123,17 @@ test('the dungeon level and where it went deeper, to the app and the DM', () => 
   assert.deepEqual([rulesView(s, []).dungeon!.level, rulesView(s, []).dungeon!.deepened, rulesContext(s).dungeon!.level], [3, d.deepened, 3]);
   const fresh = { party, combat: null, dungeon: startDungeon('fixed', 3, [1, 1], 4) };
   assert.deepEqual([rulesView(fresh, []).dungeon!.level, rulesView(fresh, []).dungeon!.deepened], [1, []]);
+});
+
+test('an exhausted hero: the sheet and the party view give the same passive Perception, and the view the speed it moves at (q-mwxaavkv)', () => {
+  const heroOf = (sheet: typeof fighter) => rulesView({ party: { version: 1, rng: 1, sheets: { p1: sheet } }, combat: null, dungeon: null }, []).party[0];
+  const tired = { ...fighter, exhaustion: 2 };
+  assert.equal(heroOf(tired).passivePerception, asItStands(tired).passivePerception);
+  assert.equal(heroOf(tired).passivePerception, 10 + fighter.skillBonuses.perception - 4);
+  assert.deepEqual([heroOf(tired).speed, heroOf(fighter).speed], [fighter.speed - 10, fighter.speed], '-5 ft a level');
+  assert.equal(heroOf({ ...fighter, speed: 20, exhaustion: 5 }).speed, 0, 'never below 0');
+  const mail = fighter.equipment.find((e) => e.id === 'chain-mail')!;
+  const laden = { ...fighter, equipment: [...fighter.equipment, { ...mail, count: 10 }] };
+  assert.ok(load(laden).dragging);
+  assert.deepEqual([heroOf(laden).speed, heroOf({ ...laden, exhaustion: 5 }).speed, heroOf({ ...laden, speed: 20, exhaustion: 5 }).speed], [5, 5, 0], 'dragging: 5 ft at most');
 });

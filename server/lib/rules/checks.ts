@@ -43,6 +43,9 @@ const PASSIVE_SHIFT: Readonly<Record<Mode, number>> = { normal: 0, advantage: 5,
 export const passiveScore = (sheet: CharacterSheet, spec: CheckSpec, mode: Mode = 'normal'): number =>
   10 + checkBonus(sheet, spec).bonus + PASSIVE_SHIFT[mode];
 
+/** The sheet with its passive Perception as it stands: what every d20 test loses (exhaustion, a revival's ordeal) taken off (5.2). */
+export const asItStands = (sheet: CharacterSheet): CharacterSheet => ({ ...sheet, passivePerception: passiveScore(sheet, { ability: 'wis', skill: 'perception' }) });
+
 /** The Influence action's skills (5.2): DC 15 or the monster's Intelligence score, whichever is higher. */
 export const INFLUENCE_SKILLS: ReadonlySet<string> = new Set(['animal-handling', 'deception', 'intimidation', 'performance', 'persuasion']);
 /** The monster's skill a hero's check is measured against. */

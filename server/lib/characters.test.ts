@@ -52,6 +52,15 @@ test('a new hero is forged with one Potion of Greater Healing; a saved hero is l
   assert.deepEqual(greater(upgradeCharacter(old as never).sheet), [], 'a hero stored before sheets gets none on read');
 });
 
+test('a saved hero\u2019s sheet reads with its passive Perception as it stands: exhaustion off, like any d20 test (q-mwxaavkv)', async () => {
+  const me = randomUUID();
+  const hero = await makeCharacter(me, 'Fen');
+  const stored = await getStore().getCharacter(hero.id);
+  await getStore().saveCharacter({ ...stored!, sheet: { ...stored!.sheet!, exhaustion: 2 } });
+  const [read] = await mine(me);
+  assert.deepEqual([read.sheet.passivePerception, read.sheet.speed], [hero.sheet.passivePerception - 4, hero.sheet.speed]);
+});
+
 test('the seed is pinned: a hero not yet saved with a sheet keeps the same numbers on every read and every release', () => {
   const build = { id: 'pinned-hero', name: 'Pin', race: 'human', characterClass: 'fighter' };
   const sheet = heroSheet(build, 'classic');

@@ -66,6 +66,9 @@ export function gainExhaustion(sheet: CharacterSheet, levels = 1): CharacterShee
 export const exhaustionEffects = ({ exhaustion }: CharacterSheet) =>
   ({ d20: EXHAUSTION_D20 * exhaustion, speed: EXHAUSTION_SPEED * exhaustion, dead: exhaustion === MAX_EXHAUSTION });
 
+/** The speed the hero moves at: its own, 5 ft less a level of exhaustion, never below 0. */
+export const speedNow = (sheet: CharacterSheet): number => Math.max(0, sheet.speed + exhaustionEffects(sheet).speed);
+
 /** What every D20 Test (attack, save, check, initiative) loses: exhaustion and a revival's ordeal (5.2). */
 export const d20Modifier = ({ exhaustion, revivalPenalty = 0 }: CharacterSheet) => 0 - revivalPenalty + EXHAUSTION_D20 * exhaustion; // 0 - …: never -0
 

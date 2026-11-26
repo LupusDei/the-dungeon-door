@@ -6,6 +6,7 @@ import {
   ABILITIES, type Ability, type AbilityMethod, type AbilityScores, type BackgroundBoost,
   abilityModifier, applyBackgroundBoost, scoresFor,
 } from './abilities.ts';
+import { asItStands } from './checks.ts';
 import { type Rng, pick, sample } from './rng.ts';
 import { type CharacterSheet, parseCharacterSheet } from './sheet.ts';
 import type { EquipmentOption, Item, Size, Srd, SrdBackground, SrdClass, SrdSpecies, SrdSpellcasting } from './srd.ts';
@@ -162,7 +163,8 @@ export function expertiseOf(sheet: CharacterSheet, scores: AbilityScores, data: 
 
 /**
  * Every number that follows from the rest of the sheet: proficiency bonus by level, max HP from the hit
- * die rolls (each level at least 1), AC, save and skill bonuses, passive Perception, and the spell save
+ * die rolls (each level at least 1), AC, save and skill bonuses, passive Perception (as it stands: less
+ * exhaustion, as for any d20 test), and the spell save
  * DC, attack bonus and slots. HP is kept, but not above the new maximum.
  */
 export function rederive(sheet: CharacterSheet, data: Srd = bundledSrd()): CharacterSheet {
@@ -175,16 +177,16 @@ export function rederive(sheet: CharacterSheet, data: Srd = bundledSrd()): Chara
   const perLevel = abilityModifier(scores.con) + (sheet.traits.includes('dwarven-toughness') ? 1 : 0);
   const maxHp = sheet.hpRolls.reduce((sum, roll) => sum + Math.max(1, roll + perLevel), 0);
   const casting = sheet.spellcasting;
-  return {
+  return asItStands({
     ...sheet, proficiencyBonus: pb, maxHp, hp: Math.min(sheet.hp, maxHp), ...(expertise.length ? { expertise } : {}),
     armorClass: armorClass(sheet.classId, scores, sheet.otherProficiencies, sheet.equipment, data),
     saveBonuses: Object.fromEntries(ABILITIES.map((a) => [a, bonus(scores[a], sheet.savingThrows.includes(a))])) as CharacterSheet['saveBonuses'],
-    skillBonuses, passivePerception: 10 + skillBonuses.perception,
+    skillBonuses,
     spellcasting: casting && {
       ...casting, saveDc: 8 + bonus(scores[casting.ability], true), attackBonus: bonus(scores[casting.ability], true),
       ...slotsAt(data.spellcasting.get(sheet.classId)!, sheet.level, casting.expended),
     },
-  };
+  });
 }
 
 /** Builds a level-1 hero from the player's choices. Throws RuleViolation on a choice the rules forbid. */

@@ -63,6 +63,8 @@ test('rederive recomputes every number from level, scores and hit die rolls', ()
   assert.equal(s.saveBonuses.str, abilityModifier(scores.str), 'not proficient: no bonus');
   assert.equal(s.skillBonuses.medicine, abilityModifier(scores.wis) + 3);
   assert.equal(s.passivePerception, 10 + abilityModifier(scores.wis));
+  assert.equal(rederive({ ...s, exhaustion: 2 }, srd()).passivePerception, s.passivePerception - 4, 'exhaustion: -2 a level, as on any d20 test (5.2)');
+  assert.equal(rederive({ ...s, exhaustion: 2 }, srd()).speed, s.speed, 'the sheet\u2019s speed is the hero\u2019s own');
   assert.equal(s.armorClass, mira.armorClass + 1, 'DEX 14 in chain shirt (max +2) or scale mail');
   assert.deepEqual(s.spellcasting, { ...mira.spellcasting!, saveDc: 8 + 3 + abilityModifier(scores.wis), attackBonus: 3 + abilityModifier(scores.wis), slots: [4, 3, 2, 0, 0, 0, 0, 0, 0] });
 });

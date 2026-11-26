@@ -6,6 +6,7 @@ import { passiveScore } from '../rules/checks.ts';
 import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
 import { load } from '../rules/inventory.ts';
+import { speedNow } from '../rules/rests.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
 import { candidates, fightBand, rateEncounter, temperedBudget, toughnessFor, type FightBand, type Toughness } from '../rules/encounter.ts';
 import { resourcesOf } from '../rules/resources.ts';
@@ -56,6 +57,8 @@ export interface HeroView {
   /** Slain: stays dead until revived. */
   dead: boolean;
   passivePerception: number; passiveInsight: number;
+  /** Feet the hero moves now: the sheet's speed (its own) less 5 ft a level of exhaustion, 5 ft at most while dragging. */
+  speed: number;
   gp: number; inventory: { id: string; name: string; count: number }[];
   /** Pounds carried and the 5.2 carrying capacity; over it the hero is dragging (Speed 5 ft), up to dragLimit. */
   carried: number; capacity: number; dragLimit: number; dragging: boolean;
@@ -116,7 +119,7 @@ const heroView = (playerId: string, s: CharacterSheet, light: LightLevel): HeroV
   playerId, name: s.name, level: s.level, xp: s.xp, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass,
   exhaustion: s.exhaustion, hitDiceLeft: s.level - s.hitDiceSpent, slotsLeft: slotsLeft(s),
   resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
-  ...passives(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
+  ...passives(s), speed: movingAt(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
   ...load(s), sight: sightOf(s, light), darkvision: darkvision(s), resistances: heroResistances(s), conditions: conditionViews(s),
   concentratingOn: held(s),
 });
@@ -125,6 +128,9 @@ const held = (s: CharacterSheet) => {
   const id = s.spellcasting?.concentratingOn;
   return id ? srd().spells.get(id)!.name : null;
 };
+
+const DRAGGING_SPEED = 5;
+const movingAt = (s: CharacterSheet) => (load(s).dragging ? Math.min(DRAGGING_SPEED, speedNow(s)) : speedNow(s));
 
 const passives = (s: CharacterSheet) => ({
   passivePerception: passiveScore(s, { ability: 'wis', skill: 'perception' }), passiveInsight: passiveScore(s, { ability: 'wis', skill: 'insight' }),

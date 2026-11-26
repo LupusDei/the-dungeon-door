@@ -78,14 +78,14 @@ CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see ser
   version: 1
   name: string; level: number /* 1–20 */; xp: number
   classId: string; speciesId: string; backgroundId: string; subclassId: string | null
-  size: string; speed: number     // feet
+  size: string; speed: number     // feet: the hero's own, before exhaustion (rules.party[].speed is what it moves at)
   abilityScores: { str, dex, con, int, wis, cha: number }
   proficiencyBonus: number
   maxHp: number; hp: number; armorClass: number
   hitDiceSpent: number            // of one per level; all come back on a Long Rest
   exhaustion: number              // 0–6 (5.2: −2 per level to d20 tests, −5 ft speed per level; 6 = dead)
   savingThrows: string[]; saveBonuses: { str, dex, …: number }
-  skills: string[]; skillBonuses: { [skillId]: number }; passivePerception: number
+  skills: string[]; skillBonuses: { [skillId]: number }; passivePerception: number // as it stands: −2 per exhaustion level (and a revival's ordeal), the same as rules.party
   equipment: [{ id, name, count }]; gp: number
   traits: string[]; feat: string; feats: string[]; features: string[]
   resourcesUsed: { [resourceId]: number }     // Rage, Second Wind, … spent since their rest
@@ -221,6 +221,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
     down: boolean                     // at 0 HP
     dead: boolean                     // slain: stays dead after the adventure
     passivePerception: number; passiveInsight: number
+    speed: number                     // feet it moves now: sheet speed − 5 per exhaustion level (min 0), 5 at most while dragging
     gp: number                        // coins, as gold (can be fractional)
     inventory: [{ id: string; name: string; count: number }]
     carried: number; capacity: number; dragLimit: number   // pounds; over capacity the hero is dragging
