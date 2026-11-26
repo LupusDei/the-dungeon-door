@@ -4,8 +4,8 @@ import type { RulesContext, RulesResults } from './types.ts';
 import { RULES_INSTRUCTIONS, rulesBlock, resultsBlock } from './rulesPrompt.ts';
 
 const ctx: RulesContext = {
-  party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0] }],
+  party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false },
+    { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true }],
   combat: { round: 3, combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up' }, { name: 'Ogre', side: 'foes', hp: 0, maxHp: 68, status: 'dead' }] },
   dungeon: { kind: 'Lair', area: 'Grand chamber', purpose: 'Throne room', exits: [{ id: 'r2', connection: 'locked-door', leadsTo: 'Vault' }, { id: 'x1', connection: 'open-passage', leadsTo: null }] },
   monsters: ['ogre', 'goblin-warrior'],
@@ -16,15 +16,15 @@ const heroOnly = (slotsLeft: number[]) => rulesBlock({ ...ctx, party: [{ ...ctx.
 test('the rules block tells the DM the party’s numbers, the fight, the area and its exits, and the monsters to use', () => {
   assert.equal(rulesBlock(ctx), [
     'THE RULES ENGINE (SRD 5.2)',
-    '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1',
-    '- Cleo: level 2, DOWN (0/12 HP), AC 12, spell slots left 2/1',
+    '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, passive Perception 13, passive Insight 10, 4 gp; carries Chain Mail, Potion of Healing ×2',
+    '- Cleo: level 2, DOWN (0/12 HP), AC 12, spell slots left 2/1, passive Perception 11, passive Insight 12, 0.5 gp, overloaded (Speed 5 ft); carries nothing',
     'COMBAT, round 3: Bryn 7/20 HP; Ogre dead',
     'DUNGEON (Lair): the party is in Grand chamber (Throne room). Exits: r2 locked-door to Vault; x1 open-passage to unexplored',
     'Monsters for fights: ogre, goblin-warrior',
   ].join('\n'));
   assert.equal(rulesBlock({ ...ctx, combat: null, dungeon: { ...ctx.dungeon!, purpose: null, exits: [] } }).split('\n')[3],
     'DUNGEON (Lair): the party is in Grand chamber. Exits: none');
-  assert.equal(heroOnly([3, 0, 0, 0, 0, 0, 0, 0, 0]), '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, spell slots left 3');
+  assert.equal(heroOnly([3, 0, 0, 0, 0, 0, 0, 0, 0]), '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, spell slots left 3, passive Perception 13, passive Insight 10, 4 gp; carries Chain Mail, Potion of Healing ×2');
   assert.equal(rulesBlock(null), '');
 });
 

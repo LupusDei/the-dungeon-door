@@ -16,6 +16,11 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   "mode":"best" when one hero acts and the others can only help (picking a lock), "group" when everyone must
   (sneaking past together). Set "advantage" or "disadvantage" for circumstances. Against a creature, give
   "against": its monster id and leave "dc" null: the engine uses its passive score or the Influence DC.
+- Goods: {"kind":"buy","items":["potion-of-healing"]} (SRD item ids; each is bought by the richest hero who can
+  pay, at SRD prices), {"kind":"sell","items":["gemstone"]} (everyone sells all they hold of it: gear at half
+  price, gems and jewellery at full value), {"kind":"use","item":"potion-of-healing"} (the most hurt hero
+  drinks). Only offer buying and selling where there is someone to trade with. Treasure the party finds is
+  already in their packs.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
@@ -28,7 +33,9 @@ const slots = (left: number[]) => {
 
 function heroLine(h: RulesContext['party'][number]): string {
   const hp = h.hp === 0 ? `DOWN (0/${h.maxHp} HP)` : `${h.hp}/${h.maxHp} HP`;
-  return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}`;
+  const passive = `, passive Perception ${h.passivePerception}, passive Insight ${h.passiveInsight}`;
+  const goods = `, ${h.gp} gp${h.dragging ? ', overloaded (Speed 5 ft)' : ''}; carries ${h.items || 'nothing'}`;
+  return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}`;
 }
 
 function combatLine(c: NonNullable<RulesContext['combat']>): string {

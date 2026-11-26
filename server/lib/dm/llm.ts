@@ -12,7 +12,7 @@ import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Pa
 
 /** Flat, so every structured-output provider takes it; the engine checks it (play/hooks.ts parseHook). */
 const RulesHook = z.object({
-  kind: z.enum(['check', 'save', 'fight', 'rest', 'move']),
+  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use']),
   ability: z.enum(['str', 'dex', 'con', 'int', 'wis', 'cha']).nullable().describe('check or save'),
   skill: z.string().nullable().describe('check: an SRD skill id such as "athletics", or null'),
   tool: z.string().nullable().describe('check: a tool id such as "thieves-tools", or null'),
@@ -26,6 +26,8 @@ const RulesHook = z.object({
   monsters: z.array(z.string()).nullable().describe('fight: monster ids from the list you are given'),
   rest: z.enum(['short', 'long']).nullable().describe('rest'),
   exit: z.string().nullable().describe('move: an exit id from the dungeon block'),
+  items: z.array(z.string()).nullable().describe('buy or sell: SRD item ids, e.g. ["potion-of-healing"]'),
+  item: z.string().nullable().describe('use: a potion id, e.g. "potion-of-healing"'),
 });
 
 const Choice = z.object({
