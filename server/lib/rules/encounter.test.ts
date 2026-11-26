@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildEncounter, candidates, composeEncounter, foeCap, temperedBudget, worthwhile } from './encounter.ts';
+import { buildEncounter, candidates, capFight, composeEncounter, foeCap, temperedBudget, worthwhile } from './encounter.ts';
 import type { Monster } from './monsters.ts';
 import { scriptedRng } from './rng.ts';
 import { encounterBudget, monster } from './monsters.ts';
@@ -90,4 +90,19 @@ test('composing repeats the last kind on a 1 and draws again on a 2, while anyth
   const c = kind('c', 10);
   assert.deepEqual(composeEncounter(scriptedRng([3, 2, 1, 1, 1, 1, 1]), 100, [a, b, c]).monsters, ['c', 'a', 'c', 'c', 'c', 'c'], 'a third kind is never drawn: two kinds at most');
   assert.deepEqual(composeEncounter(scriptedRng([1, 1, 1]), 100, [c], 2).monsters, ['c', 'c'], 'no more than the cap');
+});
+
+test('a fight the DM proposes is held to a high encounter for the party: its monsters in order while they fit the budget and the foe cap', () => {
+  const budget = temperedBudget([1, 1, 1, 1], 'high');
+  assert.equal(budget, 200);
+  assert.deepEqual(capFight(['goblin-warrior', 'goblin-warrior', 'goblin-warrior', 'goblin-warrior'], [1, 1, 1, 1]), ['goblin-warrior', 'goblin-warrior'], 'two foes at most for four level-1 heroes');
+  assert.deepEqual(capFight(['goblin-warrior', 'bugbear-warrior', 'goblin-warrior'], [1, 1, 1, 1]), ['goblin-warrior', 'goblin-warrior'], 'a bugbear (200 XP) does not fit after a goblin; the next goblin does');
+  assert.deepEqual(capFight(['bugbear-warrior', 'goblin-warrior'], [1, 1, 1, 1]), ['bugbear-warrior']);
+  assert.deepEqual(capFight(['goblin-warrior', 'goblin-warrior', 'goblin-warrior'], [5, 5, 5, 5]), ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
+});
+
+test('a fight the DM proposes always keeps one foe: the least of them, when none fits', () => {
+  assert.deepEqual(capFight(['adult-red-dragon', 'ogre'], [1]), ['ogre']);
+  assert.deepEqual(capFight(['ogre'], [1, 1]), ['ogre']);
+  assert.deepEqual(capFight(['adult-red-dragon', 'ghast', 'ogre'], [1]), ['ghast'], 'the first, among equals');
 });

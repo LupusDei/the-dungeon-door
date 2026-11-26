@@ -3,7 +3,7 @@
  * levels 1 and 2, where the 5.2 table is swingy, the budget is halved and the foes are few; an encounter
  * is at most two kinds of monster. See docs/rules-design.md (Phase 5).
  */
-import { type Difficulty, encounterBudget, type Monster, monsters } from './monsters.ts';
+import { type Difficulty, encounterBudget, type Monster, monster, monsters } from './monsters.ts';
 import { type Rng, pick } from './rng.ts';
 import { require } from './violation.ts';
 
@@ -66,4 +66,19 @@ export function composeEncounter(rng: Rng, budget: number, kinds: readonly Monst
     left -= next.xp;
   }
   return { budget, xp: budget - left, monsters: chosen.map((m) => m.id) };
+}
+
+/**
+ * The DM's proposed foes held to a high encounter for these levels: each in order while it fits what is
+ * left of the budget, up to the foe cap. One always stays: the least of them, when none fits.
+ */
+export function capFight(ids: readonly string[], levels: readonly number[]): string[] {
+  const cap = foeCap(levels.length, top(levels));
+  let left = temperedBudget(levels, 'high');
+  const kept: string[] = [];
+  for (const id of ids) {
+    const xp = monster(id).xp;
+    if (kept.length < cap && xp <= left) { kept.push(id); left -= xp; }
+  }
+  return kept.length > 0 ? kept : [ids.reduce((a, b) => (monster(b).xp < monster(a).xp ? b : a))];
 }

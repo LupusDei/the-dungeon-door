@@ -4,13 +4,12 @@
  */
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { HazardSpec } from '../rules/hazards.ts';
-import { atLevel } from '../rules/depth.ts';
-import { habitat, kindIdOf } from '../rules/habitats.ts';
+import { capFight } from '../rules/encounter.ts';
 import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
 import { groupRoll } from './checks.ts';
-import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, partyLevel, waitingFoes, withAttitude } from './delve.ts';
+import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
 import { provisions } from './provisions.ts';
 import { afterHarm } from './dying.ts';
@@ -47,14 +46,9 @@ function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): 
 }
 
 const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
-const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.level);
-/** In a dungeon, the heroes standing counted at its level (what a band or a trap is scaled to); outside one, the heroes' own levels. */
-function foesFor(s: RulesState): number[] {
-  if (!s.dungeon) return levelsOf(s);
-  return atLevel(Object.values(s.party.sheets).filter((h) => !h.dead).length, dungeonLevel(s.dungeon));
-}
-/** The monsters that live in the party's dungeon (none outside one: any may come). */
-const poolOf = (s: RulesState) => (s.dungeon ? habitat(kindIdOf(s.dungeon.map.kind)) : undefined);
+/** The levels a band, a trap or a proposed fight is scaled to (play/delve.ts foeLevels). */
+const foesFor = (s: RulesState) => foeLevels(s.party, s.dungeon);
+const poolOf = (s: RulesState) => habitatOf(s.dungeon);
 
 function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const rng = seededRng(s.party.rng);
@@ -214,7 +208,7 @@ const traded = (s: RulesState, t: Pick<Traded, 'party' | 'lines'>) => done({ ...
 const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook, { kind: K }>, ballots: readonly Ballot[]) => RulesTurn } = {
   check: (s, hook, ballots) => roll(s, hook, ballots),
   save: (s, hook, ballots) => roll(s, hook, ballots),
-  fight: (s, hook) => fight(s, hook.monsters),
+  fight: (s, hook) => fight(s, capFight(hook.monsters, foesFor(s))),
   rest: (s, hook) => rest(s, hook.rest),
   move: (s, hook, ballots) => move(s, hook.exit, ballots),
   buy: (s, hook) => traded(s, buyItems(s.party, hook.items)),

@@ -368,3 +368,12 @@ test('going deeper is told: the line after the party enters names the new level'
   assert.ok(found);
   assert.equal(found.lines[1], 'The way leads deeper: dungeon level 2.');
 });
+
+test('a fight the DM proposes is held to a high encounter at the dungeon level (outside one, at the heroes’ levels)', () => {
+  const foes = (t: RulesTurn) => Object.values(t.combat!.combatants).filter((c) => c.side === 'foes').length;
+  const goblins = { kind: 'fight' as const, monsters: Array(5).fill('goblin-warrior') };
+  assert.equal(foes(playTurn(state(), goblins, ballots(5, 5))), 1, 'two level-1 heroes meet one foe');
+  const d = startDungeon('explore', 3, [1, 1], 4);
+  assert.equal(foes(playTurn(state({ dungeon: d }), goblins, ballots(5, 5))), 1);
+  assert.equal(foes(playTurn(state({ dungeon: { ...d, level: 5 } }), goblins, ballots(5, 5))), 4, 'at dungeon level 5, twice the party');
+});

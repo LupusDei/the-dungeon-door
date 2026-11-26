@@ -3,11 +3,12 @@
  * it is opened). Entering a room that isn't cleared springs what is there: its monsters are met (a fight if
  * they are Hostile, play/parley.ts), its trap or hazard goes off (play/traps.ts), its treasure is loot.
  */
-import { deeper } from '../rules/depth.ts';
+import { atLevel, deeper } from '../rules/depth.ts';
 import type { DungeonNode, Exit, Treasure } from '../rules/dungeon.ts';
 import { generateDungeon, restock } from '../rules/dungeon.ts';
 import type { MapSize } from '../rules/dungeonTables.ts';
 import { areaBeyond, expand, isDoor, startExplore } from '../rules/explore.ts';
+import { habitat, kindIdOf } from '../rules/habitats.ts';
 import { derivedRng } from '../rules/rng.ts';
 import type { Attitude } from './parley.ts';
 import type { DungeonState, PartyState } from './state.ts';
@@ -23,6 +24,16 @@ export function startDungeon(mode: 'fixed' | 'explore', seed: number, levels: nu
 
 /** The dungeon level the party has reached: absent, the level its map starts at (1 on a map from before levels). */
 export const dungeonLevel = (dungeon: DungeonState): number => dungeon.level ?? dungeon.map.level ?? 1;
+
+/** In a dungeon, the heroes standing counted at its level (what a band, a trap or a fight is scaled to); outside one, the heroes' own levels. */
+export function foeLevels(party: PartyState, dungeon: DungeonState | null): number[] {
+  const sheets = Object.values(party.sheets);
+  if (!dungeon) return sheets.map((h) => h.level);
+  return atLevel(sheets.filter((h) => !h.dead).length, dungeonLevel(dungeon));
+}
+
+/** The monsters that live in the party's dungeon (none outside one: any may come). */
+export const habitatOf = (dungeon: DungeonState | null) => (dungeon ? habitat(kindIdOf(dungeon.map.kind)) : undefined);
 
 /** The level beyond this exit: through a door into an area not yet seen (a fixed map's corridor aside), a seeded chance of a level deeper. */
 function levelBeyond(dungeon: DungeonState, via: Exit, to: string): number {

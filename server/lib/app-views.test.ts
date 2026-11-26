@@ -233,7 +233,7 @@ test('in a rules game each player’s character is the hero as it stands in the 
 });
 
 test('a combat round is written for each player: what their own hero will do', async () => {
-  const { code, players } = await intoFight(['fighter', 'wizard'], ['goblin-warrior', 'goblin-warrior']);
+  const { code, players } = await intoFight(['fighter', 'wizard', 'fighter', 'fighter'], ['goblin-warrior', 'goblin-warrior']); // four heroes, so the DM's two goblins both come
   const game = (await getStore().getGame(code))!;
   await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: { ...game.party!.sheets, [players[1]]: withSpells(game.party!.sheets[players[1]], ['fire-bolt'], ['burning-hands']) } } });
   const [fighter, wizard] = await Promise.all(players.map((p) => view(code, p)));

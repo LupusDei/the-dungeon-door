@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { heroSheet } from '../characters.ts';
 import { load } from '../rules/inventory.ts';
+import { candidates, temperedBudget } from '../rules/encounter.ts';
+import { habitat, kindIdOf } from '../rules/habitats.ts';
 import { encounterBudget, monsters } from '../rules/monsters.ts';
 import { startDungeon, enter } from './delve.ts';
 import { startFight } from './fight.ts';
@@ -64,7 +66,9 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
     exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: d.map.nodes.r1.name }, { id: 'r4', connection: 'unlocked-door', leadsTo: `${d.map.nodes.r4.name}, by a winding passage` }],
     waiting: null,
   });
-  assert.deepEqual(ctx.monsters, suitableMonsters([1, 1]));
+  assert.deepEqual(ctx.monsters, suitableMonsters([1, 1], habitat(kindIdOf(d.map.kind))), 'the dungeon’s own monsters');
+  assert.deepEqual(rulesContext({ party, combat: null, dungeon: { ...d, level: 5 } }).monsters, suitableMonsters([5, 5], habitat(kindIdOf(d.map.kind))), 'at its level');
+  assert.deepEqual(rulesContext({ party, combat: null, dungeon: null }).monsters, suitableMonsters([1, 1]));
   assert.deepEqual([rulesContext({ party, combat: null, dungeon: null }).combat, rulesContext({ party, combat: null, dungeon: null }).dungeon], [null, null]);
 });
 
@@ -83,16 +87,19 @@ test('an exit not yet explored leads to the unknown', () => {
   assert.ok(rulesContext({ party, combat: null, dungeon: d }).dungeon!.exits.every((x) => x.leadsTo === null));
 });
 
-test('monsters to suggest: those a moderate fight for this party could afford, toughest first, at most 40', () => {
+test('monsters to suggest: those the engine fights that a moderate fight for this party could afford, toughest first, at most 40', () => {
   const ids = suitableMonsters([3, 3, 3]);
-  const budget = encounterBudget([3, 3, 3], 'moderate');
+  const budget = temperedBudget([3, 3, 3], 'moderate');
+  const fightable = candidates([3, 3, 3], undefined);
   assert.equal(ids.length, 40);
-  assert.ok(ids.every((id) => monsters().get(id)!.xp <= budget));
+  assert.ok(ids.every((id) => fightable.some((m) => m.id === id) && monsters().get(id)!.xp <= budget));
   const xps = ids.map((id) => monsters().get(id)!.xp);
   assert.deepEqual(xps, [...xps].sort((a, b) => b - a));
-  assert.equal(xps[0], Math.max(...[...monsters().values()].map((m) => m.xp).filter((x) => x <= budget)));
+  assert.equal(xps[0], Math.max(...fightable.map((m) => m.xp).filter((x) => x <= budget)));
   assert.equal(encounterBudget([3, 3], 'moderate'), 450);
   assert.equal(monsters().get(suitableMonsters([3, 3])[0])!.xp, 450, 'a monster worth the whole budget is in');
+  assert.ok(suitableMonsters([1, 1, 1, 1]).every((id) => monsters().get(id)!.xp <= 150), 'level 1: half the 5.2 budget');
+  assert.deepEqual(suitableMonsters([2, 2], ['goblin-warrior', 'ogre']), ['goblin-warrior'], 'from the dungeon’s own (an ogre is too much)');
 });
 
 test('conditions show with how they end, in the API and to the DM', () => {

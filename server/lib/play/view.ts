@@ -7,11 +7,11 @@ import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
 import { load } from '../rules/inventory.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
-import { encounterBudget, monsters } from '../rules/monsters.ts';
+import { candidates, temperedBudget } from '../rules/encounter.ts';
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
-import { dungeonLevel, waitingFoes } from './delve.ts';
+import { dungeonLevel, foeLevels, habitatOf, waitingFoes } from './delve.ts';
 import { foesNamed } from './hooks.ts';
 import type { Attitude } from './parley.ts';
 import type { DungeonState } from './state.ts';
@@ -153,10 +153,10 @@ export interface RulesContext {
 
 const MONSTER_PICKS = 40;
 
-/** Monsters a moderate fight for this party could afford, toughest first. */
-export function suitableMonsters(levels: readonly number[]): string[] {
-  const budget = encounterBudget(levels, 'moderate');
-  return [...monsters().values()]
+/** Monsters the engine fights (from `pool`, if given) that a moderate fight for this party could afford, toughest first. */
+export function suitableMonsters(levels: readonly number[], pool?: readonly string[]): string[] {
+  const budget = temperedBudget(levels, 'moderate');
+  return candidates(levels, pool)
     .filter((m) => m.xp <= budget)
     .sort((a, b) => b.xp - a.xp)
     .slice(0, MONSTER_PICKS)
@@ -199,6 +199,6 @@ export function rulesContext(state: RulesState): RulesContext {
       exits: here.exits.map((x) => ({ id: x.id, connection: x.connection, leadsTo: x.to === null ? null : leadsTo(dungeon, x.id, x.to) })),
       waiting: waiting(dungeon),
     },
-    monsters: suitableMonsters(sheets.map((s) => s.level)),
+    monsters: suitableMonsters(foeLevels(party, dungeon), habitatOf(dungeon)),
   };
 }
