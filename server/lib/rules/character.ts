@@ -100,9 +100,9 @@ export function armorClass(classId: string, scores: AbilityScores, proficiencies
   return Math.max(bare, ...bodies);
 }
 
-interface SpellPick { count: number; noun: string; list: string; onList: (id: string) => boolean }
+export interface SpellPick { count: number; noun: string; list: string; onList: (id: string) => boolean }
 
-function requireSpells(chosen: readonly string[], pick: SpellPick): string[] {
+export function requireSpells(chosen: readonly string[], pick: SpellPick): string[] {
   require(chosen.length === pick.count, `choose ${pick.count} ${pick.noun}`);
   requireDistinct(chosen);
   for (const id of chosen) require(pick.onList(id), `${id} is not a ${pick.list}`);
@@ -141,7 +141,7 @@ function slotsAt(casting: SrdSpellcasting, level: number, expended: readonly num
   const slots = [...casting.byLevel[level - 1].slots];
   if (casting.casterType !== 'pact') return { slots, expended: expended.map((n, i) => Math.min(n, slots[i])) };
   const spent = expended.reduce((sum, n) => sum + n, 0);
-  return { slots, expended: slots.map((n) => Math.min(n, n > 0 ? spent : 0)) };
+  return { slots, expended: slots.map((n) => Math.min(n, spent)) };
 }
 
 /**

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { ABILITIES, type Ability } from './abilities.ts';
 import { buildCharacter, type CharacterChoices } from './character.ts';
 import { awardXp, canLevelUp, encounterXp, type LevelUpChoices, levelForXp, levelUp, splitXp } from './leveling.ts';
+import { climb } from './leveling.fixture.ts';
 import { scriptedRng, seededRng } from './rng.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { srd } from './srd.ts';
@@ -27,21 +28,6 @@ const bryn = () => buildCharacter(BRYN, seededRng(1));
 const milestone = { advancement: 'milestone' as const };
 const avg: LevelUpChoices = { hp: 'average' };
 const violation = (message: RegExp) => (e: unknown) => e instanceof RuleViolation && message.test(e.message);
-
-/** Level a hero up to `level` by milestones, taking the class's first subclass and +1 to its two lowest scores. */
-function climb(sheet: CharacterSheet, level: number): CharacterSheet {
-  while (sheet.level < level) {
-    const next = srd().classes.get(sheet.classId)!.levels[sheet.level];
-    const choices: LevelUpChoices = { hp: 'average' };
-    if (sheet.level + 1 === srd().classes.get(sheet.classId)!.subclassLevel) choices.subclassId = srd().classes.get(sheet.classId)!.subclasses[0];
-    if (next.features.some((f) => f.id.endsWith('-ability-score-improvement') || f.id.endsWith('-epic-boon'))) {
-      const [a, b] = [...ABILITIES].sort((x, y) => sheet.abilityScores[x] - sheet.abilityScores[y]);
-      choices.improvement = { kind: 'abilityScores', increases: { [a]: 1, [b]: 1 } };
-    }
-    sheet = levelUp(sheet, choices, seededRng(sheet.level), milestone);
-  }
-  return sheet;
-}
 
 test('the level for an XP total follows the SRD thresholds, up to 20', () => {
   assert.deepEqual([0, 299, 300, 899, 900, 6500, 354999, 355000, 10 ** 9].map((xp) => levelForXp(xp)), [1, 1, 2, 2, 3, 5, 19, 20, 20]);
