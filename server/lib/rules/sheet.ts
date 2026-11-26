@@ -45,6 +45,10 @@ export const CharacterSheetSchema = z.object({
   /** Armor, weapon and tool proficiencies by SRD id. */
   otherProficiencies: z.array(z.string()),
   saveBonuses: perAbility(int),
+  /** Skills with Expertise (twice the proficiency bonus); filled in by rederive as features grant it. */
+  expertise: z.array(z.string()).optional(),
+  /** The hero died (three failed death saves, massive damage or exhaustion 6) and stays dead until revived. */
+  dead: z.boolean().optional(),
   /** Every skill's check bonus, proficient or not. */
   skillBonuses: z.record(z.string(), int),
   passivePerception: int,

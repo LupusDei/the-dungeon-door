@@ -144,6 +144,22 @@ function slotsAt(casting: SrdSpellcasting, level: number, expended: readonly num
   return { slots, expended: slots.map((n) => Math.min(n, spent)) };
 }
 
+/** Expertise each feature grants (SRD 5.2): Rogue 1 and 6, Bard 2 and 9, Ranger 9 give two skills; Deft Explorer one. */
+const EXPERTISE_GRANTS: Readonly<Record<string, number>> = { Expertise: 2, 'Deft Explorer': 1 };
+
+/**
+ * The hero's Expertise: the skills already chosen, then (for grants not yet used) its proficient skills
+ * with the best bonus, so a quick-built hero gets the obvious picks.
+ */
+export function expertiseOf(sheet: CharacterSheet, scores: AbilityScores, data: Srd): string[] {
+  const slots = sheet.features.reduce((n, f) => n + (EXPERTISE_GRANTS[f] ?? 0), 0);
+  const { expertise: chosen = [] } = sheet;
+  const open = sheet.skills
+    .filter((s) => !chosen.includes(s))
+    .sort((a, b) => scores[data.skills.get(b)!] - scores[data.skills.get(a)!] || a.localeCompare(b));
+  return [...chosen, ...open].slice(0, Math.max(slots, chosen.length));
+}
+
 /**
  * Every number that follows from the rest of the sheet: proficiency bonus by level, max HP from the hit
  * die rolls (each level at least 1), AC, save and skill bonuses, passive Perception, and the spell save
@@ -153,12 +169,14 @@ export function rederive(sheet: CharacterSheet, data: Srd = bundledSrd()): Chara
   const pb = data.advancement[sheet.level - 1].proficiencyBonus;
   const scores = sheet.abilityScores;
   const bonus = (score: number, proficient: boolean) => abilityModifier(score) + (proficient ? pb : 0);
-  const skillBonuses = Object.fromEntries([...data.skills].map(([skill, ability]) => [skill, bonus(scores[ability], sheet.skills.includes(skill))]));
+  const expertise = expertiseOf(sheet, scores, data);
+  const skillBonuses = Object.fromEntries([...data.skills].map(([skill, ability]) =>
+    [skill, bonus(scores[ability], sheet.skills.includes(skill)) + (expertise.includes(skill) ? pb : 0)]));
   const perLevel = abilityModifier(scores.con) + (sheet.traits.includes('dwarven-toughness') ? 1 : 0);
   const maxHp = sheet.hpRolls.reduce((sum, roll) => sum + Math.max(1, roll + perLevel), 0);
   const casting = sheet.spellcasting;
   return {
-    ...sheet, proficiencyBonus: pb, maxHp, hp: Math.min(sheet.hp, maxHp),
+    ...sheet, proficiencyBonus: pb, maxHp, hp: Math.min(sheet.hp, maxHp), ...(expertise.length ? { expertise } : {}),
     armorClass: armorClass(sheet.classId, scores, sheet.otherProficiencies, sheet.equipment, data),
     saveBonuses: Object.fromEntries(ABILITIES.map((a) => [a, bonus(scores[a], sheet.savingThrows.includes(a))])) as CharacterSheet['saveBonuses'],
     skillBonuses, passivePerception: 10 + skillBonuses.perception,
