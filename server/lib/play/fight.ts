@@ -6,7 +6,7 @@
  */
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
-import { type Combatant, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
+import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
 import { conditionsOf } from '../rules/conditions.ts';
 import { type LightLevel, monsterSight, sightOf } from '../rules/light.ts';
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
@@ -98,8 +98,10 @@ export function bestSpell(sheet: CharacterSheet): SrdSpell | null {
 /** The attack with the best bonus to hit. */
 export const bestWeapon = (me: Combatant) => me.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best));
 
-function attackAction(combat: CombatState, me: Combatant, natural: number): Action {
-  return { kind: 'attack', attack: bestWeapon(me).name, target: mostWounded(combat, me.side).id, natural };
+function attackAction(combat: CombatState, me: Combatant, sheet: CharacterSheet, natural: number): Action {
+  const attack = bestWeapon(me).name;
+  const extra = extraAttacks(sheet);
+  return { kind: 'attack', attack, target: mostWounded(combat, me.side).id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
 }
 
 /** What a hero does on its turn for its vote. A spell spends its slot on the returned sheet. */
@@ -107,7 +109,7 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
   const me = combat.combatants[playerId];
   if (choiceId === 'c') return { action: { kind: 'dodge' }, sheet };
   const spell = choiceId === 'b' ? bestSpell(sheet) : null;
-  if (!spell) return { action: attackAction(combat, me, natural), sheet };
+  if (!spell) return { action: attackAction(combat, me, sheet, natural), sheet };
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
   const { saveDc, attackBonus } = sheet.spellcasting!;
   const caster = { saveDc, attackBonus, modifier: attackBonus - sheet.proficiencyBonus };

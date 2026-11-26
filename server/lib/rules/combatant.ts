@@ -37,6 +37,8 @@ export interface Combatant {
   status: Status;
   /** What defeating it is worth (monsters); 0 for heroes. */
   xp: number;
+  /** A monster's Multiattack: the attacks it makes in a turn, by name. */
+  multiattack?: string[];
   /** Undead, constructs and oozes: they never break (no morale check). Monsters only. */
   fearless?: true;
 }
@@ -71,6 +73,11 @@ function unarmedStrike(sheet: CharacterSheet): Attack {
 /** The combat-only fields every combatant starts with. */
 const fresh = (): Pick<Combatant, 'conditions' | 'deathSaves' | 'status'> => ({ conditions: [], deathSaves: { successes: 0, failures: 0 }, status: 'up' });
 
+const EXTRA_ATTACKS: readonly [string, number][] = [['Three Extra Attacks', 3], ['Two Extra Attacks', 2], ['Extra Attack', 1]];
+
+/** The attacks a hero adds when it takes the Attack action (5.2 Extra Attack; the Fighter's two and three). */
+export const extraAttacks = (sheet: CharacterSheet): number => EXTRA_ATTACKS.find(([name]) => sheet.features.includes(name))?.[1] ?? 0;
+
 export function heroCombatant(id: string, sheet: CharacterSheet, data: Srd = bundledSrd()): Combatant {
   const weapons = sheet.equipment.map((i) => data.weapons.get(i.id)).filter((w) => w !== undefined);
   const attacks = weapons.map((w) => weaponAttack(w, sheet));
@@ -91,5 +98,6 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     initiative: abilityModifier(m.abilities.dex), saveBonuses: { ...m.saveBonuses }, attacks: m.attacks,
     resistances: m.resistances, vulnerabilities: m.vulnerabilities, immunities: m.immunities, conditionImmunities: m.conditionImmunities,
     ...fresh(), xp: m.xp, ...(FEARLESS.test(m.type) ? { fearless: true as const } : {}),
+    ...(m.multiattack.length ? { multiattack: m.multiattack } : {}),
   };
 }

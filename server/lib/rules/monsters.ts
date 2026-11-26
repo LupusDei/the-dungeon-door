@@ -32,12 +32,17 @@ export interface Monster {
   senses: { darkvision: number; blindsight: number; truesight: number };
   /** Attack-roll actions only; save-based actions (breath weapons) are left to the DM for now. */
   attacks: MonsterAttack[];
+  /** The attacks its Multiattack makes in a turn, by name (two or more); [] without one. */
+  multiattack: string[];
 }
 
 const ref = z.object({ index: z.string() });
 const damageTypes = z.array(z.string()).transform((ts) => ts.filter((t) => DAMAGE_TYPES.includes(t)));
+/** A count, or "Number of Heads": the hydra starts with five (heads it grows and loses are not tracked). */
+const headsOr = (count: string) => (/^\d+$/.test(count) ? Number(count) : 5);
 const action = z.object({
   name: z.string(), desc: z.string(), attackBonus: z.number().optional(),
+  actions: z.array(z.object({ actionName: z.string(), count: z.string().transform(headsOr) })).optional(),
   damage: z.array(z.object({ damageDice: z.string(), damageType: ref })).optional(),
 });
 
@@ -59,6 +64,28 @@ function damageRolls(rolls: { damageDice: string; damageType: { index: string } 
   });
 }
 
+const COUNTS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5 };
+const MAKES = /makes (two|three|four|five) /;
+
+/** The attacks a Multiattack lists, each as many times as listed; what is not an attack roll is left out. */
+const listedAttacks = (multi: z.infer<typeof action>, attacks: readonly MonsterAttack[]): string[] =>
+  (multi.actions ?? []).filter((r) => attacks.some((a) => a.name === r.actionName)).flatMap((r) => Array<string>(r.count).fill(r.actionName));
+
+/**
+ * The attack rolls of a Multiattack, by name: the listed attacks, each as many times as listed (what is not an
+ * attack roll is left out), made up to the number the text says ("makes three Rend attacks") with the first
+ * listed one, or with its usual attack when none is listed ("makes three attacks, using A or B").
+ */
+function multiattackOf(actions: readonly z.infer<typeof action>[], attacks: readonly MonsterAttack[]): string[] {
+  const multi = actions.find((a) => a.name === 'Multiattack');
+  if (!multi || attacks.length === 0) return [];
+  const listed = listedAttacks(multi, attacks);
+  const filler = listed[0] ?? (attacks.find((a) => !a.ranged) ?? attacks[0]).name;
+  const stated = COUNTS[MAKES.exec(multi.desc)?.[1] ?? ''] ?? 0;
+  const named = [...listed, ...Array<string>(Math.max(0, stated - listed.length)).fill(filler)];
+  return named.length > 1 ? named : [];
+}
+
 const SKILL = 'skill-';
 /** "60 ft." → 60; absent → 0. */
 const feet = (text: string | undefined) => (text ? parseInt(text, 10) : 0);
@@ -76,6 +103,10 @@ const monsterSchema = z.object({
 }).transform((m): Monster => {
   const abilities = { str: m.strength, dex: m.dexterity, con: m.constitution, int: m.intelligence, wis: m.wisdom, cha: m.charisma };
   const listed = new Map(m.proficiencies.map((p) => [p.proficiency.index, p.value]));
+  const attacks = m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
+    name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
+    damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
+  }));
   return {
     id: m.index, name: m.name, size: m.size, type: m.type,
     ac: m.armorClass[0].value, hp: m.hitPoints, hitDice: m.hitDice, speed: parseInt(m.speed.walk, 10),
@@ -87,10 +118,7 @@ const monsterSchema = z.object({
     skills: Object.fromEntries([...listed].filter(([id]) => id.startsWith(SKILL)).map(([id, value]) => [id.slice(SKILL.length), value])),
     passivePerception: m.senses.passivePerception,
     senses: { darkvision: feet(m.senses.darkvision), blindsight: feet(m.senses.blindsight), truesight: feet(m.senses.truesight) },
-    attacks: m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
-      name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
-      damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
-    })),
+    attacks, multiattack: multiattackOf(m.actions, attacks),
   };
 });
 

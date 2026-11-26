@@ -303,3 +303,11 @@ test('a concentrating hero who is hurt saves to keep it; when the fight ends, so
   assert.equal(won.ended, 'victory');
   assert.equal(won.party.sheets.p2.spellcasting!.concentratingOn, null);
 });
+
+test('Attack with Extra Attack: the best weapon again for each extra attack; without it, one', () => {
+  const { combat } = startFight(party(), ['goblin-warrior']);
+  const veteran = { ...fighter, features: [...fighter.features, 'Extra Attack'] };
+  const best = [...combat.combatants.p1.attacks].sort((x, y) => y.bonus - x.bonus)[0].name;
+  assert.deepEqual(heroAction(combat, veteran, 'p1', 'a', 12).action, { kind: 'attack', attack: best, target: 'foe-1', natural: 12, then: [best] });
+  assert.equal('then' in heroAction(combat, fighter, 'p1', 'a', 12).action, false);
+});

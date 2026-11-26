@@ -11,7 +11,8 @@ import type { Cast } from './spells.ts';
 import { lookup, require } from './violation.ts';
 
 export type Action =
-  | { kind: 'attack'; attack: string; target: string; natural?: number; cover?: Cover; advantage?: boolean; disadvantage?: boolean }
+  /** `then`: the turn's further attacks (Multiattack, Extra Attack), each at the most wounded foe still up. */
+  | { kind: 'attack'; attack: string; target: string; natural?: number; cover?: Cover; advantage?: boolean; disadvantage?: boolean; then?: string[] }
   | { kind: 'dodge' }
   /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
   | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number };
@@ -106,12 +107,26 @@ export function choicesFor(state: CombatState, id: string): Choice[] {
   return [...attacks, { label: 'Dodge', action: { kind: 'dodge' } }];
 }
 
-function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'attack' }>, rng: Rng): CombatState {
-  const target = lookup(new Map(Object.entries(state.combatants)), action.target, 'combatant');
-  require(target.side !== actor.side, `${actor.name} will not attack an ally`);
+function strike(state: CombatState, actor: Combatant, target: Combatant, action: Extract<Action, { kind: 'attack' }>, rng: Rng): CombatState {
   const disadvantage = action.disadvantage || state.dodging.includes(target.id);
   const { result, target: hurt } = attackRoll(rng, actor, action.attack, target, { ...action, disadvantage });
   return withEvent(state, { kind: 'attack', round: state.round, actor: actor.id, result }, hurt);
+}
+
+/** The living, up combatants against `side`. */
+const upAgainst = (state: CombatState, side: Combatant['side']) => Object.values(state.combatants).filter((c) => c.side !== side && c.status === 'up');
+const fewestHp = (cs: Combatant[]) => cs.reduce((low, c) => (c.hp < low.hp ? c : low));
+
+/** One more attack this turn, at the most wounded foe still up; none left, no attack. */
+function followUp(state: CombatState, actorId: string, attack: string, rng: Rng): CombatState {
+  const targets = upAgainst(state, state.combatants[actorId].side);
+  return targets.length ? strike(state, state.combatants[actorId], fewestHp(targets), { kind: 'attack', attack, target: '' }, rng) : state;
+}
+
+function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'attack' }>, rng: Rng): CombatState {
+  const target = lookup(new Map(Object.entries(state.combatants)), action.target, 'combatant');
+  require(target.side !== actor.side, `${actor.name} will not attack an ally`);
+  return (action.then ?? []).reduce((s, attack) => followUp(s, actor.id, attack, rng), strike(state, actor, target, action, rng));
 }
 
 function resolveCast(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'spell' }>, rng: Rng): CombatState {
@@ -157,14 +172,13 @@ export function drinkPotion(state: CombatState, item: string, dice: string): Com
   return { ...withEvent(state, event, healed), rng: rng.state() };
 }
 
-/** A monster's turn: its first melee attack (or first attack) on the up hero with the fewest HP. Null on a hero's turn. */
+/** A monster's turn: its Multiattack, or its first melee attack (or first attack), on the up hero with the fewest HP. Null on a hero's turn. */
 export function monsterAction(state: CombatState): Action | null {
   const me = state.combatants[currentActor(state)];
   if (me.side === 'party') return null;
-  const targets = Object.values(state.combatants).filter((c) => c.side === 'party' && c.status === 'up');
-  const target = targets.reduce((low, c) => (c.hp < low.hp ? c : low));
-  const attack = me.attacks.find((a) => !a.ranged) ?? me.attacks[0];
-  return { kind: 'attack', attack: attack.name, target: target.id };
+  const target = fewestHp(upAgainst(state, me.side));
+  const [first, ...then] = me.multiattack ?? [(me.attacks.find((a) => !a.ranged) ?? me.attacks[0]).name];
+  return { kind: 'attack', attack: first, target: target.id, ...(then.length ? { then } : {}) };
 }
 
 /** Plays turns until the round ends or the combat does: heroes by `votes` (Dodge without one), monsters by rule. */

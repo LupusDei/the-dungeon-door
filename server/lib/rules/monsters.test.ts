@@ -71,3 +71,17 @@ test('special senses in feet: darkvision, blindsight, truesight (0 without)', ()
   assert.deepEqual(monster('bandit').senses, { darkvision: 0, blindsight: 0, truesight: 0 });
   assert.equal(Object.values(Object.fromEntries([...monsters()].map(([id, m]) => [id, m.senses.truesight]))).some((n) => n > 0), true);
 });
+
+test('Multiattack: the attacks it makes on its turn, by name; options mean that many of its usual attack; none, or one, is no Multiattack', () => {
+  assert.deepEqual(monster('owlbear').multiattack, ['Rend', 'Rend']);
+  assert.deepEqual(monster('ghoul').multiattack, ['Bite', 'Bite']);
+  assert.deepEqual(monster('chuul').multiattack, ['Pincer', 'Pincer'], 'what is not an attack roll is left out');
+  assert.deepEqual(monster('assassin').multiattack, ['Shortsword', 'Shortsword', 'Shortsword']);
+  assert.deepEqual(monster('bugbear-stalker').multiattack, ['Javelin', 'Javelin'], 'the first melee attack');
+  assert.deepEqual(monster('hydra').multiattack, Array(5).fill('Bite'), 'as many as its five heads');
+  assert.deepEqual(monster('young-brass-dragon').multiattack, ['Rend', 'Rend', 'Rend'], 'the text says three, the table lists one');
+  assert.deepEqual(monster('behir').multiattack, [], 'one Bite and a Constrict (no attack roll): no Multiattack');
+  assert.deepEqual(monster('goblin-warrior').multiattack, []);
+  assert.deepEqual(monster('barbed-devil').multiattack, ['Claws', 'Claws'], 'one Claws and one Tail, or two Hurl Flame: two of its usual attack');
+  assert.deepEqual(monster('dryad').multiattack, [], 'one attack and a spell is no Multiattack');
+});

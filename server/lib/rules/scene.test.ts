@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { type Combatant, heroCombatant, monsterCombatant } from './combatant.ts';
+import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from './combatant.ts';
 import { monster } from './monsters.ts';
 import { act, choicesFor, currentActor, drinkPotion, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
 import { SAMPLE } from './sheet.fixture.ts';
@@ -170,4 +170,26 @@ test('a potion drunk as a Bonus Action heals the one whose turn it is, and the t
   assert.deepEqual(after.log.at(-1), { kind: 'potion', round: s.round, actor: me, item: 'potion-of-healing', healed: after.combatants[me].hp - 1 });
   assert.deepEqual([currentActor(after), after.turn], [me, s.turn], 'still their turn');
   assert.notEqual(drinkPotion(hurt, 'potion-of-healing', '2d4+2').rng, s.rng, 'the dice move on');
+});
+
+test('Multiattack: a monster makes all its attacks in its turn, each further one at the most wounded hero still up', () => {
+  const bear = (o: Partial<Combatant> = {}): Combatant => ({ ...monsterCombatant('ob', monster('owlbear')), ...o });
+  const s = startCombat(3, [hero('bryn', { hp: 9 }), hero('ash', { hp: 4 }), bear()]);
+  const turn = { ...s, turn: s.order.indexOf('ob') };
+  assert.deepEqual(monsterAction(turn), { kind: 'attack', attack: 'Rend', target: 'ash', then: ['Rend'] });
+  const killer = [{ name: 'Rend', bonus: 30, ranged: false, damage: [{ dice: '200', type: 'slashing' }] }];
+  const done = act({ ...turn, combatants: { ...turn.combatants, ob: { ...turn.combatants.ob, attacks: killer } } }, monsterAction(turn)!);
+  const strikes = done.log.filter((e) => e.kind === 'attack' && e.actor === 'ob').map((e) => e.kind === 'attack' && e.result.target);
+  assert.deepEqual(strikes, ['ash', 'bryn'], 'the second Rend goes to the next hero up');
+  const alone = startCombat(3, [hero('ash', { hp: 4 }), bear({ attacks: killer })]);
+  const once = act({ ...alone, turn: alone.order.indexOf('ob') }, monsterAction({ ...alone, turn: alone.order.indexOf('ob') })!);
+  assert.equal(once.log.filter((e) => e.kind === 'attack').length, 1, 'nobody left up: no more attacks');
+  assert.equal(monsterCombatant('g', monster('goblin-warrior')).multiattack, undefined);
+});
+
+test('Extra Attack: a hero adds one attack; a Fighter two or three at levels 11 and 20', () => {
+  assert.equal(extraAttacks({ ...SAMPLE, features: [] }), 0);
+  assert.equal(extraAttacks({ ...SAMPLE, features: ['Extra Attack'] }), 1);
+  assert.equal(extraAttacks({ ...SAMPLE, features: ['Extra Attack', 'Two Extra Attacks'] }), 2);
+  assert.equal(extraAttacks({ ...SAMPLE, features: ['Extra Attack', 'Two Extra Attacks', 'Three Extra Attacks'] }), 3);
 });
