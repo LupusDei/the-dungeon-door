@@ -66,6 +66,15 @@ test('rederive recomputes every number from level, scores and hit die rolls', ()
   assert.deepEqual(s.spellcasting, { ...mira.spellcasting!, saveDc: 8 + 3 + abilityModifier(scores.wis), attackBonus: 3 + abilityModifier(scores.wis), slots: [4, 3, 2, 0, 0, 0, 0, 0, 0] });
 });
 
+test('rederive keeps spent slots; a warlock\'s spent pact slots rise with the pact slot level', () => {
+  const mira = buildCharacter(MIRA, rng());
+  const spent = rederive({ ...mira, level: 3, hpRolls: [8, 5, 5], spellcasting: { ...mira.spellcasting!, expended: [2, 0, 0, 0, 0, 0, 0, 0, 0] } }, srd());
+  assert.deepEqual(spent.spellcasting!.expended, [2, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const warlock = { ...mira, classId: 'warlock', level: 2, hpRolls: [8, 5], spellcasting: { ...mira.spellcasting!, ability: 'cha' as const, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], expended: [1, 0, 0, 0, 0, 0, 0, 0, 0] } };
+  assert.deepEqual(rederive({ ...warlock, level: 3, hpRolls: [8, 5, 5] }, srd()).spellcasting!.expended, [0, 1, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(rederive({ ...warlock, spellcasting: { ...warlock.spellcasting, expended: [2, 0, 0, 0, 0, 0, 0, 0, 0] }, level: 1, hpRolls: [8] }, srd()).spellcasting!.expended, [1, 0, 0, 0, 0, 0, 0, 0, 0], 'never more than the slots');
+});
+
 test('each level gives at least 1 hit point, and Dwarven Toughness adds 1 a level', () => {
   const bryn = buildCharacter(BRYN, rng());
   const frail = rederive({ ...bryn, level: 3, hpRolls: [10, 1, 1], abilityScores: { ...bryn.abilityScores, con: 3 }, traits: [] }, srd());
@@ -101,6 +110,7 @@ test('a cleric gets armor, shield and level-1 spellcasting', () => {
   assert.deepEqual(s.spellcasting, {
     ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0],
     cantrips: ['guidance', 'sacred-flame', 'light'], prepared: ['bless', 'cure-wounds', 'healing-word', 'shield-of-faith'],
+    expended: [0, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null,
   });
 });
 

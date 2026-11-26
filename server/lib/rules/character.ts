@@ -8,7 +8,7 @@ import {
 } from './abilities.ts';
 import { type Rng, pick, sample } from './rng.ts';
 import { type CharacterSheet, parseCharacterSheet } from './sheet.ts';
-import type { EquipmentOption, Item, Size, Srd, SrdBackground, SrdClass, SrdSpecies } from './srd.ts';
+import type { EquipmentOption, Item, Size, Srd, SrdBackground, SrdClass, SrdSpecies, SrdSpellcasting } from './srd.ts';
 import { srd as bundledSrd } from './srd.ts';
 import { lookup, require } from './violation.ts';
 
@@ -127,11 +127,22 @@ function spellcasting(cls: SrdClass, choices: CharacterChoices, data: Srd): Char
 }
 
 /** Placeholders for the numbers rederive fills in. */
-const UNDERIVED_SPELLCASTING = { saveDc: 0, attackBonus: 0, slots: [] };
+const UNDERIVED_SPELLCASTING = { saveDc: 0, attackBonus: 0, slots: [], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null };
 const UNDERIVED = {
   proficiencyBonus: 0, maxHp: 0, hp: 0, armorClass: 0, passivePerception: 0, skillBonuses: {},
   saveBonuses: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 },
 };
+
+/**
+ * The slots for a level, keeping what was spent. Pact slots are all of one level, which rises with the
+ * warlock's level, so the spent ones move up with it.
+ */
+function slotsAt(casting: SrdSpellcasting, level: number, expended: readonly number[]): { slots: number[]; expended: number[] } {
+  const slots = [...casting.byLevel[level - 1].slots];
+  if (casting.casterType !== 'pact') return { slots, expended: expended.map((n, i) => Math.min(n, slots[i])) };
+  const spent = expended.reduce((sum, n) => sum + n, 0);
+  return { slots, expended: slots.map((n) => Math.min(n, n > 0 ? spent : 0)) };
+}
 
 /**
  * Every number that follows from the rest of the sheet: proficiency bonus by level, max HP from the hit
@@ -153,7 +164,7 @@ export function rederive(sheet: CharacterSheet, data: Srd = bundledSrd()): Chara
     skillBonuses, passivePerception: 10 + skillBonuses.perception,
     spellcasting: casting && {
       ...casting, saveDc: 8 + bonus(scores[casting.ability], true), attackBonus: bonus(scores[casting.ability], true),
-      slots: [...data.spellcasting.get(sheet.classId)!.byLevel[sheet.level - 1].slots],
+      ...slotsAt(data.spellcasting.get(sheet.classId)!, sheet.level, casting.expended),
     },
   };
 }

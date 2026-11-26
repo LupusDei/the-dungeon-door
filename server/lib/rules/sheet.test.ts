@@ -9,7 +9,7 @@ test('a sheet survives a trip through JSON and the parser unchanged', () => {
 });
 
 test('a caster sheet keeps its spellcasting', () => {
-  const caster = { ...SAMPLE, spellcasting: { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: ['guidance'], prepared: ['bless'] } };
+  const caster = { ...SAMPLE, spellcasting: { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: ['guidance'], prepared: ['bless'], expended: [1, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: 'bless' } };
   assert.deepEqual(parseCharacterSheet(caster), caster);
 });
 
@@ -32,4 +32,9 @@ test('a sheet has a level from 1 to 20 and one hit die roll per level', () => {
   assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 0, hpRolls: [] }), /level: /);
   assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 2 }), /hpRolls: one hit die roll per level/);
   assert.throws(() => parseCharacterSheet({ ...SAMPLE, xp: -1 }), /xp: /);
+});
+
+test('a caster cannot have spent more slots than it has', () => {
+  const casting = { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: [], prepared: [], expended: [3, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null };
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, spellcasting: casting }), /spellcasting\.expended: no more slots can be spent than there are/);
 });

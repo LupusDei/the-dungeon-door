@@ -61,7 +61,11 @@ export const CharacterSheetSchema = z.object({
     slots: z.array(int.min(0)).length(9),
     cantrips: z.array(z.string()),
     prepared: z.array(z.string()),
-  }).nullable(),
+    /** Slots spent per spell level since they were last regained. */
+    expended: z.array(int.min(0)).length(9),
+    /** The spell the caster is concentrating on, if any. */
+    concentratingOn: z.string().nullable(),
+  }).refine((c) => c.expended.every((n, i) => n <= c.slots[i]), { path: ['expended'], message: 'no more slots can be spent than there are' }).nullable(),
 })
   .refine((s) => s.hp <= s.maxHp, { path: ['hp'], message: 'hit points cannot exceed the maximum' })
   .refine((s) => s.hpRolls.length === s.level, { path: ['hpRolls'], message: 'one hit die roll per level' });
