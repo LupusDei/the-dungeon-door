@@ -56,3 +56,9 @@ gitignored credentials in `ios/fastlane/` and `ios/Config/Secrets.xcconfig`.
   `DD_IMAGE_MODEL`), so Claude, Grok, etc. are a config change.
 - **Later:** voice chat in your character's voice, DM narration voices (archetypes already carry a
   voice description), richer rules (stats, HP, inventory).
+
+## Rules data and attribution
+
+Open-licensed D&D 5e tables for a forthcoming rules engine live in [`server/data/srd/`](server/data/srd/). Prefer the `5.2/` folder (2024 rules). A rules digest is in [`docs/rules-digest.md`](docs/rules-digest.md). Full file lists, rebuild instructions, and license text are in [`server/data/srd/README.md`](server/data/srd/README.md).
+
+This work includes material from the System Reference Document 5.2 and the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/legalcode). Additional extras are CC-BY-4.0 (Level Up: Advanced 5th Edition and Old-School Essentials), OGL 1.0a (Pathfinder starting wealth; see [`server/data/srd/extras/OGL-LICENSE.md`](server/data/srd/extras/OGL-LICENSE.md)), or CC0 (original procedures for this game). Nothing was copied from the Dungeon Master's Guide or from 1e AD&D Appendix A.
