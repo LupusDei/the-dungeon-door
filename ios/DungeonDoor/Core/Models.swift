@@ -543,6 +543,13 @@ struct Vote: Codable, Hashable {
     var label: String? = nil
 }
 
+/// A line or a deed a player gave in character. No roll.
+struct RoleplayLine: Codable, Hashable {
+    let playerId: String
+    let characterName: String
+    let text: String
+}
+
 struct GameScene: Codable, Hashable {
     let index: Int
     let title: String
@@ -562,6 +569,8 @@ struct GameScene: Codable, Hashable {
     let votes: [Vote]
     let myVote: String?
     let outcome: String?
+    /// In-character lines this turn, oldest first. Empty on a server from before players could speak so.
+    var roleplay: [RoleplayLine] = []
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -599,6 +608,7 @@ extension GameScene {
         votes = try c.value(.votes, or: [])
         myVote = try c.decodeIfPresent(String.self, forKey: .myVote)
         outcome = try c.decodeIfPresent(String.self, forKey: .outcome)
+        roleplay = try c.value(.roleplay, or: [])
     }
 }
 
@@ -1034,6 +1044,8 @@ struct ChronicleEntry: Codable, Hashable, Identifiable {
     /// The most-voted choice. Empty for a round of a fight, where each hero acts for themselves.
     let choiceLabel: String
     let outcome: String
+    /// What the heroes said and did in character that turn.
+    var roleplay: [RoleplayLine] = []
     var id: Int { index }
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -1052,6 +1064,7 @@ extension ChronicleEntry {
         voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choiceLabel = try c.value(.choiceLabel, or: "")
         outcome = try c.value(.outcome, or: "")
+        roleplay = try c.value(.roleplay, or: [])
     }
 }
 

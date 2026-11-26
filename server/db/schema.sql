@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS scenes (
   PRIMARY KEY (game_code, idx)
 );
 
+-- In-character lines for the turn (no roll): what the players said and did, oldest first.
+ALTER TABLE scenes ADD COLUMN IF NOT EXISTS roleplay jsonb NOT NULL DEFAULT '[]';
+
 -- The narrators' readings of scenes (lib/voice.ts, lib/game.ts requestNarration): one audio file per scene
 -- per narrator, made when a player first asks for it. A row with no url is the claim of whoever is making it
 -- (started_at); a failed try clears started_at so the next request can claim it again.

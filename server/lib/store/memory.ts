@@ -1,4 +1,4 @@
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, RoleplayLine, StoredScene, Vote } from '../types.ts';
 import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
@@ -124,7 +124,7 @@ export class MemoryStore implements Store {
       if (existing.narration !== scene.narration) this.forgetVoices(code, existing); // new words need new readings
       Object.assign(existing, structuredClone(scene));
     } else {
-      game.scenes.push({ ...structuredClone(scene), voices: {}, votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
+      game.scenes.push({ ...structuredClone(scene), voices: {}, roleplay: [], votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
       game.scenes.sort((a, b) => a.index - b.index);
     }
     game.updatedAt = now();
@@ -174,6 +174,18 @@ export class MemoryStore implements Store {
     scene.outcome = outcome;
     scene.chosenChoiceId = chosenChoiceId;
     game.updatedAt = now();
+  }
+
+  async appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null> {
+    await tick();
+    const game = this.games.get(code)?.game;
+    const scene = game?.scenes.find((s) => s.index === index);
+    if (!game || !scene || game.status !== 'voting' || game.sceneIndex !== index) return null;
+    const roleplay = scene.roleplay ?? [];
+    if (roleplay.length >= 20) return null;
+    scene.roleplay = [...roleplay, structuredClone(line)];
+    game.updatedAt = now();
+    return scene.roleplay.map((entry) => structuredClone(entry));
   }
 
   async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number) {

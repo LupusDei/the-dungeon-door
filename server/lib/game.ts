@@ -10,6 +10,7 @@ import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
+import { hasStolenHeroSpeech, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
 import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
@@ -75,6 +76,7 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     votes: votesFor(game, current),
     myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
     outcome: current.outcome,
+    roleplay: current.roleplay ?? [],
   };
 }
 
@@ -120,6 +122,7 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
           choiceLabel: combat ? '' : (s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? ''),
           outcome: s.outcome as string,
           combat,
+          roleplay: s.roleplay ?? [],
         };
       }),
     messages,
@@ -244,6 +247,26 @@ export async function postMessage(code: string, playerId: string, text: unknown)
   const game = await loadGame(code);
   const player = member(game, playerId);
   return getStore().addMessage(code, { kind: 'chat', playerId, characterName: player.character.name, text: trimmed });
+}
+
+const ROLEPLAY_LIMIT = 20;
+
+/**
+ * POST /api/games/{code}/speak — a line or a deed in character. No roll. Kept on the current scene,
+ * and given to the dungeon master when the turn resolves. Not a freeform action: nothing is adjudicated.
+ */
+export async function speakInCharacter(code: string, playerId: string, text: unknown): Promise<GameState> {
+  const trimmed = typeof text === 'string' ? text.trim() : '';
+  if (!trimmed || trimmed.length > 500) throw badRequest('text must be 1–500 characters');
+  const game = await loadGame(code);
+  const player = member(game, playerId);
+  if (game.status !== 'voting') throw conflict(`can't speak in character: the game is ${game.status}`);
+  const scene = game.scenes.find((s) => s.index === game.sceneIndex);
+  if (!scene) throw conflict('there is no scene to speak in');
+  if ((scene.roleplay?.length ?? 0) >= ROLEPLAY_LIMIT) throw badRequest('this turn already holds as many in-character lines as it can');
+  const stored = await getStore().appendRoleplay(code, scene.index, { playerId, characterName: player.character.name, text: trimmed });
+  if (!stored) throw conflict('that scene is no longer open');
+  return viewGame(code, playerId);
 }
 
 /** POST /api/games/{code}/dungeon-master */
@@ -438,6 +461,7 @@ function pastScene(game: Game, scene: StoredScene): PastScene {
     votes: voteRecords(game, scene),
     outcome: scene.outcome,
     chosenChoiceId: scene.chosenChoiceId,
+    roleplay: scene.roleplay ?? [],
   };
 }
 
@@ -492,7 +516,7 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   if (!game || game.status !== 'preparing') return;
   let draft;
   try {
-    draft = await getDungeonMaster(game.dungeonMaster).openingScene(await contextFor(game, 0));
+    draft = await inTheirOwnWords(game, async () => getDungeonMaster(game.dungeonMaster).openingScene(await contextFor(game, 0)));
     const scene = {
       index: 0,
       title: sceneTitle(draft, 'The Dungeon Door'),
@@ -579,10 +603,28 @@ function nextChoices(plan: Plan, draft: NextScene): StoredChoice[] {
   return choicesOf(draft.choices, plan.rules);
 }
 
+function spokenBy(game: Game): HeroLine[] {
+  return game.scenes.flatMap((s) => (s.roleplay ?? []).map((line) => ({ name: line.characterName, text: line.text })));
+}
+
+/** The heroes' own words. A draft that speaks for them is asked for once more, then the stolen sentences are cut. */
+async function inTheirOwnWords<T extends SceneText & { outcome?: string }>(game: Game, ask: () => Promise<T>): Promise<T> {
+  const heroes = game.players.map((p) => p.character.name);
+  const lines = spokenBy(game);
+  const steals = (draft: T) => [draft.narration, draft.outcome ?? '', draft.quip ?? ''].some((text) => hasStolenHeroSpeech(text, heroes, lines));
+  let draft = await ask();
+  if (steals(draft)) draft = await ask();
+  const narration = stripHeroSpeech(draft.narration, heroes, lines).trim() || 'What do you do?';
+  const quip = draft.quip ? stripHeroSpeech(draft.quip, heroes, lines).trim() : '';
+  if (draft.outcome === undefined) return { ...draft, narration, quip: quip || undefined };
+  const outcome = stripHeroSpeech(draft.outcome, heroes, lines).trim() || 'The action plays out.';
+  return { ...draft, narration, outcome, quip: quip || undefined };
+}
+
 async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
   const dm = getDungeonMaster(game.dungeonMaster);
   const ctx = await contextFor(game, plan.next, plan.rules); // history ends with the scene being resolved
-  const draft = plan.isFinale ? await dm.finale(ctx, plan.resolution) : await dm.nextScene(ctx, plan.resolution);
+  const draft = await inTheirOwnWords(game, () => plan.isFinale ? dm.finale(ctx, plan.resolution) : dm.nextScene(ctx, plan.resolution));
   const { leaders } = plan.resolution;
   const chosen = leaders.includes(draft.chosenChoiceId) ? draft.chosenChoiceId : (leaders[0] ?? null);
   const store = getStore();

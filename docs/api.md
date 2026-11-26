@@ -199,6 +199,9 @@ Scene {
                                      // ("Attack with Longsword", "Cast Fire Bolt", "Break Free", "Help Ilsa", "Dodge")
   myVote: string | null              // choiceId of the caller
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
+  roleplay: [{ playerId: string; characterName: string; text: string }]
+                                     // in-character lines and deeds this turn, oldest first. No roll.
+                                     // Empty until someone speaks. Omitted by servers from before this.
 }
 
 ChronicleEntry {
@@ -208,6 +211,8 @@ ChronicleEntry {
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
   combat: boolean                    // a combat round: every hero took their own action
+  roleplay: [{ playerId: string; characterName: string; text: string }]
+                                     // what the heroes said and did in character that turn. Omitted by older servers.
 }
 
 RulesView {                          // SRD 5.2 (2024 rules)
@@ -289,6 +294,13 @@ Message {
   Re-joining with a different character swaps the character. Max 6 players.
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
 - `POST /api/games/{code}/messages` body `{ text }` → `Message`.
+  Table talk. It is not what a hero says in the story.
+- `POST /api/games/{code}/speak` body `{ text }` → `GameState`.
+  An in-character line or deed, 1–500 characters: what the hero says or does, with no roll and nothing for
+  the rules engine to adjudicate. Voting only (409 otherwise). It is appended to the current scene's
+  `roleplay`, which is the turn's log, and stays on that chronicle entry once the scene resolves. The
+  dungeon master's next narration, and the NPCs in it, answer these words. A player may send several.
+  This is not a freeform action and it is not table chat.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
   Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole

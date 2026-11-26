@@ -1,5 +1,5 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, RoleplayLine, StoredScene, Vote } from '../types.ts';
 import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 type Row = Record<string, any>;
@@ -138,6 +138,7 @@ export class PostgresStore implements Store {
       votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
       outcome: s.outcome,
       chosenChoiceId: s.chosen_choice_id as ChoiceId | null,
+      roleplay: Array.isArray(s.roleplay) ? s.roleplay as RoleplayLine[] : [],
       createdAt: iso(s.created_at),
     }));
     return gameRow(row, players, scenes);
@@ -235,6 +236,27 @@ export class PostgresStore implements Store {
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
       [code, index, outcome, chosenChoiceId],
     );
+  }
+
+  async appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null> {
+    const rows = await this.q(
+      `WITH s AS (
+         UPDATE scenes AS sc
+         SET roleplay = COALESCE(sc.roleplay, '[]'::jsonb) || $3::jsonb
+         FROM games g
+         WHERE sc.game_code = g.code AND g.code = $1 AND sc.idx = $2
+           AND g.status = 'voting' AND g.scene_index = $2
+           AND jsonb_array_length(COALESCE(sc.roleplay, '[]'::jsonb)) < 20
+         RETURNING sc.roleplay
+       ),
+       bumped AS (
+         UPDATE games SET updated_at = now() WHERE code = $1 AND EXISTS (SELECT 1 FROM s) RETURNING code
+       )
+       SELECT roleplay FROM s`,
+      [code, index, JSON.stringify([line])],
+    );
+    const [row] = rows;
+    return row && Array.isArray(row.roleplay) ? row.roleplay as RoleplayLine[] : null;
   }
 
   async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number) {

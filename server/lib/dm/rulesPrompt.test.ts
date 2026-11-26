@@ -54,6 +54,7 @@ test('the instructions explain hooks, 5.2 DCs and combat rounds', () => {
   for (const words of ['"check"', '"save"', '"fight"', '"rest"', '"move"', '5 very easy', 'Attack, Cast and Dodge', 'no numbers']) {
     assert.ok(RULES_INSTRUCTIONS.includes(words), words);
   }
+  assert.match(RULES_INSTRUCTIONS, /Do not add feelings,\s+dialogue or extra deeds for the heroes/);
 });
 
 test('a hero who sees dimly or not at all is marked, so the story shows only what they see', () => {

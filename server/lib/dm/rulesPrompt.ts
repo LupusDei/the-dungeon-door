@@ -60,8 +60,9 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
 - Dungeon levels: the dungeon starts at the party's level and may go a level deeper behind a new door (the
   results say "The way leads deeper"); its monsters, traps and treasure are the engine's, for that level.
   Make the deeper level feel it: older stone, colder air, stranger signs.
-- When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
-  change them, and still use no numbers in the story.
+- When you resolve, the engine has already rolled: your outcome must match its results. Colour them as what
+  happened in the world, never change them, and still use no numbers in the story. Do not add feelings,
+  dialogue or extra deeds for the heroes.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
   next one (still write three choices; they are ignored).`;
 
