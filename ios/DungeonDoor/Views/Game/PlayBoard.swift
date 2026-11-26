@@ -255,7 +255,7 @@ struct PlayBoard: Equatable {
     }
 
     private static func offerDetail(_ choice: Choice, dungeon: DungeonMap?) -> String {
-        let rule = RuleTag(label: choice.rules, dungeon: dungeon)?.text
+        let rule = RuleTag(label: choice.rules, dungeon: dungeon)?.text ?? ""
         return [choice.detail, rule].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 

@@ -169,7 +169,8 @@ struct PlayDashboard: View {
         var refs: [PlaySpellRef] = []
         for id in casting.cantrips + casting.prepared where seen.insert(id).inserted {
             let name = book.spellName(id)
-            var bits = [book.spellLine(id), casting.cantrips.contains(id) ? "Cantrip" : "Prepared"].compactMap { $0 }
+            let kind = casting.cantrips.contains(id) ? "Cantrip" : "Prepared"
+            var bits = [book.spellLine(id) ?? "", kind].filter { !$0.isEmpty }
             let held = casting.concentratingOn == id
                 || live?.standing.concentratingOn?.localizedCaseInsensitiveCompare(name) == .orderedSame
             if held { bits.insert("Active", at: 0) }

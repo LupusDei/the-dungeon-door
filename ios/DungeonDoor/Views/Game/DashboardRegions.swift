@@ -202,10 +202,10 @@ struct DashboardVitals: View {
                 .tracking(0.6)
                 .foregroundStyle(standing ? Palette.muted : Palette.ember)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(hp.map(String.init) ?? "—")
+                Text(hp.map { "\($0)" } ?? "—")
                     .font(.serif(.title3, weight: .bold))
                     .foregroundStyle(standing ? Palette.parchment : Palette.muted)
-                Text("/\(maxHp.map(String.init) ?? "—")")
+                Text("/\(maxHp.map { "\($0)" } ?? "—")")
                     .font(.serif(.footnote, weight: .semibold))
                     .foregroundStyle(Palette.muted)
             }
@@ -231,7 +231,7 @@ struct DashboardVitals: View {
             ZStack {
                 ShieldShape().fill(Palette.raised)
                 ShieldShape().stroke(Palette.gold, style: StrokeStyle(lineWidth: 1.25, lineJoin: .round))
-                Text(armor.map(String.init) ?? "—")
+                Text(armor.map { "\($0)" } ?? "—")
                     .font(.serif(.headline, weight: .bold))
                     .monospacedDigit()
                     .minimumScaleFactor(0.6)
