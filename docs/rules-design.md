@@ -20,6 +20,7 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   violation.ts               RuleViolation: a choice the rules forbid
   dice, monsters, combatant, resolve, encounter, scene (PR B): combat
   dungeonTables, dungeon, explore (PR C): fixed room graph or explore-as-you-go, stocking, loot
+  leveling (PR D)            XP awards and thresholds, milestones, level-up
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
 ```
 
@@ -192,6 +193,30 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
   the SRD 5.2 magic items (common and uncommon, rare from level 4).
 - Not yet: wandering monsters, traps' DCs and damage, treasure values for gems and jewellery, and
   marking rooms cleared (the game stores that beside the dungeon).
+
+## Leveling (PR D)
+
+`leveling.ts`, on the same `CharacterSheet` (still version 1; nothing stores sheets yet):
+
+- **XP.** `encounterXp(crs)` sums the SRD CR-to-XP values; `splitXp(total, heroes)` gives each hero an
+  equal share (the remainder is lost); `awardXp` adds it. `levelForXp` and `canLevelUp` read the SRD 5.2
+  thresholds (300, 900, 2,700 … 355,000).
+- **Milestones.** `levelUp(…, { advancement: 'milestone' })` skips the XP check and raises the hero's XP
+  to the new level's threshold, so switching back to XP later stays consistent.
+- **Hit points.** The sheet keeps one hit die result per level (`hpRolls`; level 1 is the die's
+  maximum). A level-up takes the fixed value (die / 2 + 1) or a seeded roll. Max HP is always derived:
+  each level adds its roll + CON modifier (+1 Dwarven Toughness), at least 1, so raising CON raises every
+  past level too. A wounded hero gains the new hit points but is not healed.
+- **Everything else is rederived** by `rederive(sheet)` (also used by `buildCharacter`): proficiency
+  bonus by level, saves, skills, passive Perception, AC, spell save DC, attack bonus and slots.
+- **Features.** The class's features for the new level, and the subclass's, are appended by name. The
+  subclass is chosen at the class's subclass level (3 in SRD 5.2), from the class's SRD subclasses.
+- **Improvements.** At an Ability Score Improvement level: +2 to one score or +1 to two (max 20), or a
+  general feat the hero qualifies for (Grappler: STR or DEX 13; its +1 to STR or DEX), each feat once.
+  At 19, an Epic Boon (its +1 can reach 30; Boon of Spell Recall needs spellcasting) or a general feat.
+  A feat's +1 options are read from its SRD text where it enters (`srd.ts`).
+- Not yet: new cantrips and prepared spells at higher levels (PR E validates them), class resources
+  such as Rage uses (PR F), feats' other benefits, fighting styles, and multiclassing.
 
 ## Integration (later, contract first)
 
