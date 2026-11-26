@@ -1,0 +1,2793 @@
+{
+  "meta": {
+    "title": "Spell Slots by Class and Level",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 8,
+    "notes": "Warlock uses Pact Magic: a small number of slots of a single level, shown in the same slots array (the non-zero slot level is the pact slot level)."
+  },
+  "records": [
+    {
+      "index": "bard",
+      "class": "bard",
+      "casterType": "full",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 19,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 20,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 21,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 22,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            2,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "index": "cleric",
+      "class": "cleric",
+      "casterType": "full",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 19,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 20,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 21,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 22,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            2,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "index": "druid",
+      "class": "druid",
+      "casterType": "full",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 19,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 20,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 21,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 22,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            2,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "index": "paladin",
+      "class": "paladin",
+      "casterType": "half",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 2,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 3,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": "ranger",
+      "class": "ranger",
+      "casterType": "half",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 2,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 3,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 0,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": "sorcerer",
+      "class": "sorcerer",
+      "casterType": "full",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 2,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 19,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 20,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 21,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 6,
+          "spellsKnown": null,
+          "preparedSpells": 22,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            2,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "index": "warlock",
+      "class": "warlock",
+      "casterType": "pact",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 2,
+          "slots": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 3,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 2,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 8,
+          "slots": [
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 13,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 13,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": "wizard",
+      "class": "wizard",
+      "casterType": "full",
+      "byLevel": [
+        {
+          "level": 1,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 4,
+          "slots": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 2,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 5,
+          "slots": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 3,
+          "cantripsKnown": 3,
+          "spellsKnown": null,
+          "preparedSpells": 6,
+          "slots": [
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 4,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 7,
+          "slots": [
+            4,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 5,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 9,
+          "slots": [
+            4,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 6,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 10,
+          "slots": [
+            4,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 7,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 11,
+          "slots": [
+            4,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 8,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 12,
+          "slots": [
+            4,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 9,
+          "cantripsKnown": 4,
+          "spellsKnown": null,
+          "preparedSpells": 14,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 10,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 15,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 11,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 12,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 16,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 13,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 17,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 14,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 18,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "level": 15,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 19,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 16,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 21,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "level": 17,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 22,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 18,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 23,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 19,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 24,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "level": 20,
+          "cantripsKnown": 5,
+          "spellsKnown": null,
+          "preparedSpells": 25,
+          "slots": [
+            4,
+            3,
+            3,
+            3,
+            3,
+            2,
+            2,
+            1,
+            1
+          ]
+        }
+      ]
+    }
+  ]
+}

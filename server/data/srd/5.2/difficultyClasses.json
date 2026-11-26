@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "title": "Typical Difficulty Classes",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 6,
+    "additionalSources": [
+      "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
+    ],
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "taskDifficulty": "Very easy",
+      "dc": 5
+    },
+    {
+      "taskDifficulty": "Easy",
+      "dc": 10
+    },
+    {
+      "taskDifficulty": "Medium",
+      "dc": 15
+    },
+    {
+      "taskDifficulty": "Hard",
+      "dc": 20
+    },
+    {
+      "taskDifficulty": "Very hard",
+      "dc": 25
+    },
+    {
+      "taskDifficulty": "Nearly impossible",
+      "dc": 30
+    }
+  ]
+}

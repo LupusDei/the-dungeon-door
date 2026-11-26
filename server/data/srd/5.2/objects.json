@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "title": "Object Armor Class and Hit Points",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "additionalSources": [
+      "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
+    ],
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "armorClassBySubstance": [
+        {
+          "ac": 11,
+          "substance": "Cloth, paper, rope"
+        },
+        {
+          "ac": 13,
+          "substance": "Crystal, glass, ice"
+        },
+        {
+          "ac": 15,
+          "substance": "Wood"
+        },
+        {
+          "ac": 17,
+          "substance": "Stone"
+        },
+        {
+          "ac": 19,
+          "substance": "Iron, steel"
+        },
+        {
+          "ac": 21,
+          "substance": "Mithral"
+        },
+        {
+          "ac": 23,
+          "substance": "Adamantine"
+        }
+      ],
+      "hitPointsBySize": [
+        {
+          "size": "Tiny",
+          "examples": "bottle, lock",
+          "fragile": "2 (1d4)",
+          "resilient": "5 (2d4)"
+        },
+        {
+          "size": "Small",
+          "examples": "chest, lute",
+          "fragile": "3 (1d6)",
+          "resilient": "10 (3d6)"
+        },
+        {
+          "size": "Medium",
+          "examples": "barrel, chandelier",
+          "fragile": "4 (1d8)",
+          "resilient": "18 (4d8)"
+        },
+        {
+          "size": "Large",
+          "examples": "cart, dining table",
+          "fragile": "5 (1d10)",
+          "resilient": "27 (5d10)"
+        }
+      ],
+      "notes": "An object is destroyed at 0 Hit Points. For Huge or Gargantuan objects, divide into Large or smaller sections and track each section separately."
+    }
+  ]
+}

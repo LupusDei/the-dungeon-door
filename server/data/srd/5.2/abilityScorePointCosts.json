@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "title": "Ability Score Point Costs",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 8,
+    "additionalSources": [
+      "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
+    ],
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "score": 8,
+      "cost": 0
+    },
+    {
+      "score": 9,
+      "cost": 1
+    },
+    {
+      "score": 10,
+      "cost": 2
+    },
+    {
+      "score": 11,
+      "cost": 3
+    },
+    {
+      "score": 12,
+      "cost": 4
+    },
+    {
+      "score": 13,
+      "cost": 5
+    },
+    {
+      "score": 14,
+      "cost": 7
+    },
+    {
+      "score": 15,
+      "cost": 9
+    }
+  ]
+}
