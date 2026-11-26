@@ -9,7 +9,7 @@ import { abilityCheck, checkBonus, dcAgainst, hasTool } from '../rules/checks.ts
 import { parseDice, rollDice } from '../rules/dice.ts';
 import { monster } from '../rules/monsters.ts';
 import { exhaustionEffects } from '../rules/rests.ts';
-import { type D20, modeOf, rollD20 } from '../rules/resolve.ts';
+import { type D20, type Mode, modeOf, rollD20 } from '../rules/resolve.ts';
 import type { Rng } from '../rules/rng.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { type RollHook, rollName } from './hooks.ts';
@@ -18,7 +18,7 @@ export interface Hero { playerId: string; sheet: CharacterSheet }
 export interface Roll {
   playerId: string; name: string;
   /** The d20 kept; null for a hero who is down. */
-  natural: number | null; dice: number[]; bonus: number; total: number | null; success: boolean;
+  natural: number | null; dice: number[]; mode: Mode; bonus: number; total: number | null; success: boolean;
 }
 export interface GroupRoll { rolls: Roll[]; success: boolean; sheets: Hero[]; lines: string[] }
 
@@ -31,25 +31,26 @@ function dcOf(hook: RollHook): number {
   return typeof hook.dc === 'number' ? hook.dc : dcAgainst(monster(hook.against!), hook);
 }
 
-function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: boolean): D20 & { bonus: number } {
+function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: boolean): D20 & { bonus: number; mode: Mode } {
   if (hook.kind === 'check') return abilityCheck(rng, hero.sheet, hook, { natural, advantage: helped || !!hook.advantage, disadvantage: !!hook.disadvantage });
   const bonus = hero.sheet.saveBonuses[hook.ability] + exhaustionEffects(hero.sheet).d20;
-  return { ...rollD20(rng, bonus, modeOf(!!hook.advantage, !!hook.disadvantage), natural), bonus };
+  const mode = modeOf(!!hook.advantage, !!hook.disadvantage);
+  return { ...rollD20(rng, bonus, mode, natural), bonus, mode };
 }
 
 function rollFor(hero: Hero, hook: RollHook, vote: number, rng: Rng, helped = false): Roll {
-  const { natural, rolls, total, bonus } = d20For(hero, hook, vote, rng, helped);
-  return { playerId: hero.playerId, name: hero.sheet.name, natural, dice: rolls, bonus, total, success: total >= dcOf(hook) };
+  const { natural, rolls, total, bonus, mode } = d20For(hero, hook, vote, rng, helped);
+  return { playerId: hero.playerId, name: hero.sheet.name, natural, dice: rolls, mode, bonus, total, success: total >= dcOf(hook) };
 }
 
-const downRoll = (h: Hero): Roll => ({ playerId: h.playerId, name: h.sheet.name, natural: null, dice: [], bonus: 0, total: null, success: false });
+const downRoll = (h: Hero): Roll => ({ playerId: h.playerId, name: h.sheet.name, natural: null, dice: [], mode: 'normal', bonus: 0, total: null, success: false });
 
 /** "14 (Advantage over 3)". */
 function diceText(roll: Roll): string {
-  if (roll.dice.length === 1) return `${roll.natural}`;
+  if (roll.mode === 'normal') return `${roll.natural}`;
   const [first, second] = roll.dice;
   const dropped = first === roll.natural ? second : first;
-  return `${roll.natural} (${dropped < roll.natural! ? 'Advantage' : 'Disadvantage'} over ${dropped})`;
+  return `${roll.natural} (${roll.mode === 'advantage' ? 'Advantage' : 'Disadvantage'} over ${dropped})`;
 }
 
 function lineOf(roll: Roll, hook: RollHook): string {

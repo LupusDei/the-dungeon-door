@@ -96,6 +96,7 @@ test('Advantage and Disadvantage: two d20s, the vote first; the line shows the d
   const save = groupRoll([bryn], { kind: 'save', ability: 'dex', dc: 10, disadvantage: true }, { p1: 15 }, scriptedRng([4]));
   assert.equal(save.lines[0], 'Bryn: Dexterity save 4 (Disadvantage over 15) + 2 = 6 vs DC 10, failure');
   assert.deepEqual(groupRoll([bryn], { ...hook, disadvantage: true }, { p1: 3 }, scriptedRng([])).rolls[0].dice, [3], 'both cancel');
+  assert.equal(groupRoll([bryn], hook, { p1: 9 }, scriptedRng([9])).lines[0], 'Bryn: Athletics 9 (Advantage over 9) + 5 = 14 vs DC 12, success', 'equal dice');
 });
 
 test('a tool check adds proficiency for a tool the hero knows; with the skill too it has Advantage', () => {
