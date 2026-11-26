@@ -1,11 +1,11 @@
 /**
  * SRD 5.2 hazards (Rules Glossary and Environmental Effects; 5.2/hazards.json): falling, burning,
  * suffocation, extreme cold and heat, dehydration and malnutrition. Each befalls one hero; Exhaustion 6 is
- * death. Not modelled: Resistance to Cold or Fire (heroes' resistances are not on the sheet yet).
+ * death. A hero who resists Cold (or Fire) endures extreme cold (or heat) without a save.
  */
 import { abilityModifier } from './abilities.ts';
 import { parseDice, rollDice } from './dice.ts';
-import { resisted } from './defenses.ts';
+import { heroResistances, resisted } from './defenses.ts';
 import { damageHero } from './dying.ts';
 import { d20Modifier, gainExhaustion } from './rests.ts';
 import { rollD20 } from './resolve.ts';
@@ -67,10 +67,16 @@ function heavyArmored(s: CharacterSheet): boolean {
   });
 }
 
-/** A Constitution save at the end of each hour (5.2): cold DC 10; heat DC 5 + 1 an hour, Disadvantage in Medium or Heavy armor. */
+/** A Constitution save at the end of each hour (5.2), none for a hero resisting Cold (Fire): cold DC 10; heat DC 5 + 1 an hour, Disadvantage in Medium or Heavy armor. */
 function exposure(rng: Rng, s: CharacterSheet, kind: 'extreme-cold' | 'extreme-heat', hours: number): Suffered {
   const heat = kind === 'extreme-heat';
+  if (heroResistances(s).includes(heat ? 'fire' : 'cold')) return { sheet: s, line: `${s.name} resists the ${heat ? 'heat' : 'cold'}: no save is needed` };
   if (heat && has(s, 'waterskin')) return { sheet: s, line: `${s.name} has drinkable water: the heat is bearable` };
+  return hourlySaves(rng, s, kind, hours);
+}
+
+function hourlySaves(rng: Rng, s: CharacterSheet, kind: 'extreme-cold' | 'extreme-heat', hours: number): Suffered {
+  const heat = kind === 'extreme-heat';
   const mode = heat && heavyArmored(s) ? 'disadvantage' : 'normal';
   let sheet = s;
   let failed = 0;

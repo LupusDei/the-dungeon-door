@@ -366,7 +366,8 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
   check (Restrained by a web, Grappled). Outside a fight an escape is tried free each turn; in a fight it
   is the hero's action (Break Free).
 - **Resistances** (`rules/defenses.ts`). Species traits (dwarven poison resilience and the like) halve
-  damage of their types, from attacks, spells, traps and hazards.
+  damage of their types, from attacks, spells, traps and hazards; a hero resisting Cold (Fire) endures
+  extreme cold (heat) without a save.
 - **Concentration** (`play/concentration.ts`). A CON save each time the hero is hit (DC 10 or half the
   damage); the spell ends on a failure, at 0 HP, when Incapacitated, or when the fight ends.
 - **Multiattack and Extra Attack** (`rules/monsters.ts multiattackOf`). A monster makes each attack its

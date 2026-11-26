@@ -63,3 +63,11 @@ test('exhaustion 6 from any hazard is death', () => {
   const last = sufferHazard(scriptedRng([]), { ...bryn, exhaustion: 5 }, { kind: 'dehydration' });
   assert.deepEqual([last.sheet.exhaustion, last.sheet.dead, last.line], [6, true, 'Bryn has too little water: Exhaustion 6, and dies']);
 });
+
+test('a hero who resists cold or fire endures that exposure without a save (5.2)', () => {
+  const cold = sufferHazard(scriptedRng([]), { ...bryn, traits: ['draconic-damage-resistance-cold'] }, { kind: 'extreme-cold', hours: 4 });
+  assert.deepEqual([cold.sheet.exhaustion, cold.line], [0, 'Bryn resists the cold: no save is needed']);
+  const fire = { ...bryn, traits: ['lineage-resistance-fire'] };
+  assert.equal(sufferHazard(scriptedRng([]), fire, { kind: 'extreme-heat', hours: 4 }).line, 'Bryn resists the heat: no save is needed');
+  assert.equal(sufferHazard(scriptedRng([1]), fire, { kind: 'extreme-cold', hours: 1 }).sheet.exhaustion, 1, 'fire resistance does not help in the cold');
+});
