@@ -20,6 +20,7 @@ struct DashboardSection<Content: View>: View {
 /// The line a region shows when it has nothing to list. It keeps the region's place.
 struct DashboardNote: View {
     let text: String
+    init(_ text: String) { self.text = text }
 
     var body: some View {
         Text(text)
