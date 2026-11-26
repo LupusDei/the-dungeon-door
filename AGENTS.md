@@ -113,6 +113,8 @@ say plainly that an app change is untested.
   `api_key.json` and `server/.env*` are gitignored and stay that way.
 - **Releases.** See "Shipping is the default" above: team work is integrated, pushed, migrated, deployed
   and shipped to TestFlight without asking; a short list of things still needs the owner's word.
+- **Commits.** A commit is its author's alone. No `Co-Authored-By` line for an AI tool, whichever
+  agent wrote the change.
 - **Art.** Build-time art (icon, home-screen dragon, sounds) is generated with the owner's Runway
   account (recipes in `design/`); in-game art (portraits, scenes) goes through the AI Gateway at
   runtime. Voices are original designs, never imitations of real people.
