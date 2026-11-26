@@ -102,12 +102,15 @@ export const withAttitude = (dungeon: DungeonState, attitude: Attitude): Dungeon
 const SP_PER_GP = 10;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** Coins are shared out evenly as gold; gems, jewellery and the magic item go to whoever has room. */
+/** Coins are shared out in whole gold among the living (the odd pieces to the first of them); gems, jewellery and the magic item go to whoever has room. */
 export function claimTreasure(party: PartyState, treasure: Treasure): { party: PartyState; lines: string[] } {
-  const coin = treasure.gp + treasure.sp / SP_PER_GP;
-  const ids = Object.keys(party.sheets);
-  const share = coin / ids.length;
-  const sheets = Object.fromEntries(ids.map((id) => [id, { ...party.sheets[id], gp: party.sheets[id].gp + share }]));
+  const coin = Math.floor(treasure.gp + treasure.sp / SP_PER_GP);
+  const ids = Object.keys(party.sheets).filter((id) => !party.sheets[id].dead);
+  const share = Math.floor(coin / ids.length);
+  const over = ids.slice(0, coin - share * ids.length);
+  const gold = (id: string) => party.sheets[id].gp + share + (over.includes(id) ? 1 : 0);
+  const sheets = { ...party.sheets, ...Object.fromEntries(ids.map((id) => [id, { ...party.sheets[id], gp: gold(id) }])) };
+  const more = over.length ? `, and 1 more to ${over.map((id) => party.sheets[id].name).join(' and ')}` : '';
   const extras = [
     treasure.gems ? plural(treasure.gems, 'gem', 'gems') : '',
     treasure.jewellery ? plural(treasure.jewellery, 'piece of jewellery', 'pieces of jewellery') : '',
@@ -116,5 +119,5 @@ export function claimTreasure(party: PartyState, treasure: Treasure): { party: P
   const magic = treasure.magicItem ? itemIdOf(treasure.magicItem) : null;
   const found = [...Array<string>(treasure.gems).fill('gemstone'), ...Array<string>(treasure.jewellery).fill('jewellery'), ...(magic ? [magic] : [])];
   const stowed = stow({ ...party, sheets }, found);
-  return { party: stowed.party, lines: [`Treasure: ${[`${coin} gp in coin (${share} each)`, ...extras].join(', ')}.`, ...stowed.lines] };
+  return { party: stowed.party, lines: [`Treasure: ${[`${coin} gp in coin (${share} each${more})`, ...extras].join(', ')}.`, ...stowed.lines] };
 }

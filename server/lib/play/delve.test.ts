@@ -47,17 +47,22 @@ test('traps scale by the party\'s average level, rounded down', () => {
   assert.deepEqual([partyLevel([1, 3]), partyLevel([5, 4]), partyLevel([5, 6]), partyLevel([17, 20])], [2, 4, 5, 18]);
 });
 
-test('treasure: the coins are shared out as gold; gems, jewellery and the magic item go into packs', () => {
-  const party: PartyState = { version: 1, rng: 1, sheets: { p1: { ...SAMPLE, gp: 1 }, p2: { ...SAMPLE, name: 'Cleo', gp: 0 } } };
+test('treasure: the coins are shared out in whole gold among the living; gems, jewellery and the magic item go into packs', () => {
+  const party: PartyState = { version: 1, rng: 1, sheets: { p1: { ...SAMPLE, gp: 1 }, p2: { ...SAMPLE, name: 'Cleo', gp: 0 }, p3: { ...SAMPLE, name: 'Dag', gp: 3, dead: true } } };
   const { party: rich, lines } = claimTreasure(party, { sp: 25, gp: 10, gems: 2, jewellery: 1, magicItem: 'Potion of Healing' });
-  assert.deepEqual([rich.sheets.p1.gp, rich.sheets.p2.gp], [7.25, 6.25]);
+  assert.deepEqual([rich.sheets.p1.gp, rich.sheets.p2.gp, rich.sheets.p3.gp], [7, 6, 3], '12 gp (the odd 5 sp are too few to share); the dead take none');
   assert.deepEqual(lines, [
-    'Treasure: 12.5 gp in coin (6.25 each), 2 gems, 1 piece of jewellery, Potion of Healing.',
+    'Treasure: 12 gp in coin (6 each), 2 gems, 1 piece of jewellery, Potion of Healing.',
     'Cleo takes 2 Gemstone, Piece of Jewellery.', 'Bryn takes Potion of Healing.',
   ]);
   assert.deepEqual(rich.sheets.p2.equipment.slice(1).map((e) => [e.id, e.count]), [['gemstone', 2], ['jewellery', 1]]);
   assert.deepEqual(claimTreasure(party, { sp: 0, gp: 0, gems: 0, jewellery: 0, magicItem: 'Spoon of Destiny' }).lines, ['Treasure: 0 gp in coin (0 each), Spoon of Destiny.'], 'an item the SRD does not list is only named');
   assert.deepEqual(claimTreasure(party, { sp: 0, gp: 4, gems: 0, jewellery: 0, magicItem: null }).lines, ['Treasure: 4 gp in coin (2 each).']);
+  const odd = claimTreasure(party, { sp: 0, gp: 5, gems: 0, jewellery: 0, magicItem: null });
+  assert.deepEqual(odd.lines, ['Treasure: 5 gp in coin (2 each, and 1 more to Bryn).']);
+  assert.deepEqual([odd.party.sheets.p1.gp, odd.party.sheets.p2.gp], [4, 2]);
+  const three = { ...party, sheets: { ...party.sheets, p3: { ...SAMPLE, name: 'Dag', gp: 0 } } };
+  assert.deepEqual(claimTreasure(three, { sp: 0, gp: 8, gems: 0, jewellery: 0, magicItem: null }).lines, ['Treasure: 8 gp in coin (2 each, and 1 more to Bryn and Cleo).']);
 });
 
 test('a cleared room is remembered once', () => {
