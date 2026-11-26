@@ -204,3 +204,20 @@ test('trade hooks: buying, selling and drinking a potion change the sheets and s
   assert.ok(drunk.party.sheets.p2.hp > 1);
   assert.match(drunk.lines[0], /^Bryn gives Cleo a Potion of Healing: \d+ HP back\.$/);
 });
+
+test('a hero killed outside a fight may be Revivified on the spot; the revive hook raises the dead', () => {
+  const cleric = heroSheet({ id: 'c', name: 'Mira', race: 'human', characterClass: 'cleric' });
+  const slots = [4, 3, 2, 0, 1, 0, 0, 0, 0];
+  const priest = { ...cleric, gp: 900, hp: 200, maxHp: 200, spellcasting: { ...cleric.spellcasting!, prepared: ['revivify', 'raise-dead'], slots, expended: slots.map(() => 0) } };
+  const doomed = party({ p1: { ...fighter, hp: 1, maxHp: 1 }, p2: priest });
+  const fall = playTurn(state({ party: doomed }), { kind: 'hazard', hazard: 'falling', feet: 60 }, ballots(1, 1));
+  assert.deepEqual([fall.party.sheets.p1.dead, fall.party.sheets.p1.hp], [undefined, 1], fall.lines.join(' | '));
+  assert.ok(fall.lines.includes('Mira casts Revivify on Bryn, using up a 300 gp diamond: Bryn lives again with 1 HP.'));
+  const save = playTurn(state({ party: doomed }), { kind: 'save', ability: 'dex', dc: 30, damage: '1d4+20' }, ballots(1, 1));
+  assert.equal(save.party.sheets.p1.hp, 1, save.lines.join(' | '));
+  const trapped = playTurn(state({ party: party({ p1: { ...fighter, hp: 1, maxHp: 1 }, p2: priest }) }), { kind: 'trap', trap: 'poisoned-needle' }, ballots(1, 1));
+  assert.notEqual(trapped.party.sheets.p1.dead, true, trapped.lines.join(' | '));
+  const temple = playTurn(state({ party: party({ p1: { ...fighter, hp: 0, dead: true }, p2: priest }) }), { kind: 'revive' }, []);
+  assert.deepEqual([temple.party.sheets.p1.revivalPenalty, temple.party.sheets.p2.gp], [4, 400]);
+  assert.match(temple.lines[0], /^Mira casts Raise Dead on Bryn/);
+});

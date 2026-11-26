@@ -186,4 +186,6 @@ test('parley hooks: with the foes in the room, or with monsters the DM names (un
   assert.equal(hookLabel({ kind: 'parley' }), 'Parley');
   assert.equal(hookLabel({ kind: 'parley', monsters: [] }), 'Parley');
   assert.equal(hookLabel({ kind: 'parley', monsters: ['goblin-warrior', 'goblin-warrior'] }), 'Parley with Goblin Warrior ×2');
+  assert.deepEqual(parseHook({ kind: 'revive', monsters: null }), { kind: 'revive' });
+  assert.equal(hookLabel({ kind: 'revive' }), 'Raise the dead');
 });

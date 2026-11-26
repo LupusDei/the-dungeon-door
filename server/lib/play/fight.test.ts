@@ -233,3 +233,16 @@ test('a hero at half HP or less drinks its least healing potion as a Bonus Actio
   const unvoted = fightRound(p, calm, {});
   assert.ok(unvoted.lines.some((l) => l.startsWith('Bryn drinks')), 'without a vote they still drink, then Dodge');
 });
+
+test('a hero slain in the fight is Revivified at its end by a party caster with the spell, a slot and the gold', () => {
+  const cleric = heroSheet({ id: 'c', name: 'Mira', race: 'human', characterClass: 'cleric' });
+  const slots = [4, 3, 2, 0, 0, 0, 0, 0, 0];
+  const priest = { ...cleric, gp: 300, spellcasting: { ...cleric.spellcasting!, prepared: ['revivify'], slots, expended: slots.map(() => 0) } };
+  const { combat, party: p } = startFight(party({ p1: fighter, p2: priest, p3: wizard }), ['goblin-warrior']);
+  const { result, lines } = winRound(combat, p, { p2: { attacks: harmless }, p3: { hp: 0, status: 'dead' } });
+  assert.equal(result.ended, 'victory');
+  assert.deepEqual([result.party.sheets.p3.dead, result.party.sheets.p3.hp, result.party.sheets.p2.gp], [undefined, 1, 0]);
+  assert.deepEqual(lines.slice(-2), ['Cleo is dead.', 'Mira casts Revivify on Cleo, using up a 300 gp diamond: Cleo lives again with 1 HP.']);
+  const lost = winRound(combat, p, { p2: { hp: 0, status: 'dead' } });
+  assert.equal(lost.result.party.sheets.p2.dead, true, 'the caster herself slain: nobody to cast');
+});

@@ -12,6 +12,7 @@ import { fightRound, startFight, type FightEnd } from './fight.ts';
 import { foesNamed, type RollHook, type RulesHook } from './hooks.ts';
 import { parley, rollAttitude } from './parley.ts';
 import { partyRest } from './rest.ts';
+import { newlyDead, raiseTheDead, revivify } from './revive.ts';
 import type { CombatState, DungeonState, PartyState } from './state.ts';
 import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
 import { partyHazard, springTrap } from './traps.ts';
@@ -30,6 +31,13 @@ export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballo
 const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null): RulesTurn =>
   ({ ...s, lines, success, fight });
 
+/** Whoever the harm left at 0 HP is dying, and is settled; whoever it killed may be Revivified on the spot. */
+function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): { party: PartyState; lines: string[] } {
+  const settled = afterHarm(t.party);
+  const back = revivify(settled.party, newlyDead(before, settled.party));
+  return { party: back.party, lines: [...t.lines, ...settled.lines, ...back.lines] };
+}
+
 const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
 const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.level);
 
@@ -38,8 +46,8 @@ function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before:
   const heroes = Object.entries(s.party.sheets).filter(([, sheet]) => !sheet.dead).map(([playerId, sheet]) => ({ playerId, sheet }));
   const rolled = groupRoll(heroes, hook, votesOf(ballots), rng);
   const sheets = { ...s.party.sheets, ...Object.fromEntries(rolled.sheets.map((h) => [h.playerId, h.sheet])) };
-  const settled = afterHarm({ ...s.party, rng: rng.state(), sheets });
-  return done({ ...s, party: settled.party }, [...before, ...rolled.lines, ...settled.lines], rolled.success);
+  const settled = harmed(s.party, { party: { ...s.party, rng: rng.state(), sheets }, lines: rolled.lines });
+  return done({ ...s, party: settled.party }, [...before, ...settled.lines], rolled.success);
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
@@ -67,8 +75,8 @@ function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballo
 
 function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const sprung = springTrap(s.party, id, partyLevel(levelsOf(s)), votesOf(ballots));
-  const settled = afterHarm(sprung.party);
-  return done({ ...s, party: settled.party }, [...before, ...sprung.lines, ...settled.lines], sprung.success);
+  const settled = harmed(s.party, sprung);
+  return done({ ...s, party: settled.party }, [...before, ...settled.lines], sprung.success);
 }
 
 /** Foes met in a room: Hostile ones attack; the others watch and wait (their attitude is kept for the room). */
@@ -107,11 +115,6 @@ function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTur
   return { ...trapped, ...cleared.state, lines: cleared.lines };
 }
 
-/** Whoever the harm left at 0 HP is dying, and is settled. */
-function harmed(t: { party: PartyState; lines: string[] }): { party: PartyState; lines: string[] } {
-  const settled = afterHarm(t.party);
-  return { party: settled.party, lines: [...t.lines, ...settled.lines] };
-}
 
 const traded = (s: RulesState, t: Pick<Traded, 'party' | 'lines'>) => done({ ...s, party: t.party }, t.lines);
 
@@ -125,8 +128,9 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   sell: (s, hook) => traded(s, sellItems(s.party, hook.items)),
   use: (s, hook) => traded(s, usePotion(s.party, hook.item)),
   trap: (s, hook, ballots) => trap(s, hook.trap, ballots),
-  hazard: (s, { kind: _, hazard, ...amount }) => traded(s, harmed(partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec))),
+  hazard: (s, { kind: _, hazard, ...amount }) => traded(s, harmed(s.party, partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec))),
   parley: (s, hook, ballots) => talk(s, hook.monsters, ballots),
+  revive: (s) => traded(s, raiseTheDead(s.party)),
 };
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */

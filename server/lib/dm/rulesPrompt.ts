@@ -32,7 +32,10 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   they let the party be, failure sours them and Hostile foes attack), a fight with them, or a way past. Outside
   a dungeon, {"kind":"parley","monsters":["goblin-warrior"]} talks with creatures you name.
 - In a fight the foes check morale when shaken (first death, half their strength gone, leader down): they may
-  stand, flee (the heroes get Opportunity Attacks) or surrender. Slain heroes stay dead.
+  stand, flee (the heroes get Opportunity Attacks) or surrender. Slain heroes stay dead unless a party caster
+  Revivifies them on the spot (the engine does that). Where there is a temple or shrine, {"kind":"revive"}
+  raises every dead hero (Raise Dead: a party caster's 500 gp diamond, or the temple's 2,500 gp) while the
+  party's gold lasts.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the

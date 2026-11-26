@@ -34,7 +34,9 @@ export type RulesHook =
   /** An SRD 5.2 hazard that befalls every living hero; feet, minutes, hours or days as the hazard needs. */
   | { kind: 'hazard'; hazard: HazardKind; feet?: number; minutes?: number; hours?: number; days?: number }
   /** Talk to the foes waiting in the room, or to these (play/parley.ts). */
-  | { kind: 'parley'; monsters?: string[] | null };
+  | { kind: 'parley'; monsters?: string[] | null }
+  /** A temple or shrine: every dead hero is raised (Raise Dead) while the party's gold lasts (play/revive.ts). */
+  | { kind: 'revive' };
 
 interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
 
@@ -77,6 +79,7 @@ const HookSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('trap'), trap: z.string().refine(isTrap) }),
   hazardSchema,
   z.object({ kind: z.literal('parley'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).nullish() }),
+  z.object({ kind: z.literal('revive') }),
 ]);
 
 /** The hook, or null when there is none or it doesn't hold up (unknown skill or monster, DC out of 1–30…). */
@@ -132,6 +135,7 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   trap: () => 'Risk a trap',
   hazard: (h) => `Hazard: ${titleCase(h.hazard)}${hazardAmount(h)}`,
   parley: (h) => (h.monsters && h.monsters.length > 0 ? `Parley with ${foesNamed(h.monsters)}` : 'Parley'),
+  revive: () => 'Raise the dead',
 };
 
 /** What the app shows under the choice. */

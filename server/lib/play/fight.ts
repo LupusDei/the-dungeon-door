@@ -20,6 +20,7 @@ import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
 import { afterFight } from './dying.ts';
 import { type Break, morale } from './morale.ts';
+import { newlyDead, revivify } from './revive.ts';
 import type { PartyState } from './state.ts';
 
 export const MAX_ROUNDS = 10;
@@ -215,7 +216,7 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   return { action, state: drunk.state, sheets: { ...drunk.sheets, [id]: sheet } };
 }
 
-/** However it ends, the slain stay dead and the fallen are settled: stabilized by a friend, or left to their death saves. */
+/** However it ends, the fallen are settled (stabilized by a friend, or left to their death saves) and the slain stay dead, unless a party caster Revivifies them. */
 function settleFight(party: PartyState, combat: CombatState, lines: string[], broke: Break | null): Round {
   const ended = endOf(combat, broke);
   if (ended === null) return { party, combat, lines, ended };
@@ -225,7 +226,8 @@ function settleFight(party: PartyState, combat: CombatState, lines: string[], br
     defeat: () => ({ party, lines: [] }),
   }[ended]();
   const settled = afterFight(won.party, combat);
-  return { party: settled.party, combat, lines: [...lines, ...won.lines, ...settled.lines], ended };
+  const back = revivify(settled.party, newlyDead(won.party, settled.party));
+  return { party: back.party, combat, lines: [...lines, ...won.lines, ...settled.lines, ...back.lines], ended };
 }
 
 /** Plays one round: each hero by their vote, monsters by rule; then settles the fight if it ended. */
