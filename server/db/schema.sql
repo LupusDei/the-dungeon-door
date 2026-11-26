@@ -75,3 +75,13 @@ CREATE TABLE IF NOT EXISTS quest_docs (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (kind, id)
 );
+
+-- Sign-in records (lib/authstore.ts): OAuth clients, pending requests, one-time codes and tokens.
+-- Codes and tokens are stored as hashes; everything expires.
+CREATE TABLE IF NOT EXISTS auth_docs (
+  kind       text NOT NULL,
+  id         text NOT NULL,
+  data       jsonb NOT NULL,
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY (kind, id)
+);

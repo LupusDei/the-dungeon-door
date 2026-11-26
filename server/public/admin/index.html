@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — The Dungeon Door</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#120e0a">
+<link rel="icon" href="/media/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&family=Spectral:ital,wght@0,400;1,400&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+/* Layout: who you are and where the project stands, then one tab per thing you can manage. */
+.page { display: grid; gap: 28px; padding-block: 34px 0; }
+.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.masthead h1 { font: 700 clamp(2rem, 5vw, 2.8rem)/1.05 var(--display); }
+.who { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14.5px; }
+.who strong { color: var(--fg); }
+.card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 20px; }
+.card h2 { font: 600 1.15rem/1.25 var(--display); margin-bottom: 8px; }
+.card p { color: var(--muted); max-width: 62ch; }
+.card p + p { margin-top: 10px; }
+.gate { max-width: 560px; display: grid; gap: 14px; }
+.standing { display: grid; gap: 12px; padding: 16px 20px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, var(--raised), var(--surface)); }
+.standing-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.standing-where { font: 600 1.15rem/1.25 var(--display); }
+.muted { color: var(--muted); }
+
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; cursor: pointer; color: var(--muted); font-weight: 600; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--gold); border-bottom-color: var(--gold); }
+.panel { display: grid; gap: 18px; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.panel-head h2 { font: 600 1rem/1.2 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
+.spacer { flex: 1 1 0; }
+input[type="search"], input[type="text"], input[type="password"], select, textarea {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; min-width: 0; width: 100%;
+}
+textarea { resize: vertical; font: 400 15.5px/1.45 var(--prose); }
+select:disabled, input:disabled, textarea:disabled { opacity: .6; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar input[type="search"] { flex: 1 1 200px; width: auto; }
+.toolbar select { flex: 0 1 170px; width: auto; }
+
+/* Tasks table: a grid on wide screens, stacked cards on narrow ones */
+.rows { display: grid; gap: 8px; }
+.trow { display: grid; gap: 8px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); grid-template-columns: minmax(0, 1fr); }
+.trow.head { background: none; border-color: transparent; padding-block: 0; color: var(--muted); font-size: 12.5px; display: none; }
+.trow-title { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.trow-title:hover { color: var(--gold); }
+.trow-title[data-status="done"] { color: var(--muted); }
+.trow-fields { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.trow select { padding: 6px 8px; font-size: 13.5px; }
+@media (min-width: 900px) {
+  .trow { grid-template-columns: minmax(0, 5fr) minmax(0, 8fr) auto; }
+  .trow.head { display: grid; }
+  .trow-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Editors for levels, workstreams and facts */
+.items { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.item { display: grid; gap: 8px 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); grid-template-columns: 34px minmax(0, 1fr); }
+.item-num { font: 700 14px/1 var(--display); color: var(--gold); text-align: center; }
+.item-fields { display: grid; gap: 8px; }
+.item-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.item-count { color: var(--muted); font-size: 13px; }
+@media (min-width: 760px) {
+  .item { grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .item-fields.two { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .item-fields.three { grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 3fr); }
+  .item-actions { grid-column: auto; }
+}
+.savebar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.savebar .note { color: var(--muted); font-size: 14px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-size: 13px; color: var(--muted); }
+.row { display: grid; gap: 14px; }
+@media (min-width: 520px) { .row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+pre.code { margin: 0; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; color: var(--fg); }
+.connect { display: grid; gap: 16px; }
+.connect h3 { font: 600 1rem/1.3 var(--body); margin-bottom: 6px; }
+.team { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.member { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.role { font-size: 12px; color: var(--muted); }
+
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--bg); color: var(--fg); width: min(560px, calc(100vw - 32px)); padding: 22px; max-height: calc(100vh - 32px); overflow: auto; }
+dialog::backdrop { background: var(--scrim); }
+.dialog-title { font: 600 1.15rem/1.2 var(--display); margin-bottom: 14px; }
+.fields { display: grid; gap: 14px; }
+.dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.form-error { color: var(--ember); font-size: 13.5px; min-height: 1.2em; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 40; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; max-width: calc(100vw - 32px); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="wordmark" href="/"><img src="/media/icon.png" alt="" width="30" height="30">The Dungeon Door</a>
+    <nav class="topnav" aria-label="Site">
+      <a href="/quest-log">Quest log</a>
+      <a href="/admin" aria-current="page">Admin</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap page">
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">The Dungeon Door</p>
+      <h1>Admin</h1>
+    </div>
+    <div class="who" id="who" hidden></div>
+  </header>
+
+  <section class="gate" id="gate" hidden></section>
+
+  <div id="app" hidden style="display:grid; gap:24px">
+    <div class="standing" id="standing"></div>
+    <div class="tabs" role="tablist" aria-label="What to manage">
+      <button class="tab" role="tab" data-tab="tasks" id="t-tasks">Tasks</button>
+      <button class="tab" role="tab" data-tab="levels" id="t-levels">Levels</button>
+      <button class="tab" role="tab" data-tab="workstreams" id="t-workstreams">Workstreams</button>
+      <button class="tab" role="tab" data-tab="board" id="t-board">Headline</button>
+      <button class="tab" role="tab" data-tab="connect" id="t-connect">Connect an assistant</button>
+    </div>
+
+    <section class="panel" id="p-tasks" role="tabpanel" aria-labelledby="t-tasks">
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="Search tasks" aria-label="Search tasks">
+        <select id="f-status" aria-label="Filter by status"></select>
+        <select id="f-owner" aria-label="Filter by owner"></select>
+        <select id="f-level" aria-label="Filter by level"></select>
+        <span class="spacer"></span>
+        <span class="muted num" id="task-count"></span>
+        <button class="btn primary small" id="add-task" type="button">Add a task</button>
+      </div>
+      <div class="rows" id="task-rows"></div>
+    </section>
+
+    <section class="panel" id="p-levels" role="tabpanel" aria-labelledby="t-levels" hidden>
+      <div class="panel-head"><h2>Levels</h2><span class="muted">The project's milestones, in the order the party clears them.</span></div>
+      <div class="muted" id="levels-note" hidden>Only admins can change levels. You can see them here.</div>
+      <ol class="items" id="level-items"></ol>
+      <div class="savebar">
+        <button class="btn small" id="level-add" type="button">Add a level</button>
+        <span class="spacer"></span>
+        <span class="note" id="levels-dirty" hidden>Unsaved changes</span>
+        <button class="btn small" id="levels-reset" type="button" hidden>Discard</button>
+        <button class="btn primary small" id="levels-save" type="button" disabled>Save levels</button>
+      </div>
+    </section>
+
+    <section class="panel" id="p-workstreams" role="tabpanel" aria-labelledby="t-workstreams" hidden>
+      <div class="panel-head"><h2>Workstreams</h2><span class="muted">The areas of the project that tasks are grouped by.</span></div>
+      <div class="muted" id="areas-note" hidden>Only admins can change workstreams. You can see them here.</div>
+      <ol class="items" id="area-items"></ol>
+      <div class="savebar">
+        <button class="btn small" id="area-add" type="button">Add a workstream</button>
+        <span class="spacer"></span>
+        <span class="note" id="areas-dirty" hidden>Unsaved changes</span>
+        <button class="btn small" id="areas-reset" type="button" hidden>Discard</button>
+        <button class="btn primary small" id="areas-save" type="button" disabled>Save workstreams</button>
+      </div>
+    </section>
+
+    <section class="panel" id="p-board" role="tabpanel" aria-labelledby="t-board" hidden>
+      <div class="panel-head"><h2>Headline</h2><span class="muted">What the top of the quest log says.</span></div>
+      <div class="muted" id="board-note" hidden>Only admins can change the headline. You can see it here.</div>
+      <div class="field"><label for="b-summary">Summary</label><textarea id="b-summary" rows="3" maxlength="400"></textarea></div>
+      <div class="field">
+        <label>Facts shown beside it (for example the latest build)</label>
+        <ol class="items" id="fact-items"></ol>
+      </div>
+      <div class="savebar">
+        <button class="btn small" id="fact-add" type="button">Add a fact</button>
+        <span class="spacer"></span>
+        <span class="note" id="board-dirty" hidden>Unsaved changes</span>
+        <button class="btn small" id="board-reset" type="button" hidden>Discard</button>
+        <button class="btn primary small" id="board-save" type="button" disabled>Save headline</button>
+      </div>
+    </section>
+
+    <section class="panel connect" id="p-connect" role="tabpanel" aria-labelledby="t-connect" hidden>
+      <div class="card">
+        <h2>The quest log speaks MCP</h2>
+        <p>Any assistant that supports the Model Context Protocol can read the board and manage tasks, levels and workstreams as you. Point it at this address:</p>
+        <pre class="code" id="mcp-url" style="margin-top:12px"></pre>
+      </div>
+      <div>
+        <h3>Claude Code</h3>
+        <pre class="code" id="mcp-claude"></pre>
+        <p class="muted" style="margin-top:8px" id="mcp-claude-note"></p>
+      </div>
+      <div>
+        <h3>Cursor and other clients</h3>
+        <pre class="code" id="mcp-json"></pre>
+        <p class="muted" style="margin-top:8px">The client opens a browser window, you sign in with GitHub and approve it, and it stays connected.</p>
+      </div>
+      <div>
+        <h3>Scripts and assistants without a browser</h3>
+        <pre class="code" id="mcp-key"></pre>
+        <p class="muted" style="margin-top:8px">A personal quest key works as the token. Ask the owner for yours; never paste it into a chat or commit it.</p>
+      </div>
+      <div>
+        <h3>The team</h3>
+        <div class="team" id="team"></div>
+        <p class="muted" style="margin-top:10px">Admins can also change levels, workstreams and the headline. Members manage tasks.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="sitefoot">
+  <div class="wrap">
+    <span class="grow">The Dungeon Door. Team admin.</span>
+    <a href="/">Home</a>
+    <a href="/quest-log">Quest log</a>
+  </div>
+</footer>
+
+<dialog id="task-dialog" aria-labelledby="dialog-title">
+  <form id="task-form" method="dialog" novalidate>
+    <div class="dialog-title" id="dialog-title">Add a task</div>
+    <div class="fields">
+      <div class="field"><label for="d-title">What needs doing</label><input type="text" id="d-title" maxlength="140" autocomplete="off" required></div>
+      <div class="row">
+        <div class="field"><label for="d-area">Workstream</label><select id="d-area"></select></div>
+        <div class="field"><label for="d-owner">Owner</label><select id="d-owner"></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="d-level">Level</label><select id="d-level"></select></div>
+        <div class="field"><label for="d-status">Status</label><select id="d-status"></select></div>
+      </div>
+      <div class="field"><label for="d-notes">Notes (optional)</label><textarea id="d-notes" rows="4" maxlength="1200"></textarea></div>
+      <div class="field"><label for="d-link">Link (optional, https://…)</label><input type="text" id="d-link" inputmode="url" maxlength="300" autocomplete="off" placeholder="https://github.com/…"></div>
+      <div class="form-error" id="form-error" role="alert"></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn primary" id="d-save" type="submit">Add task</button>
+      <button class="btn" id="d-cancel" type="button">Cancel</button>
+      <span class="spacer"></span>
+      <button class="btn danger" id="d-delete" type="button" hidden>Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  const STATUSES = [{ id: "todo", name: "To do" }, { id: "doing", name: "In progress" }, { id: "done", name: "Done" }];
+  const KEY_SLOT = "dd.questKey";
+  const TABS = ["tasks", "levels", "workstreams", "board", "connect"];
+
+  const state = {
+    auth: null, me: null, key: null, tasks: [], meta: null, people: [], loaded: false,
+    filter: { q: "", status: "", owner: "", level: "" }, busy: new Set(), editing: null, confirmDelete: false,
+    draft: { milestones: null, areas: null, summary: null, facts: null }, confirming: new Set(),
+  };
+  let toastTimer = null;
+  const $ = (id) => document.getElementById(id);
+
+  /** Tiny DOM builder. Text always goes in as text, never markup. */
+  function el(tag, props, ...kids) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props || {})) {
+      if (value == null || value === false) continue;
+      if (key === "class") node.className = value;
+      else if (key === "text") node.textContent = value;
+      else if (key === "value") node.value = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value === true ? "" : value);
+    }
+    for (const kid of kids.flat(Infinity)) {
+      if (kid == null || kid === false) continue;
+      node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+    return node;
+  }
+
+  const milestones = () => (state.meta && state.meta.milestones) || [];
+  const areas = () => (state.meta && state.meta.areas) || [];
+  const isAdmin = () => !!state.me && state.me.role === "admin";
+  const levelLabel = (id) => { const i = milestones().findIndex((m) => m.id === id); return i < 0 ? "" : "Level " + (ROMAN[i] || i + 1); };
+  const avatar = (p, size) => (p ? el("img", { class: "avatar" + (size ? " " + size : ""), src: p.avatar, alt: "", loading: "lazy" }) : null);
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+
+  function toast(message) {
+    const box = $("toast");
+    box.textContent = message;
+    box.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { box.hidden = true; }, 4200);
+  }
+
+  async function api(method, path, body) {
+    const headers = { "x-requested-with": "dungeon-door" };
+    if (body) headers["content-type"] = "application/json";
+    if (state.key) headers["x-quest-key"] = state.key;
+    const response = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data.error || "Request failed"), { status: response.status });
+    return data;
+  }
+
+  function failed(error) {
+    if (error.status === 401) { toast("You're signed out. Sign in again."); boot(); }
+    else toast(error.status && error.status < 500 ? error.message : "That didn't save. Check your connection and try again.");
+  }
+
+  // ---------- Signing in ----------
+
+  const remembered = () => { try { return localStorage.getItem(KEY_SLOT); } catch { return null; } };
+  const remember = (key) => { try { key ? localStorage.setItem(KEY_SLOT, key) : localStorage.removeItem(KEY_SLOT); } catch { /* private window */ } };
+
+  async function whoAmI() {
+    state.key = null;
+    state.auth = await api("GET", "/api/auth/me").catch(() => ({ githubSignIn: false, person: null }));
+    state.me = state.auth.person;
+    const saved = remembered();
+    if (!state.me && saved) {
+      state.key = saved;
+      try { state.me = (await api("GET", "/api/quest-me")).person; }
+      catch (error) { state.key = null; if (error.status === 401) remember(null); }
+    }
+  }
+
+  async function signOut() {
+    remember(null);
+    await api("POST", "/api/auth/logout").catch(() => {});
+    await boot();
+  }
+
+  function renderGate() {
+    const gate = $("gate");
+    gate.replaceChildren();
+    const auth = state.auth || {};
+    if (auth.signedInAs && !state.me) {
+      gate.append(el("div", { class: "card" },
+        el("h2", { text: "Not on the team" }),
+        el("p", null, "You're signed in to GitHub as ", el("strong", { text: auth.signedInAs }), ", who isn't a member of this team, so there is nothing to manage here."),
+        el("p", null, el("button", { class: "btn small", type: "button", text: "Sign out", onclick: signOut }))));
+      return;
+    }
+    const signinFailed = new URLSearchParams(location.search).get("signin") === "failed";
+    if (auth.githubSignIn) {
+      gate.append(el("div", { class: "card" },
+        el("h2", { text: "Team sign-in" }),
+        el("p", { text: "Manage the quest log: tasks, levels, workstreams and the headline. Sign in with the GitHub account that's on the team." }),
+        signinFailed ? el("p", { style: "color:var(--ember)", text: "That sign-in didn't complete. Try again." }) : null,
+        el("p", null, el("a", { class: "btn primary", href: "/api/auth/login?return=/admin", text: "Sign in with GitHub" }))));
+    } else {
+      gate.append(el("div", { class: "card" },
+        el("h2", { text: "GitHub sign-in isn't set up yet" }),
+        el("p", { text: "Until the site's GitHub app is connected, sign in with your personal quest key instead." })));
+    }
+    const keyError = el("div", { class: "form-error", role: "alert" });
+    const keyInput = el("input", { type: "password", id: "gate-key", autocomplete: "off", spellcheck: "false" });
+    gate.append(el("form", { class: "card", style: "display:grid; gap:12px", onsubmit: async (event) => {
+        event.preventDefault();
+        const key = keyInput.value.trim();
+        if (!key) { keyError.textContent = "Paste your quest key."; return; }
+        state.key = key;
+        try {
+          state.me = (await api("GET", "/api/quest-me")).person;
+          remember(key);
+          await start();
+        } catch {
+          state.key = null;
+          keyError.textContent = "That key isn't recognised.";
+        }
+      } },
+      el("h2", { text: auth.githubSignIn ? "Or use a quest key" : "Quest key" }),
+      el("div", { class: "field" }, el("label", { for: "gate-key", text: "Your personal quest key" }), keyInput),
+      keyError,
+      el("div", null, el("button", { class: "btn small", type: "submit", text: "Sign in with key" }))));
+  }
+
+  // ---------- Data ----------
+
+  async function refresh() {
+    try {
+      const board = await api("GET", "/api/quests");
+      state.tasks = board.tasks || [];
+      state.meta = board.meta || { summary: "", milestones: [], areas: [], facts: [] };
+      state.people = board.people || [];
+      state.loaded = true;
+    } catch { if (state.loaded) toast("Couldn't refresh the board."); }
+    renderAll();
+  }
+
+  const dirty = (key) => state.draft[key] !== null;
+
+  function renderStanding() {
+    const box = $("standing");
+    box.replaceChildren();
+    const count = (list) => ({ total: list.length, done: list.filter((t) => t.status === "done").length, doing: list.filter((t) => t.status === "doing").length });
+    const all = count(state.tasks);
+    const levels = milestones().map((m) => ({ m, c: count(state.tasks.filter((t) => t.milestone === m.id)) }));
+    const here = levels.find((x) => x.c.total === 0 || x.c.done < x.c.total);
+    const pct = (n) => (all.total ? (n / all.total) * 100 : 0) + "%";
+    box.append(
+      el("div", { class: "standing-line" },
+        el("div", { class: "standing-where", text: !levels.length ? "No levels yet" : here ? "The party stands at " + levelLabel(here.m.id) + " · " + here.m.name : "Every level is cleared" }),
+        el("div", { class: "muted num", text: all.done + " of " + all.total + " tasks done" + (all.doing ? " · " + all.doing + " in progress" : "") })),
+      el("div", { class: "bar", role: "img", "aria-label": all.done + " of " + all.total + " tasks done" },
+        el("i", { class: "done", style: "width:" + pct(all.done) }), el("i", { class: "doing", style: "width:" + pct(all.doing) })));
+  }
+
+  function fillSelect(select, options, value, placeholder) {
+    const keep = value !== undefined ? value : select.value;
+    select.replaceChildren();
+    if (placeholder != null) select.append(el("option", { value: "", text: placeholder }));
+    for (const o of options) select.append(el("option", { value: o.id, text: o.name }));
+    select.value = [...select.options].some((o) => o.value === keep) ? keep : "";
+  }
+
+  const levelOptions = () => milestones().map((m) => ({ id: m.id, name: levelLabel(m.id) + " · " + m.name }));
+
+  // ---------- Tasks ----------
+
+  function renderTasks() {
+    fillSelect($("f-status"), STATUSES, state.filter.status, "Any status");
+    fillSelect($("f-owner"), [...state.people, { id: "~none", name: "Unassigned" }], state.filter.owner, "Anyone");
+    fillSelect($("f-level"), levelOptions(), state.filter.level, "All levels");
+    const f = state.filter, q = f.q.trim().toLowerCase();
+    const order = { doing: 0, todo: 1, done: 2 };
+    const shown = state.tasks
+      .filter((t) => (!f.status || t.status === f.status) && (!f.owner || (f.owner === "~none" ? !t.owner : t.owner === f.owner)) &&
+        (!f.level || t.milestone === f.level) && (!q || ((t.title || "") + " " + (t.notes || "")).toLowerCase().includes(q)))
+      .sort((a, b) => order[a.status] - order[b.status] || ((a.updatedAt || "") < (b.updatedAt || "") ? 1 : -1));
+    $("task-count").textContent = shown.length === state.tasks.length ? state.tasks.length + " tasks" : shown.length + " of " + state.tasks.length;
+    const rows = $("task-rows");
+    rows.replaceChildren(el("div", { class: "trow head", "aria-hidden": "true" },
+      el("span", { text: "Task" }),
+      el("div", { class: "trow-fields" }, el("span", { text: "Status" }), el("span", { text: "Owner" }), el("span", { text: "Level" }), el("span", { text: "Workstream" })),
+      el("span", { style: "width:56px" })));
+    if (!shown.length) rows.append(el("div", { class: "card muted", text: state.tasks.length ? "No tasks match those filters." : "No tasks yet. Add the first one." }));
+    for (const t of shown) {
+      const pick = (field, options, placeholder, label) => {
+        const select = el("select", { id: field + "-" + t.id, "aria-label": label + " of " + t.title, disabled: state.busy.has(t.id),
+          onchange: (e) => patch(t, { [field]: e.target.value }) });
+        fillSelect(select, options, t[field] || "", placeholder);
+        return select;
+      };
+      rows.append(el("div", { class: "trow" },
+        el("button", { class: "trow-title", type: "button", "data-status": t.status, text: t.title, title: "Edit", onclick: () => openDialog(t) }),
+        el("div", { class: "trow-fields" },
+          pick("status", STATUSES, null, "Status"),
+          pick("owner", state.people, "Unassigned", "Owner"),
+          pick("milestone", levelOptions(), "No level", "Level"),
+          pick("area", areas(), "No workstream", "Workstream")),
+        el("button", { class: "btn quiet small", type: "button", text: "Edit", onclick: () => openDialog(t) })));
+    }
+  }
+
+  async function patch(task, fields) {
+    if (state.busy.has(task.id)) return;
+    state.busy.add(task.id);
+    try { await api("PATCH", "/api/quests?id=" + encodeURIComponent(task.id), fields); }
+    catch (error) { failed(error); }
+    finally {
+      state.busy.delete(task.id);
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      await refresh();
+    }
+  }
+
+  function openDialog(task) {
+    state.editing = task || null;
+    state.confirmDelete = false;
+    fillSelect($("d-area"), areas(), task ? task.area || "" : (areas()[0] || {}).id || "", "No workstream");
+    fillSelect($("d-owner"), state.people, task ? task.owner || "" : state.me.id, "Unassigned");
+    fillSelect($("d-level"), levelOptions(), task ? task.milestone || "" : state.filter.level || "", "No level");
+    fillSelect($("d-status"), STATUSES, task ? task.status : "todo");
+    $("d-title").value = task ? task.title : "";
+    $("d-notes").value = task ? task.notes || "" : "";
+    $("d-link").value = task ? task.link || "" : "";
+    $("form-error").textContent = "";
+    $("dialog-title").textContent = task ? "Edit task" : "Add a task";
+    $("d-save").textContent = task ? "Save changes" : "Add task";
+    $("d-delete").hidden = !task;
+    $("d-delete").textContent = "Delete";
+    $("task-dialog").showModal();
+    $("d-title").focus();
+  }
+
+  async function saveDialog(event) {
+    event.preventDefault();
+    const fields = { title: $("d-title").value.trim(), area: $("d-area").value, owner: $("d-owner").value, milestone: $("d-level").value,
+      status: $("d-status").value || "todo", notes: $("d-notes").value.trim(), link: $("d-link").value.trim() };
+    if (!fields.title) { $("form-error").textContent = "Give the task a short title."; return; }
+    $("d-save").disabled = true;
+    try {
+      if (state.editing) await api("PATCH", "/api/quests?id=" + encodeURIComponent(state.editing.id), fields);
+      else await api("POST", "/api/quests", fields);
+      $("task-dialog").close();
+      toast(state.editing ? "Saved." : "Task added.");
+    } catch (error) {
+      if (error.status === 400) { $("form-error").textContent = error.message; return; }
+      $("task-dialog").close();
+      failed(error);
+    } finally {
+      $("d-save").disabled = false;
+      refresh();
+    }
+  }
+
+  async function deleteFromDialog() {
+    if (!state.editing) return;
+    if (!state.confirmDelete) { state.confirmDelete = true; $("d-delete").textContent = "Delete for everyone?"; return; }
+    try {
+      await api("DELETE", "/api/quests?id=" + encodeURIComponent(state.editing.id));
+      $("task-dialog").close();
+      toast("Task deleted.");
+    } catch (error) { $("task-dialog").close(); failed(error); }
+    refresh();
+  }
+
+  // ---------- Levels, workstreams, headline: edit a draft, then save it whole ----------
+
+  /** One editor for an ordered list. `spec` says which meta list it edits and which fields rows have. */
+  function listEditor(spec) {
+    const draft = () => state.draft[spec.key] || (state.meta ? state.meta[spec.key] : []) || [];
+    const touch = () => { if (!state.draft[spec.key]) state.draft[spec.key] = clone(state.meta[spec.key] || []); return state.draft[spec.key]; };
+    const usage = (id) => (spec.taskField && id ? state.tasks.filter((t) => t[spec.taskField] === id).length : 0);
+
+    function render() {
+      const list = $(spec.list);
+      const admin = isAdmin();
+      if (spec.note) $(spec.note).hidden = admin;
+      list.replaceChildren();
+      const items = draft();
+      if (!items.length) list.append(el("li", { class: "card muted", text: spec.empty }));
+      items.forEach((item, i) => {
+        const confirmKey = spec.key + ":" + i;
+        const used = usage(item.id);
+        const input = (field, placeholder, max) => el("input", { type: "text", value: item[field] || "", placeholder, maxlength: max, disabled: !admin,
+          "aria-label": placeholder + " " + (i + 1), oninput: (e) => { touch()[i][field] = e.target.value; renderBar(); } });
+        list.append(el("li", { class: "item" },
+          el("div", { class: "item-num", "aria-hidden": "true", text: spec.numbered ? ROMAN[i] || String(i + 1) : "•" }),
+          el("div", { class: "item-fields " + (spec.fields.length === 3 ? "three" : spec.fields.length === 2 ? "two" : "") },
+            spec.fields.map((f) => input(f.name, f.placeholder, f.max))),
+          admin ? el("div", { class: "item-actions" },
+            spec.taskField ? el("span", { class: "item-count num", text: used ? used + (used === 1 ? " task" : " tasks") : item.id ? "no tasks" : "new" }) : null,
+            el("button", { class: "btn quiet small", type: "button", "aria-label": "Move up", text: "↑", disabled: i === 0,
+              onclick: () => { const d = touch(); d.splice(i - 1, 0, d.splice(i, 1)[0]); state.confirming.clear(); render(); } }),
+            el("button", { class: "btn quiet small", type: "button", "aria-label": "Move down", text: "↓", disabled: i === items.length - 1,
+              onclick: () => { const d = touch(); d.splice(i + 1, 0, d.splice(i, 1)[0]); state.confirming.clear(); render(); } }),
+            el("button", { class: "btn quiet small danger", type: "button",
+              text: state.confirming.has(confirmKey) ? (used ? "Remove (frees " + used + ")?" : "Remove?") : "Remove",
+              onclick: () => {
+                if (!state.confirming.has(confirmKey)) { state.confirming.clear(); state.confirming.add(confirmKey); render(); return; }
+                touch().splice(i, 1); state.confirming.clear(); render();
+              } })) : null));
+      });
+      $(spec.add).hidden = !admin;
+      renderBar();
+    }
+
+    function renderBar() {
+      const changed = dirty(spec.key);
+      $(spec.dirty).hidden = !changed;
+      $(spec.reset).hidden = !changed;
+      $(spec.save).disabled = !changed || !isAdmin();
+      $(spec.save).hidden = !isAdmin();
+    }
+
+    $(spec.add).addEventListener("click", () => {
+      touch().push(Object.fromEntries(spec.fields.map((f) => [f.name, ""])));
+      render();
+      const inputs = $(spec.list).querySelectorAll("input");
+      if (inputs.length) inputs[inputs.length - spec.fields.length].focus();
+    });
+    $(spec.reset).addEventListener("click", () => { state.draft[spec.key] = null; state.confirming.clear(); render(); });
+    return { render, renderBar };
+  }
+
+  const levelEditor = listEditor({ key: "milestones", list: "level-items", add: "level-add", save: "levels-save", reset: "levels-reset", dirty: "levels-dirty", note: "levels-note",
+    numbered: true, taskField: "milestone", empty: "No levels yet. Add the first milestone.",
+    fields: [{ name: "name", placeholder: "Level name", max: 60 }, { name: "blurb", placeholder: "What clearing it means", max: 240 }] });
+  const areaEditor = listEditor({ key: "areas", list: "area-items", add: "area-add", save: "areas-save", reset: "areas-reset", dirty: "areas-dirty", note: "areas-note",
+    numbered: false, taskField: "area", empty: "No workstreams yet.",
+    fields: [{ name: "name", placeholder: "Workstream name", max: 60 }] });
+  const factEditor = listEditor({ key: "facts", list: "fact-items", add: "fact-add", save: "board-save", reset: "board-reset", dirty: "board-dirty", note: null,
+    numbered: false, taskField: null, empty: "No facts shown.",
+    fields: [{ name: "label", placeholder: "Label", max: 40 }, { name: "value", placeholder: "Value", max: 120 }, { name: "href", placeholder: "Link (optional)", max: 300 }] });
+
+  function renderBoard() {
+    const admin = isAdmin();
+    $("board-note").hidden = admin;
+    const summary = $("b-summary");
+    summary.disabled = !admin;
+    if (document.activeElement !== summary) summary.value = state.draft.summary !== null ? state.draft.summary : (state.meta && state.meta.summary) || "";
+    factEditor.render();
+    boardBar();
+  }
+
+  function boardBar() {
+    const changed = dirty("summary") || dirty("facts");
+    $("board-dirty").hidden = !changed;
+    $("board-reset").hidden = !changed;
+    $("board-save").disabled = !changed || !isAdmin();
+    $("board-save").hidden = !isAdmin();
+  }
+
+  async function saveMeta(body, keys, done) {
+    try {
+      const board = await api("PUT", "/api/quest-meta", body);
+      state.meta = board.meta;
+      state.tasks = board.tasks;
+      for (const key of keys) state.draft[key] = null;
+      state.confirming.clear();
+      // Leave the field being typed in, so the editors redraw from what was saved.
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      toast(done);
+    } catch (error) { failed(error); }
+    renderAll();
+  }
+
+  const cleaned = (list) => list.map((item) => Object.fromEntries(Object.entries(item).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])));
+
+  // ---------- Connect ----------
+
+  function renderConnect() {
+    const url = location.origin + "/api/mcp";
+    $("mcp-url").textContent = url;
+    $("mcp-claude").textContent = "claude mcp add --transport http dungeon-door " + url;
+    $("mcp-claude-note").textContent = (state.auth && state.auth.githubSignIn)
+      ? "Then run /mcp inside Claude Code, choose dungeon-door and sign in with GitHub."
+      : "GitHub sign-in isn't set up on this site yet, so add your quest key as shown under “Scripts” below.";
+    $("mcp-json").textContent = JSON.stringify({ mcpServers: { "dungeon-door": { url } } }, null, 2);
+    $("mcp-key").textContent = "claude mcp add --transport http dungeon-door " + url + " \\\n  --header \"Authorization: Bearer $QUEST_KEY\"";
+    $("team").replaceChildren(...state.people.map((p) => el("div", { class: "member" }, avatar(p, "big"),
+      el("div", null, el("div", { text: p.name, style: "font-weight:600" }), el("div", { class: "role", text: p.id + " · " + p.role })))));
+  }
+
+  // ---------- Shell ----------
+
+  function renderWho() {
+    const who = $("who");
+    who.replaceChildren();
+    who.hidden = !state.me;
+    if (state.me) who.append(avatar(state.me), el("span", null, el("strong", { text: state.me.name }), " · " + state.me.role),
+      el("button", { class: "btn quiet small", type: "button", text: "Sign out", onclick: signOut }));
+  }
+
+  function showTab(name) {
+    const tab = TABS.includes(name) ? name : "tasks";
+    for (const t of TABS) {
+      $("t-" + t).setAttribute("aria-selected", String(t === tab));
+      $("p-" + t).hidden = t !== tab;
+    }
+  }
+
+  function renderAll() {
+    if (!state.loaded) return;
+    const editingText = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.type !== "search";
+    renderWho();
+    renderStanding();
+    if (!(document.activeElement && document.activeElement.tagName === "SELECT")) renderTasks();
+    if (!editingText) { levelEditor.render(); areaEditor.render(); renderBoard(); }
+    renderConnect();
+  }
+
+  async function start() {
+    $("gate").hidden = true;
+    $("app").hidden = false;
+    showTab(location.hash.slice(1));
+    await refresh();
+  }
+
+  async function boot() {
+    await whoAmI();
+    renderWho();
+    if (state.me) return start();
+    $("app").hidden = true;
+    $("gate").hidden = false;
+    renderGate();
+  }
+
+  for (const t of TABS) $("t-" + t).addEventListener("click", () => { history.replaceState(null, "", "#" + t); showTab(t); });
+  addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+  $("q").addEventListener("input", (e) => { state.filter.q = e.target.value; renderTasks(); });
+  for (const [id, key] of [["f-status", "status"], ["f-owner", "owner"], ["f-level", "level"]]) {
+    $(id).addEventListener("change", (e) => { state.filter[key] = e.target.value; e.target.blur(); renderTasks(); });
+  }
+  $("add-task").addEventListener("click", () => openDialog(null));
+  $("task-form").addEventListener("submit", saveDialog);
+  $("d-cancel").addEventListener("click", () => $("task-dialog").close());
+  $("d-delete").addEventListener("click", deleteFromDialog);
+  $("levels-save").addEventListener("click", () => saveMeta({ milestones: cleaned(state.draft.milestones) }, ["milestones"], "Levels saved."));
+  $("areas-save").addEventListener("click", () => saveMeta({ areas: cleaned(state.draft.areas) }, ["areas"], "Workstreams saved."));
+  $("b-summary").addEventListener("input", (e) => { state.draft.summary = e.target.value; boardBar(); });
+  $("board-reset").addEventListener("click", () => { state.draft.summary = null; $("b-summary").value = (state.meta && state.meta.summary) || ""; boardBar(); });
+  $("board-save").addEventListener("click", () => {
+    const body = {};
+    if (dirty("summary")) body.summary = state.draft.summary.trim();
+    if (dirty("facts")) body.facts = cleaned(state.draft.facts).map((f) => (f.href ? f : { label: f.label, value: f.value }));
+    saveMeta(body, ["summary", "facts"], "Headline saved.");
+  });
+  // Unsaved structure edits shouldn't be lost to a stray click on a link.
+  addEventListener("beforeunload", (event) => { if (["milestones", "areas", "summary", "facts"].some(dirty)) event.preventDefault(); });
+  setInterval(() => { if (state.me && !document.hidden && !$("task-dialog").open) refresh(); }, 30000);
+
+  boot();
+})();
+</script>
+</body>
+</html>

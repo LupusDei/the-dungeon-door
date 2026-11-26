@@ -74,10 +74,17 @@ The Dungeon Door is a tabletop-style fantasy game with an AI dungeon master. Pla
 
 ## Where tasks live
 
-The team's shared board is the quest log on the website: https://the-dungeon-door.vercel.app/quest-log
-(API: `GET /api/quests`, and `POST`/`PATCH`/`DELETE` with the `x-quest-key` header; see the README).
-When you start, finish or discover team-level work, update it there if you have been given a quest
-key (it is in the `QUEST_KEY` environment variable when you have one; never print it or commit it).
+The team's shared board is the quest log: https://the-dungeon-door.vercel.app/quest-log. Keep it
+truthful as you work: set a task to `doing` when you start it and `done` when it lands (with a link
+to the pull request), and add tasks for team-level work you discover.
+
+- **Best: the MCP server** at `https://the-dungeon-door.vercel.app/api/mcp` (tools `quest_get_board`,
+  `quest_list_tasks`, `quest_add_task`, `quest_update_task`, …). If it is connected in your session,
+  use it. Setup: `docs/quest-log.md`.
+- **Otherwise the REST API**: `GET /api/quests`, and `POST`/`PATCH`/`DELETE` with the `x-quest-key`
+  header, if you have been given a quest key (in the `QUEST_KEY` environment variable when you have
+  one; never print it or commit it).
+
 `bd` is for your own working notes inside this repository, not for coordinating with the team.
 
 ## Build & Test

@@ -173,6 +173,7 @@ dialog::backdrop { background: var(--scrim); }
       <button class="btn quiet small" id="clear-filters" type="button" hidden>Clear filters</button>
       <span class="spacer"></span>
       <span class="whoami" id="whoami" hidden></span>
+      <button class="btn quiet small" id="use-key" type="button" hidden>Use a quest key</button>
       <button class="btn small" id="sign-in" type="button">Team sign-in</button>
       <button class="btn primary small" id="add-task" type="button" hidden>Add a task</button>
     </div>
@@ -180,12 +181,12 @@ dialog::backdrop { background: var(--scrim); }
     <div class="board" id="board"></div>
   </section>
 
-  <section class="howto" aria-label="Adding tasks from a script">
-    <div><strong style="color:var(--fg)">On the team?</strong> Sign in with your personal quest key to add and move tasks here. Assistants can do the same from a script:</div>
+  <section class="howto" aria-label="Other ways to manage the board">
+    <div><strong style="color:var(--fg)">On the team?</strong> Sign in to add and move tasks here, or use the <a href="/admin">admin portal</a> to manage everything, including levels and workstreams.</div>
+    <div>Assistants can manage the board too. It is an MCP server at <span class="num">/api/mcp</span>; the admin portal's “Connect an assistant” tab has the setup. Scripts can use the API with a personal quest key:</div>
     <code>curl -X POST https://the-dungeon-door.vercel.app/api/quests \
   -H "x-quest-key: $QUEST_KEY" -H "content-type: application/json" \
   -d '{"title": "What needs doing", "area": "rules", "milestone": "armory", "owner": "unclebob"}'</code>
-    <div>Change one with <span class="num">PATCH /api/quests?id=…</span> (for example <span class="num">{"status": "done"}</span>). Read the whole board with <span class="num">GET /api/quests</span>.</div>
   </section>
 </main>
 
@@ -193,6 +194,7 @@ dialog::backdrop { background: var(--scrim); }
   <div class="wrap">
     <span class="grow">The Dungeon Door. An independent game, still being built.</span>
     <a href="/">Home</a>
+    <a href="/admin">Admin</a>
     <a href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
   </div>
 </footer>
@@ -252,7 +254,7 @@ dialog::backdrop { background: var(--scrim); }
   const REFRESH_MS = 20000;
 
   const state = {
-    tasks: [], meta: null, people: [], loaded: false, problem: null, me: null, key: null,
+    tasks: [], meta: null, people: [], loaded: false, problem: null, me: null, key: null, auth: null,
     filter: { area: "", owner: "", level: "", q: "" }, showAllDone: false, busy: new Set(),
     editing: null, confirmDelete: false,
   };
@@ -480,10 +482,14 @@ dialog::backdrop { background: var(--scrim); }
 
   function renderWho() {
     const who = $("whoami");
+    const github = !!(state.auth && state.auth.githubSignIn);
+    const outsider = state.auth && state.auth.signedInAs && !state.me ? state.auth.signedInAs : null;
     who.replaceChildren();
-    who.hidden = !state.me;
-    $("sign-in").textContent = state.me ? "Sign out" : "Team sign-in";
-    if (state.me) who.append(avatar(state.me), el("span", { text: state.me.name }));
+    who.hidden = !state.me && !outsider;
+    $("sign-in").textContent = state.me || outsider ? "Sign out" : github ? "Sign in with GitHub" : "Team sign-in";
+    $("use-key").hidden = !!state.me || !!outsider || !github;
+    if (state.me) who.append(avatar(state.me), el("a", { href: "/admin", text: state.me.name, title: "Open the admin portal", style: "color:inherit" }));
+    else if (outsider) who.append(el("span", { text: outsider + " isn't on the team" }));
   }
 
   function fillSelect(select, options, value, placeholder) {
@@ -518,7 +524,7 @@ dialog::backdrop { background: var(--scrim); }
   // ---------- Talking to the server ----------
 
   async function api(method, path, body) {
-    const headers = {};
+    const headers = { "x-requested-with": "dungeon-door" };
     if (body) headers["content-type"] = "application/json";
     if (state.key) headers["x-quest-key"] = state.key;
     const response = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
@@ -650,12 +656,28 @@ dialog::backdrop { background: var(--scrim); }
     }
   }
 
-  function signOut() {
+  async function signOut() {
     state.key = null;
     state.me = null;
     remember(null);
+    await api("POST", "/api/auth/logout").catch(() => {});
+    state.auth = await api("GET", "/api/auth/me").catch(() => state.auth);
     renderAll();
   }
+
+  /** A GitHub session (cookie) if there is one; otherwise a quest key remembered in this browser. */
+  async function restoreSignIn() {
+    state.auth = await api("GET", "/api/auth/me").catch(() => null);
+    if (state.auth && state.auth.person) { state.me = state.auth.person; return; }
+    const saved = remembered();
+    if (saved) await signIn(saved);
+  }
+
+  const openKeyDialog = () => {
+    $("key-error").textContent = "";
+    $("key-dialog").showModal();
+    $("k-key").focus();
+  };
 
   async function submitKey(event) {
     event.preventDefault();
@@ -684,20 +706,19 @@ dialog::backdrop { background: var(--scrim); }
   $("task-form").addEventListener("submit", saveDialog);
   $("f-cancel").addEventListener("click", () => $("task-dialog").close());
   $("f-delete").addEventListener("click", deleteFromDialog);
-  $("sign-in").addEventListener("click", () => {
-    if (state.me) { signOut(); toast("Signed out."); return; }
-    $("key-error").textContent = "";
-    $("key-dialog").showModal();
-    $("k-key").focus();
+  $("sign-in").addEventListener("click", async () => {
+    if (state.me || (state.auth && state.auth.signedInAs)) { await signOut(); toast("Signed out."); return; }
+    if (state.auth && state.auth.githubSignIn) { location.href = "/api/auth/login?return=/quest-log"; return; }
+    openKeyDialog();
   });
+  $("use-key").addEventListener("click", openKeyDialog);
   $("key-form").addEventListener("submit", submitKey);
   $("k-cancel").addEventListener("click", () => $("key-dialog").close());
 
   (async () => {
     renderFilters();
     renderAll();
-    const saved = remembered();
-    await Promise.all([refresh(), saved ? signIn(saved) : null]);
+    await Promise.all([refresh(), restoreSignIn()]);
     renderAll();
     setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });

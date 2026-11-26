@@ -20,9 +20,16 @@ const { rewrites = [] } = JSON.parse(readFileSync(join(root, 'vercel.json'), 'ut
 function rewrite(pathname: string): string {
   for (const { source, destination } of rewrites) {
     const names: string[] = [];
-    const pattern = new RegExp('^' + source.replace(/:(\w+)/g, (_, name) => (names.push(name), '([^/]+)')) + '/?$');
+    // `:name` matches one path segment; `/:name*` matches the rest of the path (possibly nothing).
+    const pattern = new RegExp(
+      '^' +
+        source
+          .replace(/\/:(\w+)\*/g, (_, name) => (names.push(name), '(?:/(.*))?'))
+          .replace(/:(\w+)/g, (_, name) => (names.push(name), '([^/]+)')) +
+        '/?$',
+    );
     const match = pathname.match(pattern);
-    if (match) return names.reduce((dest, name, i) => dest.replaceAll(`:${name}`, match[i + 1]), destination);
+    if (match) return names.reduce((dest, name, i) => dest.replaceAll(`:${name}`, match[i + 1] ?? ''), destination);
   }
   return pathname;
 }

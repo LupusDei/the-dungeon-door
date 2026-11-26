@@ -9,12 +9,14 @@
     "test": "node --test --experimental-strip-types lib/*.test.ts",
     "migrate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/migrate.ts",
     "seed:quests": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/seed-quests.ts",
+    "mcp:smoke": "node --experimental-strip-types scripts/mcp-smoke.ts",
     "bot": "node --experimental-strip-types scripts/bot.ts"
   },
   "engines": {
     "node": "24.x"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
     "@neondatabase/serverless": "^1.2.1",
     "@vercel/blob": "^2.9.0",
     "@vercel/functions": "^3.11.4",
@@ -22,6 +24,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^26.6.10",
     "typescript": "^7.0.2"
   }

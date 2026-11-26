@@ -1,16 +1,66 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/**/*.ts": { "maxDuration": 300 }
+    "api/**/*.ts": {
+      "maxDuration": 300
+    }
   },
   "rewrites": [
-    { "source": "/api/games/:code/join", "destination": "/api/game-join?code=:code" },
-    { "source": "/api/games/:code/leave", "destination": "/api/game-leave?code=:code" },
-    { "source": "/api/games/:code/messages", "destination": "/api/game-messages?code=:code" },
-    { "source": "/api/games/:code/dungeon-master", "destination": "/api/game-dungeon-master?code=:code" },
-    { "source": "/api/games/:code/start", "destination": "/api/game-start?code=:code" },
-    { "source": "/api/games/:code/vote", "destination": "/api/game-vote?code=:code" },
-    { "source": "/api/games/:code/advance", "destination": "/api/game-advance?code=:code" },
-    { "source": "/api/games/:code", "destination": "/api/game?code=:code" }
+    {
+      "source": "/api/games/:code/join",
+      "destination": "/api/game-join?code=:code"
+    },
+    {
+      "source": "/api/games/:code/leave",
+      "destination": "/api/game-leave?code=:code"
+    },
+    {
+      "source": "/api/games/:code/messages",
+      "destination": "/api/game-messages?code=:code"
+    },
+    {
+      "source": "/api/games/:code/dungeon-master",
+      "destination": "/api/game-dungeon-master?code=:code"
+    },
+    {
+      "source": "/api/games/:code/start",
+      "destination": "/api/game-start?code=:code"
+    },
+    {
+      "source": "/api/games/:code/vote",
+      "destination": "/api/game-vote?code=:code"
+    },
+    {
+      "source": "/api/games/:code/advance",
+      "destination": "/api/game-advance?code=:code"
+    },
+    {
+      "source": "/api/games/:code",
+      "destination": "/api/game?code=:code"
+    },
+    {
+      "source": "/api/auth/:action",
+      "destination": "/api/auth?action=:action"
+    },
+    {
+      "source": "/api/oauth/:action",
+      "destination": "/api/oauth?action=:action"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/oauth?action=resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "/api/oauth?action=resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/oauth?action=server"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server/:path*",
+      "destination": "/api/oauth?action=server"
+    }
   ]
 }

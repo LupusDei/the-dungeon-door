@@ -14,6 +14,7 @@ all the votes, not just the majority, to decide what happens next.
 | `server/` | Vercel functions (TypeScript, AI SDK via Vercel AI Gateway). Game state, portraits, the DM. |
 | `server/lib/dm/` | **The dungeon master seam.** Swap or add DM implementations here. See `docs/dungeon-master.md`. |
 | `docs/api.md` | The API contract between the app and the server. Change it first, then both sides. |
+| `docs/quest-log.md` | The team's progress board: admin portal, MCP server, sign-in. |
 
 ## Run it
 
@@ -42,23 +43,21 @@ Neon Postgres, Vercel Blob, AI Gateway). It requires the shared app key, which b
 ## Website and quest log
 
 The marketing site is static files in `server/public/`, served from the same Vercel project as the
-API: https://the-dungeon-door.vercel.app. Its `/quest-log` page is the team's progress board:
-milestones as levels of the dungeon, workstreams, and every task.
+API: https://the-dungeon-door.vercel.app. On it:
 
-Anyone can read the board. Adding or changing tasks needs a personal quest key, one per team member
-(LupusDei, unclebob, slagyr, slagyr-assistant; ask the owner for yours). Paste it into "Team sign-in"
-on the page, or send it from a script:
+- `/quest-log`: the team's progress board (milestones as levels of the dungeon, workstreams, tasks). Public to read.
+- `/admin`: the admin portal for tasks, levels, workstreams and the headline.
+- `/api/mcp`: an MCP server, so assistants can manage the board too.
+
+The team is four GitHub accounts (LupusDei, unclebob, slagyr, slagyr-assistant). They sign in with
+GitHub, or use a personal quest key in scripts. To connect an assistant:
 
 ```bash
-curl -X POST https://the-dungeon-door.vercel.app/api/quests \
-  -H "x-quest-key: $QUEST_KEY" -H "content-type: application/json" \
-  -d '{"title": "What needs doing", "area": "rules", "milestone": "armory", "owner": "unclebob"}'
+claude mcp add --transport http dungeon-door https://the-dungeon-door.vercel.app/api/mcp
 ```
 
-`PATCH /api/quests?id=…` changes a task (for example `{"status": "done"}`), `DELETE` removes one, and
-`GET /api/quests` returns the whole board with the valid `area` and `milestone` ids. The code is
-`server/lib/quests.ts` and `server/api/quests.ts`; `npm run dev` serves the site and a seeded board
-locally, where the key `dev-<your GitHub login>` works.
+Everything else (roles, the API, how sign-in works, setting up the GitHub OAuth app, local
+development) is in [`docs/quest-log.md`](docs/quest-log.md).
 
 ## Ship to TestFlight
 
