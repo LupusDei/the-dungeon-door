@@ -1,5 +1,5 @@
 import { fakeDelay } from '../models.ts';
-import type { DMChoice, DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
+import type { DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
 
 /**
  * A deterministic, offline DM for DD_FAKE_AI=1 (local dev and tests). It still reads the votes and rolls
@@ -8,11 +8,26 @@ import type { DMChoice, DMContext, DungeonMaster, FinaleScene, NextScene, Openin
 
 const PLACES = ['a drowned chapel', 'a goblin market under the bridge', 'the clockwork library', 'a frozen lighthouse', 'the hollow hill', 'a ship of bones', 'the moonlit orchard', 'a collapsed dwarven forge'];
 
-const choicesFor = (place: string): DMChoice[] => [
-  { label: 'Charge straight in', detail: `Burst into ${place} before anything inside can prepare.` },
-  { label: 'Look for another way', detail: `Circle ${place} in search of a hidden entrance.` },
-  { label: 'Parley first', detail: `Call out and see who — or what — answers from ${place}.` },
-];
+/** In a rules-engine game: go on (in a dungeon) or fight the weakest suitable monster, look around, talk. */
+function hooksFor(rules: RulesContext) {
+  const exit = rules.dungeon?.exits[0];
+  return [
+    exit ? { kind: 'move' as const, exit: exit.id } : { kind: 'fight' as const, monsters: rules.monsters.slice(-1) },
+    { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 },
+    { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
+  ];
+}
+
+function choicesFor(place: string, ctx: DMContext): DMChoice[] {
+  const choices: DMChoice[] = [
+    { label: 'Charge straight in', detail: `Burst into ${place} before anything inside can prepare.` },
+    { label: 'Look for another way', detail: `Circle ${place} in search of a hidden entrance.` },
+    { label: 'Parley first', detail: `Call out and see who — or what — answers from ${place}.` },
+  ];
+  if (!ctx.rules) return choices;
+  const hooks = hooksFor(ctx.rules);
+  return choices.map((c, i) => ({ ...c, rules: hooks[i] }));
+}
 
 function resolve(ctx: DMContext, r: Resolution) {
   const chosenChoiceId = r.leaders[0];
@@ -43,7 +58,7 @@ export const fakeDungeonMaster: DungeonMaster = {
       imagePrompt: `Adventurers before a rune-carved oak door leading to ${place}`,
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: `Welcome, travellers. I am ${ctx.archetype.name}. Mind the door.`,
-      choices: choicesFor(place),
+      choices: choicesFor(place, ctx),
     };
   },
 
@@ -57,7 +72,7 @@ export const fakeDungeonMaster: DungeonMaster = {
       imagePrompt: `The party arriving at ${place}`,
       featuredCharacters: ctx.party.slice(0, 2).map((p) => p.name),
       quip: resolution.votes.some((v) => v.roll === 20) ? 'A natural 20! The dice gods smile.' : 'Onward!',
-      choices: choicesFor(place),
+      choices: choicesFor(place, ctx),
     };
   },
 

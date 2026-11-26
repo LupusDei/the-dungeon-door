@@ -299,6 +299,7 @@ async function contextFor(game: Game, sceneIndex: number): Promise<DMContext> {
     recentChat: messages
       .filter((m) => m.kind !== 'system')
       .map((m) => ({ characterName: m.characterName, kind: m.kind as 'chat' | 'dm', text: m.text })),
+    rules: null,
   };
 }
 
@@ -316,6 +317,7 @@ export function resolutionOf(game: Game, scene: StoredScene): Resolution {
     tally,
     leaders: CHOICE_IDS.filter((id) => tally[id] === top && top > 0),
     abstained: game.players.filter((p) => !voted.has(p.playerId)).map((p) => p.character.name),
+    rules: null,
   };
 }
 

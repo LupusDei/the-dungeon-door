@@ -4,7 +4,12 @@
  * registered per archetype in ./registry.ts. See docs/dungeon-master.md.
  */
 import type { DungeonMasterArchetype } from '../catalog.ts';
+import type { RulesHook } from '../play/hooks.ts';
+import type { FightNews } from '../play/turn.ts';
+import type { RulesContext } from '../play/view.ts';
 import type { ChoiceId } from '../types.ts';
+
+export type { RulesContext } from '../play/view.ts';
 
 export interface PartyMember {
   playerId: string;
@@ -59,6 +64,19 @@ export interface Resolution {
   leaders: ChoiceId[];
   /** Characters who didn't vote (AFK when the host advanced). */
   abstained: string[];
+  /** What the rules engine rolled for the chosen choice; null for a game from before the engine. */
+  rules: RulesResults | null;
+}
+
+/** The engine's results for the resolved scene. Narrate them; never change them. */
+export interface RulesResults {
+  /** The choice the engine picked (ties go to the higher-rolling voters); `leaders` is just this. */
+  chosen: ChoiceId | null;
+  /** The dice, one line each ("Bryn: Athletics 14 + 5 = 19 vs DC 12, success"). */
+  lines: string[];
+  /** For a check or save: did the party succeed? */
+  success: boolean | null;
+  fight: FightNews;
 }
 
 export interface ChatLine {
@@ -80,6 +98,8 @@ export interface DMContext {
   sceneCount: number;
   /** The most recent table talk, oldest first. Players may hint at what they want. */
   recentChat: ChatLine[];
+  /** The rules engine's state (after the resolved scene's dice); null for a game from before the engine. */
+  rules: RulesContext | null;
 }
 
 export interface SceneText {
@@ -97,6 +117,11 @@ export interface SceneText {
 export interface DMChoice {
   label: string;
   detail: string;
+  /**
+   * The mechanic behind the choice (rules-engine games): a RulesHook (play/hooks.ts). The engine checks it
+   * where it enters; a missing or bad one makes the choice pure story.
+   */
+  rules?: RulesHook | Record<string, unknown> | null;
 }
 
 export interface OpeningScene extends SceneText {
