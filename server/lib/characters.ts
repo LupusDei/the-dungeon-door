@@ -3,6 +3,7 @@ import { heroAttacks } from './attacks.ts';
 import { isValid } from './catalog.ts';
 import { badRequest, conflict, forbidden, isUUID, notFound } from './http.ts';
 import { type BuildStyle, buildCharacter, quickChoices } from './rules/character.ts';
+import { item } from './rules/items.ts';
 import { revive, TEMPLE_RAISE_DEAD } from './rules/revive.ts';
 import { derivedRng } from './rules/rng.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
@@ -25,6 +26,14 @@ export function heroSheet({ id, name, race, characterClass, backgroundId }: Buil
   return buildCharacter(quickChoices(rng, { name, classId: characterClass, speciesId: race, backgroundId }, undefined, style), rng);
 }
 
+const FORGE_GIFT = 'potion-of-greater-healing';
+
+/** A hero as the forge makes it: the engine's level-1 sheet, and one Potion of Greater Healing in its pack (Robert, 2026-11-26). */
+export function forgedSheet(build: Build): CharacterSheet {
+  const sheet = heroSheet(build);
+  return { ...sheet, equipment: [...sheet.equipment, { id: FORGE_GIFT, name: item(FORGE_GIFT).name, count: 1 }] };
+}
+
 /** A stored hero as the API shows it: on its SRD 5.2 species, with a sheet. Not saved until the hero is next saved. */
 export function upgradeCharacter(stored: StoredCharacter): Character {
   const race = currentRace(stored.race) as string;
@@ -42,10 +51,10 @@ const sameBuild = (sheet: CharacterSheet, b: Build) =>
 
 /** Keeps the sheet (renamed) when the build is unchanged; rebuilds it at level 1; refuses to rebuild a levelled hero. */
 function sheetFor(existing: Character | null, build: Build): CharacterSheet {
-  if (!existing) return heroSheet(build);
+  if (!existing) return forgedSheet(build);
   if (sameBuild(existing.sheet, build)) return { ...existing.sheet, name: build.name };
   if (existing.sheet.level > 1) throw badRequest('a hero above level 1 cannot change race, class or background');
-  return heroSheet(build);
+  return forgedSheet(build);
 }
 
 const catalogId = (kind: Parameters<typeof isValid>[0]) =>
@@ -116,7 +125,7 @@ export async function saveCharacter(playerId: string, body: unknown): Promise<Ch
 export function previewSheet(body: unknown): Pick<Character, 'sheet' | 'attacks'> {
   const parsed = BuildInput.safeParse(body);
   if (!parsed.success) throw badRequest(zodMessage(parsed.error));
-  const sheet = heroSheet(parsed.data);
+  const sheet = forgedSheet(parsed.data);
   return { sheet, attacks: heroAttacks(sheet) };
 }
 

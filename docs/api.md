@@ -115,7 +115,9 @@ are explained by `GET /api/reference`.
   ownerId is taken from `x-dd-player`) → `Character`. Upsert by id; only the owner can update.
   - A new hero gets a level-1 sheet from the engine: its species (`race`), class and background
     (`backgroundId`, or one picked for it), standard array scores best-first to the class's saving
-    throws, the background's +2/+1, starting gear and spells. The same id always builds the same hero.
+    throws, the background's +2/+1, starting gear and spells, plus one Potion of Greater Healing
+    (`potion-of-greater-healing`) that every new hero is forged with (also on a level-1 rebuild and in
+    `POST /api/sheet`; heroes already saved are not given one). The same id always builds the same hero.
   - Saving again keeps the sheet (level, XP, HP…). Renaming renames the sheet. Changing race, class or
     background rebuilds it, but only at level 1: a levelled hero gets 400.
   - Old ids still accepted and mapped: `half-orc` → `orc`, `half-elf` → `elf` (SRD 5.2 has neither).
