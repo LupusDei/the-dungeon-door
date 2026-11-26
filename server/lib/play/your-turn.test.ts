@@ -65,3 +65,15 @@ test('a fighter at half its HP or less with Second Wind left uses it first, befo
   assert.deepEqual(choices.map((c) => c.detail.endsWith(' First uses Second Wind.')), [true, true, true]);
   assert.doesNotMatch(choices[0].detail, /drinks/);
 });
+
+test('the choices name the foe the hero will really aim at: past one immune to its damage', () => {
+  const combat = fight({ p1: fighter }, ['goblin-warrior', 'goblin-warrior']);
+  const type = combat.combatants.p1.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best)).damage[0].type;
+  assert.match(yourChoices(patch(combat, { 'foe-1': { hp: 1, immunities: [type] } }), fighter, 'p1')[0].detail, /, at Goblin Warrior 2\.$/);
+  const bolt = mage(['fire-bolt'], [0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const casting = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior']);
+  assert.match(yourChoices(patch(casting, { 'foe-1': { hp: 1, immunities: ['fire'] } }), { ...bolt, spellcasting: { ...bolt.spellcasting!, cantrips: ['fire-bolt'], prepared: [] } }, 'p1')[1].detail, /, at Goblin Warrior 2\.$/);
+  const blast = mage(['fireball'], [4, 3, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const three = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
+  assert.match(yourChoices(patch(three, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 2 }, 'foe-3': { hp: 3 } }), blast, 'p1')[1].detail, /, at Goblin Warrior 2, Goblin Warrior 3 and Goblin Warrior 1\./);
+});

@@ -5,7 +5,7 @@ import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
-import { autoLevelUp, bestSpell, fightRound, heroAction, improvement, MAX_ROUNDS, spellScore, startFight } from './fight.ts';
+import { autoLevelUp, bestSpell, caught, fightRound, heroAction, improvement, MAX_ROUNDS, spellScore, startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
@@ -375,4 +375,25 @@ test('foes who Disengage as a Bonus Action (Nimble Escape) flee without Opportun
   const fled = Array.from({ length: 60 }, (_, i) => shakenRound(i + 1, true)).find((r) => r.ended === 'fled')!;
   assert.ok(fled.lines.includes('Goblin Warrior 2 Disengages as a Bonus Action: no Opportunity Attacks.'), fled.lines.join(' | '));
   assert.equal(fled.lines.some((l) => l.startsWith('Opportunity Attack')), false);
+});
+
+test('heroes aim past a foe immune to their damage: the most wounded foe that can be hurt, else the most wounded', () => {
+  const { combat } = startFight(party(), ['goblin-warrior', 'goblin-warrior']);
+  const type = combat.combatants.p1.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best)).damage[0].type;
+  const warded = patch(combat, { 'foe-1': { hp: 1, immunities: [type] }, 'foe-2': { hp: 5 } });
+  assert.equal((heroAction(warded, fighter, 'p1', 'a', 10).action as { target: string }).target, 'foe-2', 'past the immune one');
+  const both = patch(combat, { 'foe-1': { hp: 1, immunities: [type] }, 'foe-2': { hp: 5, immunities: [type] } });
+  assert.equal((heroAction(both, fighter, 'p1', 'a', 10).action as { target: string }).target, 'foe-1', 'none can be hurt: the most wounded');
+  const bolt = srd().spells.get('fire-bolt')!;
+  const mage = { ...wizard, spellcasting: { ...wizard.spellcasting!, cantrips: ['fire-bolt'], prepared: [] } };
+  const fireproof = patch(combat, { 'foe-1': { hp: 1, immunities: [bolt.damage!.type] }, 'foe-2': { hp: 5 } });
+  assert.deepEqual((heroAction(fireproof, mage, 'p2', 'b', 10).action as { targets: string[] }).targets, ['foe-2']);
+});
+
+test('an area spell catches the foes it can hurt first, the most wounded of them first', () => {
+  const { combat } = startFight(party(), ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
+  const hurt = patch(combat, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 5 }, 'foe-3': { hp: 3 } });
+  assert.deepEqual(caught(hurt, 'party', 2, 'fire'), ['foe-3', 'foe-2']);
+  assert.deepEqual(caught(hurt, 'party', 3, 'fire'), ['foe-3', 'foe-2', 'foe-1']);
+  assert.deepEqual(caught(hurt, 'party', 2, 'cold'), ['foe-1', 'foe-3']);
 });

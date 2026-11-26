@@ -13,7 +13,7 @@ import { slotsLeft } from '../rules/spells.ts';
 import type { SrdSpell } from '../rules/srd.ts';
 import { CHOICE_IDS, type ChoiceView } from '../types.ts';
 import { thirdChoice, thirdWords } from './actions.ts';
-import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, mostWounded } from './fight.ts';
+import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, mostWounded, weaponType } from './fight.ts';
 import { ABILITY_NAMES } from './hooks.ts';
 import type { CombatState } from './state.ts';
 
@@ -48,10 +48,11 @@ function slotNote(spell: SrdSpell, sheet: CharacterSheet): string {
 const listed = (names: readonly string[]) =>
   (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
-/** Who the spell is aimed at: the most wounded foe, or as many as its area catches. */
+/** Who the spell is aimed at: the most wounded foe, or as many as its area catches (those it can hurt first). */
 function aim(spell: SrdSpell, combat: CombatState, me: Combatant): string {
-  if (!spell.area) return mostWounded(combat, me.side).name;
-  return listed(caught(combat, me.side, areaCatch(spell.area)).map((id) => combat.combatants[id].name));
+  const type = spell.damage!.type;
+  if (!spell.area) return mostWounded(combat, me.side, type).name;
+  return listed(caught(combat, me.side, areaCatch(spell.area), type).map((id) => combat.combatants[id].name));
 }
 
 function cast(spell: SrdSpell, sheet: CharacterSheet, foes: string) {
@@ -73,7 +74,7 @@ function bonusNote(me: Combatant, sheet: CharacterSheet): string {
 /** Attack, Cast and the third choice (Dodge, Break Free or Help: play/actions.ts) as this hero would do them now. */
 export function yourChoices(combat: CombatState, sheet: CharacterSheet, playerId: string): ChoiceView[] {
   const me = combat.combatants[playerId];
-  const attack = strike(me, mostWounded(combat, me.side).name);
+  const attack = strike(me, mostWounded(combat, me.side, weaponType(me)).name);
   const spell = bestSpell(sheet);
   const bonus = bonusNote(me, sheet);
   const third = thirdWords(thirdChoice(combat, sheet, playerId), combat, sheet, COMBAT_CHOICES[2]);

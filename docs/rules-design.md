@@ -385,7 +385,9 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
 - **The third choice** (`play/actions.ts`, **original** for a three-slot vote): Break Free when held,
   Help to stabilize a dying friend (a Healer's Kit, or DC 10 Medicine), else Dodge.
 - **Fleeing and targeting.** A monster with Disengage as a Bonus Action (goblins) flees without
-  Opportunity Attacks. Monsters prefer heroes who aren't Dodging.
+  Opportunity Attacks. Monsters prefer heroes who aren't Dodging. Heroes aim past foes immune to their
+  damage type (the most wounded foe they can hurt, else the most wounded); an area spell catches those it
+  can hurt first.
 - **Revival windows.** Revivify is always within its minute (a fight lasts at most ten rounds). Raise Dead
   reaches only heroes dead 10 days or less by the clock (`sheet.diedAt`); the between-games temple keeps no
   clock, so it has no window.

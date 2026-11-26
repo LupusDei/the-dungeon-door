@@ -78,10 +78,12 @@ export function startFight(party: PartyState, monsterIds: readonly string[], lig
 
 const living = (c: Combatant) => c.status !== 'dead';
 
-/** The living combatant on the other side with the fewest hit points. */
-export function mostWounded(combat: CombatState, side: Combatant['side']): Combatant {
-  return Object.values(combat.combatants).filter((c) => c.side !== side && living(c)).reduce((low, c) => (c.hp < low.hp ? c : low));
-}
+/** The living combatant on the other side with the fewest hit points, preferring one not immune to `type` (damage). */
+export const mostWounded = (combat: CombatState, side: Combatant['side'], type?: string): Combatant =>
+  combat.combatants[caught(combat, side, 1, type)[0]];
+
+/** The damage type the hero's chosen attack deals (its first damage roll's). */
+export const weaponType = (me: Combatant): string => bestWeapon(me).damage[0].type;
 
 /** Average damage of a cast at the spell's own level, every beam hitting. */
 export function spellScore(spell: SrdSpell, sheet: CharacterSheet): number {
@@ -104,7 +106,7 @@ export const bestWeapon = (me: Combatant) => me.attacks.reduce((best, a) => (a.b
 function attackAction(combat: CombatState, me: Combatant, sheet: CharacterSheet, natural: number): Action {
   const attack = bestWeapon(me).name;
   const extra = extraAttacks(sheet);
-  return { kind: 'attack', attack, target: mostWounded(combat, me.side).id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
+  return { kind: 'attack', attack, target: mostWounded(combat, me.side, weaponType(me)).id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
 }
 
 /** What a hero does on its turn for its vote. A spell spends its slot on the returned sheet. */
@@ -116,14 +118,16 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
   const { saveDc, attackBonus } = sheet.spellcasting!;
   const caster = { saveDc, attackBonus, modifier: attackBonus - sheet.proficiencyBonus };
-  const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area)) : Array<string>(cast.beams).fill(mostWounded(combat, me.side).id);
+  const type = spell.damage!.type;
+  const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area), type) : Array<string>(cast.beams).fill(mostWounded(combat, me.side, type).id);
   return { action: { kind: 'spell', caster, cast, targets, natural }, sheet: spent };
 }
 
-/** The `n` most wounded living foes (fewer if fewer are left), for an area spell. */
-export function caught(combat: CombatState, side: Combatant['side'], n: number): string[] {
+/** The `n` most wounded living foes (fewer if fewer are left), those not immune to `type` (damage) first. */
+export function caught(combat: CombatState, side: Combatant['side'], n: number, type?: string): string[] {
+  const immune = (c: Combatant) => Number(type !== undefined && c.immunities.includes(type));
   const foes = Object.values(combat.combatants).filter((c) => c.side !== side && living(c));
-  return foes.sort((a, b) => a.hp - b.hp).slice(0, n).map((c) => c.id);
+  return foes.sort((a, b) => immune(a) - immune(b) || a.hp - b.hp).slice(0, n).map((c) => c.id);
 }
 
 // ---- telling the round ----
