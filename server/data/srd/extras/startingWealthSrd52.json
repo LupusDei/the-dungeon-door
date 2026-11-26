@@ -1,0 +1,150 @@
+{
+  "meta": {
+    "title": "SRD 5.2 Starting Gold Options by Class",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 12,
+    "notes": "Convenience extract of gold amounts in 5.2/classes.json starting equipment options."
+  },
+  "records": [
+    {
+      "index": "barbarian",
+      "name": "Barbarian",
+      "kitLeftoverGoldGp": 15,
+      "buyoutGoldGp": 75,
+      "allGoldOptionsGp": [
+        15,
+        75
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "bard",
+      "name": "Bard",
+      "kitLeftoverGoldGp": 19,
+      "buyoutGoldGp": 90,
+      "allGoldOptionsGp": [
+        19,
+        90
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "cleric",
+      "name": "Cleric",
+      "kitLeftoverGoldGp": 7,
+      "buyoutGoldGp": 110,
+      "allGoldOptionsGp": [
+        7,
+        110
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "druid",
+      "name": "Druid",
+      "kitLeftoverGoldGp": 9,
+      "buyoutGoldGp": 50,
+      "allGoldOptionsGp": [
+        9,
+        50
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "fighter",
+      "name": "Fighter",
+      "kitLeftoverGoldGp": 4,
+      "buyoutGoldGp": 155,
+      "allGoldOptionsGp": [
+        4,
+        11,
+        155
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "monk",
+      "name": "Monk",
+      "kitLeftoverGoldGp": 11,
+      "buyoutGoldGp": 50,
+      "allGoldOptionsGp": [
+        11,
+        50
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "paladin",
+      "name": "Paladin",
+      "kitLeftoverGoldGp": 9,
+      "buyoutGoldGp": 150,
+      "allGoldOptionsGp": [
+        9,
+        150
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "ranger",
+      "name": "Ranger",
+      "kitLeftoverGoldGp": 7,
+      "buyoutGoldGp": 150,
+      "allGoldOptionsGp": [
+        7,
+        150
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "rogue",
+      "name": "Rogue",
+      "kitLeftoverGoldGp": 8,
+      "buyoutGoldGp": 100,
+      "allGoldOptionsGp": [
+        8,
+        100
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "sorcerer",
+      "name": "Sorcerer",
+      "kitLeftoverGoldGp": 28,
+      "buyoutGoldGp": 50,
+      "allGoldOptionsGp": [
+        28,
+        50
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "warlock",
+      "name": "Warlock",
+      "kitLeftoverGoldGp": 15,
+      "buyoutGoldGp": 100,
+      "allGoldOptionsGp": [
+        15,
+        100
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    },
+    {
+      "index": "wizard",
+      "name": "Wizard",
+      "kitLeftoverGoldGp": 5,
+      "buyoutGoldGp": 55,
+      "allGoldOptionsGp": [
+        5,
+        55
+      ],
+      "notes": "The larger amount is the SRD 5.2 option to forgo the packaged starting kit and buy equipment with gold."
+    }
+  ]
+}

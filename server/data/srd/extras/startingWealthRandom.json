@@ -1,0 +1,174 @@
+{
+  "meta": {
+    "title": "Original Starting Purse (centered on SRD 5.2 buyouts)",
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "version": "original",
+    "srd": "original + SRD 5.2 buyout amounts",
+    "ruleset": "2024",
+    "license": "CC0-1.0 (procedure and fortune die); buyout amounts CC-BY-4.0 SRD 5.2",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode. The fortune-die procedure is original and dedicated to the public domain under CC0 1.0.",
+    "sourceUrl": null,
+    "notes": "Authored for The Dungeon Door. The base gold amounts are SRD 5.2; the random fortune die is original CC0."
+  },
+  "records": [
+    {
+      "index": "dungeon-door-starting-purse",
+      "name": "The Dungeon Door Starting Purse",
+      "license": "CC0-1.0",
+      "origin": "original",
+      "procedure": [
+        "Start with the class's SRD 5.2 buyoutGoldGp (see startingWealthSrd52.json). This replaces packaged starting gear.",
+        "Optionally roll the fortune die below and apply the modifier. The result cannot drop below 10 gp.",
+        "Do not also take a packaged starting kit."
+      ],
+      "fortuneDie": {
+        "dice": "1d8",
+        "rows": [
+          {
+            "roll": 1,
+            "modifierGp": -25,
+            "label": "Light purse"
+          },
+          {
+            "roll": 2,
+            "modifierGp": -10,
+            "label": "Short changed"
+          },
+          {
+            "roll": [
+              3,
+              4,
+              5,
+              6
+            ],
+            "modifierGp": 0,
+            "label": "As listed"
+          },
+          {
+            "roll": 7,
+            "modifierGp": 15,
+            "label": "A little extra"
+          },
+          {
+            "roll": 8,
+            "modifierGp": 40,
+            "label": "Windfall"
+          }
+        ],
+        "minimumGp": 10
+      },
+      "byClass": [
+        {
+          "index": "barbarian",
+          "name": "Barbarian",
+          "baseGoldGp": 75,
+          "rangeGp": [
+            50,
+            115
+          ]
+        },
+        {
+          "index": "bard",
+          "name": "Bard",
+          "baseGoldGp": 90,
+          "rangeGp": [
+            65,
+            130
+          ]
+        },
+        {
+          "index": "cleric",
+          "name": "Cleric",
+          "baseGoldGp": 110,
+          "rangeGp": [
+            85,
+            150
+          ]
+        },
+        {
+          "index": "druid",
+          "name": "Druid",
+          "baseGoldGp": 50,
+          "rangeGp": [
+            25,
+            90
+          ]
+        },
+        {
+          "index": "fighter",
+          "name": "Fighter",
+          "baseGoldGp": 155,
+          "rangeGp": [
+            130,
+            195
+          ]
+        },
+        {
+          "index": "monk",
+          "name": "Monk",
+          "baseGoldGp": 50,
+          "rangeGp": [
+            25,
+            90
+          ]
+        },
+        {
+          "index": "paladin",
+          "name": "Paladin",
+          "baseGoldGp": 150,
+          "rangeGp": [
+            125,
+            190
+          ]
+        },
+        {
+          "index": "ranger",
+          "name": "Ranger",
+          "baseGoldGp": 150,
+          "rangeGp": [
+            125,
+            190
+          ]
+        },
+        {
+          "index": "rogue",
+          "name": "Rogue",
+          "baseGoldGp": 100,
+          "rangeGp": [
+            75,
+            140
+          ]
+        },
+        {
+          "index": "sorcerer",
+          "name": "Sorcerer",
+          "baseGoldGp": 50,
+          "rangeGp": [
+            25,
+            90
+          ]
+        },
+        {
+          "index": "warlock",
+          "name": "Warlock",
+          "baseGoldGp": 100,
+          "rangeGp": [
+            75,
+            140
+          ]
+        },
+        {
+          "index": "wizard",
+          "name": "Wizard",
+          "baseGoldGp": 55,
+          "rangeGp": [
+            30,
+            95
+          ]
+        }
+      ],
+      "notes": "Original table. Centered on SRD 5.2 gold buyouts, with a small 1d8 fortune modifier. Deliberately not the 2014 PHB d4-times-10 formulas."
+    }
+  ]
+}
