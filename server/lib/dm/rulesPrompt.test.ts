@@ -61,4 +61,5 @@ test('a hero who sees dimly or not at all is marked, so the story shows only wha
   assert.match(sees('dim'), /; sees only dimly$/);
   assert.match(sees('none'), /; CANNOT SEE \(darkness\)$/);
   assert.match(RULES_INSTRUCTIONS, /Describe\s+only what the heroes can see/);
+  assert.match(RULES_INSTRUCTIONS, /wandering monsters every half\s+hour/);
 });

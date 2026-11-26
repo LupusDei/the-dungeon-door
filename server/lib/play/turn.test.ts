@@ -249,3 +249,56 @@ test('a corridor is passed through on the way to the room: its trap springs, ten
   const again = playTurn({ ...gone, combat: null }, { kind: 'move', exit: 'r0' }, []);
   assert.deepEqual([again.dungeon!.at, again.lines.some((l) => l.includes('Spiked Pit'))], ['r0', false]);
 });
+
+const inDungeon = (rng: number, over: Partial<DungeonState> = {}) => ({ ...state({ dungeon: { ...startDungeon('fixed', 3, [1, 1], 4), ...over } }), party: { ...party(), rng } });
+const seeds = Array.from({ length: 80 }, (_, i) => i + 1);
+
+test('wandering monsters: a check every half hour in a dungeon; on a 1 a band comes, and Hostile ones attack', () => {
+  const quiet = playTurn(inDungeon(1), null, []);
+  assert.deepEqual([quiet.dungeon!.wander, quiet.party.rng], [600, 1], 'ten minutes toward the next check, no dice');
+  const turns = seeds.map((rng) => playTurn(inDungeon(rng, { wander: 1200 }), null, []));
+  assert.ok(turns.every((t) => t.dungeon!.wander === 0));
+  const came = turns.filter((t) => t.lines.some((l) => l.startsWith('Wandering monsters (d6: 1): ')));
+  assert.ok(came.length > 3 && came.length < 30, String(came.length));
+  const attacked = came.find((t) => t.fight === 'started')!;
+  assert.match(attacked.lines.find((l) => l.startsWith('Wandering'))!, /They are hostile \(2d6: [2-5]\)\.$/);
+  assert.ok(attacked.combat);
+  const passed = came.find((t) => t.fight === null)!;
+  assert.match(passed.lines.at(-1)!, /They are (indifferent|friendly) \(2d6: \d+\)\. They go their way\.$/);
+  assert.equal(playTurn({ ...state(), party: { ...party(), rng: attacked.party.rng } }, null, []).dungeon, null, 'none outside a dungeon');
+});
+
+test('noise brings a check at once, 2 in 6: after a fight ends or a trap goes off', () => {
+  const loudTurns = seeds.map((rng) => playTurn(inDungeon(rng, { noise: true }), null, []));
+  assert.ok(loudTurns.every((t) => t.dungeon!.noise === undefined && t.dungeon!.wander === 600));
+  const came = loudTurns.filter((t) => t.lines.some((l) => /^Wandering monsters \(d6: [12]\)/.test(l))).length;
+  assert.ok(came > 15 && came < 45, String(came));
+  const d = startDungeon('fixed', 3, [1, 1], 4);
+  const pit = playTurn({ ...inDungeon(5), dungeon: d }, { kind: 'trap', trap: 'spiked-pit' }, ballots(1, 1));
+  assert.equal(pit.success, false);
+  assert.notEqual(pit.party.rng, playTurn({ ...inDungeon(5), dungeon: d, party: { ...party(), rng: 5 } }, { kind: 'check', ability: 'str', dc: 1 }, ballots(1, 1)).party.rng);
+});
+
+test('a rest in a dungeon gets one check first; wanderers who come interrupt it, and no time passes', () => {
+  const rests = seeds.map((rng) => playTurn(inDungeon(rng, { wander: 1500 }), { kind: 'rest', rest: 'long' }, []));
+  const broken = rests.find((t) => t.fight === 'started')!;
+  assert.deepEqual([broken.lines[0], broken.party.clock, broken.lines.some((l) => l.startsWith('The party takes a long rest'))], ['Before the party can rest:', 0, false]);
+  const slept = rests.find((t) => t.lines.some((l) => l.startsWith('The party takes a long rest')))!;
+  assert.deepEqual([slept.party.clock, slept.dungeon!.wander], [8 * 3600, 0]);
+});
+
+test('spoor in a corridor makes a check on the way, 2 in 6; Hostile wanderers stop the party there', () => {
+  const d = startDungeon('fixed', 3, [1, 1], 4);
+  const c = d.map.nodes['r0-r4'];
+  const spoored = { ...d.map.nodes, 'r0-r4': { ...c, contents: { ...c.contents!, trap: null, kind: 'empty' as const, special: 'spoor' } } };
+  const walks = seeds.map((rng) => playTurn({ ...inDungeon(rng), dungeon: { ...d, map: { ...d.map, nodes: spoored } } }, { kind: 'move', exit: 'r4' }, []));
+  const stopped = walks.find((t) => t.fight === 'started' && t.dungeon!.at === 'r0-r4')!;
+  assert.match(stopped.lines[1], /^Wandering monsters \(d6: [12]\)/);
+  assert.ok(walks.some((t) => t.dungeon!.at === 'r4'));
+});
+
+test('foes waiting in the room keep wanderers off', () => {
+  const t = met('indifferent');
+  const turns = seeds.map((rng) => playTurn({ ...t, combat: null, party: { ...t.party, rng }, dungeon: { ...t.dungeon!, wander: 1700 } }, null, []));
+  assert.ok(turns.every((x) => !x.lines.some((l) => l.startsWith('Wandering'))));
+});

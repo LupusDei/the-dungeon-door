@@ -36,4 +36,8 @@ export interface DungeonState {
   cleared: string[];
   /** The attitude of the foes met in each room (play/parley.ts); absent in games from before it. */
   attitudes?: Record<string, Attitude>;
+  /** Seconds toward the next wandering-monster check (play/wandering.ts); absent: 0. */
+  wander?: number;
+  /** Something loud just happened (a fight ended, a trap went off): a check comes at once, 2 in 6. */
+  noise?: true;
 }
