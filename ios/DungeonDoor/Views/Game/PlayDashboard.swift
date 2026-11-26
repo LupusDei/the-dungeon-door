@@ -390,6 +390,12 @@ private struct DashboardScenePanel: View {
                 .font(.system(size: 11, design: .serif))
                 .monospacedDigit()
                 .foregroundStyle(out ? Palette.ember : Palette.muted)
+            if !out, let position = combatant.position {
+                // The range band: in melee, about 30 feet off, or about 60.
+                Text("\u{00B7} \(position)")
+                    .font(.system(size: 10, design: .serif))
+                    .foregroundStyle(position == "engaged" ? Palette.parchment.opacity(0.85) : Palette.muted)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

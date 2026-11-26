@@ -810,6 +810,11 @@ struct Combatant: Codable, Hashable, Identifiable {
     var wound: String? = nil
     /// A foe's vigor, 6 (unhurt) down to 0, for its gauge. Nil for a hero, and from a server older than wounds.
     var vigor: Int? = nil
+    /// Where it stands in the fight: "engaged" (in melee), "near" (about 30 ft) or "far" (about 60 ft).
+    /// Nil from a server without range bands.
+    var position: String? = nil
+    /// The ids it is in melee with; empty unless engaged.
+    var engagedWith: [String] = []
 
     /// What its health reads: a foe's wound, or hit points ("7/20").
     var healthText: String { wound ?? "\(hp)/\(maxHp)" }
@@ -840,6 +845,8 @@ extension Combatant {
         toughness = try c.decodeIfPresent(String.self, forKey: .toughness)
         wound = try c.decodeIfPresent(String.self, forKey: .wound)
         vigor = c.contains(.vigor) ? try c.whole(.vigor) : nil
+        position = try c.decodeIfPresent(String.self, forKey: .position)
+        engagedWith = try c.value(.engagedWith, or: [])
     }
 }
 
