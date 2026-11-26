@@ -230,15 +230,16 @@ const spellsOf = (data: Srd, classId: string, level: number) =>
 interface Style {
   first: (cls: SrdClass) => Ability[];
   boost: (rng: Rng, allowed: readonly Ability[], first: readonly Ability[]) => { kind: 'twoOne'; plusTwo: Ability; plusOne: Ability };
-  healing: readonly string[];
+  /** Spells prepared first when the class has them, best first (the rest are at random). */
+  firstSpells: readonly string[];
 }
 
-/** The healing spells a healer prepares first, best first. */
-const HEALING = ['cure-wounds', 'healing-word'];
+/** A healer prepares its best healing spell first; a wizard or sorcerer, Magic Missile (darts that never miss). */
+const FIRST_SPELLS = ['cure-wounds', 'healing-word', 'magic-missile'];
 
 const STYLES: Record<BuildStyle, Style> = {
-  primary: { first: (cls) => [...new Set<Ability>([...cls.primary, 'con'])], boost: boostFor, healing: HEALING },
-  classic: { first: (cls) => cls.saves, boost: (rng, allowed) => boostFor(rng, allowed, []), healing: [] },
+  primary: { first: (cls) => [...new Set<Ability>([...cls.primary, 'con'])], boost: boostFor, firstSpells: FIRST_SPELLS },
+  classic: { first: (cls) => cls.saves, boost: (rng, allowed) => boostFor(rng, allowed, []), firstSpells: [] },
 };
 
 /** A full, legal set of choices, chosen by the rng: "roll me a hero", or an NPC for the DM (see BuildStyle); the gear options are taken. */
@@ -256,7 +257,7 @@ export function quickChoices(rng: Rng, request: QuickRequest, data: Srd = bundle
     abilities: { kind: 'standardArray', order: [...first, ...sample(rng, rest, rest.length)] },
     boost,
     classChoices: pickClassChoices(rng, cls, background), classEquipment: 0, backgroundEquipment: 0,
-    ...pickSpells(rng, cls.id, data, how.healing),
+    ...pickSpells(rng, cls.id, data, how.firstSpells),
   };
 }
 
@@ -276,11 +277,11 @@ function pickClassChoices(rng: Rng, cls: SrdClass, background: SrdBackground): s
   });
 }
 
-/** Cantrips at random; a healer's first prepared spell is its best healing spell (of `healing`), the rest at random. */
-function pickSpells(rng: Rng, classId: string, data: Srd, healing: readonly string[]): { cantrips: string[]; prepared: string[] } {
+/** Cantrips at random; the first prepared spell is the first of `firstSpells` the class has, the rest at random. */
+function pickSpells(rng: Rng, classId: string, data: Srd, firstSpells: readonly string[]): { cantrips: string[]; prepared: string[] } {
   const casting = data.spellcasting.get(classId)?.byLevel[0] ?? { cantrips: 0, prepared: 0 };
   const known = spellsOf(data, classId, 1);
-  const healer = healing.filter((id) => known.includes(id)).slice(0, 1);
+  const healer = firstSpells.filter((id) => known.includes(id)).slice(0, 1);
   return {
     cantrips: sample(rng, spellsOf(data, classId, 0), casting.cantrips),
     prepared: [...healer, ...sample(rng, known.filter((id) => !healer.includes(id)), casting.prepared - healer.length)],

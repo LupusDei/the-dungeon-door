@@ -260,4 +260,7 @@ test('a hero who can cast a healing spell at level 1 has one prepared: Cure Woun
     }
   }
   assert.ok(!quickChoices(seededRng(1), { name: 'Test', classId: 'wizard' }).prepared!.some((p) => p === 'cure-wounds' || p === 'healing-word'));
+  for (const classId of ['wizard', 'sorcerer']) {
+    for (let seed = 0; seed < 5; seed++) assert.equal(quickChoices(seededRng(seed), { name: 'Test', classId }).prepared![0], 'magic-missile', `a new ${classId} prepares Magic Missile first`);
+  }
 });

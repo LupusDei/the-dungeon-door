@@ -7,14 +7,15 @@
  */
 import { spellDamage } from '../attacks.ts';
 import type { Combatant } from '../rules/combatant.ts';
+import { averageDice, parseDice } from '../rules/dice.ts';
 import { item } from '../rules/items.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
-import { slotsLeft, spellHealingDice } from '../rules/spells.ts';
+import { slotsLeft, spellHealingDice, strikesAt } from '../rules/spells.ts';
 import type { SrdSpell } from '../rules/srd.ts';
 import { CHOICE_IDS, type ChoiceView } from '../types.ts';
 import { thirdChoice, thirdWords } from './actions.ts';
-import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, healingSpell, mostWounded, weaponType } from './fight.ts';
+import { bestSpell, bestWeapon, bonusHeal, caught, COMBAT_CHOICES, healingSpell, mostWounded, splitDarts, weaponType } from './fight.ts';
 import { ABILITY_NAMES } from './hooks.ts';
 import type { CombatState } from './state.ts';
 
@@ -49,17 +50,21 @@ function slotNote(spell: SrdSpell, sheet: CharacterSheet): string {
 const listed = (names: readonly string[]) =>
   (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
-/** Who the spell is aimed at: the most wounded foe, or as many as its area catches (those it can hurt first). */
-function aim(spell: SrdSpell, combat: CombatState, me: Combatant): string {
+/** Who the spell is aimed at: the most wounded foe, as many as its area catches (those it can hurt first), or whom its darts strike. */
+function aim(spell: SrdSpell, combat: CombatState, me: Combatant, sheet: CharacterSheet): string {
   const type = spell.damage!.type;
+  if (spell.darts) return listed([...new Set(splitDarts(combat, me.side, strikesAt(spell, spell.level, sheet.level), averageDice(parseDice(spell.damage!.dice)), type))].map((id) => combat.combatants[id].name));
   if (!spell.area) return mostWounded(combat, me.side, type).name;
   return listed(caught(combat, me.side, areaCatch(spell.area), type).map((id) => combat.combatants[id].name));
 }
 
+/** "3 darts of 1d4+1 force that never miss". */
+const darts = (spell: SrdSpell, sheet: CharacterSheet) => `${strikesAt(spell, spell.level, sheet.level)} darts of ${spell.damage!.dice} ${spell.damage!.type} that never miss`;
+
 function cast(spell: SrdSpell, sheet: CharacterSheet, foes: string) {
   const { attackBonus, saveDc } = sheet.spellcasting!;
   const damage = spellDamage(spell, sheet.level);
-  const how = spell.attack
+  const how = spell.darts ? darts(spell, sheet) : spell.attack
     ? `${signed(attackBonus)} to hit, ${damage}`
     : `${damage}, ${ABILITY_NAMES[spell.save!]} save DC ${saveDc}${spell.halfOnSave ? ' for half' : ''}`;
   return { label: `Cast ${spell.name}`, detail: `${how}, at ${foes}.${slotNote(spell, sheet)}` };
@@ -89,6 +94,6 @@ export function yourChoices(combat: CombatState, sheet: CharacterSheet, playerId
   const spell = bestSpell(sheet);
   const bonus = bonusNote(me, sheet);
   const third = thirdWords(thirdChoice(combat, sheet, playerId), combat, sheet, COMBAT_CHOICES[2]);
-  const second = heal(combat, sheet, me) ?? (spell ? cast(spell, sheet, aim(spell, combat, me)) : attack);
+  const second = heal(combat, sheet, me) ?? (spell ? cast(spell, sheet, aim(spell, combat, me, sheet)) : attack);
   return view([attack, second, third].map((c) => ({ ...c, detail: c.detail + bonus })));
 }

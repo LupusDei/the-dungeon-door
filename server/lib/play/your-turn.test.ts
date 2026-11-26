@@ -47,6 +47,14 @@ test('an area spell names everyone it catches: A, B and C', () => {
   assert.match(yourChoices(combat, blast, 'p1')[1].detail, /, at Goblin Warrior 1, Goblin Warrior 2 and Goblin Warrior 3\./);
 });
 
+test('Magic Missile says how many darts, that they never miss, and whom they will strike', () => {
+  const combat = patch(fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior']), { 'foe-1': { hp: 3 } }); // one dart drops it, two go on
+  const mm = mage(['magic-missile'], [4, 2, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.equal(yourChoices(combat, mm, 'p1')[1].label, 'Cast Magic Missile');
+  assert.equal(yourChoices(combat, mm, 'p1')[1].detail, '3 darts of 1d4+1 force that never miss, at Goblin Warrior 1 and Goblin Warrior 2. Uses a level 1 slot (4 left).');
+  assert.match(yourChoices(fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior']), mm, 'p1')[1].detail, /never miss, at Goblin Warrior 1\. /, 'all three at a goblin they can drop');
+});
+
 test('a hero at half its HP or less, with a potion (even one), drinks it first; above half, not', () => {
   const combat = fight({ p1: fighter });
   const one = { ...fighter, resourcesUsed: { 'second-wind': 2 }, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };

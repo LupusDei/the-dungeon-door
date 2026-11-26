@@ -5,7 +5,7 @@ import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
-import { autoLevelUp, bestSpell, caught, fightRound, healingSpell, heroAction, improvement, MAX_ROUNDS, spellScore, startFight } from './fight.ts';
+import { autoLevelUp, bestSpell, caught, fightRound, healingSpell, heroAction, improvement, MAX_ROUNDS, spellScore, splitDarts, startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
@@ -424,4 +424,22 @@ test('the healed friend is back up and the round tells it', () => {
   assert.equal(round.combat.combatants.p1.status, 'up');
   assert.ok(round.combat.combatants.p1.hp > 0);
   assert.ok(round.lines.some((l) => /^Cleo casts Cure Wounds: Bryn regains \d+ HP\.$/.test(l)), round.lines.join('\n'));
+});
+
+test('Magic Missile is cast in a fight: it outscores Fire Bolt at level 1 (three sure darts), and its darts are split to drop foes', () => {
+  const missile = srd().spells.get('magic-missile')!;
+  assert.equal(spellScore(missile, wizard), 3 * 3, 'three darts of 1d4 + 1: 3 each, rounded down as stat blocks do');
+  const mm = caster(['fire-bolt'], ['magic-missile']);
+  assert.equal(bestSpell(mm)!.id, 'magic-missile');
+  assert.equal(bestSpell(caster(['fire-bolt'], ['magic-missile'], [4, 2, 0, 0, 0, 0, 0, 0, 0]))!.id, 'fire-bolt', 'no slot left');
+  const { combat } = startFight(party(), ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
+  const hurt = patch(combat, { 'foe-2': { hp: 3 }, 'foe-3': { hp: 0, status: 'dead' } });
+  assert.deepEqual(splitDarts(hurt, 'party', 3, 3, 'force'), ['foe-2', 'foe-1', 'foe-1'], 'one dart drops the wounded goblin, the rest go on');
+  assert.deepEqual(splitDarts(patch(hurt, { 'foe-1': { hp: 0, status: 'dead' } }), 'party', 4, 3, 'force'), ['foe-2', 'foe-2', 'foe-2', 'foe-2'], 'every foe covered: the rest at the most wounded');
+  const { action, sheet } = heroAction(hurt, mm, 'p2', 'b', 12);
+  assert.deepEqual(action.kind === 'spell' && [action.cast.spellId, action.cast.beams, action.targets], ['magic-missile', 3, ['foe-2', 'foe-1', 'foe-1']]);
+  assert.equal(sheet.spellcasting!.expended[0], 1);
+  const round = fightRound(party({ p1: fighter, p2: mm }), hurt, { p1: { choiceId: 'c', roll: 10 }, p2: { choiceId: 'b', roll: 10 } });
+  const line = round.lines.find((l) => l.startsWith(`${mm.name} casts Magic Missile: `))!;
+  assert.match(line, /^Cleo casts Magic Missile: Goblin Warrior 2 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage\.$/);
 });

@@ -5,7 +5,7 @@
  */
 import { heroCombatant } from './rules/combatant.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
-import { beamsAt, spellDamageDice } from './rules/spells.ts';
+import { spellDamageDice, strikesAt } from './rules/spells.ts';
 import { type SrdSpell, srd } from './rules/srd.ts';
 
 export interface AttackView {
@@ -20,13 +20,13 @@ export interface AttackView {
   save: string | null;
 }
 
-/** A spell a fight can resolve: it deals damage, by a spell attack or a save. */
-export const fightsWith = (spell: SrdSpell): boolean => spell.damage !== null && (spell.attack !== null || spell.save !== null);
+/** A spell a fight can resolve: it deals damage, by a spell attack, a save, or darts that never miss. */
+export const fightsWith = (spell: SrdSpell): boolean => spell.damage !== null && (spell.attack !== null || spell.save !== null || spell.darts !== null);
 
-/** The damage of a cast at the spell's own level: "1d10 fire", or "2 × 1d10 force" for separate beams. */
+/** The damage of a cast at the spell's own level: "1d10 fire", or "2 × 1d10 force" for separate beams or darts. */
 export function spellDamage(spell: SrdSpell, characterLevel: number): string {
   const dice = spellDamageDice(spell, spell.level, characterLevel)!;
-  const beams = beamsAt(spell, characterLevel);
+  const beams = strikesAt(spell, spell.level, characterLevel);
   return `${beams > 1 ? `${beams} × ` : ''}${dice} ${spell.damage!.type}`;
 }
 

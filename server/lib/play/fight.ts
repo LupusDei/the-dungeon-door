@@ -4,6 +4,7 @@
  * engine's rules. Shaken foes check morale (morale.ts). When it ends the living heroes split the XP and level
  * up: all of it on a victory or surrender, the slain foes' when the rest flee. See docs/api.md.
  */
+import { fightsWith } from '../attacks.ts';
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
 import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
@@ -18,8 +19,8 @@ import { held, removeItem } from '../rules/inventory.ts';
 import { resourcesOf, useResource } from '../rules/resources.ts';
 import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { beamsAt, castSpell, endConcentration, slotsLeft, spellDamageDice } from '../rules/spells.ts';
-import { areaCatch } from '../rules/spellEffects.ts';
+import { type Cast, castSpell, endConcentration, slotsLeft, spellDamageDice, strikesAt } from '../rules/spells.ts';
+import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
 import { takeThird } from './actions.ts';
@@ -85,18 +86,18 @@ export const mostWounded = (combat: CombatState, side: Combatant['side'], type?:
 /** The damage type the hero's chosen attack deals (its first damage roll's). */
 export const weaponType = (me: Combatant): string => bestWeapon(me).damage[0].type;
 
-/** Average damage of a cast at the spell's own level, every beam hitting. */
+/** Average damage of a cast at the spell's own level, every beam or dart hitting. */
 export function spellScore(spell: SrdSpell, sheet: CharacterSheet): number {
-  return averageDice(parseDice(spellDamageDice(spell, spell.level, sheet.level)!)) * beamsAt(spell, sheet.level);
+  return averageDice(parseDice(spellDamageDice(spell, spell.level, sheet.level)!)) * strikesAt(spell, spell.level, sheet.level);
 }
 
-/** The damaging spell (attack or save) with the most average damage that the hero can cast now. */
+/** The damaging spell (attack, save or darts) with the most average damage that the hero can cast now. */
 export function bestSpell(sheet: CharacterSheet): SrdSpell | null {
   if (!sheet.spellcasting) return null;
   const left = slotsLeft(sheet);
   const castable = (s: SrdSpell) => s.level === 0 || left.slice(s.level - 1).some((n) => n > 0);
   const known = [...sheet.spellcasting.cantrips, ...sheet.spellcasting.prepared].map((id) => srd().spells.get(id)!);
-  const damaging = known.filter((s) => s.damage && (s.attack || s.save) && castable(s));
+  const damaging = known.filter((s) => fightsWith(s) && castable(s));
   return damaging.reduce<SrdSpell | null>((best, s) => (best === null || spellScore(s, sheet) > spellScore(best, sheet) ? s : best), null);
 }
 
@@ -142,8 +143,26 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
   const caster = casterOf(sheet);
   const type = spell.damage!.type;
-  const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area), type) : Array<string>(cast.beams).fill(mostWounded(combat, me.side, type).id);
+  const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area), type) : aimed(combat, me, spell, cast);
   return { action: { kind: 'spell', caster, cast, targets, natural }, sheet: spent };
+}
+
+/** A cast's targets without an area: darts split to drop foes, beams all at the most wounded. */
+function aimed(combat: CombatState, me: Combatant, spell: SrdSpell, cast: Cast): string[] {
+  const type = spell.damage!.type;
+  if (spell.darts) return splitDarts(combat, me.side, cast.beams, averageDice(parseDice(cast.damageDice!)), type);
+  return Array<string>(cast.beams).fill(mostWounded(combat, me.side, type).id);
+}
+
+/**
+ * Magic Missile's darts among the foes (the caster chooses, SRD 5.2): the most wounded first, each given the
+ * darts that on average drop it; any left over go to the most wounded.
+ */
+export function splitDarts(combat: CombatState, side: Combatant['side'], darts: number, perDart: number, type: string): string[] {
+  const foes = caught(combat, side, darts, type);
+  const aimed: string[] = [];
+  for (const id of foes) aimed.push(...Array<string>(Math.min(Math.ceil(combat.combatants[id].hp / perDart), darts - aimed.length)).fill(id));
+  return [...aimed, ...Array<string>(darts - aimed.length).fill(foes[0])];
 }
 
 /** The `n` most wounded living foes (fewer if fewer are left), those not immune to `type` (damage) first. */
@@ -166,13 +185,19 @@ function riderLine(r: RiderOutcome, who: string): string {
   return r.roll ? `${who} fails ${save}: ${what}.` : `${who} is ${what}.`;
 }
 
+/** What a spell did to one target: hit or missed by an attack, saved or not, or struck by a dart. */
+const struck = (o: SpellOutcome): string => {
+  if (o.attack) return o.attack.hit ? 'is hit' : 'is missed';
+  return o.save ? (o.save.success ? 'saves' : 'fails the save') : 'is struck';
+};
+
 const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names) => string } = {
   attack: ({ actor, result: r, reaction, rider }, name) =>
     `${reaction ? 'Opportunity Attack: ' : ''}${name(actor)} attacks ${name(r.target)} with ${r.attack}: ${r.roll.natural} (total ${r.roll.total}) vs AC ${r.ac}, ` +
     (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.') + (rider ? ` ${riderLine(rider, name(r.target))}` : ''),
   spell: ({ actor, spellId, outcomes }, name) =>
     `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) =>
-      (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${o.attack ? (o.attack.hit ? 'is hit' : 'is missed') : o.save!.success ? 'saves' : 'fails the save'}`) +
+      (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${struck(o)}`) +
       (o.damage > 0 ? `, ${o.damage} damage` : '')).join('; ') + '.',
   dodge: ({ actor }, name) => `${name(actor)} dodges.`,
   other: ({ text }) => text,
