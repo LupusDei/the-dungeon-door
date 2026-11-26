@@ -1,6 +1,6 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, RoleplayLine, StoredScene, Vote } from '../types.ts';
 
 export interface NewGame {
   code: string;
@@ -29,6 +29,14 @@ export interface GameExpectation {
   sceneIndex?: number;
 }
 
+/** Someone the player has shared a game with, by the hero they last played beside them. */
+export interface Companion { playerId: string; name: string; lastPlayedAt: string }
+
+/** An invitation to a party still in its lobby. */
+export interface Invite { code: string; toPlayerId: string; fromPlayerId: string; fromName: string; createdAt: string }
+/** An invitation as the invited player sees it: with who is in the party already. */
+export interface InviteView extends Invite { party: string[] }
+
 export interface NewMessage {
   kind: MessageKind;
   playerId: string | null;
@@ -36,8 +44,8 @@ export interface NewMessage {
   text: string;
 }
 
-/** A scene as written by the DM: everything but its votes and resolution. */
-export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices'>;
+/** A scene as written by the DM: everything but its votes, its in-character lines, and its resolution. */
+export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices' | 'roleplay'>;
 
 /**
  * Persistence for characters, games and chat. Two implementations: Postgres (`postgres.ts`, when
@@ -81,12 +89,31 @@ export interface Store {
   setSceneOutcome(code: string, index: number, outcome: string, chosenChoiceId: ChoiceId | null): Promise<void>;
   /**
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its
-   * original roll. Returns the stored vote, or null when the game isn't voting on that scene.
+   * original roll. `named` is the legal action the vote names; null is a choice letter, and clears one.
+   * Returns the stored vote, or null when the game isn't voting on that scene.
    */
-  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, move?: Move | null): Promise<Vote | null>;
+  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named?: { actionId: string; targets: string[] } | null, move?: Move | null): Promise<Vote | null>;
+  /**
+   * Records a written check on this player's vote — only while the game is voting on scene `index`.
+   * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.
+   */
+  setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>): Promise<Vote | null>;
+  /**
+   * Appends an in-character line to the scene, only while the game is voting on it and the turn holds
+   * fewer than 20. Returns the turn's lines, or null when the scene is not open.
+   */
+  appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null>;
 
   /** Appends a chat/system/dm message with the game's next message id. */
   addMessage(code: string, message: NewMessage): Promise<Message>;
   /** Messages with id > `since` (all when omitted), oldest first, at most the newest `limit`. */
   listMessages(code: string, since?: number, limit?: number): Promise<Message[]>;
+
+  /** The players this one has shared a game with, most recent first. */
+  listCompanions(playerId: string, limit?: number): Promise<Companion[]>;
+  /** Records an invitation. False when that player is already invited to that game. */
+  addInvite(invite: Invite): Promise<boolean>;
+  /** The player's invitations to games still in the lobby that they have not joined, newest first. */
+  listInvites(toPlayerId: string): Promise<InviteView[]>;
+  removeInvite(code: string, toPlayerId: string): Promise<void>;
 }

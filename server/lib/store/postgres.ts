@@ -1,11 +1,24 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
-import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, RoleplayLine, StoredScene, Vote } from '../types.ts';
+import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 type Row = Record<string, any>;
 
 const iso = (value: unknown): string => new Date(value as string | Date).toISOString();
+
+/** A votes row. The extra columns are absent until migrated, and null on a plain letter vote. */
+function voteOf(row: Row): Vote {
+  const vote: Vote = { playerId: row.player_id, choiceId: row.choice_id as ChoiceId, roll: row.roll as number };
+  if (typeof row.action_id === 'string') vote.actionId = row.action_id;
+  const targets = typeof row.targets === 'string' ? JSON.parse(row.targets) as unknown : row.targets;
+  if (Array.isArray(targets) && targets.length > 0 && targets.every((t) => typeof t === 'string')) vote.targets = targets as string[];
+  const freeform = typeof row.freeform === 'string' ? JSON.parse(row.freeform) as unknown : row.freeform;
+  if (freeform && typeof freeform === 'object') vote.freeform = freeform as Vote['freeform'];
+  const move = typeof row.move === 'string' ? JSON.parse(row.move) as unknown : row.move;
+  if (move && typeof move === 'object') vote.move = move as Vote['move'];
+  return vote;
+}
 
 const GAME_COLUMNS: Record<keyof GamePatch, string> = {
   status: 'status',
@@ -124,10 +137,7 @@ export class PostgresStore implements Store {
       [code],
     );
     if (!row) return null;
-    const votes = (row.votes as Row[]).map((v) => ({
-      sceneIdx: v.scene_idx as number,
-      vote: { playerId: v.player_id, choiceId: v.choice_id, roll: v.roll, ...(v.move ? { move: v.move } : {}) } as Vote,
-    }));
+    const votes = (row.votes as Row[]).map((v) => ({ sceneIdx: v.scene_idx as number, vote: voteOf(v) }));
     const players = (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) }));
     const readings = (row.voices ?? []) as Row[];
     const scenes = (row.scenes as Row[]).map((s): StoredScene => ({
@@ -142,6 +152,7 @@ export class PostgresStore implements Store {
       votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
       outcome: s.outcome,
       chosenChoiceId: s.chosen_choice_id as ChoiceId | null,
+      roleplay: Array.isArray(s.roleplay) ? s.roleplay as RoleplayLine[] : [],
       createdAt: iso(s.created_at),
     }));
     return gameRow(row, players, scenes);
@@ -241,20 +252,56 @@ export class PostgresStore implements Store {
     );
   }
 
-  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, move?: Move | null) {
+  async appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null> {
+    const rows = await this.q(
+      `WITH s AS (
+         UPDATE scenes AS sc
+         SET roleplay = COALESCE(sc.roleplay, '[]'::jsonb) || $3::jsonb
+         FROM games g
+         WHERE sc.game_code = g.code AND g.code = $1 AND sc.idx = $2
+           AND g.status = 'voting' AND g.scene_index = $2
+           AND jsonb_array_length(COALESCE(sc.roleplay, '[]'::jsonb)) < 20
+         RETURNING sc.roleplay
+       ),
+       bumped AS (
+         UPDATE games SET updated_at = now() WHERE code = $1 AND EXISTS (SELECT 1 FROM s) RETURNING code
+       )
+       SELECT roleplay FROM s`,
+      [code, index, JSON.stringify([line])],
+    );
+    const [row] = rows;
+    return row && Array.isArray(row.roleplay) ? row.roleplay as RoleplayLine[] : null;
+  }
+
+  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null, move?: Move | null) {
     // Only while the game is voting on this scene; a changed vote keeps its first roll. FOR SHARE waits
     // for a concurrent resolve (voting → resolving) to commit and then sees it, so no vote sneaks in late.
     // (It deliberately doesn't touch games.updated_at: two votes updating the row they share-lock would deadlock.)
     const rows = await this.q(
       `WITH ok AS (SELECT code FROM games WHERE code = $1 AND status = 'voting' AND scene_index = $2 FOR SHARE)
-       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, move)
-       SELECT code, $2, $3, $4, $5, $6 FROM ok
-       ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE SET choice_id = EXCLUDED.choice_id, move = EXCLUDED.move
-       RETURNING player_id, choice_id, roll, move`,
-      [code, index, playerId, choiceId, roll, move ? JSON.stringify(move) : null],
+       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move)
+       SELECT code, $2, $3, $4, $5, $6, $7::jsonb, NULL, $8::jsonb FROM ok
+       ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
+         SET choice_id = EXCLUDED.choice_id, action_id = EXCLUDED.action_id, targets = EXCLUDED.targets, freeform = NULL, move = EXCLUDED.move
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move`,
+      [code, index, playerId, choiceId, roll, named?.actionId ?? null, named ? JSON.stringify(named.targets) : null, move ? JSON.stringify(move) : null],
     );
     const [row] = rows;
-    return row ? { playerId: row.player_id, choiceId: row.choice_id as ChoiceId, roll: row.roll as number, ...(row.move ? { move: row.move } : {}) } as Vote : null;
+    return row ? voteOf(row) : null;
+  }
+
+  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>) {
+    const rows = await this.q(
+      `WITH ok AS (SELECT code FROM games WHERE code = $1 AND status = 'voting' AND scene_index = $2 FOR SHARE)
+       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move)
+       SELECT code, $2, $3, 'a', $4, NULL, NULL, $5::jsonb, NULL FROM ok
+       ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
+         SET freeform = EXCLUDED.freeform, action_id = NULL, targets = NULL, move = NULL
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move`,
+      [code, index, playerId, roll, JSON.stringify(freeform)],
+    );
+    const [row] = rows;
+    return row ? voteOf(row) : null;
   }
 
   // ---- chat ----
@@ -281,6 +328,49 @@ export class PostgresStore implements Store {
       [code, since ?? 0, limit],
     );
     return rows.map(toMessage);
+  }
+
+  // ---- companions and invitations ----
+
+  async listCompanions(playerId: string, limit = 30) {
+    const rows = await this.q(
+      `SELECT o.player_id, (array_agg(o.character->>'name' ORDER BY g.updated_at DESC))[1] AS name, max(g.updated_at) AS last_played
+       FROM game_players me
+       JOIN game_players o ON o.game_code = me.game_code AND o.player_id <> me.player_id
+       JOIN games g ON g.code = me.game_code
+       WHERE me.player_id = $1
+       GROUP BY o.player_id ORDER BY last_played DESC LIMIT $2`,
+      [playerId, limit],
+    );
+    return rows.map((r): Companion => ({ playerId: r.player_id, name: r.name, lastPlayedAt: iso(r.last_played) }));
+  }
+
+  async addInvite(invite: Invite) {
+    const rows = await this.q(
+      `INSERT INTO invites (game_code, to_player, from_player, from_name, created_at) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (game_code, to_player) DO NOTHING RETURNING game_code`,
+      [invite.code, invite.toPlayerId, invite.fromPlayerId, invite.fromName, invite.createdAt],
+    );
+    return rows.length > 0;
+  }
+
+  async listInvites(toPlayerId: string) {
+    const rows = await this.q(
+      `SELECT i.game_code, i.from_player, i.from_name, i.created_at,
+         COALESCE((SELECT json_agg(p.character->>'name' ORDER BY p.joined_at) FROM game_players p WHERE p.game_code = i.game_code), '[]') AS party
+       FROM invites i JOIN games g ON g.code = i.game_code
+       WHERE i.to_player = $1 AND g.status = 'lobby'
+         AND NOT EXISTS (SELECT 1 FROM game_players p WHERE p.game_code = i.game_code AND p.player_id = $1)
+       ORDER BY i.created_at DESC LIMIT 20`,
+      [toPlayerId],
+    );
+    return rows.map((r): InviteView => ({
+      code: r.game_code, toPlayerId, fromPlayerId: r.from_player, fromName: r.from_name, createdAt: iso(r.created_at), party: r.party as string[],
+    }));
+  }
+
+  async removeInvite(code: string, toPlayerId: string) {
+    await this.q('DELETE FROM invites WHERE game_code = $1 AND to_player = $2', [code, toPlayerId]);
   }
 }
 

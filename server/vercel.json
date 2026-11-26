@@ -23,6 +23,10 @@
       "destination": "/api/game-messages?code=:code"
     },
     {
+      "source": "/api/games/:code/speak",
+      "destination": "/api/game-speak?code=:code"
+    },
+    {
       "source": "/api/games/:code/dungeon-master",
       "destination": "/api/game-dungeon-master?code=:code"
     },
@@ -35,8 +39,16 @@
       "destination": "/api/game-vote?code=:code"
     },
     {
+      "source": "/api/games/:code/action",
+      "destination": "/api/game-action?code=:code"
+    },
+    {
       "source": "/api/games/:code/advance",
       "destination": "/api/game-advance?code=:code"
+    },
+    {
+      "source": "/api/games/:code/invites",
+      "destination": "/api/game-invites?code=:code"
     },
     {
       "source": "/api/games/:code/narration",

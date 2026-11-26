@@ -179,13 +179,24 @@ export function placesAfter(combatants: Record<string, Combatant>, id: string, m
   return next;
 }
 
-/** Where everyone starts. No surprise: both sides near. Surprise: the fight begins in melee. */
-export function openingPlaces(combatants: readonly Combatant[], surprise?: 'party' | 'foes'): Record<string, Place> {
-  if (!surprise) return Object.fromEntries(combatants.map((c) => [c.id, { band: 'near' as const, with: [] }]));
+export interface Opening {
+  surprise?: 'party' | 'foes';
+  /** Where both sides start when nobody is surprised. A room is near; the road is far. */
+  band?: 'near' | 'far';
+}
+
+const openingOf = (opening?: Opening | 'party' | 'foes'): Opening | undefined =>
+  (opening === 'party' || opening === 'foes' ? { surprise: opening } : opening);
+
+/** Where everyone starts. No surprise: both sides at `band` (near in a room, far on the road). Surprise: the fight begins in melee. */
+export function openingPlaces(combatants: readonly Combatant[], opening?: Opening | 'party' | 'foes'): Record<string, Place> {
+  const start = openingOf(opening);
+  const band = start?.band === 'far' ? 'far' : 'near';
+  if (!start?.surprise) return Object.fromEntries(combatants.map((c) => [c.id, { band, with: [] }]));
   const up = combatants.filter((c) => c.status === 'up');
   return Object.fromEntries(combatants.map((c) => {
     const withThem = up.filter((o) => o.side !== c.side).map((o) => o.id);
-    return [c.id, c.status === 'up' && withThem.length ? { band: 'engaged' as const, with: withThem } : { band: 'near' as const, with: [] }];
+    return [c.id, c.status === 'up' && withThem.length ? { band: 'engaged' as const, with: withThem } : { band, with: [] }];
   }));
 }
 

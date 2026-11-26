@@ -89,7 +89,13 @@ type RulesHook =
 4. The engine applies the result to state (damage, conditions, HP, death saves, XP) and hands the DM
    a structured summary in `Resolution`, for example "Bryn: 17 + 5 = 22 vs AC 15, hit, 9 slashing,
    goblin down".
-5. The DM narrates it. It can colour the result, but it cannot change the numbers.
+5. The DM narrates it. It can colour the result, but it cannot change the numbers, and it cannot play the
+   heroes. The heroes belong to the players: the narrator does not put words in their mouths, decide their
+   feelings, attitudes or choices, or narrate actions they did not take. It describes the world, the NPCs,
+   the monsters and the immediate physical result of the chosen action, then hands the moment back. Whimsical
+   detail of places and items is part of the world. A player may speak or act in character
+   (`POST /api/games/{code}/speak`) with no roll and no adjudication; the line is kept on the turn, and the
+   next narration answers it. Quoted hero speech the player did not write is stripped.
 
 **Exploration scenes** keep the current rule: the party goes with the most-voted choice, and every
 voter's roll still counts (a check is made by each voter; the DM narrates successes and failures).
@@ -395,6 +401,8 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
   mechanical effect beyond needing to Break Free (simplified).
 - **The third choice** (`play/actions.ts`, **original** for a three-slot vote): Break Free when held,
   Help to stabilize a dying friend (a Healer's Kit, or DC 10 Medicine), else Dodge.
+- **Freeform turns** (`play/actions.ts`, **original**). A player may write their own action. The DM
+  classifies the words and never names a number. See "Freeform turns" below.
 - **Fleeing and targeting.** A monster with Disengage as a Bonus Action (goblins) flees without
   Opportunity Attacks. Monsters prefer heroes who aren't Dodging. Heroes aim past foes immune to their
   damage type (the most wounded foe they can hurt, else the most wounded); an area spell catches those it
@@ -407,6 +415,41 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
 Still simplified: legendary actions and legendary resistance; Hide, Ready and Search as combat
 actions; rider creature-type and size limits; subspecies resistances (tiefling legacies, dragonborn
 ancestry) until the sheet records the subspecies; overland travel pace. Dash is a combat move (range bands).
+
+## Freeform turns
+
+**Original.** A player may write what they do ("I kick the brazier onto the goblins") instead of picking
+one of the three choices, in a fight or out of one. The dungeon master only classifies the words. The
+engine owns every number.
+
+The classification is one of three:
+
+- **A known action.** It maps onto an id from this hero's legal actions (scene.actions): a weapon, a
+  spell, a common action such as Dodge, or one of the three choices (choice:a and so on). knownActionIds
+  is those available ids. choiceFor is the only place an id becomes a choice letter (an attack is a, a
+  spell is b, anything else known is c). An id that needs a target is stored as the letter: the
+  classification does not name who. TODO: pass a target the words name. A later kind (a move) has no
+  letter until choiceFor learns it.
+- **A check.** An ability, or a skill, a tier, and an effect category. Tiers are the 5e ones: easy DC 10,
+  medium DC 15, hard DC 20. A natural 20 or 1 is not automatic, same as any other check. The player's d20
+  is the one rolled for a vote, and the line is posted with the other dice.
+- **Impossible.** The fiction does not allow it. The engine narrates the no (or a fixed line when the
+  classification cannot be read, or the narration contains a number). The turn is not spent.
+
+Effect categories, on a successful check:
+
+- **none.** Success is the whole result.
+- **damage.** The DM names a severity. The dice are light 1d6, moderate 2d6, severe 4d6, and the type is
+  an SRD damage type or bludgeoning. In a fight that damage hits the most wounded foe, the same target an
+  Attack would pick, after resistance, immunity and vulnerability. Outside a fight the dice are still
+  rolled and logged; there is no creature in the state to mark.
+- **condition.** The DM names an SRD condition other than exhaustion, and the ability of the save. The DC
+  is the same tier. In a fight the most wounded foe saves; on a failure the condition lands for the fight.
+  Outside a fight the line states the save and the DC for the DM to narrate.
+
+A classification the engine cannot read (unknown skill, missing tier, a number where a word belongs) is
+treated as impossible, so a bad reply cannot spend the turn or invent a result. The known-action id has
+to be one of today's.
 
 ## Phase 5: dungeon levels, fights that fit, XP at the quest's end
 
@@ -512,7 +555,9 @@ engaged. `rules/bands.ts` holds the rule; `play/moves.ts` lists the legal moves 
   attack made while engaged has disadvantage. A touch spell needs engaged.
 - **Monsters use the same bands.** A melee foe steps in (one band, then the attack; from two bands away it
   spends the turn moving closer). A ranged foe steps out of melee, Disengaging when it can, and shoots.
-- **A fight starts with both sides near.** When one side surprises the other, it begins in melee.
+- **A fight in a room starts with both sides near.** A fight on the road starts **far**: they see each
+  other down the track, about 60 feet apart, and a move still closes with a foe in that same band. When
+  one side surprises the other, the fight begins in melee.
 - **An area catches by band, where its size fits.** A cone, line, emanation or an area of range Self
   reaches from the caster: a 15-foot cone catches the creatures they are engaged with, not the near band.
   Stepping in (one move) and then casting catches that cluster. A sphere, cylinder or cube with a range is
@@ -521,8 +566,71 @@ engaged. `rules/bands.ts` holds the rule; `play/moves.ts` lists the legal moves 
   count (`areaCatch`) remains only for a stored fight that has no places.
 
 On a hero's turn the one-band step is free with the action, so Attack from near steps in and strikes, and
-the choice says so. A vote may also carry a `move` (`docs/api.md`): one band before the action, or a Dash
+the choice says so. The same moves are on that hero's action list (`kind` `"move"`), so choosing one spends
+the action on the move. A vote may also carry a `move` (`docs/api.md`): one band before the action, or a Dash
 instead of it. An illegal move is refused.
+
+## The road from the tavern to the door
+
+Robert's design: *"From the tavern to the door there should be a trek through territory with risk of
+bandits, varmints, bands of level 1-2 surface monsters, and wandering vendors. Two scenes before the door
+to the dungeon begins."*
+
+`play/trek.ts`. A dungeon game (`fixed` or `explore`; a tale told has no door) opens on the road: **two
+scenes**, then the door scene as before. The game is two scenes longer than the `sceneCount` asked for (the
+map is still sized for the count asked for).
+
+- **The road is rolled when the game starts**, from the game's seed (`derivedRng(seed, 'trek')`): a terrain
+  (farm road, forest road, moorland track, hill trails, river valley) and, for each stretch, a d12:
+
+  | d12   | On the stretch | Odds |
+  |-------|----------------|------|
+  | 1–3   | bandits: Bandit, Scout, Tough, Bandit Captain | 25% |
+  | 4–6   | wild beasts: Giant Rat, Jackal, Wolf, Boar, Giant Badger, Giant Wolf Spider, … up to Brown Bear and Giant Boar | 25% |
+  | 7–8   | a band of monsters: Goblin Minion, Warrior or Boss, Hobgoblin Warrior, Gnoll Warrior, Worg, Bugbear Warrior | 17% |
+  | 9–10  | a wandering vendor | 17% |
+  | 11–12 | a quiet stretch | 17% |
+
+  So two of three stretches hold foes. They are a **low** fight for the party (`buildEncounter`, the same
+  budget, tempering and party-size cap as a dungeon room), at the levels the dungeon starts at; the
+  tougher ones only appear for parties that can afford them. Bandits and monster bands carry treasure for
+  the dungeon's starting level; beasts carry none.
+- **Foes are met** as in a dungeon room: they roll an attitude (2d6: 2–5 Hostile, about 28%). Hostile ones
+  bar the way: Engage, Run (slip past: no fight, no loot, no XP) or Parley. If a parley fails and they are
+  still Hostile, they attack: there is no way back on the road. Others watch and wait while the party goes on.
+- **A fight** on the road awards XP like any other, and its victors take the stretch's treasure.
+- **A wandering vendor** sells a Potion of Healing (50 gp) and four other SRD adventuring gear items of
+  25 gp or less, at SRD prices, through the `buy` hook.
+- **After each scene** the party goes on by itself (two hours, under the open sky's light) to the next
+  stretch, or, after the second, to the dungeon door ("The party reaches the dungeon door."). On the road
+  there are no exits (`move` is refused), no dungeon wanderers, and no torches needed by day.
+- **The DM** sees `trek` (stretch, terrain, what is on it, wares, who waits) and no `dungeon` until the
+  door; its instructions say to narrate overland travel, with no corridors, rooms or doors.
+
+## Wounds, not hit points
+
+Robert's design: *"The monster's hp should not be explicitly shown. Instead it should show degrees of
+incapacity like Bleeding, limping, gasping etc. players should see that they are making progress without
+knowing exactly how much."*
+
+`rules/wounds.ts`. A foe's hit points stay in the engine's state; the app and the DM see its **wound**, one
+of six rungs of **vigor** by the share of hit points left:
+
+| Vigor | Hit points left | Flesh | Undead | Construct | Ooze |
+|-------|-----------------|-------|--------|-----------|------|
+| 6 | all | Unhurt | Whole | Intact | Whole |
+| 5 | over 3/4 | Scratched | Torn | Scuffed | Rippling |
+| 4 | over 1/2 | Bleeding | Gouged | Dented | Seeping |
+| 3 | over 1/4 (1/2 or less: Bloodied, as in the 2024 rules) | Bloodied | Crumbling | Cracked | Shrinking |
+| 2 | over 1/10 | Staggering | Falling apart | Breaking | Sloughing |
+| 1 | any left | Gasping | Coming undone | Failing | Dissolving |
+| 0 | none | Dead | Destroyed | Destroyed | Destroyed |
+
+- The API's foe combatants carry `wound` and `vigor` and no `hp`/`maxHp`; heroes keep theirs.
+- A round's lines tell a foe's wounds when they change ("Goblin Warrior is bleeding."). Damage rolled on a
+  hit is still shown ("hit for 7"), but never what is left.
+- The DM's combat block gives the wound word for each foe, and its instructions say to show wounds in the
+  story, never hit points.
 
 ## For the app (the game layer on top)
 

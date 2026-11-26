@@ -1,4 +1,8 @@
 {:features-dirs ["features"]
  :output-dir "target/gherclj/generated"
- :step-namespaces [gherclj.toughness-steps gherclj.band-steps]
+ :step-namespaces [gherclj.toughness-steps
+                   gherclj.legal-steps
+                   gherclj.freeform-steps
+                   gherclj.player-voice-steps
+                   gherclj.band-steps]
  :framework :typescript/node-test}

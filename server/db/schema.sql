@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS scenes (
   PRIMARY KEY (game_code, idx)
 );
 
+-- In-character lines for the turn (no roll): what the players said and did, oldest first.
+ALTER TABLE scenes ADD COLUMN IF NOT EXISTS roleplay jsonb NOT NULL DEFAULT '[]';
+
 -- The narrators' readings of scenes (lib/voice.ts, lib/game.ts requestNarration): one audio file per scene
 -- per narrator, made when a player first asks for it. A row with no url is the claim of whoever is making it
 -- (started_at); a failed try clears started_at so the next request can claim it again.
@@ -79,11 +82,20 @@ CREATE TABLE IF NOT EXISTS votes (
   player_id  text NOT NULL,
   choice_id  text NOT NULL CHECK (choice_id IN ('a', 'b', 'c')),
   roll       int  NOT NULL CHECK (roll BETWEEN 1 AND 20),
+  action_id  text,                    -- a legal action named by the vote; null for a letter vote
+  targets    jsonb,
+  freeform   jsonb,                   -- a written check: { text, ruling }
   move       jsonb,                   -- a combat move taken with the vote: {to, engage?, dash?, disengage?}
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (game_code, scene_idx, player_id)
 );
 
+-- A vote may name a legal action (docs/api.md) as well as a choice letter. Null for a letter vote.
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS action_id text;
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS targets jsonb;
+-- A written check on a vote (play/actions.ts): { text, ruling }. Null on an ordinary vote.
+-- The choice_id of such a row is ignored. Added without rewriting existing votes.
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS freeform jsonb;
 ALTER TABLE votes ADD COLUMN IF NOT EXISTS move jsonb;
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -105,3 +117,37 @@ CREATE TABLE IF NOT EXISTS quest_docs (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (kind, id)
 );
+
+-- Push notifications (lib/push, docs/push.md). A device token belongs to the last player to register it.
+CREATE TABLE IF NOT EXISTS push_devices (
+  token       text PRIMARY KEY,
+  player_id   text NOT NULL,
+  environment text NOT NULL CHECK (environment IN ('sandbox', 'production')),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS push_devices_player_idx ON push_devices (player_id);
+
+-- One row per player who has been pushed: when, how many they have not answered, and what waits to go
+-- (lib/push/throttle.ts PushState). unanswered and waiting repeat what is in state, for cheap lookups;
+-- version makes each change a compare-and-set.
+CREATE TABLE IF NOT EXISTS push_state (
+  player_id  text PRIMARY KEY,
+  state      jsonb NOT NULL,
+  unanswered int  NOT NULL DEFAULT 0,
+  waiting    int  NOT NULL DEFAULT 0,
+  version    int  NOT NULL DEFAULT 1,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Invitations to a party still in its lobby, from someone the invited player has played with.
+CREATE TABLE IF NOT EXISTS invites (
+  game_code   text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
+  to_player   text NOT NULL,
+  from_player text NOT NULL,
+  from_name   text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (game_code, to_player)
+);
+CREATE INDEX IF NOT EXISTS invites_to_idx ON invites (to_player, created_at DESC);
+CREATE INDEX IF NOT EXISTS game_players_player_idx ON game_players (player_id);

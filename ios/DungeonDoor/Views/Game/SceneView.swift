@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// One scene: the art, the dungeon master's narration, and what the party does about it. A told
-/// scene offers three choices to vote on, each with what the rules will make of it; a round of a
-/// fight hands over to `CombatView`. Also the finale, which has no choices.
+/// One scene as it was drawn before the play dashboard: the art, the narration, and the choices.
+/// `GameView` now plays on `PlayDashboard`. This screen stays because the dashboard still uses the
+/// narrator bar, the time and light line, the waiting-foes notice, and the resolving and level-up
+/// covers that live here.
 struct SceneView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -11,6 +12,7 @@ struct SceneView: View {
     /// Opens the sheet of the hero with this player id (the party strip's taps).
     var openHero: (String) -> Void = { _ in }
     @State private var revealedRoll: Int?
+    @State private var inCharacterDraft = ""
 
     private var state: GameState { session.state }
     private var rules: RulesView? { state.rules }
@@ -28,6 +30,7 @@ struct SceneView: View {
                             CombatView(session: session, scene: scene, combat: combat, openHero: openHero).id("combat")
                             NarratorBar(scene: scene, session: session, narrator: narrator)
                             narration(scene)
+                            inCharacter(scene)
                             IllustrationView(url: scene.imageURL)
                         } else {
                             if let party = rules?.party, !party.isEmpty {
@@ -38,6 +41,7 @@ struct SceneView: View {
                             NarratorBar(scene: scene, session: session, narrator: narrator)
                             whatCameOfIt(scene)
                             narration(scene)
+                            inCharacter(scene)
                             if scene.isFinale {
                                 finale
                             } else {
@@ -59,6 +63,7 @@ struct SceneView: View {
             }
             .onChange(of: state.scene?.index) { _, _ in
                 revealedRoll = nil
+                inCharacterDraft = ""
                 withAnimation { proxy.scrollTo(state.scene?.index, anchor: .top) }
             }
             .task(id: state.scene?.index) {
@@ -136,6 +141,7 @@ struct SceneView: View {
                             Text(deed).font(.proseSmall.weight(.semibold)).foregroundStyle(Palette.gold)
                         }
                         Text(last.outcome).font(.proseSmall.italic()).foregroundStyle(Palette.parchment.opacity(0.85))
+                        roleplayLines(last.roleplay)
                     }
                     .padding(.leading, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,6 +149,49 @@ struct SceneView: View {
                 }
                 DiceLog(lines: dice, heroes: heroNames)
             }
+        }
+    }
+
+    /// What the players said and did in character, then a box to add to this turn. No roll.
+    @ViewBuilder private func inCharacter(_ scene: GameScene) -> some View {
+        if !scene.isFinale {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("In character")
+                if scene.roleplay.isEmpty && state.status == .voting {
+                    Text("Say what your hero says or does. No roll.")
+                        .font(.proseSmall.italic())
+                        .foregroundStyle(Palette.muted)
+                }
+                roleplayLines(scene.roleplay)
+                if state.status == .voting {
+                    HStack(alignment: .bottom, spacing: 10) {
+                        TextField("Say or do…", text: $inCharacterDraft, axis: .vertical)
+                            .font(.prose)
+                            .lineLimit(1...3)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .card()
+                        Button {
+                            let text = inCharacterDraft
+                            inCharacterDraft = ""
+                            Task { await session.speakInCharacter(text) }
+                        } label: {
+                            Image(systemName: "quote.bubble.fill").font(.system(size: 28))
+                        }
+                        .disabled(inCharacterDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.busy)
+                        .accessibilityLabel("Speak in character")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func roleplayLines(_ lines: [RoleplayLine]) -> some View {
+        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+            (Text(line.characterName + ": ").fontWeight(.semibold) + Text(line.text))
+                .font(.proseSmall)
+                .foregroundStyle(Palette.parchment)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -351,7 +400,7 @@ enum ChoiceLetter {
 
 /// The hour and what the party sees by: "Day 1, 08:40", "Torch, 40 min left (Bryn)" or "Dark, and
 /// no light". Under it, what the caller's own hero can make out when that is less than everything.
-private struct TimeAndLight: View {
+struct TimeAndLight: View {
     let clock: GameClock?
     let light: PartyLight?
     let mine: HeroStanding?
@@ -431,7 +480,7 @@ private struct TimeAndLight: View {
 
 /// The narrator's controls above a scene's telling: hear it read, and whether every scene is read
 /// as it arrives.
-private struct NarratorBar: View {
+struct NarratorBar: View {
     let scene: GameScene
     let session: GameSession
     @Bindable var narrator: Narrator
@@ -519,7 +568,7 @@ private struct NarratorBar: View {
 }
 
 /// Foes the party is facing: who they are, how hard they are, how they take to the party.
-private struct WaitingFoesNotice: View {
+struct WaitingFoesNotice: View {
     let waiting: WaitingFoes
 
     private var tint: Color { waiting.isHostile ? Palette.ember : Palette.verdigris }
@@ -672,7 +721,7 @@ private struct ChoiceCard: View {
 
 /// While the dungeon master weighs the votes (or tells the round of a fight): everyone's d20, laid
 /// out on the table.
-private struct ResolvingOverlay: View {
+struct ResolvingOverlay: View {
     let scene: GameScene
     let players: [GamePlayer]
 
@@ -720,7 +769,7 @@ private struct ResolvingOverlay: View {
 }
 
 /// The moment the caller's hero gains a level: stays up until they send it away.
-private struct LevelUpOverlay: View {
+struct LevelUpOverlay: View {
     let notice: LevelUp
     let dismiss: () -> Void
     let showSheet: () -> Void

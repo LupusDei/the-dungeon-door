@@ -34,7 +34,8 @@ DM team can add archetypes without an app release.
     "symbol": "book.closed", "accent": "#C9A227"
   }],
   "narrators": [{ "id": "george-storyteller", "name": "George, the old storyteller", "description": "…" }],
-  "defaultNarrator": "george-storyteller"
+  "defaultNarrator": "george-storyteller",
+  "push": false
 }
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
@@ -44,6 +45,32 @@ A background's `abilities` are the three scores it can raise (the builder puts +
 and `explore`, in the order to show them.
 `narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
 to show them; `defaultNarrator` is the one used when a request names none. New voices need no app release.
+`push` is true when this server sends push notifications (it holds the push key; see docs/push.md). The app
+asks leave to notify only then.
+
+## Pushes, companions and invitations
+
+The server pushes to a player's devices when it is their turn (a new scene, or a combat round their hero
+can act in), when someone else in their party chats, and when a companion invites them. How often, and
+what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" or "invite") and `code`
+(the game) beside the alert, and the app opens that game, or the way in for an invitation.
+
+- `POST /api/devices` body `{ token, environment }` → `{ ok: true }`. `token` is the APNs device token as
+  hex; `environment` is `"sandbox"` (a build run from Xcode) or `"production"` (TestFlight, the App Store).
+  The token then takes this player's pushes; a token belongs to the last player to register it. Send it at
+  each launch. 400 for a token that is not hex or another environment.
+- `DELETE /api/devices` body `{ token }` → `{ ok: true }`. The device takes no more pushes.
+- `GET /api/companions` → `{ companions: [{ playerId, name, lastPlayedAt }] }`: the players the caller has
+  shared a game with, most recent first, each by the hero they last played beside the caller. There are no
+  accounts or friend lists; these are the people a player can invite.
+- `POST /api/games/{code}/invites` body `{ playerId }` → `{ ok: true, alreadyInvited: boolean }`. Anyone in a
+  party still in its lobby invites one of their companions. The invited player gets a push (once per game)
+  and the invitation. 403 for someone who is not the caller's companion, or a caller not in the game; 409 once
+  the adventure has begun, or for someone already in the party.
+- `GET /api/invites` → `{ invites: [{ code, fromPlayerId, fromName, createdAt, party: string[] }] }`: the
+  caller's invitations to parties still in the lobby that they have not joined, newest first. `party` names
+  the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
+- `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
 ## Characters
 
@@ -189,17 +216,52 @@ Scene {
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
               rules: string | null }]  // e.g. "Athletics check, DC 12", "Fight: Goblin Warrior (weak) — low";
                                      // exactly 3; empty for the epilogue
+  actions: LegalAction[]             // this caller's hero, this turn. Weapons, spells they know or have
+                                     // prepared, usable items, class features with uses, and the common
+                                     // actions, plus the scene's choices. One they cannot take is listed
+                                     // with `reason` rather than left out. Empty for the epilogue and once
+                                     // the scene has resolved. A kind the app has not seen (a later "move")
+                                     // is still one of these, with the same fields.
   combat: boolean                    // true for a combat round: each vote is that player's own hero's action,
                                      // and `choices` are written for the caller's hero (see below)
   canAct: boolean                    // false when the caller's hero cannot act this round (down or dead):
                                      // nothing to choose, and the round does not wait for them
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
   votes: [{ playerId, choiceId, roll: number /* d20 */,
-            label?: string,          // in a combat round: what that hero is doing, in their own choice's words
+            label?: string, actionId?: string, targets?: string[],
             move?: { to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean } }]
-                                     // ("Attack with Longsword", "Cast Fire Bolt", "Break Free", "Help Ilsa", "Dodge")
-  myVote: string | null              // choiceId of the caller
+                                     // in a combat round, `label` is what that hero is doing ("Attack with
+                                     // Longsword", "Cast Fire Bolt", "Dash", "Move to near"). `actionId` and
+                                     // `targets` are set when the vote named an action from `actions` rather
+                                     // than a letter. `move` is a combat move taken with the vote (see the
+                                     // vote endpoint). A written check is not listed here; it is in `freeforms`
+  myVote: string | null              // choiceId of the caller; a letter vote is still "a", "b" or "c".
+                                     // Null when they wrote a check or have not acted
+  myAction: null | { id: string; targets: string[] }
+                                     // the caller's vote as an action. A letter vote is "choice:a"
+                                     // (and "choice:b", "choice:c"). Null until they vote, and null for a written check
+  freeforms: [{ playerId, text, roll: number }]
+                                     // written checks this scene (the player's own words and the d20).
+                                     // Each of these players has acted. Absent on servers from before written actions
+  myFreeform: { text, roll: number } | null
+                                     // the caller's written check, or null. Absent on older servers
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
+  roleplay: [{ playerId: string; characterName: string; text: string }]
+                                     // in-character lines and deeds this turn, oldest first. No roll.
+                                     // Empty until someone speaks. Omitted by servers from before this.
+}
+
+LegalAction {
+  id: string                         // stable: "attack:greatsword", "spell:fire-bolt", "item:potion-of-healing",
+                                     // "feature:second-wind", "common:dash", "choice:a"
+  label: string                      // "Attack with Greatsword", "Cast Fire Bolt", "Dash", "Engage"
+  kind: string                       // "attack", "spell", "item", "feature", "common", "choice" or "move".
+  detail: string
+  targets: [{ id: string; name: string }]   // who or what a vote may name; empty when it needs no target
+  picks: "none" | "one" | "many"     // how many of `targets` the vote names
+  limit?: number                     // for "many": at most this many (an area, or a spell's darts)
+  available: boolean
+  reason: string | null              // why not, when available is false; null when it can be taken
 }
 
 ChronicleEntry {
@@ -209,6 +271,8 @@ ChronicleEntry {
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
   combat: boolean                    // a combat round: every hero took their own action
+  roleplay: [{ playerId: string; characterName: string; text: string }]
+                                     // what the heroes said and did in character that turn. Omitted by older servers.
 }
 
 RulesView {                          // SRD 5.2 (2024 rules)
@@ -241,16 +305,34 @@ RulesView {                          // SRD 5.2 (2024 rules)
     outcome: "ongoing"                // a settled fight is gone (combat: null); its end is in results
     band: "low" | "moderate" | "high" | "deadly"   // the fight against this party; deadly is above high.
                                       // The engine's word. Absent from servers older than toughness ratings.
-    combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
+    combatants: [{ id: string; name: string; side: "party" | "foes";
+                   hp?: number; maxHp?: number      // a hero's hit points; absent for a foe
+                   wound?: string; vigor?: number   // a foe's instead: its hit points are hidden
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
                    toughness: null | "puny" | "weak" | "even" | "strong" | "deadly";
                    position: "engaged" | "near" | "far";   // range band: melee (about 5 ft, reach included),
                                       // about 30 ft, or about 60 ft. A fight starts with both sides near.
                    engagedWith: string[] }]   // ids they are in melee with; empty unless engaged. Initiative order.
                                       // a hero's id is its playerId; toughness is null for a hero, and the
-                                      // foe's own rating against this party (absent from older servers)
+                                      // foe's own rating against this party (absent from older servers).
+                                      // wound: how hurt the foe looks, by the share of hit points left:
+                                      // "Unhurt" (full), "Scratched" (over 3/4), "Bleeding" (over 1/2),
+                                      // "Bloodied" (1/2 or less, the 2024 term), "Staggering" (over 1/10),
+                                      // "Gasping", "Dead" (0). Undead: Whole, Torn, Gouged, Crumbling, Falling
+                                      // apart, Coming undone, Destroyed. Constructs: Intact, Scuffed, Dented,
+                                      // Cracked, Breaking, Failing, Destroyed. Oozes: Whole, Rippling, Seeping,
+                                      // Shrinking, Sloughing, Dissolving, Destroyed. vigor: the same as a rung
+                                      // for a gauge, 6 (unhurt) to 0. Servers before wounds sent a foe's
+                                      // hp and maxHp instead
   }
-  dungeon: null | {
+  trek: null | {                      // the road from the tavern to the dungeon door, while the party is on it
+    stretch: number; of: number       // stretch 1 of 2 (each a scene)
+    terrain: string                   // "a forest road under old oaks"
+    event: "bandits" | "varmints" | "band" | "vendor" | "quiet"
+    wares: [{ id: string; name: string; cost: number }]   // a wandering vendor's goods (gp); else []
+    waiting: null | { ... }           // foes met on this stretch, as dungeon.waiting
+  }                                   // absent from older servers
+  dungeon: null | {                   // null on the road: the dungeon begins at its door
     mode: "fixed" | "explore"; kind: string
     at: string                        // area id the party is in
     level: number                     // the dungeon level reached, 1–20: it starts at the living heroes'
@@ -293,13 +375,28 @@ Message {
   Re-joining with a different character swaps the character. Max 6 players.
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
 - `POST /api/games/{code}/messages` body `{ text }` → `Message`.
+  Table talk. It is not what a hero says in the story.
+- `POST /api/games/{code}/speak` body `{ text }` → `GameState`.
+  An in-character line or deed, 1–500 characters: what the hero says or does, with no roll and nothing for
+  the rules engine to adjudicate. Voting only (409 otherwise). It is appended to the current scene's
+  `roleplay`, which is the turn's log, and stays on that chronicle entry once the scene resolves. The
+  dungeon master's next narration, and the NPCs in it, answer these words. A player may send several.
+  This is not a freeform action and it is not table chat.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
   Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
   map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
   The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
-  becomes `voting` when it's ready.
-- `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId, move? }` → `GameState`.
+  becomes `voting` when it's ready. A dungeon game opens with two scenes on the road from the tavern to
+  the dungeon door (`rules.trek`; `rules.dungeon` is null until the door), so its `sceneCount` is two more
+  than asked for. Foes on the road who bar the way give Engage, Run and Parley, as in a room.
+- `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId, move? }` or `{ sceneIndex, actionId, targets?, move? }` → `GameState`.
+  `choiceId` is still `"a"`, `"b"` or `"c"`. `actionId` is an id from `scene.actions`, and `targets` are ids
+  from that action (omit them when `picks` is `"none"`; one id when `"one"`; one or more, up to `limit`,
+  when `"many"`). `"choice:a"` is the same vote as `choiceId` `"a"`. A move action (`kind` `"move"`) is named
+  the same way; its id is the move. When both a letter and `actionId` are sent, `actionId` is the
+  vote. The server checks the action is one this hero can take and the targets are among its `targets`;
+  otherwise 400, and `error` says why (`"No level 1 spell slot or higher left"`, `"that is not a valid target"`).
   Voting status only; you can change your vote until the scene resolves. The server rolls a d20
   for each vote (kept when you change your vote). `move`, only in a fight, is
   `{ to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean }`.
@@ -308,8 +405,31 @@ Message {
   `disengage: true` leaves melee without opportunity attacks. An illegal move is a 400. When every player has voted the scene resolves:
   status `resolving`, the DM weighs all votes and rolls, writes `outcome` on the old scene and the
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
+  Voting again replaces a written action (below) and keeps the same d20.
+- `POST /api/games/{code}/action` body `{ sceneIndex, text }` → `GameState` with `action`.
+  Voting status only. `text` is the player's own action, 1–280 characters ("I kick the brazier onto
+  the goblins"). The dungeon master classifies it; the engine checks that classification and owns
+  every number (docs/rules-design.md, "Freeform turns").
+  - `action.ruling` is `"known"`, `"check"` or `"impossible"`. `action.spent` is false only for
+    `"impossible"` (a bad classification counts as impossible): the turn is not used, `narration`
+    says why, and the player may still vote or write another action. A system message carries the
+    same refusal.
+  - `"known"` maps onto an id from this hero's `scene.actions` and is stored as that vote
+    (`action.choiceId` is the letter that id plays as: an attack is `"a"`, a spell `"b"`, anything
+    else `"c"`, and `choice:a` is `"a"`). One that needs no target is stored with that `actionId`.
+    One that needs a target is stored as the letter: the classification does not name who. The d20
+    is rolled the same way a vote's is, and kept if the player rewrites the action or switches to a vote.
+  - `"check"` is an ability check. The dungeon master names a skill or ability, a tier (easy,
+    medium, hard) and an effect category; the engine sets the DC (10, 15, 20), the damage dice and
+    the save. It is stored on the vote as `freeform` and counts as having acted, but it does not
+    count toward which choice the party picked. The d20 is in the dice log when the scene resolves,
+    the same lines as any other roll.
+  - `action.roll` is that d20 when the turn was spent, otherwise null.
+  - 400 `sceneIndex` not a whole number, or `text` empty or longer than 280 characters; 403 not in
+    this game; 409 the game is not voting on that scene. A hero that cannot act gets `spent: false`
+    and nothing is stored.
 - `POST /api/games/{code}/advance` → `GameState`. Host only: resolve now with the votes that are in
-  (for an AFK player). Needs at least one vote.
+  (for an AFK player). Needs at least one vote or written action. A combat round needs neither.
 - `POST /api/games/{code}/narration` with `{ sceneIndex, voice? }` → `{ sceneIndex, voice, status, voiceUrl }`.
   The scene read aloud, on demand: nothing is spoken until a player asks. `voice` is a catalog `narrators`
   id; left out, it is `defaultNarrator`. The answer names the narrator it is for.
@@ -399,6 +519,14 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   choice, which depends on the moment: **Break Free** (a hero Restrained or Grappled spends the action on
   its escape check), **Help _name_** (stabilize a dying friend: a Healer's Kit, or DC 10 Medicine), or
   **Dodge**. The id is always `c`; read its `label` and `detail`.
+  - **Legal actions** (`scene.actions`). The same turn, as a list a sheet can tap: each weapon, each cantrip
+    and prepared spell (one with no slot is still listed, with the reason), each usable item (a potion, a
+    healer's kit), each class feature that has uses, and the common actions Attack, Dash, Disengage, Dodge,
+    Help, Hide, Ready and Use an Object. A vote may name one (`actionId`, and `targets` when it needs them)
+    instead of a choice letter; the letter votes keep working, and the d20 on the vote is still the die the
+    engine uses. The list is the same shape out of a fight, where the scene's own choices (a way on, Engage,
+    Run, Parley, a rest) are included as `choice:a` and so on, and a weapon or a spell says why it cannot be
+    used yet. In a fight the list also offers each legal move (`kind` `"move"`: one band, or a Dash of two).
   Each player's vote is their own hero's action, and the vote's d20 is their attack roll. Monsters act
   by simple rules. Each round is a scene, so `sceneCount` grows by one for each round. When the foes all
   fall, the living heroes split the XP; they level up with it at the quest's end. If
@@ -422,8 +550,9 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     (DC 10 or half the damage) and loses the spell on a failure, at 0 HP or when Incapacitated; the spell
     ends with the fight. Species resistances halve damage of their types.
   - **Positions.** Each combatant has a range band (`position`): engaged with the ids in `engagedWith`
-    (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). A fight starts with both sides near,
-    or in melee when one side surprises the other. Moving one band is a move; Dash moves two and spends
+    (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). A fight in a room starts with both sides
+    near; a fight on the road starts far (they see each other down the track). One side surprising the
+    other begins in melee. Moving one band is a move; Dash moves two and spends
     the action. Leaving an engaged foe provokes an opportunity attack unless you Disengage. Melee and
     reach need engaged. A ranged weapon or spell is checked against the band (long range has disadvantage;
     past it, the attack cannot be made), and a ranged attack while engaged has disadvantage. A vote may
@@ -468,13 +597,21 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   removed. A hero at 0 HP regains 1 HP first.
 - **Dice in chat.** The engine posts its results as `system` messages ("Bryn: Athletics 14 + 5 = 19 vs DC
   12, success"), so the current app shows them without an update. The same lines are in `rules.results`.
+  A written check is one of those lines, quoting what the player wrote.
+- **Written actions** (`POST …/action`, `play/actions.ts`). A player may write what they do instead of
+  picking a choice, in or out of a fight. The dungeon master classifies the words; the engine keeps the
+  numbers. A known action is an id from this hero's `scene.actions`. A check uses the tier's DC and, on
+  a success, the effect category's damage or a save for its condition. Impossible, and a classification
+  the engine cannot read, is a narrated no and does not spend the turn. A written check is `scene.freeforms`,
+  not `scene.actions`.
 - **When it ends.** The heroes' sheets (level, XP, features, gold and gear; HP and slots restored) are
   saved back to each player's character, so the next adventure starts where this one left off. A dead
   hero goes home dead.
 
 - **Older games and apps.** A game started before the engine has `rules: null`, choices with `rules:
-  null` and `combat: false`, and plays as it always did (the DM breaks ties). The current app decodes
-  `GameState` and ignores the new keys, so it keeps working; dice show up as system messages.
+  null` and `combat: false`, and plays as it always did (the DM breaks ties). Its `scene.actions` are the
+  three choices (`choice:a` and so on). The current app decodes `GameState` and ignores the new keys, so it
+  keeps working; dice show up as system messages. A vote that still sends `choiceId` is unchanged.
 
 ### In the app
 

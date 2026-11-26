@@ -18,3 +18,28 @@ function label(state: CombatState, move: Move): string {
 export function moveActions(state: CombatState, id: string): { label: string; action: Action }[] {
   return legalMoves(state, id).map((move) => ({ label: label(state, move), action: { kind: 'move', ...move } }));
 }
+
+/** The id a legal-actions list uses for this move, so a vote can play it. */
+export function moveKey(move: Move): string {
+  const flags = `${move.dash ? ':dash' : ''}${move.disengage ? ':disengage' : ''}`;
+  const who = move.engage?.length ? `:${move.engage.join(',')}` : '';
+  return `move:${move.to}${flags}${who}`;
+}
+
+/** The move named by `moveKey`, or null when the id is not one. */
+export function parseMoveKey(id: string): Move | null {
+  if (!id.startsWith('move:')) return null;
+  const parts = id.split(':');
+  const to = parts[1];
+  if (to !== 'engaged' && to !== 'near' && to !== 'far') return null;
+  const rest = parts.slice(2);
+  const who = rest.find((part) => part !== 'dash' && part !== 'disengage');
+  const engage = who ? who.split(',').filter(Boolean) : undefined;
+  if (to === 'engaged' && !engage?.length) return null;
+  return {
+    to,
+    ...(engage?.length ? { engage } : {}),
+    ...(rest.includes('dash') ? { dash: true } : {}),
+    ...(rest.includes('disengage') ? { disengage: true } : {}),
+  };
+}

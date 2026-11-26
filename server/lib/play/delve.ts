@@ -13,6 +13,7 @@ import { derivedRng } from '../rules/rng.ts';
 import type { Attitude } from './parley.ts';
 import type { DungeonState, PartyState } from './state.ts';
 import { itemIdOf, stow } from './trade.ts';
+import { ROAD_MONSTERS } from './trek.ts';
 
 /** Short adventures get small maps. */
 export const mapSize = (sceneCount: number): MapSize => (sceneCount <= 4 ? 'short' : sceneCount <= 6 ? 'standard' : 'delve');
@@ -33,7 +34,8 @@ export function foeLevels(party: PartyState, dungeon: DungeonState | null): numb
 }
 
 /** The monsters that live in the party's dungeon (none outside one: any may come). */
-export const habitatOf = (dungeon: DungeonState | null) => (dungeon ? habitat(kindIdOf(dungeon.map.kind)) : undefined);
+/** The monsters met here: the dungeon kind's habitat, or on the road the road's (play/trek.ts). */
+export const habitatOf = (dungeon: DungeonState | null) => (dungeon?.trek ? ROAD_MONSTERS : dungeon ? habitat(kindIdOf(dungeon.map.kind)) : undefined);
 
 /** The level beyond this exit: through a door into an area not yet seen (a fixed map's corridor aside), a seeded chance of a level deeper. */
 function levelBeyond(dungeon: DungeonState, via: Exit, to: string): number {

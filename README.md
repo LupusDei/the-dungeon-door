@@ -30,6 +30,9 @@ Server (local, no AI spend; see `server/README.md` for details):
 cd server && npm install && DD_FAKE_AI=1 npm run dev
 ```
 
+Push notifications (your turn, a combat round, party chat, invitations, and how they are throttled) are
+described in `docs/push.md`, with what it takes to turn them on.
+
 Acceptance specs are Gherkin, transpiled by [gherclj](https://github.com/slagyr/gherclj) (v1.5.0) into
 Node's test runner. From `server/`:
 

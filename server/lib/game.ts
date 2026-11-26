@@ -3,14 +3,19 @@ import { renderImage, SCENE_STYLE } from './ai.ts';
 import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
+import { knownActionIds, settleRuling } from './play/actions.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
 import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
+import { checkVote, legalActions } from './play/legal.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
-import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
+import { hasStolenHeroSpeech, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
+import { pushChat, pushForget, pushSceneReady, pushSeen } from './push/notify.ts';
+import type { DMChoice, DMContext, NextScene, OpeningScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { parseMove, validateMove } from './rules/bands.ts';
 import { RuleViolation } from './rules/violation.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
@@ -18,7 +23,7 @@ import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
-import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
+import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type LegalAction, type Message, type RoleplayLine, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
 
 export const MAX_PLAYERS = 6;
 export const DEFAULT_SCENE_COUNT = 4;
@@ -51,18 +56,36 @@ function choicesFor(game: Game, current: StoredScene, playerId: string): SceneVi
   return canAct(game.combat, playerId) ? yourChoices(game.combat, game.party.sheets[playerId], playerId) : anyonesChoices();
 }
 
-/** In a combat round each vote says what that hero is doing: the label of their own choice, which differs hero to hero. */
+const choosing = (votes: StoredScene['votes']) => votes.filter((v) => !v.freeform);
+
+/** The same turn as one list: the sheet's actions, and the scene's choices. Empty once the scene is settled. */
+function actionsFor(game: Game, current: StoredScene, playerId: string): LegalAction[] {
+  if (current.outcome !== null || current.isFinale) return [];
+  const sheet = game.party && Object.hasOwn(game.party.sheets, playerId) ? game.party.sheets[playerId] : null;
+  return legalActions({ combat: game.combat, sheet, playerId, choices: choicesFor(game, current, playerId), canAct: canAct(game.combat, playerId) });
+}
+
+/** In a combat round each vote says what that hero is doing: the label of their own action, which differs hero to hero. */
 function votesFor(game: Game, current: StoredScene): SceneView['votes'] {
+  const votes = choosing(current.votes);
   const { combat, party } = game;
-  if (!combat || !party || current.outcome !== null || current.isFinale) return current.votes;
-  return current.votes.map((v) => {
+  if (!combat || !party || current.outcome !== null || current.isFinale) return votes;
+  return votes.map((v) => {
     if (!canAct(combat, v.playerId) || !Object.hasOwn(party.sheets, v.playerId)) return v;
-    const label = yourChoices(combat, party.sheets[v.playerId], v.playerId).find((c) => c.id === v.choiceId)?.label;
+    const actions = actionsFor(game, current, v.playerId);
+    const named = v.actionId ? actions.find((a) => a.id === v.actionId) : undefined;
+    const label = named?.label ?? actions.find((a) => a.id === `choice:${v.choiceId}`)?.label;
     return label ? { ...v, label } : v;
   });
 }
 
+function freeformsFor(current: StoredScene): SceneView['freeforms'] {
+  return current.votes.flatMap((v) => (v.freeform ? [{ playerId: v.playerId, text: v.freeform.text, roll: v.roll }] : []));
+}
+
 function sceneView(game: Game, current: StoredScene, playerId: string): SceneView {
+  const mine = choosing(current.votes).find((v) => v.playerId === playerId);
+  const mineWritten = freeformsFor(current).find((a) => a.playerId === playerId) ?? null;
   return {
     index: current.index,
     title: current.title,
@@ -71,12 +94,17 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     voices: current.voices,
     voiceUrl: current.voices[defaultNarrator().id] ?? null,
     choices: choicesFor(game, current, playerId),
+    actions: actionsFor(game, current, playerId),
     combat: game.combat !== null,
     canAct: canAct(game.combat, playerId),
     isFinale: current.isFinale,
     votes: votesFor(game, current),
-    myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
+    myVote: mine?.choiceId ?? null,
+    myAction: mine ? { id: mine.actionId ?? `choice:${mine.choiceId}`, targets: mine.targets ?? [] } : null,
+    freeforms: freeformsFor(current),
+    myFreeform: mineWritten,
     outcome: current.outcome,
+    roleplay: current.roleplay ?? [],
   };
 }
 
@@ -122,6 +150,7 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
           choiceLabel: combat ? '' : (s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? ''),
           outcome: s.outcome as string,
           combat,
+          roleplay: s.roleplay ?? [],
         };
       }),
     messages,
@@ -162,6 +191,7 @@ export async function viewGame(code: string, playerId: string, since?: number): 
   const store = getStore();
   const [game, messages] = await Promise.all([loadGame(code), store.listMessages(code, since)]);
   member(game, playerId);
+  pushSeen(game, playerId); // they are looking: nothing about this game need be pushed to them
   return toState(game, playerId, messages);
 }
 
@@ -216,6 +246,7 @@ export async function joinGame(code: string, playerId: string, characterId: unkn
   }
   const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString() }, MAX_PLAYERS);
   if (!joined) throw conflict('could not join: the game started or the party is full');
+  await getStore().removeInvite(code, playerId);
   if (!existing) await system(code, `${character.name} joined the party.`);
   else if (existing.character.id !== character.id) await system(code, `${character.name} takes ${existing.character.name}'s place.`);
   return viewGame(code, playerId);
@@ -228,6 +259,7 @@ export async function leaveGame(code: string, playerId: string, origin: string):
   if (!leaving) return; // already gone
   const store = getStore();
   await store.removePlayer(code, playerId);
+  pushForget(code, [playerId]);
   const remaining = game.players.filter((p) => p.playerId !== playerId);
   let text = `${leaving.character.name} left the party.`;
   if (game.hostId === playerId && remaining.length) {
@@ -245,7 +277,29 @@ export async function postMessage(code: string, playerId: string, text: unknown)
   if (!trimmed || trimmed.length > 500) throw badRequest('text must be 1–500 characters');
   const game = await loadGame(code);
   const player = member(game, playerId);
-  return getStore().addMessage(code, { kind: 'chat', playerId, characterName: player.character.name, text: trimmed });
+  const message = await getStore().addMessage(code, { kind: 'chat', playerId, characterName: player.character.name, text: trimmed });
+  pushChat(game, message);
+  return message;
+}
+
+const ROLEPLAY_LIMIT = 20;
+
+/**
+ * POST /api/games/{code}/speak — a line or a deed in character. No roll. Kept on the current scene,
+ * and given to the dungeon master when the turn resolves. Not a freeform action: nothing is adjudicated.
+ */
+export async function speakInCharacter(code: string, playerId: string, text: unknown): Promise<GameState> {
+  const trimmed = typeof text === 'string' ? text.trim() : '';
+  if (!trimmed || trimmed.length > 500) throw badRequest('text must be 1–500 characters');
+  const game = await loadGame(code);
+  const player = member(game, playerId);
+  if (game.status !== 'voting') throw conflict(`can't speak in character: the game is ${game.status}`);
+  const scene = game.scenes.find((s) => s.index === game.sceneIndex);
+  if (!scene) throw conflict('there is no scene to speak in');
+  if ((scene.roleplay?.length ?? 0) >= ROLEPLAY_LIMIT) throw badRequest('this turn already holds as many in-character lines as it can');
+  const stored = await getStore().appendRoleplay(code, scene.index, { playerId, characterName: player.character.name, text: trimmed });
+  if (!stored) throw conflict('that scene is no longer open');
+  return viewGame(code, playerId);
 }
 
 /** POST /api/games/{code}/dungeon-master */
@@ -274,8 +328,9 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   const game = await loadGame(code);
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
-  const rules = newRules(game.players, mode, dice.seed(), count);
-  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: count, ...rules }))) {
+  const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for
+  const scenes = count + (rules.dungeon?.trek ? TREK_SCENES : 0); // a dungeon game opens with the road to its door
+  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
     throw conflict('the game is already starting');
   }
   await system(code, `${host.character.name} opened the dungeon door. ${archetype(game.dungeonMaster).name} is preparing the adventure…`);
@@ -283,19 +338,42 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   return viewGame(code, playerId);
 }
 
+/** `targets` on a vote that names an action: an array of ids, or none. */
+function targetsOf(body: Record<string, unknown>): string[] {
+  if (body.targets === undefined) return [];
+  if (!Array.isArray(body.targets) || body.targets.some((t) => typeof t !== 'string' || t === '')) throw badRequest('targets must be an array of ids');
+  return body.targets as string[];
+}
+
+/**
+ * A vote is a choice letter, or an action id from this hero's list (and its targets).
+ * A letter is stored as itself. An action is stored with that id, and a letter so older reads still see a, b or c.
+ */
+function ballotOf(body: Record<string, unknown>, actions: LegalAction[]): { choiceId: ChoiceId; named: { actionId: string; targets: string[] } | null } {
+  if (body.actionId !== undefined) {
+    if (typeof body.actionId !== 'string' || body.actionId === '') throw badRequest('actionId must be the id of one of your actions');
+    const checked = checkVote(actions, body.actionId, targetsOf(body));
+    if (!checked.ok) throw badRequest(checked.error);
+    const named = checked.action.kind === 'choice' ? null : { actionId: checked.action.id, targets: checked.targets };
+    return { choiceId: checked.choiceId, named };
+  }
+  if (!CHOICE_IDS.includes(body.choiceId as ChoiceId)) throw badRequest('choiceId must be "a", "b" or "c"');
+  return { choiceId: body.choiceId as ChoiceId, named: null };
+}
+
 /** POST /api/games/{code}/vote */
-export async function castVote(code: string, playerId: string, sceneIndex: unknown, choiceId: unknown, origin: string, moveRaw?: unknown): Promise<GameState> {
+export async function castVote(code: string, playerId: string, body: Record<string, unknown>, origin: string): Promise<GameState> {
+  const { sceneIndex } = body;
   if (typeof sceneIndex !== 'number' || !Number.isInteger(sceneIndex)) throw badRequest('sceneIndex must be a whole number');
-  if (!CHOICE_IDS.includes(choiceId as ChoiceId)) throw badRequest('choiceId must be "a", "b" or "c"');
   const game = await loadGame(code);
   member(game, playerId);
   if (game.status !== 'voting') throw conflict(`can't vote: the game is ${game.status}`);
   if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
   if (!canAct(game.combat, playerId)) return viewGame(code, playerId); // a fallen hero has no action: nothing to record
-  let move: ReturnType<typeof parseMove>;
-  if (moveRaw !== undefined) {
+  let move: ReturnType<typeof parseMove> = undefined;
+  if (body.move !== undefined) {
     try {
-      move = parseMove(moveRaw);
+      move = parseMove(body.move);
       if (move && !game.combat) throw badRequest('there is no fight to move in');
       if (move && game.combat) validateMove(game.combat, playerId, move);
     } catch (e) {
@@ -303,10 +381,85 @@ export async function castVote(code: string, playerId: string, sceneIndex: unkno
       throw e;
     }
   }
-  const vote = await getStore().castVote(code, sceneIndex, playerId, choiceId as ChoiceId, dice.d20(), move);
+  const scene = game.scenes.find((s) => s.index === sceneIndex);
+  if (!scene) throw conflict('voting on that scene has closed');
+  const ballot = ballotOf(body, actionsFor(game, scene, playerId));
+  const vote = await getStore().castVote(code, sceneIndex, playerId, ballot.choiceId, dice.d20(), ballot.named, move);
   if (!vote) throw conflict('voting on that scene has closed');
   await resolveIfAllVoted(code, sceneIndex, origin);
   return viewGame(code, playerId);
+}
+
+const MAX_ACTION = 280;
+
+export interface ActionOutcome {
+  spent: boolean;
+  text: string;
+  ruling: 'known' | 'check' | 'impossible';
+  roll: number | null;
+  choiceId: ChoiceId | null;
+  narration: string | null;
+}
+
+const outcome = (text: string, settled: { spent: boolean; ruling: { kind: ActionOutcome['ruling'] }; choiceId: ChoiceId | null; narration: string | null }, roll: number | null): ActionOutcome =>
+  ({ spent: settled.spent, text, ruling: settled.ruling.kind, roll, choiceId: settled.choiceId, narration: settled.narration });
+
+/**
+ * POST /api/games/{code}/action — the player writes what they do. The DM classifies it; the engine checks
+ * that and rolls, the same d20 a vote keeps. Impossible (and a classification that cannot be read) does
+ * not spend the turn.
+ */
+export async function castAction(code: string, playerId: string, sceneIndex: unknown, text: unknown, origin: string): Promise<GameState & { action: ActionOutcome }> {
+  if (typeof sceneIndex !== 'number' || !Number.isInteger(sceneIndex)) throw badRequest('sceneIndex must be a whole number');
+  if (typeof text !== 'string' || text.trim().length === 0 || text.trim().length > MAX_ACTION) throw badRequest(`text must be from 1 to ${MAX_ACTION} characters`);
+  const written = text.trim();
+  const game = await loadGame(code);
+  const player = member(game, playerId);
+  if (game.status !== 'voting') throw conflict(`can't act: the game is ${game.status}`);
+  if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
+  const idle: ActionOutcome = { spent: false, text: written, ruling: 'impossible', roll: null, choiceId: null, narration: 'You cannot act.' };
+  if (!canAct(game.combat, playerId)) return { ...(await viewGame(code, playerId)), action: idle };
+  const scene = game.scenes.find((s) => s.index === sceneIndex);
+  if (!scene) throw conflict('that scene is not the current one');
+  const inCombat = game.combat !== null;
+  const legal = actionsFor(game, scene, playerId);
+  const allowed = knownActionIds(legal);
+  let raw: unknown = null;
+  const dm = getDungeonMaster(game.dungeonMaster);
+  if (dm.classifyAction) {
+    try {
+      raw = await dm.classifyAction(await contextFor(game, sceneIndex), {
+        characterName: player.character.name,
+        text: written,
+        inCombat,
+        actions: allowed,
+        choices: legal.filter((a) => a.available).map((a) => ({ id: a.id, label: a.label })),
+      });
+    } catch (error) {
+      console.warn(`classifying an action in ${code} failed:`, error);
+    }
+  }
+  const settled = settleRuling(raw, allowed);
+  if (!settled.spent) {
+    await system(code, `${player.character.name}: ${settled.narration}`);
+    return { ...(await viewGame(code, playerId)), action: outcome(written, settled, null) };
+  }
+  const ruling = settled.ruling;
+  if (ruling.kind === 'known' && settled.choiceId) {
+    const named = legal.find((a) => a.id === ruling.action);
+    // TODO: a written line that names a target should pass that target. Until then an action that
+    // needs one is stored as its letter, which still plays today's default (best weapon, best spell, Dodge).
+    const asAction = named && named.picks === 'none' && named.kind !== 'choice' ? { actionId: named.id, targets: [] } : null;
+    const vote = await getStore().castVote(code, sceneIndex, playerId, settled.choiceId, dice.d20(), asAction);
+    if (!vote) throw conflict('voting on that scene has closed');
+    await resolveIfAllVoted(code, sceneIndex, origin);
+    return { ...(await viewGame(code, playerId)), action: outcome(written, settled, vote.roll) };
+  }
+  if (ruling.kind !== 'check') throw new Error('a spent action is a known action or a check');
+  const vote = await getStore().setFreeform(code, sceneIndex, playerId, dice.d20(), { text: written, ruling });
+  if (!vote?.freeform) throw conflict('voting on that scene has closed');
+  await resolveIfAllVoted(code, sceneIndex, origin);
+  return { ...(await viewGame(code, playerId)), action: outcome(written, settled, vote.roll) };
 }
 
 /** Who reads a scene aloud. Tests may set their own (to count readings, or to fail). */
@@ -451,7 +604,17 @@ function pastScene(game: Game, scene: StoredScene): PastScene {
     votes: voteRecords(game, scene),
     outcome: scene.outcome,
     chosenChoiceId: scene.chosenChoiceId,
+    roleplay: [...(scene.roleplay ?? []), ...writtenLines(game, scene)],
   };
+}
+
+/** A written action is the player's own words, the same as an in-character line. */
+function writtenLines(game: Game, scene: StoredScene): RoleplayLine[] {
+  return scene.votes.flatMap((v) => {
+    if (!v.freeform?.text) return [];
+    const name = game.players.find((p) => p.playerId === v.playerId)?.character.name ?? 'A departed adventurer';
+    return [{ playerId: v.playerId, characterName: name, text: v.freeform.text }];
+  });
 }
 
 async function contextFor(game: Game, sceneIndex: number, rules: RulesState | null = rulesStateOf(game)): Promise<DMContext> {
@@ -471,13 +634,15 @@ async function contextFor(game: Game, sceneIndex: number, rules: RulesState | nu
 }
 
 export function resolutionOf(game: Game, scene: StoredScene): Resolution {
-  // Votes from players still at the table (everyone's, if nobody is left).
+  // Votes from players still at the table (everyone's, if nobody is left). A written check has acted,
+  // so it is not an abstention, but it is not a vote for a, b or c.
   const present = scene.votes.filter((v) => game.players.some((p) => p.playerId === v.playerId));
-  const votes = voteRecords(game, { ...scene, votes: present.length ? present : scene.votes });
+  const acting = present.length ? present : scene.votes;
+  const votes = voteRecords(game, { ...scene, votes: acting.filter((v) => !v.freeform) });
   const tally = { a: 0, b: 0, c: 0 } as Record<ChoiceId, number>;
   for (const v of votes) tally[v.choiceId]++;
   const top = Math.max(...CHOICE_IDS.map((id) => tally[id]));
-  const voted = new Set(votes.map((v) => v.playerId));
+  const voted = new Set(acting.map((v) => v.playerId));
   return {
     scene: pastScene(game, scene),
     votes,
@@ -497,6 +662,12 @@ function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | nul
   });
 }
 
+/** The DM's choices, or Engage, Run and Parley when foes bar the road as the game starts. */
+function openingChoices(draft: OpeningScene, game: Game): StoredChoice[] {
+  const rules = rulesStateOf(game);
+  return (rules && confrontationChoices(rules)) ?? choicesOf(draft.choices, rules);
+}
+
 const sceneTitle = (text: SceneText, fallback: string) => clip(text.title?.trim() || fallback, 120);
 
 async function writeOpening(code: string, origin: string): Promise<void> {
@@ -505,14 +676,14 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   if (!game || game.status !== 'preparing') return;
   let draft;
   try {
-    draft = await getDungeonMaster(game.dungeonMaster).openingScene(await contextFor(game, 0));
+    draft = await inTheirOwnWords(game, async () => getDungeonMaster(game.dungeonMaster).openingScene(await contextFor(game, 0)));
     const scene = {
       index: 0,
       title: sceneTitle(draft, 'The Dungeon Door'),
       narration: draft.narration.trim(),
       imagePrompt: draft.imagePrompt,
       imageUrl: null,
-      choices: choicesOf(draft.choices, game.party && game),
+      choices: openingChoices(draft, game),
       isFinale: false,
     };
     await store.saveScene(code, scene);
@@ -525,6 +696,7 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   }
   const title = clip(draft.adventureTitle?.trim() || 'An Untold Adventure', 120);
   if (!(await store.updateGame(code, { status: 'preparing' }, { status: 'voting', sceneIndex: 0, title }))) return;
+  pushSceneReady(code);
   if (draft.quip) await dmSays(code, game, draft.quip);
   await paintScene(code, 0, draft, origin);
 }
@@ -592,10 +764,31 @@ function nextChoices(plan: Plan, draft: NextScene): StoredChoice[] {
   return choicesOf(draft.choices, plan.rules);
 }
 
+function spokenBy(game: Game): HeroLine[] {
+  return game.scenes.flatMap((s) => [
+    ...(s.roleplay ?? []).map((line) => ({ name: line.characterName, text: line.text })),
+    ...writtenLines(game, s).map((line) => ({ name: line.characterName, text: line.text })),
+  ]);
+}
+
+/** The heroes' own words. A draft that speaks for them is asked for once more, then the stolen sentences are cut. */
+async function inTheirOwnWords<T extends SceneText & { outcome?: string }>(game: Game, ask: () => Promise<T>): Promise<T> {
+  const heroes = game.players.map((p) => p.character.name);
+  const lines = spokenBy(game);
+  const steals = (draft: T) => [draft.narration, draft.outcome ?? '', draft.quip ?? ''].some((text) => hasStolenHeroSpeech(text, heroes, lines));
+  let draft = await ask();
+  if (steals(draft)) draft = await ask();
+  const narration = stripHeroSpeech(draft.narration, heroes, lines).trim() || 'What do you do?';
+  const quip = draft.quip ? stripHeroSpeech(draft.quip, heroes, lines).trim() : '';
+  if (draft.outcome === undefined) return { ...draft, narration, quip: quip || undefined };
+  const outcome = stripHeroSpeech(draft.outcome, heroes, lines).trim() || 'The action plays out.';
+  return { ...draft, narration, outcome, quip: quip || undefined };
+}
+
 async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
   const dm = getDungeonMaster(game.dungeonMaster);
   const ctx = await contextFor(game, plan.next, plan.rules); // history ends with the scene being resolved
-  const draft = plan.isFinale ? await dm.finale(ctx, plan.resolution) : await dm.nextScene(ctx, plan.resolution);
+  const draft = await inTheirOwnWords(game, () => plan.isFinale ? dm.finale(ctx, plan.resolution) : dm.nextScene(ctx, plan.resolution));
   const { leaders } = plan.resolution;
   const chosen = leaders.includes(draft.chosenChoiceId) ? draft.chosenChoiceId : (leaders[0] ?? null);
   const store = getStore();
@@ -637,6 +830,8 @@ async function resolveScene(code: string, sceneIndex: number, origin: string): P
   }
   const status = plan.isFinale ? 'ended' : 'voting';
   if (!(await store.updateGame(code, { status: 'resolving', sceneIndex }, { status, sceneIndex: plan.next, ...plan.patch }))) return;
+  if (plan.isFinale) pushForget(code, game.players.map((p) => p.playerId));
+  else pushSceneReady(code);
   await announce(game, plan, draft);
   if (plan.sharesPicture) await catchUpPicture(code, sceneIndex, plan.next);
   else await paintScene(code, plan.next, draft, origin);

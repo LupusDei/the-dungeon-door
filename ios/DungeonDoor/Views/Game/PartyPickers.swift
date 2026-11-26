@@ -196,7 +196,12 @@ struct NewGameView: View {
 struct JoinGameView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var code = ""
+    @State private var code: String
+
+    /// `code`: a door code already known (from an invitation).
+    init(code: String = "") {
+        _code = State(initialValue: String(code.uppercased().prefix(6)))
+    }
     @State private var heroId: String?
     @State private var working = false
     @State private var error: String?
@@ -216,6 +221,8 @@ struct JoinGameView: View {
                                 .autocorrectionDisabled()
                                 .keyboardType(.asciiCapable)
                                 .focused($codeFocused)
+                                .foregroundStyle(.clear)
+                                .tint(.clear)
                                 .opacity(0.02)
                                 .onChange(of: code) { _, new in
                                     let cleaned = String(new.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
@@ -252,7 +259,7 @@ struct JoinGameView: View {
             .navigationTitle("Join a Party")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            .onAppear { codeFocused = true }
+            .onAppear { codeFocused = code.count != 6 }
         }
     }
 

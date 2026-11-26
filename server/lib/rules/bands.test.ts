@@ -51,6 +51,9 @@ test('a fight starts near, and in melee when one side surprises the other', () =
   assert.deepEqual(sprung.bryn, { band: 'engaged', with: ['g1'] });
   assert.deepEqual(sprung.g1, { band: 'engaged', with: ['bryn'] });
   assert.deepEqual(sprung.ash, { band: 'near', with: [] }, 'a hero who is down is not in the melee');
+  const road = openingPlaces([...heroes, ...foes], { band: 'far' });
+  assert.deepEqual(road.bryn, { band: 'far', with: [] });
+  assert.deepEqual(road.ash, { band: 'far', with: [] }, 'a hero who is down starts in the same band');
 });
 
 test('moving to engaged is symmetric; leaving drops the other back to near when nobody else holds them', () => {

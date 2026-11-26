@@ -2,6 +2,7 @@
  * The rules engine in the LLM DM's prompt: how hooks work, the engine's state, and the dice it rolled.
  * Empty for a game from before the engine.
  */
+import { ROAD_EVENTS } from '../play/trek.ts';
 import type { RulesContext, RulesResults } from './types.ts';
 
 export const RULES_INSTRUCTIONS = `
@@ -35,6 +36,10 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   easy fight. Those words are in the dungeon and combat blocks.
   When you mention how hard a foe is, repeat them as given. Never invent or change a rating, and still use
   no numbers in the story.
+- A foe's hit points are hidden from you and the players. The combat block gives each foe's wound word:
+  Unhurt, Scratched, Bleeding, Bloodied (half or less), Staggering, Gasping (the undead crumble, constructs
+  crack and oozes dissolve in their own words). Show the wound in the story (a limp, ragged breath, a
+  cracked shell) so the players see their progress; never its hit points, and no damage totals.
 - Foes the party meets roll an attitude. They do not attack at once. Hostile ones bar the way, and the
   engine replaces your three choices with Engage, Run and Parley: still write the scene. Run backs out the
   way the party came (or slips past wanderers); the room stays uncleared, with no loot and no experience.
@@ -57,11 +62,28 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   exits say so), passed on the way and possibly trapped. The engine rolls for wandering monsters every half
   hour in a dungeon and after noise (a fight, a trap going off); when they come, its results say who they
   are and whether they attack or go their way. Don't invent wandering monsters yourself.
+- THE ROAD: a dungeon game begins on the road from the tavern to the dungeon door: two stretches, one a
+  scene (the road block says which, and what is on it). Narrate overland travel: open country, the terrain
+  given, weather and the road itself; no corridors, rooms or doors until the party reaches the dungeon door.
+  Do not invent what the heroes say, feel, or decide on the road: the world, the weather, NPCs and monsters,
+  and the physical result of the chosen action, then hand the moment back. The road has no exits and takes no
+  move hooks: the party travels on by itself after each scene. Foes there
+  are met as anywhere (Hostile ones bar the way: Engage, Run to slip past, or Parley; if a parley fails and
+  they are still Hostile, they attack). A wandering vendor sells only the wares listed, at those prices: offer
+  {"kind":"buy"} with their ids. After the last stretch, the next scene opens at the dungeon door.
 - Dungeon levels: the dungeon starts at the party's level and may go a level deeper behind a new door (the
   results say "The way leads deeper"); its monsters, traps and treasure are the engine's, for that level.
   Make the deeper level feel it: older stone, colder air, stranger signs.
-- When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
-  change them, and still use no numbers in the story.
+- When you resolve, the engine has already rolled: your outcome must match its results. Colour them as what
+  happened in the world, never change them, and still use no numbers in the story. Do not add feelings,
+  dialogue or extra deeds for the heroes.
+- A player may write their own action instead of choosing. You classify those words in a separate call, and
+  you still never invent a number: a known action is one of the ids you are given, a check names an ability
+  or skill, a tier (easy, medium or hard) and an effect (none, damage of a severity, or a condition with a
+  save), and impossible means the fiction cannot allow it. The engine sets the DC (easy 10, medium 15, hard 20),
+  the damage and the save. An impossible action does not spend their turn. When you narrate, the
+  engine's lines already include any written action, quoting their words: colour that result, and do not add
+  speech, feelings, or deeds beyond the words they wrote.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
   next one (still write three choices; they are ignored).`;
 
@@ -86,8 +108,8 @@ function stood(x: NonNullable<RulesContext['combat']>['combatants'][number]): st
 
 function combatLine(c: NonNullable<RulesContext['combat']>): string {
   const who = c.combatants.map((x) => {
-    const state = x.status === 'up' ? `${x.hp}/${x.maxHp} HP` : x.status;
-    const where = x.position ? stood(x) : '';
+    const state = x.status !== 'up' ? x.status : x.wound ? x.wound.toLowerCase() : `${x.hp}/${x.maxHp} HP`;
+    const where = stood(x);
     return x.toughness ? `${x.name} ${state}${where} (${x.toughness})` : `${x.name} ${state}${where}`;
   }).join('; ');
   return `COMBAT, round ${c.round} (${c.band}): ${who}`;
@@ -100,11 +122,22 @@ function waitingLine(w: NonNullable<NonNullable<RulesContext['dungeon']>['waitin
   return `. Waiting here, ${stance}: ${w.foes} (${w.attitude})${rated}.`;
 }
 
+function roadLine(t: NonNullable<RulesContext['trek']>): string {
+  const wares = t.wares.map((w) => `${w.name} (${w.id}, ${w.cost} gp)`).join(', ');
+  const what = `${ROAD_EVENTS[t.event]}${wares ? `, selling ${wares}` : ''}`;
+  const next = t.stretch < t.of ? 'more road' : 'the dungeon door';
+  return `THE ROAD (stretch ${t.stretch} of ${t.of}, ${t.terrain}): ${what}${t.waiting ? waitingLine(t.waiting) : '.'} After it: ${next}.`;
+}
+
 function dungeonLine(d: NonNullable<RulesContext['dungeon']>): string {
   const exits = d.exits.map((x) => `${x.id} ${x.connection} to ${x.leadsTo === null ? 'unexplored' : x.leadsTo}`).join('; ') || 'none';
   const foes = d.waiting ? waitingLine(d.waiting) : '';
   return `DUNGEON (${d.kind}, level ${d.level}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}${foes}`;
 }
+
+/** For the opening scene: a dungeon game opens on the road from the tavern (play/trek.ts), not at the door. */
+export const openingNote = (rules: RulesContext | null): string =>
+  (rules?.trek ? 'Open on the road from the tavern to the dungeon door (THE ROAD), not at the door. The heroes are present; do not speak, feel, or choose for them. ' : '');
 
 export function rulesBlock(rules: RulesContext | null): string {
   if (!rules) return '';
@@ -113,6 +146,7 @@ export function rulesBlock(rules: RulesContext | null): string {
     ...rules.party.map(heroLine),
     `NOW: ${rules.time}. Light: ${rules.light}`,
     ...(rules.combat ? [combatLine(rules.combat)] : []),
+    ...(rules.trek ? [roadLine(rules.trek)] : []),
     ...(rules.dungeon ? [dungeonLine(rules.dungeon)] : []),
     `Monsters for fights: ${rules.monsters.join(', ')}`,
   ].join('\n');

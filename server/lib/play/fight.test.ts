@@ -492,3 +492,15 @@ test('no SRD monster can make a fight throw: one hero against each, to the fight
     for (let ended = null; ended === null;) ({ party: p, combat, ended } = fightRound(p, combat, { p1: { choiceId: 'a', roll: 10 } }));
   }
 });
+
+test('the round tells how a foe’s wounds worsen, never its hit points', () => {
+  const { combat, party: p } = startFight(party(), ['goblin-warrior']);
+  const three = [{ name: 'Jab', bonus: 30, ranged: false, damage: [{ dice: '3', type: 'force' }] }];
+  const set = patch(combat, { p1: { attacks: three }, p2: { attacks: harmless }, 'foe-1': { attacks: harmless, hp: 8, maxHp: 8 } });
+  const votes = { p1: { choiceId: 'a' as const, roll: 10 }, p2: { choiceId: 'a' as const, roll: 10 } };
+  const round = fightRound(p, set, votes);
+  assert.ok(round.lines.includes('Goblin Warrior is bleeding.'), round.lines.join(' | '));
+  assert.ok(round.lines.every((l) => !/\d+\/\d+|HP left|hit points/.test(l)), round.lines.join(' | '));
+  const again = fightRound(round.party, round.combat, { p1: { choiceId: 'c' as const, roll: 10 }, p2: { choiceId: 'c' as const, roll: 10 } });
+  assert.ok(again.lines.every((l) => !/ is (bloodied|bleeding)\./.test(l)), 'no word while its wounds stay as they are');
+});

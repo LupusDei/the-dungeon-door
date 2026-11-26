@@ -1,5 +1,6 @@
 import { fakeDelay } from '../models.ts';
-import type { DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
+import { ROAD_EVENTS } from '../play/trek.ts';
+import type { ActionRequest, DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
 
 /**
  * A deterministic, offline DM for DD_FAKE_AI=1 (local dev and tests). It still reads the votes and rolls
@@ -17,7 +18,17 @@ const STORY_HOOKS = [
   { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
 ];
 
+/** On the road: hike on, look around, and trade with a vendor or talk to the foes met. */
+function roadHooks(t: NonNullable<RulesContext['trek']>) {
+  const third = t.waiting ? { kind: 'parley' as const } : t.wares.length ? { kind: 'buy' as const, items: [t.wares[0].id] } : STORY_HOOKS[1];
+  return [{ kind: 'check' as const, ability: 'wis' as const, skill: 'survival', dc: 10 }, STORY_HOOKS[0], third];
+}
+
 function hooksFor(rules: RulesContext) {
+  return rules.trek ? roadHooks(rules.trek) : placeHooks(rules);
+}
+
+function placeHooks(rules: RulesContext) {
   const exit = rules.dungeon?.exits[0];
   // Local dev only: DD_FAKE_FIGHT=goblin-warrior,goblin-warrior makes the first choice that fight.
   const brawl = process.env.DD_FAKE_FIGHT?.split(',').filter((id) => id);
@@ -40,22 +51,38 @@ function choicesFor(place: string, ctx: DMContext): DMChoice[] {
   return choices.map((c, i) => ({ ...c, rules: hooks[i] }));
 }
 
-function resolve(ctx: DMContext, r: Resolution) {
+function resolve(r: Resolution) {
   const chosenChoiceId = r.leaders[0];
   const label = r.scene.choices.find((c) => c.id === chosenChoiceId)?.label ?? 'their plan';
-  const notes = r.votes.flatMap((v) =>
-    v.roll === 20 ? [`${v.characterName} pulls it off brilliantly`] :
-    v.roll === 1 ? [`${v.characterName} trips over their own boots`] :
-    v.choiceId !== chosenChoiceId ? [`${v.characterName} grumbles but follows`] : []);
-  const outcome = `The party chose to ${label.toLowerCase()}` +
-    (r.leaders.length > 1 ? ' after a heated, tied debate' : '') +
-    (notes.length ? `; ${notes.join(', ')}.` : '.') +
-    (r.abstained.length ? ` ${r.abstained.join(' and ')} lagged behind.` : '');
-  return { outcome, chosenChoiceId };
+  const flair = r.votes.some((v) => v.roll === 20) ? ' It comes off brilliantly.' : r.votes.some((v) => v.roll === 1) ? ' It goes badly wrong.' : '';
+  return { outcome: `The party chose to ${label.toLowerCase()}.${flair}`, chosenChoiceId };
 }
 
-function names(ctx: DMContext) {
-  return ctx.party.map((p) => p.name).join(', ') || 'The party';
+/** A stretch of the road to the door, told as the world, not as something the heroes decided. Null off the road. */
+function road(ctx: DMContext, opening: string): string | null {
+  const t = ctx.rules?.trek;
+  return t ? `${opening} ${t.terrain}: ${ROAD_EVENTS[t.event]}.\n\nThe dungeon door lies somewhere ahead. What do you do?` : null;
+}
+
+const empty = { action: '', ability: 'none', skill: '', tier: 'none', effect: 'none', severity: 'none', damageType: '', condition: 'none', save: 'none', narration: '' };
+
+/**
+ * The offline classification. "I fly to the moon" cannot be done. A word that is one of today's actions,
+ * or that repeats a choice's label, maps onto it. Kicking, shoving or a brazier is a medium Athletics
+ * check with moderate damage. Anything else is an easy Perception check with no effect.
+ */
+export function classifyFreeform(request: ActionRequest): Record<string, string> {
+  const text = request.text.trim();
+  const lower = text.toLowerCase();
+  if (/^impossible\b|fly to the moon/i.test(lower)) return { ...empty, kind: 'impossible', narration: 'That cannot be done.' };
+  const byId = request.actions.find((id) => lower === id || lower.startsWith(`${id} `) || lower === `i ${id}`);
+  if (byId) return { ...empty, kind: 'known', action: byId };
+  const byLabel = request.choices.find((c) => c.label.length > 0 && lower.includes(c.label.toLowerCase()));
+  if (byLabel && request.actions.includes(byLabel.id)) return { ...empty, kind: 'known', action: byLabel.id };
+  if (/kick|brazier|shove|hurl|smash|throw/.test(lower)) {
+    return { ...empty, kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'damage', severity: 'moderate', damageType: 'bludgeoning' };
+  }
+  return { ...empty, kind: 'check', ability: 'wis', skill: 'perception', tier: 'easy', effect: 'none' };
 }
 
 export const fakeDungeonMaster: DungeonMaster = {
@@ -65,7 +92,8 @@ export const fakeDungeonMaster: DungeonMaster = {
     return {
       adventureTitle: `The Secret of ${ctx.archetype.name.replace(/^The /, '')}'s Door`,
       title: 'Behind the Dungeon Door',
-      narration: `${names(ctx)} stand before an old oak door carved with runes.\n\nBeyond it lies ${place}, and something inside is humming a song you almost remember.`,
+      narration: road(ctx, 'A road leaves the tavern along') ??
+        `An old oak door carved with runes waits, shut.\n\nBeyond it lies ${place}, and something inside is humming a song you almost remember. What do you do?`,
       imagePrompt: `Adventurers before a rune-carved oak door leading to ${place}`,
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: `Welcome, travellers. I am ${ctx.archetype.name}. Mind the door.`,
@@ -77,9 +105,10 @@ export const fakeDungeonMaster: DungeonMaster = {
     await fakeDelay();
     const place = PLACES[ctx.sceneIndex % PLACES.length];
     return {
-      ...resolve(ctx, resolution),
+      ...resolve(resolution),
       title: `Scene ${ctx.sceneIndex + 1}: ${place.replace(/^(a|the) /, '').replace(/^./, (c) => c.toUpperCase())}`,
-      narration: `The path leads ${names(ctx)} to ${place}.\n\nThe air smells of old magic and fresh trouble.`,
+      narration: road(ctx, 'The road goes on along') ??
+        `The path opens onto ${place}.\n\nThe air smells of old magic and fresh trouble. What do you do?`,
       imagePrompt: `The party arriving at ${place}`,
       featuredCharacters: ctx.party.slice(0, 2).map((p) => p.name),
       quip: resolution.votes.some((v) => v.roll === 20) ? 'A natural 20! The dice gods smile.' : 'Onward!',
@@ -90,12 +119,17 @@ export const fakeDungeonMaster: DungeonMaster = {
   async finale(ctx, resolution): Promise<FinaleScene> {
     await fakeDelay();
     return {
-      ...resolve(ctx, resolution),
+      ...resolve(resolution),
       title: 'Epilogue',
-      narration: `And so ${names(ctx)} walk back out through the dungeon door, richer in stories than in gold.\n\nThe door closes softly behind them. It will be waiting.`,
+      narration: `The dungeon door stands open on the way home, the story richer than the gold.\n\nThe door closes softly. It will be waiting.`,
       imagePrompt: 'The party walking into a sunrise, the dungeon door closing behind them',
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: 'Thank you for playing. Until the door opens again…',
     };
+  },
+
+  async classifyAction(_ctx, request) {
+    await fakeDelay();
+    return classifyFreeform(request);
   },
 };

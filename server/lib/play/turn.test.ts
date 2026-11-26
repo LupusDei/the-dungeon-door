@@ -7,6 +7,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { clearRoom, startDungeon } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { DungeonState, PartyState } from './state.ts';
+import type { TrekLeg } from './trek.ts';
 import { confrontationChoices, pickChoice, playTurn, type RulesState, type RulesTurn } from './turn.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
@@ -393,4 +394,61 @@ test('a fight the DM proposes is held to a high encounter at the dungeon level (
   const d = startDungeon('explore', 3, [1, 1], 4);
   assert.equal(foes(playTurn(state({ dungeon: d }), goblins, ballots(5, 5))), 1);
   assert.equal(foes(playTurn(state({ dungeon: { ...d, level: 5 } }), goblins, ballots(5, 5))), 4, 'at dungeon level 5, twice the party');
+});
+
+// The road from the tavern to the door (play/trek.ts)
+const leg = (event: TrekLeg['event'], monsters: string[] = [], treasure: TrekLeg['treasure'] = null): TrekLeg => ({ event, roll: 1, monsters, treasure, wares: [] });
+const onTheRoad = (legs: TrekLeg[], facing?: DungeonState['facing']): RulesState => {
+  const d = startDungeon('fixed', 3, [1, 1], 4);
+  return state({ dungeon: { ...d, trek: { terrain: 'a forest road', leg: 0, legs }, ...(facing ? { facing } : {}) } });
+};
+const look = { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 5 };
+const gold = { sp: 0, gp: 40, gems: 0, jewellery: 0, magicItem: null };
+
+test('on the road the party goes on by itself after each scene: the next stretch is met, then the dungeon door', () => {
+  const start = onTheRoad([leg('quiet'), leg('quiet')]);
+  const first = playTurn(start, look, ballots(10, 10));
+  assert.equal(first.dungeon!.trek!.leg, 1);
+  assert.ok(first.lines.includes('On the road (d12: 1): a quiet stretch.'));
+  assert.ok(first.party.clock! - (start.party.clock ?? 0) >= 2 * 3600, 'a stretch of road takes two hours');
+  const door = playTurn(first, null, []);
+  assert.equal(door.dungeon!.trek, undefined);
+  assert.equal(door.dungeon!.at, start.dungeon!.map.entrance);
+  assert.equal(door.lines.at(-1), 'The party reaches the dungeon door.');
+  assert.equal(playTurn(door, null, []).dungeon!.trek, undefined, 'and stays there');
+});
+
+test('on the road there are no exits to take, no dungeon wanderers, and daylight', () => {
+  const road = onTheRoad([leg('quiet'), leg('quiet')]);
+  const moved = playTurn(road, { kind: 'move', exit: road.dungeon!.map.nodes[road.dungeon!.map.entrance].exits[0].id }, []);
+  assert.equal(moved.lines[0], 'The road leads on; the dungeon door is still ahead.');
+  assert.equal(moved.dungeon!.at, road.dungeon!.at);
+  const torch = { ...fighter, equipment: [...fighter.equipment, { id: 'torch', name: 'Torch', count: 1 }] };
+  const rested = playTurn({ ...road, party: party({ p1: torch }) }, { kind: 'rest', rest: 'short' }, []);
+  assert.ok(!rested.lines.some((l) => /Wandering|Before the party can rest|lights/.test(l)), rested.lines.join(' | '));
+});
+
+test('foes barring the road: Run slips past and the party goes on; a failed Parley and they attack', () => {
+  const hostile = { monsters: ['bandit'], attitude: 'hostile' as const };
+  const ran = playTurn(onTheRoad([leg('bandits', ['bandit']), leg('quiet')], hostile), { kind: 'run' }, []);
+  assert.deepEqual([ran.dungeon!.trek!.leg, ran.dungeon!.facing, ran.fight], [1, undefined, null]);
+  const talked = playTurn(onTheRoad([leg('bandits', ['bandit']), leg('quiet')], hostile), { kind: 'parley' }, ballots(1, 1));
+  assert.equal(talked.fight, 'started');
+  assert.ok(talked.combat);
+  assert.equal(talked.dungeon!.trek!.leg, 0, 'the party goes on once the fight is over');
+  assert.ok(talked.lines.includes('They will not let the party pass: they attack.'));
+  assert.ok(talked.lines.includes('Both sides begin far, about 60 feet apart.'));
+  assert.ok(Object.values(talked.combat!.combatants).every((c) => c.place?.band === 'far'));
+});
+
+test('a fight on the road: XP as any fight, the stretch\u2019s treasure for the victors, then the road goes on', () => {
+  const road = onTheRoad([leg('band', ['goblin-minion'], gold), leg('quiet')], { monsters: ['goblin-minion'], attitude: 'hostile' });
+  let t: RulesTurn = playTurn(road, { kind: 'engage', monsters: ['goblin-minion'] }, ballots(15, 15));
+  assert.equal(t.fight, 'started');
+  for (let i = 0; i < 20 && t.combat; i++) t = playTurn(t, null, ballots(18, 18));
+  assert.equal(t.fight, 'victory');
+  assert.equal(t.dungeon!.trek!.leg, 1);
+  const before = Object.values(road.party.sheets).reduce((gp, s) => gp + s.gp, 0);
+  assert.equal(Object.values(t.party.sheets).reduce((gp, s) => gp + s.gp, 0), before + 40);
+  assert.ok(Object.values(t.party.sheets).every((s) => s.xp > 0));
 });

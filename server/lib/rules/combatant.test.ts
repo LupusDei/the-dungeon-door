@@ -92,3 +92,8 @@ test('undead, constructs and oozes are fearless (no morale); the rest are not', 
   assert.deepEqual(['skeleton', 'zombie', 'flesh-golem', 'black-pudding', 'goblin-warrior'].map((id) => monsterCombatant('m', monster(id)).fearless === true), [true, true, true, true, false]);
   assert.equal(Object.hasOwn(monsterCombatant('m', monster('goblin-warrior')), 'fearless'), false, 'only the fearless carry the flag');
 });
+
+test('a monster’s body, for the words its wounds are told in: undead, construct or ooze; flesh is left unsaid', () => {
+  const body = (id: string) => monsterCombatant('foe-1', monster(id)).body;
+  assert.deepEqual(['zombie', 'animated-armor', 'gray-ooze', 'goblin-warrior'].map(body), ['undead', 'construct', 'ooze', undefined]);
+});

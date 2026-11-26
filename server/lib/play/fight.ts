@@ -1,9 +1,11 @@
 /**
  * Combat in the voting flow: a fight is a run of scenes, one per round. Each player's vote is their own
- * hero's action: (a) Attack, (b) Cast, (c) Dodge, or Break Free or Help when that is called for (actions.ts); the vote's d20 is the attack roll. Monsters act by the
+ * hero's action. A vote that names a legal action (play/legal.ts) is that action; otherwise it is
+ * (a) Attack, (b) Cast, (c) Dodge, or Break Free or Help when that is called for (actions.ts). The vote's d20 is the attack roll. Monsters act by the
  * engine's rules. Shaken foes check morale (morale.ts). When it ends the living heroes split the XP and level
  * up: all of it on a victory or surrender, the slain foes' when the rest flee. See docs/api.md.
  */
+import { woundOf } from '../rules/wounds.ts';
 import { fightsWith } from '../attacks.ts';
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
@@ -17,7 +19,7 @@ import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { HEALING_POTIONS, item } from '../rules/items.ts';
 import { held, removeItem } from '../rules/inventory.ts';
 import { resourcesOf, useResource } from '../rules/resources.ts';
-import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, relocate, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
+import { type Action, act, aimAgain, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, relocate, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { castSpell, endConcentration, slotsLeft, spellDamageDice, strikesAt } from '../rules/spells.ts';
 import { type Move, areaFromSelf, distanceFeet, engagedWith, meleeCluster, neededApproach, rangedShot, spellHits, stepToward, validateMove } from '../rules/bands.ts';
@@ -25,7 +27,8 @@ import { RuleViolation } from '../rules/violation.ts';
 import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
-import { takeThird } from './actions.ts';
+import { adjudicateCheck, takeThird, type CheckRuling } from './actions.ts';
+import { resolveNamedAction, skipsBonusHeal } from './legal.ts';
 import { keepConcentration } from './concentration.ts';
 import { shakeOff } from './conditions.ts';
 import { afterFight } from './dying.ts';
@@ -41,7 +44,9 @@ export const COMBAT_CHOICES = [
 ];
 
 export type FightEnd = 'victory' | 'defeat' | 'fled';
-export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: number; move?: Move }>>;
+/** A letter vote, a named legal action, a move, or a written check (`freeform`) already classified. The roll is the hero's d20. */
+export type CombatVote = { choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[]; text?: string; freeform?: CheckRuling; move?: Move };
+export type CombatVotes = Readonly<Record<string, CombatVote>>;
 export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
 
 /** Duplicate monsters are numbered: "Goblin Warrior 1", "Goblin Warrior 2". */
@@ -69,16 +74,19 @@ const blindLine = (all: Combatant[]) => {
   return blind.length ? [`In the dark, ${blind.join(', ')} cannot see (Blinded).`] : [];
 };
 
-export function startFight(party: PartyState, monsterIds: readonly string[], light: LightLevel = 'bright', surprise?: 'party' | 'foes'): { party: PartyState; combat: CombatState; lines: string[] } {
+export function startFight(party: PartyState, monsterIds: readonly string[], light: LightLevel = 'bright', start?: { surprise?: 'party' | 'foes'; band?: 'near' | 'far' } | 'party' | 'foes'): { party: PartyState; combat: CombatState; lines: string[] } {
   const rng = seededRng(party.rng);
   const seed = rng.die(1_000_000_000);
   const heroes = Object.entries(party.sheets).filter(([, sheet]) => !sheet.dead).map(([id, sheet]) => heroOf(id, sheet, light));
   const others = foes(monsterIds, light);
-  const combat = startCombat(seed, [...heroes, ...others], surprise);
+  const opening = typeof start === 'string' ? { surprise: start } : start;
+  const combat = startCombat(seed, [...heroes, ...others], opening);
   const order = combat.order.map((id) => `${combat.combatants[id].name} ${combat.initiative[id]}`).join(', ');
-  const stood = surprise
-    ? `${surprise === 'foes' ? 'The foes surprise the party' : 'The party surprises the foes'}: the fight begins in melee.`
-    : 'Both sides begin near, about 30 feet apart.';
+  const stood = opening?.surprise
+    ? `${opening.surprise === 'foes' ? 'The foes surprise the party' : 'The party surprises the foes'}: the fight begins in melee.`
+    : opening?.band === 'far'
+      ? 'Both sides begin far, about 60 feet apart.'
+      : 'Both sides begin near, about 30 feet apart.';
   return { party: { ...party, rng: rng.state() }, combat, lines: [stood, `A fight begins: ${others.map((f) => f.name).join(', ')}. Initiative: ${order}.`, ...blindLine([...heroes, ...others])] };
 }
 
@@ -273,7 +281,13 @@ function tell(before: CombatState, after: CombatState): string[] {
   const name: Names = (id) => after.combatants[id].name;
   const events = after.log.slice(before.log.length).map((e) => (LINES[e.kind] as (x: CombatEvent, n: Names) => string)(e, name));
   const fallen = Object.values(after.combatants).filter((c) => c.status === 'dead' && before.combatants[c.id].status !== 'dead');
-  return [...events, ...fallen.map((c) => `${c.name} falls.`)];
+  return [...events, ...woundsTold(before, after), ...fallen.map((c) => `${c.name} falls.`)];
+}
+
+/** A foe still up whose wounds look different now: "Goblin Warrior is bloodied." (its hit points stay hidden). */
+function woundsTold(before: CombatState, after: CombatState): string[] {
+  const changed = (c: Combatant) => c.side === 'foes' && c.status === 'up' && woundOf(c) !== woundOf(before.combatants[c.id]);
+  return Object.values(after.combatants).filter(changed).map((c) => `${c.name} is ${woundOf(c).toLowerCase()}.`);
 }
 
 // ---- after the fight ----
@@ -365,28 +379,40 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   const ruled = monsterAction(state);
   if (ruled) return { action: ruled, state, sheets };
   const id = currentActor(state);
-  const drunk = bonusAction(state, sheets, id);
   const vote = votes[id];
+  // A potion or Second Wind named as the action is that heal, so the automatic one does not also happen.
+  const drunk = vote && skipsBonusHeal(vote.actionId, vote.targets) ? { state, sheets } : bonusAction(state, sheets, id);
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
+  let here = drunk;
   if (vote.move) {
     try {
-      validateMove(drunk.state, id, vote.move);
+      validateMove(here.state, id, vote.move);
     } catch (e) {
-      if (e instanceof RuleViolation) return { action: { kind: 'other', text: e.message }, ...drunk };
+      if (e instanceof RuleViolation) return { action: { kind: 'other', text: e.message }, ...here };
       throw e;
     }
-    if (vote.move.dash) return { action: { kind: 'move', ...vote.move }, ...drunk };
-    const stepped = relocate(drunk.state, id, vote.move);
-    if (stepped.combatants[id].status !== 'up') return { action: { kind: 'dodge' }, state: stepped, sheets: drunk.sheets };
-    const taken = heroAction(stepped, drunk.sheets[id], id, vote.choiceId, vote.roll);
-    return { action: taken.action, state: stepped, sheets: { ...drunk.sheets, [id]: taken.sheet } };
+    if (vote.move.dash) return { action: { kind: 'move', ...vote.move }, ...here };
+    const stepped = relocate(here.state, id, vote.move);
+    if (stepped.combatants[id].status !== 'up') return { action: { kind: 'dodge' }, state: stepped, sheets: here.sheets };
+    here = { state: stepped, sheets: here.sheets };
+  }
+  if (vote.freeform && vote.text) {
+    const rng = seededRng(here.state.rng);
+    const foeId = caught(here.state, here.state.combatants[id].side, 1)[0];
+    const done = adjudicateCheck(rng, here.sheets[id], vote.text, vote.freeform, vote.roll, foeId ? here.state.combatants[foeId] : null);
+    const combatants = done.foe ? { ...here.state.combatants, [done.foe.id]: done.foe } : here.state.combatants;
+    return { action: { kind: 'other', text: done.text }, state: { ...here.state, rng: rng.state(), combatants }, sheets: here.sheets };
+  }
+  if (vote.actionId) {
+    const taken = resolveNamedAction(here.state, here.sheets[id], id, vote.actionId, vote.targets ?? [], vote.roll);
+    return { action: aimAgain(taken.combat, id, taken.action), state: taken.combat, sheets: { ...here.sheets, [id]: taken.sheet } };
   }
   if (vote.choiceId === 'c') {
-    const third = takeThird(drunk.state, drunk.sheets[id], id);
-    return { action: third.action, state: third.combat, sheets: { ...drunk.sheets, [id]: third.sheet } };
+    const third = takeThird(here.state, here.sheets[id], id);
+    return { action: third.action, state: third.combat, sheets: { ...here.sheets, [id]: third.sheet } };
   }
-  const { action, sheet } = heroAction(drunk.state, drunk.sheets[id], id, vote.choiceId, vote.roll);
-  return { action, state: drunk.state, sheets: { ...drunk.sheets, [id]: sheet } };
+  const { action, sheet } = heroAction(here.state, here.sheets[id], id, vote.choiceId, vote.roll);
+  return { action, state: here.state, sheets: { ...here.sheets, [id]: sheet } };
 }
 
 /** However it ends, the fallen are settled (stabilized by a friend, or left to their death saves) and the slain stay dead, unless a party caster Revivifies them. */

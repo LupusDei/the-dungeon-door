@@ -128,11 +128,11 @@ function afterDeathSave(state: CombatState, id: string, rng: Rng): CombatState {
   return withEvent(state, { kind: 'deathSave', round: state.round, actor: id, status: c.status }, c);
 }
 
-export function startCombat(seed: number, combatants: readonly Combatant[], surprise?: 'party' | 'foes'): CombatState {
+export function startCombat(seed: number, combatants: readonly Combatant[], opening?: Parameters<typeof openingPlaces>[1]): CombatState {
   const rng = seededRng(seed);
   const rolls = combatants.map((c) => ({ id: c.id, roll: rollD20(rng, c.initiative, 'normal').total, bonus: c.initiative }));
   const order = orderByInitiative(rolls);
-  const places = openingPlaces(combatants, surprise);
+  const places = openingPlaces(combatants, opening);
   const state: CombatState = {
     // Round 0, last turn: advancing once opens round 1 with the highest roll.
     version: 1, round: 0, turn: order.length - 1, order,

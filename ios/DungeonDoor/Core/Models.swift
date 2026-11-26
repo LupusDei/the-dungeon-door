@@ -75,6 +75,9 @@ struct Catalog: Codable, Hashable {
     var narrators: [NarratorInfo] = []
     /// The narrator a request gets when it names none.
     var defaultNarrator: String?
+    /// True when the server sends push notifications (it holds the push key). False on a server
+    /// that does not, and on one from before pushes: the app then never asks leave to notify.
+    var push = false
 
     func name(_ id: String, in list: KeyPath<Catalog, [CatalogOption]>) -> String {
         self[keyPath: list].first { $0.id == id }?.name ?? id.capitalized
@@ -98,6 +101,7 @@ extension Catalog {
         dungeonMasters = try c.decode([DungeonMasterInfo].self, forKey: .dungeonMasters)
         narrators = try c.value(.narrators, or: [])
         defaultNarrator = try c.decodeIfPresent(String.self, forKey: .defaultNarrator)
+        push = try c.value(.push, or: false)
     }
 }
 
@@ -484,6 +488,29 @@ struct CharacterDraft: Encodable {
     }
 }
 
+/// Someone the player has shared a game with, by the hero they last played beside them.
+struct Companion: Codable, Hashable, Identifiable {
+    let playerId: String
+    let name: String
+    var id: String { playerId }
+}
+
+/// An invitation to a party still gathering in its lobby.
+struct Invitation: Codable, Hashable, Identifiable {
+    let code: String
+    let fromName: String
+    /// The heroes already in the party, by name.
+    var party: [String] = []
+    var id: String { code }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        fromName = try c.value(.fromName, or: "A companion")
+        party = try c.value(.party, or: [])
+    }
+}
+
 /// What `POST /api/sheet` answers: the level-1 sheet a save would build, and its attacks.
 struct SheetPreview: Codable, Hashable {
     let sheet: CharacterSheet
@@ -543,6 +570,13 @@ struct Vote: Codable, Hashable {
     var label: String? = nil
 }
 
+/// A line or a deed a player gave in character. No roll.
+struct RoleplayLine: Codable, Hashable {
+    let playerId: String
+    let characterName: String
+    let text: String
+}
+
 struct GameScene: Codable, Hashable {
     let index: Int
     let title: String
@@ -562,6 +596,8 @@ struct GameScene: Codable, Hashable {
     let votes: [Vote]
     let myVote: String?
     let outcome: String?
+    /// In-character lines this turn, oldest first. Empty on a server from before players could speak so.
+    var roleplay: [RoleplayLine] = []
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -599,6 +635,7 @@ extension GameScene {
         votes = try c.value(.votes, or: [])
         myVote = try c.decodeIfPresent(String.self, forKey: .myVote)
         outcome = try c.decodeIfPresent(String.self, forKey: .outcome)
+        roleplay = try c.value(.roleplay, or: [])
     }
 }
 
@@ -768,6 +805,19 @@ struct Combatant: Codable, Hashable, Identifiable {
     /// "puny", "weak", "even", "strong" or "deadly" for a foe, against this party. Nil for a hero, and from a
     /// server older than toughness ratings.
     var toughness: String? = nil
+    /// How hurt a foe looks ("Bleeding", "Bloodied", "Gasping"): its hit points are hidden, so a foe's `hp` and
+    /// `maxHp` are not sent. Nil for a hero, and from a server older than wounds.
+    var wound: String? = nil
+    /// A foe's vigor, 6 (unhurt) down to 0, for its gauge. Nil for a hero, and from a server older than wounds.
+    var vigor: Int? = nil
+
+    /// What its health reads: a foe's wound, or hit points ("7/20").
+    var healthText: String { wound ?? "\(hp)/\(maxHp)" }
+    /// The same, spoken.
+    var healthSpoken: String { wound ?? "\(hp) of \(maxHp) hit points" }
+    /// The bar's fill: a foe's vigor out of 6, or hit points.
+    var gauge: (now: Int, most: Int) { vigor.map { ($0, Combatant.vigorRungs) } ?? (hp, maxHp) }
+    static let vigorRungs = 6
 
     var isFoe: Bool { side == "foes" }
     var isDead: Bool { status == "dead" }
@@ -788,6 +838,8 @@ extension Combatant {
         status = try c.value(.status, or: points > 0 ? "up" : "dead")
         conditions = try c.value(.conditions, or: [])
         toughness = try c.decodeIfPresent(String.self, forKey: .toughness)
+        wound = try c.decodeIfPresent(String.self, forKey: .wound)
+        vigor = c.contains(.vigor) ? try c.whole(.vigor) : nil
     }
 }
 
@@ -1034,6 +1086,8 @@ struct ChronicleEntry: Codable, Hashable, Identifiable {
     /// The most-voted choice. Empty for a round of a fight, where each hero acts for themselves.
     let choiceLabel: String
     let outcome: String
+    /// What the heroes said and did in character that turn.
+    var roleplay: [RoleplayLine] = []
     var id: Int { index }
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -1052,6 +1106,7 @@ extension ChronicleEntry {
         voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choiceLabel = try c.value(.choiceLabel, or: "")
         outcome = try c.value(.outcome, or: "")
+        roleplay = try c.value(.roleplay, or: [])
     }
 }
 

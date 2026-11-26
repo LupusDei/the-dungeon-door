@@ -1,6 +1,6 @@
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, StoredScene, Vote } from '../types.ts';
-import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, RoleplayLine, StoredScene, Vote } from '../types.ts';
+import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
   game: Game;
@@ -20,6 +20,7 @@ export class MemoryStore implements Store {
   private games = new Map<string, GameData>();
   /** When each reading was claimed, by "CODE#index#voice". */
   private voiceClaims = new Map<string, number>();
+  private invites: Invite[] = [];
 
   async getCharacter(id: string) {
     await tick();
@@ -125,7 +126,7 @@ export class MemoryStore implements Store {
       if (existing.narration !== scene.narration) this.forgetVoices(code, existing); // new words need new readings
       Object.assign(existing, structuredClone(scene));
     } else {
-      game.scenes.push({ ...structuredClone(scene), voices: {}, votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
+      game.scenes.push({ ...structuredClone(scene), voices: {}, roleplay: [], votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
       game.scenes.sort((a, b) => a.index - b.index);
     }
     game.updatedAt = now();
@@ -177,7 +178,39 @@ export class MemoryStore implements Store {
     game.updatedAt = now();
   }
 
-  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, move?: Move | null) {
+  async appendRoleplay(code: string, index: number, line: RoleplayLine): Promise<RoleplayLine[] | null> {
+    await tick();
+    const game = this.games.get(code)?.game;
+    const scene = game?.scenes.find((s) => s.index === index);
+    if (!game || !scene || game.status !== 'voting' || game.sceneIndex !== index) return null;
+    const roleplay = scene.roleplay ?? [];
+    if (roleplay.length >= 20) return null;
+    scene.roleplay = [...roleplay, structuredClone(line)];
+    game.updatedAt = now();
+    return scene.roleplay.map((entry) => structuredClone(entry));
+  }
+
+  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null, move?: Move | null) {
+    await tick();
+    const game = this.games.get(code)?.game;
+    if (!game || game.status !== 'voting' || game.sceneIndex !== index) return null;
+    const scene = game.scenes.find((s) => s.index === index);
+    if (!scene) return null;
+    const action = named ? { actionId: named.actionId, ...(named.targets.length ? { targets: [...named.targets] } : {}) } : {};
+    const stepped = move ? { move } : {};
+    let vote = scene.votes.find((v) => v.playerId === playerId);
+    if (vote) {
+      delete vote.actionId;
+      delete vote.targets;
+      delete vote.freeform;
+      delete vote.move;
+      Object.assign(vote, { choiceId, ...action, ...stepped });
+    } else scene.votes.push((vote = { playerId, choiceId, roll, ...action, ...stepped }));
+    game.updatedAt = now();
+    return { ...vote };
+  }
+
+  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>) {
     await tick();
     const game = this.games.get(code)?.game;
     if (!game || game.status !== 'voting' || game.sceneIndex !== index) return null;
@@ -185,12 +218,13 @@ export class MemoryStore implements Store {
     if (!scene) return null;
     let vote: Vote | undefined = scene.votes.find((v) => v.playerId === playerId);
     if (vote) {
-      vote.choiceId = choiceId;
-      if (move) vote.move = move;
-      else delete vote.move;
-    } else scene.votes.push((vote = { playerId, choiceId, roll, ...(move ? { move } : {}) }));
+      delete vote.actionId;
+      delete vote.targets;
+      delete vote.move;
+      vote.freeform = structuredClone(freeform);
+    } else scene.votes.push((vote = { playerId, choiceId: 'a', roll, freeform: structuredClone(freeform) }));
     game.updatedAt = now();
-    return { ...vote };
+    return structuredClone(vote);
   }
 
   async addMessage(code: string, message: NewMessage) {
@@ -208,5 +242,44 @@ export class MemoryStore implements Store {
     await tick();
     const messages = this.games.get(code)?.messages ?? [];
     return messages.filter((m) => since === undefined || m.id > since).slice(-limit).map((m) => ({ ...m }));
+  }
+
+  async listCompanions(playerId: string, limit = 30) {
+    await tick();
+    const met = new Map<string, Companion>();
+    for (const { game } of this.games.values()) {
+      if (!game.players.some((p) => p.playerId === playerId)) continue;
+      for (const p of game.players) {
+        if (p.playerId === playerId) continue;
+        const known = met.get(p.playerId);
+        if (!known || known.lastPlayedAt < game.updatedAt) met.set(p.playerId, { playerId: p.playerId, name: p.character.name, lastPlayedAt: game.updatedAt });
+      }
+    }
+    return [...met.values()].sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt)).slice(0, limit);
+  }
+
+  async addInvite(invite: Invite) {
+    await tick();
+    if (this.invites.some((i) => i.code === invite.code && i.toPlayerId === invite.toPlayerId)) return false;
+    this.invites.push({ ...invite });
+    return true;
+  }
+
+  async listInvites(toPlayerId: string) {
+    await tick();
+    return this.invites
+      .filter((i) => i.toPlayerId === toPlayerId)
+      .map((i): InviteView | null => {
+        const game = this.games.get(i.code)?.game;
+        if (!game || game.status !== 'lobby' || game.players.some((p) => p.playerId === toPlayerId)) return null;
+        return { ...i, party: game.players.map((p) => p.character.name) };
+      })
+      .filter((i): i is InviteView => i !== null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async removeInvite(code: string, toPlayerId: string) {
+    await tick();
+    this.invites = this.invites.filter((i) => !(i.code === code && i.toPlayerId === toPlayerId));
   }
 }

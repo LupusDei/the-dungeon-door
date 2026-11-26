@@ -7,7 +7,7 @@ import type { DungeonMasterArchetype } from '../catalog.ts';
 import type { RulesHook } from '../play/hooks.ts';
 import type { FightNews } from '../play/turn.ts';
 import type { RulesContext } from '../play/view.ts';
-import type { ChoiceId } from '../types.ts';
+import type { ChoiceId, RoleplayLine } from '../types.ts';
 
 export type { RulesContext } from '../play/view.ts';
 
@@ -52,6 +52,8 @@ export interface PastScene {
   /** The DM's summary of what happened (null only for a scene still being resolved). */
   outcome: string | null;
   chosenChoiceId: ChoiceId | null;
+  /** Lines and deeds the players wrote in character this turn, oldest first. */
+  roleplay?: RoleplayLine[];
 }
 
 /** The scene the party just voted on, with everything the DM needs to weigh the votes. */
@@ -145,6 +147,18 @@ export interface NextScene extends SceneText, ResolvedTurn {
 /** The epilogue: no choices, the game ends. */
 export interface FinaleScene extends SceneText, ResolvedTurn {}
 
+/** What a player wrote, and the actions it may map onto. The DM classifies; it does not roll. */
+export interface ActionRequest {
+  characterName: string;
+  /** The player's own words. */
+  text: string;
+  inCombat: boolean;
+  /** Ids the text may map onto (today's actions). */
+  actions: readonly string[];
+  /** The choices on offer, so a known action can name one. */
+  choices: { id: string; label: string }[];
+}
+
 export interface DungeonMaster {
   /** Scene 0: names the adventure and sets the hook. */
   openingScene(ctx: DMContext): Promise<OpeningScene>;
@@ -152,4 +166,10 @@ export interface DungeonMaster {
   nextScene(ctx: DMContext, resolution: Resolution): Promise<NextScene>;
   /** Resolves the final vote and writes the epilogue (scene `ctx.sceneCount - 1`). */
   finale(ctx: DMContext, resolution: Resolution): Promise<FinaleScene>;
+  /**
+   * Classifies a written action. No numbers: a known action id, a check (ability or skill, a tier, an
+   * effect category), or impossible. Absent on a DM that does not adjudicate written actions; the engine
+   * then treats the action as impossible and the turn is not spent.
+   */
+  classifyAction?(ctx: DMContext, request: ActionRequest): Promise<unknown>;
 }
