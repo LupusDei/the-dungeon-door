@@ -6,7 +6,9 @@ import { z } from 'zod';
 import { ABILITIES, type Ability } from '../rules/abilities.ts';
 import { HEALING_POTIONS, items } from '../rules/items.ts';
 import { monsters } from '../rules/monsters.ts';
+import type { HazardKind } from '../rules/hazards.ts';
 import { modeOf } from '../rules/resolve.ts';
+import { isTrap } from '../rules/traps.ts';
 import { srd } from '../rules/srd.ts';
 
 export type RulesHook =
@@ -26,7 +28,11 @@ export type RulesHook =
   /** Every hero sells all they hold of each item. */
   | { kind: 'sell'; items: string[] }
   /** The most hurt hero drinks a Potion of Healing. */
-  | { kind: 'use'; item: string };
+  | { kind: 'use'; item: string }
+  /** An SRD 5.2 example trap (by id) the party may run into. */
+  | { kind: 'trap'; trap: string }
+  /** An SRD 5.2 hazard that befalls every living hero; feet, minutes, hours or days as the hazard needs. */
+  | { kind: 'hazard'; hazard: HazardKind; feet?: number; minutes?: number; hours?: number; days?: number };
 
 interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
 
@@ -41,6 +47,18 @@ const edge = { advantage: z.boolean().nullish(), disadvantage: z.boolean().nulli
 const isMonster = (id: string) => monsters().has(id);
 const itemList = z.array(z.string()).transform((ids) => ids.filter((id) => items().has(id))).refine((ids) => ids.length > 0);
 
+const amount = (max: number) => z.number().positive().max(max);
+/** Each hazard with the amount it needs (and nothing else). */
+const hazardSchema = z.discriminatedUnion('hazard', [
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('falling'), feet: amount(1000) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('burning') }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('suffocation'), minutes: amount(60) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('extreme-cold'), hours: amount(24) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('extreme-heat'), hours: amount(24) }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('dehydration') }),
+  z.object({ kind: z.literal('hazard'), hazard: z.literal('malnutrition'), days: amount(60) }),
+]);
+
 const HookSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('check'), ability, skill: z.string().refine((s) => srd().skills.has(s)).nullish(),
@@ -54,6 +72,8 @@ const HookSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('buy'), items: itemList }),
   z.object({ kind: z.literal('sell'), items: itemList }),
   z.object({ kind: z.literal('use'), item: z.string().refine((id) => Object.hasOwn(HEALING_POTIONS, id)) }),
+  z.object({ kind: z.literal('trap'), trap: z.string().refine(isTrap) }),
+  hazardSchema,
 ]);
 
 /** The hook, or null when there is none or it doesn't hold up (unknown skill or monster, DC out of 1–30…). */
@@ -89,6 +109,12 @@ const EDGE_LABELS = { normal: '', advantage: ', with Advantage', disadvantage: '
 const edgeLabel = (h: Edge) => EDGE_LABELS[modeOf(!!h.advantage, !!h.disadvantage)];
 const target = (h: Extract<RulesHook, { kind: 'check' }>) => (typeof h.dc === 'number' ? `, DC ${h.dc}` : ` vs ${monsters().get(h.against!)!.name}`);
 
+const UNITS = ['feet', 'minutes', 'hours', 'days'] as const;
+function hazardAmount(h: Extract<RulesHook, { kind: 'hazard' }>): string {
+  const unit = UNITS.find((u) => typeof h[u] === 'number');
+  return unit ? ` (${h[unit]} ${unit})` : '';
+}
+
 const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>) => string } = {
   check: (h) => `${rollName(h)} check${target(h)}${h.mode === 'best' ? ', one hero with help' : ''}${edgeLabel(h)}`,
   save: (h) => `${rollName(h)}, DC ${h.dc}${edgeLabel(h)}`,
@@ -98,6 +124,8 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   buy: (h) => `Buy ${countedList(h.items, itemName, times)}`,
   sell: (h) => `Sell ${countedList(h.items, itemName, times)}`,
   use: (h) => `Drink a ${itemName(h.item)}`,
+  trap: () => 'Risk a trap',
+  hazard: (h) => `Hazard: ${titleCase(h.hazard)}${hazardAmount(h)}`,
 };
 
 /** What the app shows under the choice. */

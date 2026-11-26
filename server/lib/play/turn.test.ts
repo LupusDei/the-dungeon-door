@@ -83,14 +83,26 @@ test('a way on: the party moves, and what is in the room springs: monsters fight
   assert.deepEqual([back.fight, back.lines.length], [null, 1]);
 });
 
-test('a trapped room: each hero makes the trap’s Dexterity save', () => {
+test('a trapped room springs its SRD 5.2 trap (or the 5.2 counterpart of an old 5.1 id)', () => {
   const d = startDungeon('fixed', 3, [1, 1], 4);
   const r4 = d.map.nodes.r4;
   const trapped: DungeonState = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r4: { ...r4, contents: { ...r4.contents!, trap: 'pits', treasure: null } } } } };
-  const sprung = playTurn(state({ dungeon: trapped }), { kind: 'move', exit: 'r4' }, ballots(1, 1));
-  assert.equal(sprung.lines[1], 'A trap!');
-  assert.match(sprung.lines[2], /^Bryn: Dexterity save 1 [+-] \d+ = -?\d+ vs DC 13, failure$/);
+  const blind = { ...state({ dungeon: trapped }), party: party({ p1: { ...fighter, skillBonuses: { ...fighter.skillBonuses, investigation: -5 } }, p2: { ...rogue, skillBonuses: { ...rogue.skillBonuses, investigation: -5 } } }) };
+  const sprung = playTurn(blind, { kind: 'move', exit: 'r4' }, ballots(1, 1));
+  assert.equal(sprung.lines[1], 'Nobody notices the Hidden Pit.');
+  assert.match(sprung.lines[2], /^Damage \d bludgeoning: Bryn takes \d$/);
   assert.equal(sprung.success, false);
+  assert.ok(sprung.dungeon!.cleared.includes('r4'));
+});
+
+test('trap and hazard hooks from the DM', () => {
+  const needle = playTurn(state(), { kind: 'trap', trap: 'poisoned-needle' }, ballots(10, 10));
+  assert.ok(needle.lines.length >= 2);
+  const fall = playTurn(state(), { kind: 'hazard', hazard: 'falling', feet: 10 }, ballots(1, 1));
+  assert.deepEqual(fall.lines.map((l) => l.split(' falls')[0]), ['Bryn', 'Cleo']);
+  assert.equal(fall.success, null);
+  const thirst = playTurn(state(), { kind: 'hazard', hazard: 'dehydration' }, ballots(1, 1));
+  assert.equal(thirst.lines.length, 2);
 });
 
 test('a way that is not there, or no dungeon at all: nothing happens but a line saying so', () => {

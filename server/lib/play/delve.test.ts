@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SAMPLE } from '../rules/sheet.fixture.ts';
-import { arrival, claimTreasure, clearRoom, enter, mapSize, startDungeon, trapHook } from './delve.ts';
+import { arrival, claimTreasure, clearRoom, enter, mapSize, partyLevel, startDungeon } from './delve.ts';
 import type { DungeonState, PartyState } from './state.ts';
 
 test('a fixed dungeon is a whole map, sized by the adventure; explore mode starts with the entrance only', () => {
@@ -26,7 +26,7 @@ test('taking an exit moves the party, remembers where it has been, and refuses a
   assert.equal(Object.keys(opened.dungeon.map.nodes).length, 2, 'explore mode rolls the area beyond');
 });
 
-test('arriving in a room that is not cleared: its monsters are a fight, its trap a save, its treasure loot', () => {
+test('arriving in a room that is not cleared: its monsters are a fight, its trap goes off, its treasure loot', () => {
   const d = startDungeon('fixed', 3, [1, 1], 4);
   const boars = arrival(d, d.map.nodes.r1);
   assert.deepEqual(boars.fight, ['boar', 'boar', 'boar']);
@@ -35,15 +35,11 @@ test('arriving in a room that is not cleared: its monsters are a fight, its trap
   assert.deepEqual([loot.fight, loot.treasure!.sp], [null, 600]);
   assert.deepEqual(arrival(clearRoom(d, 'r1'), d.map.nodes.r1), { fight: null, trap: null, treasure: null });
   const trapped = { ...d.map.nodes.r4, contents: { ...d.map.nodes.r4.contents!, kind: 'trap' as const, trap: 'pits', treasure: null } };
-  assert.deepEqual(arrival(d, trapped).trap, trapHook([1, 1]));
+  assert.deepEqual(arrival(d, trapped).trap, 'pits');
 });
 
-test('traps use the SRD 5.2 scaling: DC and damage by the party’s level', () => {
-  assert.deepEqual(trapHook([1, 3]), { kind: 'save', ability: 'dex', dc: 13, damage: '2d10', damageType: 'bludgeoning' });
-  assert.deepEqual(trapHook([5, 4]), { kind: 'save', ability: 'dex', dc: 13, damage: '2d10', damageType: 'bludgeoning' });
-  assert.deepEqual(trapHook([5, 6]).dc, 15);
-  assert.deepEqual(trapHook([11]).damage, '10d10');
-  assert.deepEqual(trapHook([17, 20]), { kind: 'save', ability: 'dex', dc: 19, damage: '18d10', damageType: 'bludgeoning' });
+test('traps scale by the party\'s average level, rounded down', () => {
+  assert.deepEqual([partyLevel([1, 3]), partyLevel([5, 4]), partyLevel([5, 6]), partyLevel([17, 20])], [2, 4, 5, 18]);
 });
 
 test('treasure: the coins are shared out as gold; gems, jewellery and the magic item go into packs', () => {

@@ -21,6 +21,11 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   price, gems and jewellery at full value), {"kind":"use","item":"potion-of-healing"} (the most hurt hero
   drinks). Only offer buying and selling where there is someone to trade with. Treasure the party finds is
   already in their packs.
+- Traps and hazards: {"kind":"trap","trap":"poisoned-needle"} (one of collapsing-roof, falling-net,
+  fire-casting-statue, hidden-pit, poisoned-darts, poisoned-needle, rolling-stone, spiked-pit: the SRD 5.2
+  example traps; the engine checks the party's passive scores, disarms or springs it, and scales it to their
+  level), or {"kind":"hazard","hazard":"falling","feet":30} (also burning; suffocation with "minutes";
+  extreme-cold or extreme-heat with "hours"; dehydration; malnutrition with "days").
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the

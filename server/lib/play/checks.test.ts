@@ -157,3 +157,20 @@ test('trade hooks: items must be in the SRD catalog; only Potions of Healing can
   assert.equal(hookLabel({ kind: 'sell', items: ['gemstone', 'gemstone'] }), 'Sell Gemstone ×2');
   assert.equal(hookLabel({ kind: 'use', item: 'potion-of-healing' }), 'Drink a Potion of Healing');
 });
+
+test('trap and hazard hooks: a 5.2 trap id (or an old 5.1 one); a hazard with the amount it needs', () => {
+  assert.deepEqual(parseHook({ kind: 'trap', trap: 'poisoned-needle' }), { kind: 'trap', trap: 'poisoned-needle' });
+  assert.deepEqual(parseHook({ kind: 'trap', trap: 'pits' }), { kind: 'trap', trap: 'pits' });
+  assert.equal(parseHook({ kind: 'trap', trap: 'falling' }), null, 'a hazard is not a trap');
+  assert.deepEqual(parseHook({ kind: 'hazard', hazard: 'falling', feet: 30, minutes: null }), { kind: 'hazard', hazard: 'falling', feet: 30 });
+  assert.deepEqual(parseHook({ kind: 'hazard', hazard: 'burning', feet: null }), { kind: 'hazard', hazard: 'burning' });
+  assert.equal(parseHook({ kind: 'hazard', hazard: 'falling' }), null, 'how far?');
+  assert.equal(parseHook({ kind: 'hazard', hazard: 'extreme-heat', hours: 0 }), null);
+  assert.equal(parseHook({ kind: 'hazard', hazard: 'lava', hours: 1 }), null);
+  assert.equal(hookLabel({ kind: 'trap', trap: 'poisoned-needle' }), 'Risk a trap');
+  assert.equal(hookLabel({ kind: 'hazard', hazard: 'extreme-heat', hours: 4 }), 'Hazard: Extreme Heat (4 hours)');
+  assert.equal(hookLabel({ kind: 'hazard', hazard: 'falling', feet: 30 }), 'Hazard: Falling (30 feet)');
+  assert.equal(hookLabel({ kind: 'hazard', hazard: 'suffocation', minutes: 2 }), 'Hazard: Suffocation (2 minutes)');
+  assert.equal(hookLabel({ kind: 'hazard', hazard: 'malnutrition', days: 5 }), 'Hazard: Malnutrition (5 days)');
+  assert.equal(hookLabel({ kind: 'hazard', hazard: 'burning' }), 'Hazard: Burning');
+});

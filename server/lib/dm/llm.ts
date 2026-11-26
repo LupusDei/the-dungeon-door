@@ -12,7 +12,7 @@ import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Pa
 
 /** Flat, so every structured-output provider takes it; the engine checks it (play/hooks.ts parseHook). */
 const RulesHook = z.object({
-  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use']),
+  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use', 'trap', 'hazard']),
   ability: z.enum(['str', 'dex', 'con', 'int', 'wis', 'cha']).nullable().describe('check or save'),
   skill: z.string().nullable().describe('check: an SRD skill id such as "athletics", or null'),
   tool: z.string().nullable().describe('check: a tool id such as "thieves-tools", or null'),
@@ -28,6 +28,12 @@ const RulesHook = z.object({
   exit: z.string().nullable().describe('move: an exit id from the dungeon block'),
   items: z.array(z.string()).nullable().describe('buy or sell: SRD item ids, e.g. ["potion-of-healing"]'),
   item: z.string().nullable().describe('use: a potion id, e.g. "potion-of-healing"'),
+  trap: z.string().nullable().describe('trap: an SRD 5.2 trap id, e.g. "poisoned-needle"'),
+  hazard: z.enum(['falling', 'burning', 'suffocation', 'extreme-cold', 'extreme-heat', 'dehydration', 'malnutrition']).nullable().describe('hazard'),
+  feet: z.number().nullable().describe('hazard falling: how far'),
+  minutes: z.number().nullable().describe('hazard suffocation: how long without air'),
+  hours: z.number().nullable().describe('hazard extreme-cold or extreme-heat: hours exposed'),
+  days: z.number().nullable().describe('hazard malnutrition: days without food'),
 });
 
 const Choice = z.object({
