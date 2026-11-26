@@ -22,6 +22,7 @@ import * as gameApi from '../api/game.ts';
 import * as gamesApi from '../api/games.ts';
 import * as imageApi from '../api/image.ts';
 import * as portraitApi from '../api/portrait.ts';
+import { call, gamePath, makeCharacter } from './api.fixture.ts';
 import { settle } from './background.ts';
 import { fakeDungeonMaster } from './dm/fake.ts';
 import { registerDungeonMaster, unregisterDungeonMaster } from './dm/registry.ts';
@@ -29,33 +30,6 @@ import type { DungeonMaster } from './dm/types.ts';
 import { MemoryStore } from './store/memory.ts';
 import { setStore } from './store/index.ts';
 import type { Character, GameState, Message } from './types.ts';
-
-type Handler = (request: Request) => Promise<Response>;
-
-async function call<T = any>(handler: Handler, path: string, opts: { player?: string; body?: unknown; method?: string; headers?: Record<string, string> } = {}) {
-  const headers: Record<string, string> = { 'content-type': 'application/json', ...opts.headers };
-  if (opts.player) headers['x-dd-player'] = opts.player;
-  const request = new Request(`http://localhost:3000${path}`, {
-    method: opts.method ?? (opts.body === undefined ? 'GET' : 'POST'),
-    headers,
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-  });
-  const response = await handler(request);
-  return { status: response.status, body: (response.headers.get('content-type')?.includes('json') ? await response.json() : null) as T, response };
-}
-
-/** Mirrors the vercel.json rewrite: the handler sees ?code=… */
-const gamePath = (code: string, action?: string, query = '') => `/api/game${action ? `-${action}` : ''}?code=${code}${query}`;
-
-async function makeCharacter(player: string, name: string): Promise<Character> {
-  const { status, body } = await call<Character>(charactersApi.PUT, '/api/characters', {
-    player,
-    method: 'PUT',
-    body: { id: randomUUID(), name, race: 'dwarf', characterClass: 'cleric', gender: 'female', temperament: 'stoic', alignment: 'lawful-good', backstory: '', description: 'braided red beard' },
-  });
-  assert.equal(status, 200, JSON.stringify(body));
-  return body;
-}
 
 async function table(n: number) {
   const players = Array.from({ length: n }, () => randomUUID());
