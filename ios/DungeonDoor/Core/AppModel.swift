@@ -15,7 +15,11 @@ final class AppModel {
     private var referenceIsFresh = false
     private(set) var characters: [Character] = []
     var catalogError: String?
-    var activeGame: GameSession?
+    var activeGame: GameSession? { didSet { PushCenter.shared.openGame = activeGame?.code } }
+    /// Invitations to parties still gathering, newest first.
+    private(set) var invitations: [Invitation] = []
+    /// A door code to knock on, from a tapped invitation. The home screen opens the join sheet with it.
+    var joinCode: String?
     /// True once the first refresh has come back (or failed), so launch arguments know the roster is as fresh as it gets.
     private(set) var didRefresh = false
 
@@ -48,7 +52,29 @@ final class AppModel {
             referenceIsFresh = true
             Self.store(fresh, to: "reference.json")
         }
+        await refreshInvitations()
         didRefresh = true
+    }
+
+    func refreshInvitations() async {
+        if let fresh = try? await api.invitations() { invitations = fresh }
+    }
+
+    func decline(_ invitation: Invitation) async {
+        invitations.removeAll { $0.code == invitation.code }
+        try? await api.decline(invitationTo: invitation.code)
+    }
+
+    /// A tapped notification: an invitation opens the way in; anything else opens its game.
+    func open(_ news: PushNews) async {
+        if news.isInvite {
+            await refreshInvitations()
+            if activeGame == nil { joinCode = news.code }
+            return
+        }
+        guard activeGame?.code != news.code else { return }
+        guard let state = try? await api.game(news.code, since: nil), state.player(playerId) != nil else { return }
+        enter(state)
     }
 
     /// Saves a hero. `backgroundId` is the forge's pick for a new or level-1 hero; nil keeps the
@@ -88,6 +114,10 @@ final class AppModel {
         activeGame = session
         UserDefaults.standard.set(state.code, forKey: "dd.lastGame")
         session.start()
+        invitations.removeAll { $0.code == state.code }
+        // In a party there is something to be called back for: this is when leave to notify is asked,
+        // on a server that sends pushes.
+        if catalog?.push == true { Task { await PushCenter.shared.enable() } }
     }
 
     func leaveGame() async {

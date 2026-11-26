@@ -28,6 +28,14 @@ export interface GameExpectation {
   sceneIndex?: number;
 }
 
+/** Someone the player has shared a game with, by the hero they last played beside them. */
+export interface Companion { playerId: string; name: string; lastPlayedAt: string }
+
+/** An invitation to a party still in its lobby. */
+export interface Invite { code: string; toPlayerId: string; fromPlayerId: string; fromName: string; createdAt: string }
+/** An invitation as the invited player sees it: with who is in the party already. */
+export interface InviteView extends Invite { party: string[] }
+
 export interface NewMessage {
   kind: MessageKind;
   playerId: string | null;
@@ -99,4 +107,12 @@ export interface Store {
   addMessage(code: string, message: NewMessage): Promise<Message>;
   /** Messages with id > `since` (all when omitted), oldest first, at most the newest `limit`. */
   listMessages(code: string, since?: number, limit?: number): Promise<Message[]>;
+
+  /** The players this one has shared a game with, most recent first. */
+  listCompanions(playerId: string, limit?: number): Promise<Companion[]>;
+  /** Records an invitation. False when that player is already invited to that game. */
+  addInvite(invite: Invite): Promise<boolean>;
+  /** The player's invitations to games still in the lobby that they have not joined, newest first. */
+  listInvites(toPlayerId: string): Promise<InviteView[]>;
+  removeInvite(code: string, toPlayerId: string): Promise<void>;
 }

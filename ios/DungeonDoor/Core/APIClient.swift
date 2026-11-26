@@ -139,6 +139,44 @@ struct APIClient: Sendable {
 
     // MARK: Transport
 
+    // MARK: Pushes and invitations
+
+    private struct OK: Decodable { let ok: Bool }
+
+    /// This device takes pushes for this player. `environment` is "sandbox" or "production".
+    func registerDevice(token: String, environment: String) async throws {
+        struct Body: Encodable { let token: String; let environment: String }
+        let _: OK = try await send("POST", "api/devices", body: Body(token: token, environment: environment))
+    }
+
+    func unregisterDevice(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        let _: OK = try await send("DELETE", "api/devices", body: Body(token: token))
+    }
+
+    /// The players this one has shared a game with, most recent first.
+    func companions() async throws -> [Companion] {
+        struct Wrapper: Decodable { let companions: [Companion] }
+        let w: Wrapper = try await send("GET", "api/companions")
+        return w.companions
+    }
+
+    /// Invites a companion to a party in its lobby.
+    func invite(_ code: String, playerId: String) async throws {
+        struct Body: Encodable { let playerId: String }
+        let _: OK = try await send("POST", "api/games/\(code)/invites", body: Body(playerId: playerId))
+    }
+
+    func invitations() async throws -> [Invitation] {
+        struct Wrapper: Decodable { let invites: [Invitation] }
+        let w: Wrapper = try await send("GET", "api/invites")
+        return w.invites
+    }
+
+    func decline(invitationTo code: String) async throws {
+        let _: OK = try await send("DELETE", "api/invites", query: ["code": code])
+    }
+
     private func send<T: Decodable>(_ method: String, _ path: String, query: [String: String] = [:],
                                     body: (any Encodable)? = nil, timeout: TimeInterval = 30) async throws -> T {
         var components = URLComponents(url: base.appending(path: path), resolvingAgainstBaseURL: false)!

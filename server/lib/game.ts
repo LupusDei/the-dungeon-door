@@ -14,6 +14,7 @@ import { checkVote, legalActions } from './play/legal.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import { hasStolenHeroSpeech, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
+import { pushChat, pushForget, pushSceneReady, pushSeen } from './push/notify.ts';
 import type { DMChoice, DMContext, NextScene, OpeningScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
@@ -188,6 +189,7 @@ export async function viewGame(code: string, playerId: string, since?: number): 
   const store = getStore();
   const [game, messages] = await Promise.all([loadGame(code), store.listMessages(code, since)]);
   member(game, playerId);
+  pushSeen(game, playerId); // they are looking: nothing about this game need be pushed to them
   return toState(game, playerId, messages);
 }
 
@@ -242,6 +244,7 @@ export async function joinGame(code: string, playerId: string, characterId: unkn
   }
   const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString() }, MAX_PLAYERS);
   if (!joined) throw conflict('could not join: the game started or the party is full');
+  await getStore().removeInvite(code, playerId);
   if (!existing) await system(code, `${character.name} joined the party.`);
   else if (existing.character.id !== character.id) await system(code, `${character.name} takes ${existing.character.name}'s place.`);
   return viewGame(code, playerId);
@@ -254,6 +257,7 @@ export async function leaveGame(code: string, playerId: string, origin: string):
   if (!leaving) return; // already gone
   const store = getStore();
   await store.removePlayer(code, playerId);
+  pushForget(code, [playerId]);
   const remaining = game.players.filter((p) => p.playerId !== playerId);
   let text = `${leaving.character.name} left the party.`;
   if (game.hostId === playerId && remaining.length) {
@@ -271,7 +275,9 @@ export async function postMessage(code: string, playerId: string, text: unknown)
   if (!trimmed || trimmed.length > 500) throw badRequest('text must be 1–500 characters');
   const game = await loadGame(code);
   const player = member(game, playerId);
-  return getStore().addMessage(code, { kind: 'chat', playerId, characterName: player.character.name, text: trimmed });
+  const message = await getStore().addMessage(code, { kind: 'chat', playerId, characterName: player.character.name, text: trimmed });
+  pushChat(game, message);
+  return message;
 }
 
 const ROLEPLAY_LIMIT = 20;
@@ -677,6 +683,7 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   }
   const title = clip(draft.adventureTitle?.trim() || 'An Untold Adventure', 120);
   if (!(await store.updateGame(code, { status: 'preparing' }, { status: 'voting', sceneIndex: 0, title }))) return;
+  pushSceneReady(code);
   if (draft.quip) await dmSays(code, game, draft.quip);
   await paintScene(code, 0, draft, origin);
 }
@@ -810,6 +817,8 @@ async function resolveScene(code: string, sceneIndex: number, origin: string): P
   }
   const status = plan.isFinale ? 'ended' : 'voting';
   if (!(await store.updateGame(code, { status: 'resolving', sceneIndex }, { status, sceneIndex: plan.next, ...plan.patch }))) return;
+  if (plan.isFinale) pushForget(code, game.players.map((p) => p.playerId));
+  else pushSceneReady(code);
   await announce(game, plan, draft);
   if (plan.sharesPicture) await catchUpPicture(code, sceneIndex, plan.next);
   else await paintScene(code, plan.next, draft, origin);

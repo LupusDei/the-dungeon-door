@@ -1,5 +1,5 @@
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, RoleplayLine, StoredScene, Vote } from '../types.ts';
-import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
   game: Game;
@@ -19,6 +19,7 @@ export class MemoryStore implements Store {
   private games = new Map<string, GameData>();
   /** When each reading was claimed, by "CODE#index#voice". */
   private voiceClaims = new Map<string, number>();
+  private invites: Invite[] = [];
 
   async getCharacter(id: string) {
     await tick();
@@ -237,5 +238,44 @@ export class MemoryStore implements Store {
     await tick();
     const messages = this.games.get(code)?.messages ?? [];
     return messages.filter((m) => since === undefined || m.id > since).slice(-limit).map((m) => ({ ...m }));
+  }
+
+  async listCompanions(playerId: string, limit = 30) {
+    await tick();
+    const met = new Map<string, Companion>();
+    for (const { game } of this.games.values()) {
+      if (!game.players.some((p) => p.playerId === playerId)) continue;
+      for (const p of game.players) {
+        if (p.playerId === playerId) continue;
+        const known = met.get(p.playerId);
+        if (!known || known.lastPlayedAt < game.updatedAt) met.set(p.playerId, { playerId: p.playerId, name: p.character.name, lastPlayedAt: game.updatedAt });
+      }
+    }
+    return [...met.values()].sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt)).slice(0, limit);
+  }
+
+  async addInvite(invite: Invite) {
+    await tick();
+    if (this.invites.some((i) => i.code === invite.code && i.toPlayerId === invite.toPlayerId)) return false;
+    this.invites.push({ ...invite });
+    return true;
+  }
+
+  async listInvites(toPlayerId: string) {
+    await tick();
+    return this.invites
+      .filter((i) => i.toPlayerId === toPlayerId)
+      .map((i): InviteView | null => {
+        const game = this.games.get(i.code)?.game;
+        if (!game || game.status !== 'lobby' || game.players.some((p) => p.playerId === toPlayerId)) return null;
+        return { ...i, party: game.players.map((p) => p.character.name) };
+      })
+      .filter((i): i is InviteView => i !== null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async removeInvite(code: string, toPlayerId: string) {
+    await tick();
+    this.invites = this.invites.filter((i) => !(i.code === code && i.toPlayerId === toPlayerId));
   }
 }

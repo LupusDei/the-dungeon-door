@@ -34,7 +34,8 @@ DM team can add archetypes without an app release.
     "symbol": "book.closed", "accent": "#C9A227"
   }],
   "narrators": [{ "id": "george-storyteller", "name": "George, the old storyteller", "description": "…" }],
-  "defaultNarrator": "george-storyteller"
+  "defaultNarrator": "george-storyteller",
+  "push": false
 }
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
@@ -44,6 +45,32 @@ A background's `abilities` are the three scores it can raise (the builder puts +
 and `explore`, in the order to show them.
 `narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
 to show them; `defaultNarrator` is the one used when a request names none. New voices need no app release.
+`push` is true when this server sends push notifications (it holds the push key; see docs/push.md). The app
+asks leave to notify only then.
+
+## Pushes, companions and invitations
+
+The server pushes to a player's devices when it is their turn (a new scene, or a combat round their hero
+can act in), when someone else in their party chats, and when a companion invites them. How often, and
+what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" or "invite") and `code`
+(the game) beside the alert, and the app opens that game, or the way in for an invitation.
+
+- `POST /api/devices` body `{ token, environment }` → `{ ok: true }`. `token` is the APNs device token as
+  hex; `environment` is `"sandbox"` (a build run from Xcode) or `"production"` (TestFlight, the App Store).
+  The token then takes this player's pushes; a token belongs to the last player to register it. Send it at
+  each launch. 400 for a token that is not hex or another environment.
+- `DELETE /api/devices` body `{ token }` → `{ ok: true }`. The device takes no more pushes.
+- `GET /api/companions` → `{ companions: [{ playerId, name, lastPlayedAt }] }`: the players the caller has
+  shared a game with, most recent first, each by the hero they last played beside the caller. There are no
+  accounts or friend lists; these are the people a player can invite.
+- `POST /api/games/{code}/invites` body `{ playerId }` → `{ ok: true, alreadyInvited: boolean }`. Anyone in a
+  party still in its lobby invites one of their companions. The invited player gets a push (once per game)
+  and the invitation. 403 for someone who is not the caller's companion, or a caller not in the game; 409 once
+  the adventure has begun, or for someone already in the party.
+- `GET /api/invites` → `{ invites: [{ code, fromPlayerId, fromName, createdAt, party: string[] }] }`: the
+  caller's invitations to parties still in the lobby that they have not joined, newest first. `party` names
+  the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
+- `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
 ## Characters
 

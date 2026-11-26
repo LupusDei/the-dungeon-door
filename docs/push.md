@@ -1,0 +1,79 @@
+# Push notifications
+
+The server tells a player's phone when the game needs them. The code is in `server/lib/push/`; the app's
+side is `ios/DungeonDoor/Core/PushCenter.swift`.
+
+## What is pushed, and to whom
+
+| When | Who hears | The push |
+| --- | --- | --- |
+| A scene is ready for votes | Every player in the game | "The Sunken Crypt. What will Bryn do?" |
+| A combat round begins | Every player whose hero can act (not down, not dead) | "Round 2: Bryn, choose your action. Facing Zombie, Giant Rat ×2." |
+| A player chats | The rest of the party, not the one who spoke | "Corin: Are we going in?" |
+| A companion invites them | The invited player | "Bryn invites you to a new adventure. Door code ABCDEF." |
+
+A player who is looking at the game hears nothing about it. The app fetches the game every two seconds
+while it is open, so a push about a game waits eight seconds before it goes, and a fetch by that player in
+the meantime cancels it. An invitation does not wait: the home screen does not watch for them.
+
+Only players with a registered device are pushed (`POST /api/devices`, docs/api.md).
+
+## How often
+
+Per player, three limits hold together (`throttle.ts`):
+
+- at most **2 pushes in any minute**;
+- at most **5 in any ten minutes**;
+- after each push the player does not answer, **the wait before the next doubles**: 30 seconds, then 1, 2,
+  4, 8, 16 minutes and so on, up to six hours. Opening the game ends it.
+
+A player who stays away from a busy game is pushed at 0:00, 0:30, 1:30, 3:30 and 7:30, then 15:30, 31:30
+and so on: two in the first minute and five in the first ten.
+
+What may not go yet waits, one push per subject (a game's turn, a game's chat, an invitation), newest
+content kept:
+
+- A new scene or round replaces the turn push still waiting for that game, so a player comes back to the
+  current one. On the lock screen a newer turn push also replaces the older (they share a collapse id).
+- Chat waiting becomes one push: "Corin: Three (and 2 more messages)".
+- **Turns go first.** A combat round, then a turn, then an invitation, then chat. Chat is never the last
+  push of a minute or of ten minutes (that one is kept for a turn), and a player with three unanswered
+  pushes gets no more chat until they come back.
+- What waits goes at the next opening: within the request that made it if that is under two and a half
+  minutes away, else when someone next fetches that game. A turn push is dropped after six hours, chat
+  after half an hour, an invitation after a day. Leaving a game, or its end, drops what waited about it.
+
+## Turning it on
+
+Nothing is sent until the server holds an APNs key; until then `GET /api/catalog` says `push: false` and
+the app never asks leave to notify. To turn it on:
+
+1. **A push key.** In the Apple Developer portal, Certificates, Identifiers & Profiles, Keys: create a key
+   with "Apple Push Notifications service (APNs)" ticked, and download the `.p8` (once only). One key
+   serves every app of the team, so a key made for another app works here too.
+2. **The app may take pushes.** The App ID `com.jmm.the-dungeon-door` needs the Push Notifications
+   capability, the provisioning profile regenerated to carry it (`fastlane match appstore --force`), and
+   this in `ios/project.yml` under the target (it writes `DungeonDoor.entitlements`):
+
+   ```yaml
+       entitlements:
+         path: DungeonDoor/DungeonDoor.entitlements
+         properties:
+           aps-environment: development
+   ```
+
+   It is left out until the profile carries the entitlement: with it and an old profile, the TestFlight
+   build does not sign.
+3. **The server holds the key.** On Vercel: `APNS_KEY_ID` (the key's id), `APNS_TEAM_ID` (`2BRYAM5Q52`),
+   `APNS_KEY` (the `.p8` file's text, or that text base64-encoded) and, only for another bundle id,
+   `APNS_TOPIC`. Deploy.
+
+Builds run from Xcode register as `sandbox`, TestFlight and App Store builds as `production`; the server
+sends each to the right Apple host. The simulator on an Intel Mac gets no device token.
+
+## Checking it
+
+- `npm test` covers the limits, who hears what, and the request Apple is sent (no network).
+- On a simulator, `xcrun simctl push <device> com.jmm.the-dungeon-door payload.json` delivers a push by
+  hand; the app's launch argument `-pushOpen <kind>:<CODE>` acts as a tap on one.
+- A real push needs a real phone, a build with the entitlement and the key on the server.

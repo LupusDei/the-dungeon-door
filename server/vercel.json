@@ -47,6 +47,10 @@
       "destination": "/api/game-advance?code=:code"
     },
     {
+      "source": "/api/games/:code/invites",
+      "destination": "/api/game-invites?code=:code"
+    },
+    {
       "source": "/api/games/:code/narration",
       "destination": "/api/game-narration?code=:code"
     },

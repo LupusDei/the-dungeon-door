@@ -1,3 +1,4 @@
+import { apnsConfig } from './push/apns.ts';
 import { srd } from './rules/srd.ts';
 import { defaultNarrator, publicNarrators } from './voice.ts';
 
@@ -206,6 +207,7 @@ export function publicCatalog() {
     })),
     narrators: publicNarrators(),
     defaultNarrator: defaultNarrator().id,
+    push: apnsConfig() !== null,
   };
 }
 

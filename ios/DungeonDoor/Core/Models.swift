@@ -75,6 +75,9 @@ struct Catalog: Codable, Hashable {
     var narrators: [NarratorInfo] = []
     /// The narrator a request gets when it names none.
     var defaultNarrator: String?
+    /// True when the server sends push notifications (it holds the push key). False on a server
+    /// that does not, and on one from before pushes: the app then never asks leave to notify.
+    var push = false
 
     func name(_ id: String, in list: KeyPath<Catalog, [CatalogOption]>) -> String {
         self[keyPath: list].first { $0.id == id }?.name ?? id.capitalized
@@ -98,6 +101,7 @@ extension Catalog {
         dungeonMasters = try c.decode([DungeonMasterInfo].self, forKey: .dungeonMasters)
         narrators = try c.value(.narrators, or: [])
         defaultNarrator = try c.decodeIfPresent(String.self, forKey: .defaultNarrator)
+        push = try c.value(.push, or: false)
     }
 }
 
@@ -481,6 +485,29 @@ struct CharacterDraft: Encodable {
         appearance = hero.appearance
         portraitUrl = hero.portraitUrl
         self.backgroundId = backgroundId
+    }
+}
+
+/// Someone the player has shared a game with, by the hero they last played beside them.
+struct Companion: Codable, Hashable, Identifiable {
+    let playerId: String
+    let name: String
+    var id: String { playerId }
+}
+
+/// An invitation to a party still gathering in its lobby.
+struct Invitation: Codable, Hashable, Identifiable {
+    let code: String
+    let fromName: String
+    /// The heroes already in the party, by name.
+    var party: [String] = []
+    var id: String { code }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        fromName = try c.value(.fromName, or: "A companion")
+        party = try c.value(.party, or: [])
     }
 }
 
