@@ -234,7 +234,12 @@ dialog::backdrop { background: var(--scrim); }
         <div class="field"><label for="d-level">Level</label><select id="d-level"></select></div>
         <div class="field"><label for="d-status">Status</label><select id="d-status"></select></div>
       </div>
-      <div class="field"><label for="d-notes">Notes (optional)</label><textarea id="d-notes" rows="4" maxlength="1200"></textarea></div>
+      <div class="row">
+        <div class="field"><label for="d-kind">Kind</label><select id="d-kind"></select></div>
+        <div class="field"><label for="d-severity">Severity (issues)</label><select id="d-severity"></select></div>
+      </div>
+      <div class="field"><label for="d-notes">Notes (optional): a line or two for the card</label><textarea id="d-notes" rows="3" maxlength="1200"></textarea></div>
+      <div class="field"><label for="d-details">Full brief (optional): what is wrong, where, how to reproduce it, what done looks like</label><textarea id="d-details" rows="8" maxlength="12000"></textarea></div>
       <div class="field"><label for="d-link">Link (optional, https://…)</label><input type="text" id="d-link" inputmode="url" maxlength="300" autocomplete="off" placeholder="https://github.com/…"></div>
       <div class="form-error" id="form-error" role="alert"></div>
     </div>
@@ -255,6 +260,9 @@ dialog::backdrop { background: var(--scrim); }
 
   const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
   const STATUSES = [{ id: "todo", name: "To do" }, { id: "doing", name: "In progress" }, { id: "done", name: "Done" }];
+  const KINDS = [{ id: "task", name: "Task" }, { id: "bug", name: "Bug" }, { id: "balance", name: "Balance" }];
+  const SEVERITIES = [{ id: "high", name: "High" }, { id: "medium", name: "Medium" }, { id: "low", name: "Low" }];
+  const KIND_TAGS = { bug: "[Bug] ", balance: "[Balance] " };
   const KEY_SLOT = "dd.questKey";
   const TABS = ["tasks", "levels", "workstreams", "board", "connect"];
 
@@ -410,7 +418,7 @@ dialog::backdrop { background: var(--scrim); }
     const order = { doing: 0, todo: 1, done: 2 };
     const shown = state.tasks
       .filter((t) => (!f.status || t.status === f.status) && (!f.owner || (f.owner === "~none" ? !t.owner : t.owner === f.owner)) &&
-        (!f.level || t.milestone === f.level) && (!q || ((t.title || "") + " " + (t.notes || "")).toLowerCase().includes(q)))
+        (!f.level || t.milestone === f.level) && (!q || ((t.title || "") + " " + (t.notes || "") + " " + (t.details || "") + " " + (KIND_TAGS[t.kind] || "")).toLowerCase().includes(q)))
       .sort((a, b) => order[a.status] - order[b.status] || ((a.updatedAt || "") < (b.updatedAt || "") ? 1 : -1));
     $("task-count").textContent = shown.length === state.tasks.length ? state.tasks.length + " tasks" : shown.length + " of " + state.tasks.length;
     const rows = $("task-rows");
@@ -427,7 +435,7 @@ dialog::backdrop { background: var(--scrim); }
         return select;
       };
       rows.append(el("div", { class: "trow" },
-        el("button", { class: "trow-title", type: "button", "data-status": t.status, text: t.title, title: "Edit", onclick: () => openDialog(t) }),
+        el("button", { class: "trow-title", type: "button", "data-status": t.status, text: (KIND_TAGS[t.kind] || "") + t.title, title: "Edit", onclick: () => openDialog(t) }),
         el("div", { class: "trow-fields" },
           pick("status", STATUSES, null, "Status"),
           pick("owner", state.people, "Unassigned", "Owner"),
@@ -457,6 +465,9 @@ dialog::backdrop { background: var(--scrim); }
     fillSelect($("d-level"), levelOptions(), task ? task.milestone || "" : state.filter.level || "", "No level");
     fillSelect($("d-status"), STATUSES, task ? task.status : "todo");
     $("d-title").value = task ? task.title : "";
+    fillSelect($("d-kind"), KINDS, task ? task.kind || "task" : "task");
+    fillSelect($("d-severity"), SEVERITIES, task ? task.severity || "" : "", "Not set");
+    $("d-details").value = task ? task.details || "" : "";
     $("d-notes").value = task ? task.notes || "" : "";
     $("d-link").value = task ? task.link || "" : "";
     $("form-error").textContent = "";
@@ -471,7 +482,8 @@ dialog::backdrop { background: var(--scrim); }
   async function saveDialog(event) {
     event.preventDefault();
     const fields = { title: $("d-title").value.trim(), area: $("d-area").value, owner: $("d-owner").value, milestone: $("d-level").value,
-      status: $("d-status").value || "todo", notes: $("d-notes").value.trim(), link: $("d-link").value.trim() };
+      status: $("d-status").value || "todo", notes: $("d-notes").value.trim(), link: $("d-link").value.trim(),
+      kind: $("d-kind").value || "task", severity: $("d-severity").value, details: $("d-details").value.trim() };
     if (!fields.title) { $("form-error").textContent = "Give the task a short title."; return; }
     $("d-save").disabled = true;
     try {

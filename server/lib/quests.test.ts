@@ -94,3 +94,37 @@ test('admins reshape the board; members cannot; removing a level frees its tasks
 
   assert.equal((await put('LupusDei', { facts: [{ label: 'x', value: 'y', href: 'http://insecure' }] })).status, 400);
 });
+
+test('a task can be marked as an issue: a bug or a balance problem, with a severity and a full brief', async () => {
+  const plain = await (await post(as('LupusDei'), { title: 'Write the docs' })).json();
+  assert.deepEqual([plain.kind, plain.severity, plain.details], ['task', '', ''], 'an ordinary task by default');
+
+  const brief = 'What is wrong: rats deal no damage.\n\nWhere: server/lib/rules/monsters.ts\n\nDone when: a rat bite deals 1 piercing.';
+  const created = await post(as('LupusDei'), { title: 'Small monsters deal no damage', kind: 'bug', severity: 'high', owner: 'unclebob', details: brief });
+  assert.equal(created.status, 201);
+  const bug = await created.json();
+  assert.deepEqual([bug.kind, bug.severity, bug.details, bug.owner], ['bug', 'high', brief, 'unclebob']);
+
+  const patched = await (await PATCH(new Request(`${base}?id=${bug.id}`, { method: 'PATCH', headers: as('unclebob'), body: JSON.stringify({ status: 'doing' }) }))).json();
+  assert.deepEqual([patched.kind, patched.severity, patched.details], ['bug', 'high', brief], 'kept when not sent');
+  const retyped = await (await PATCH(new Request(`${base}?id=${bug.id}`, { method: 'PATCH', headers: as('unclebob'), body: JSON.stringify({ kind: 'balance', severity: '' }) }))).json();
+  assert.deepEqual([retyped.kind, retyped.severity], ['balance', '']);
+
+  const listed = (await (await GET()).json()).tasks.find((t: { id: string }) => t.id === bug.id);
+  assert.equal(listed.details, brief, 'the website gets the brief too');
+});
+
+test('a task stored before issues existed reads as an ordinary task', async () => {
+  await quests().put({ id: 'old', title: 'Old', area: '', milestone: '', status: 'todo', owner: '', notes: '', link: '',
+    createdAt: '2026-11-25T00:00:00Z', updatedAt: '2026-11-25T00:00:00Z', lastChange: 'added', createdBy: 'slagyr', updatedBy: 'slagyr' } as never);
+  const [old] = (await (await GET()).json()).tasks;
+  assert.deepEqual([old.kind, old.severity, old.details], ['task', '', '']);
+  const edited = await (await PATCH(new Request(`${base}?id=old`, { method: 'PATCH', headers: as('slagyr'), body: JSON.stringify({ notes: 'still fine' }) }))).json();
+  assert.deepEqual([edited.kind, edited.notes], ['task', 'still fine']);
+});
+
+test('bad issue fields are refused', async () => {
+  for (const body of [{ title: 'x', kind: 'feature' }, { title: 'x', severity: 'urgent' }, { title: 'x', details: 'y'.repeat(12_001) }, { title: 'x', details: 7 }]) {
+    assert.equal((await post(as('LupusDei'), body)).status, 400, JSON.stringify(body).slice(0, 60));
+  }
+});

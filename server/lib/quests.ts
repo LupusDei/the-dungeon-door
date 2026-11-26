@@ -38,6 +38,14 @@ export const personByLogin = (login: string | null | undefined): Person | null =
 export const STATUSES = ['todo', 'doing', 'done'] as const;
 export type QuestStatus = (typeof STATUSES)[number];
 
+/** What a task is. An **issue** is a bug or a balance problem: something wrong with what is already built. */
+export const KINDS = ['task', 'bug', 'balance'] as const;
+export type QuestKind = (typeof KINDS)[number];
+/** How much an issue matters; '' when nobody has said (and for ordinary tasks). */
+export const SEVERITIES = ['', 'low', 'medium', 'high'] as const;
+export type Severity = (typeof SEVERITIES)[number];
+export const DETAILS_MAX = 12_000;
+
 export interface QuestTask {
   id: string;
   title: string;
@@ -45,8 +53,16 @@ export interface QuestTask {
   milestone: string;
   status: QuestStatus;
   owner: string;
+  /** A line or two for the card: context, or the outcome. */
   notes: string;
   link: string;
+  kind: QuestKind;
+  severity: Severity;
+  /**
+   * The full brief, for whoever picks the task up (a person or their assistant) with nothing else to go
+   * on: what is wrong, where in the code, how to reproduce it, what done looks like. Plain text.
+   */
+  details: string;
   createdAt: string;
   updatedAt: string;
   lastChange: 'added' | 'started' | 'finished' | 'reopened' | 'edited';
@@ -62,6 +78,11 @@ export interface QuestMeta {
 }
 
 const EMPTY_META: QuestMeta = { summary: '', milestones: [], areas: [], facts: [] };
+
+export const isIssue = (task: Pick<QuestTask, 'kind'>): boolean => task.kind !== 'task';
+
+/** A task as stored before issues existed has no kind, severity or details: it is an ordinary task. */
+const whole = (task: QuestTask): QuestTask => ({ ...task, kind: task.kind ?? 'task', severity: task.severity ?? '', details: task.details ?? '' });
 
 // ---- who is asking ----
 
@@ -111,8 +132,8 @@ class MemoryQuests implements QuestStore {
   private m: QuestMeta = EMPTY_META;
   async meta() { return this.m; }
   async setMeta(meta: QuestMeta) { this.m = meta; }
-  async list() { return [...this.tasks.values()]; }
-  async get(id: string) { return this.tasks.get(id) ?? null; }
+  async list() { return [...this.tasks.values()].map(whole); }
+  async get(id: string) { const task = this.tasks.get(id); return task ? whole(task) : null; }
   async put(task: QuestTask) { this.tasks.set(task.id, task); }
   async remove(id: string) { return this.tasks.delete(id); }
 }
@@ -136,11 +157,11 @@ class PostgresQuests implements QuestStore {
   }
   async list() {
     const rows = await this.q("SELECT data FROM quest_docs WHERE kind = 'task'");
-    return rows.map((r) => r.data as QuestTask);
+    return rows.map((r) => whole(r.data as QuestTask));
   }
   async get(id: string) {
     const [row] = await this.q("SELECT data FROM quest_docs WHERE kind = 'task' AND id = $1", [id]);
-    return row ? (row.data as QuestTask) : null;
+    return row ? whole(row.data as QuestTask) : null;
   }
   async put(task: QuestTask) {
     await this.q(
@@ -179,7 +200,7 @@ const text = (value: unknown, max: number, field: string): string => {
   return trimmed;
 };
 
-type Fields = Pick<QuestTask, 'title' | 'area' | 'milestone' | 'status' | 'owner' | 'notes' | 'link'>;
+type Fields = Pick<QuestTask, 'title' | 'area' | 'milestone' | 'status' | 'owner' | 'notes' | 'link' | 'kind' | 'severity' | 'details'>;
 
 /** Validates the fields present in `body`; missing ones come from `base` (the task being edited). */
 function fieldsFrom(body: Record<string, unknown>, meta: QuestMeta, base?: QuestTask): Fields {
@@ -196,7 +217,11 @@ function fieldsFrom(body: Record<string, unknown>, meta: QuestMeta, base?: Quest
   if (owner && !PEOPLE.some((p) => p.id === owner)) throw badRequest(`unknown owner "${owner}"; valid: ${PEOPLE.map((p) => p.id).join(', ')}`);
   const link = text(pick('link'), 300, 'link');
   if (link && !/^https:\/\//i.test(link)) throw badRequest('links must start with https://');
-  return { title, area, milestone, status, owner, notes: text(pick('notes'), 1200, 'notes'), link };
+  const kind = (pick('kind') ?? 'task') as QuestKind;
+  if (!KINDS.includes(kind)) throw badRequest('kind must be task, bug or balance');
+  const severity = (pick('severity') ?? '') as Severity;
+  if (!SEVERITIES.includes(severity)) throw badRequest('severity must be low, medium or high (or empty)');
+  return { title, area, milestone, status, owner, notes: text(pick('notes'), 1200, 'notes'), link, kind, severity, details: text(pick('details'), DETAILS_MAX, 'details') };
 }
 
 const changeFor = (from: QuestStatus, to: QuestStatus): QuestTask['lastChange'] =>

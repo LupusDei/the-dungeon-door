@@ -89,6 +89,20 @@
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chip { font-size: 12px; line-height: 1; padding: 5px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .chip.owner { color: var(--fg); border-color: var(--muted); padding: 2px 9px 2px 2px; }
+/* Issues: a bug or a balance problem is marked on its card, never by colour alone. */
+.chip.kind { font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: 11px; }
+.chip.kind.bug { color: #ffb59a; border-color: var(--ember); background: rgba(221, 110, 69, .14); }
+.chip.kind.balance { color: #a9dccd; border-color: var(--verdigris); background: rgba(116, 179, 161, .13); }
+.task[data-kind="bug"] { border-left: 3px solid var(--ember); }
+.task[data-kind="balance"] { border-left: 3px solid var(--verdigris); }
+.task[data-status="done"][data-kind] { border-left-color: var(--line); }
+.task-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.brief > summary { cursor: pointer; font-size: 13px; color: var(--gold); list-style-position: inside; }
+.brief[open] > summary { margin-bottom: 8px; }
+.brief-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 14.5px/1.5 var(--prose); color: var(--fg); max-height: 60vh; overflow: auto; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
+.issues-strip { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--ember); border-radius: 12px; background: rgba(221, 110, 69, .08); }
+.issues-strip strong { color: var(--fg); }
+.issues-strip .who { color: var(--muted); font-size: 14px; }
 .task-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .task-foot select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
 .task-link { font-size: 13px; }
@@ -170,6 +184,7 @@ dialog::backdrop { background: var(--scrim); }
       <select id="filter-area" aria-label="Filter by workstream"></select>
       <select id="filter-owner" aria-label="Filter by owner"></select>
       <select id="filter-level" aria-label="Filter by level"></select>
+      <select id="filter-kind" aria-label="Filter by kind"></select>
       <button class="btn quiet small" id="clear-filters" type="button" hidden>Clear filters</button>
       <span class="spacer"></span>
       <span class="whoami" id="whoami" hidden></span>
@@ -177,6 +192,7 @@ dialog::backdrop { background: var(--scrim); }
       <button class="btn primary small" id="add-task" type="button" hidden>Add a task</button>
     </div>
     <div id="board-notice"></div>
+    <div id="issues-strip"></div>
     <div class="board" id="board"></div>
   </section>
 
@@ -208,7 +224,12 @@ dialog::backdrop { background: var(--scrim); }
         <div class="field"><label for="f-level">Level</label><select id="f-level"></select></div>
         <div class="field"><label for="f-status">Status</label><select id="f-status"></select></div>
       </div>
-      <div class="field"><label for="f-notes">Notes (optional)</label><textarea id="f-notes" maxlength="1200"></textarea></div>
+      <div class="row">
+        <div class="field"><label for="f-kind">Kind</label><select id="f-kind"></select></div>
+        <div class="field"><label for="f-severity">Severity (issues)</label><select id="f-severity"></select></div>
+      </div>
+      <div class="field"><label for="f-notes">Notes (optional): a line or two for the card</label><textarea id="f-notes" maxlength="1200"></textarea></div>
+      <div class="field"><label for="f-details">Full brief (optional): what is wrong, where, how to reproduce it, what done looks like</label><textarea id="f-details" maxlength="12000" style="min-height:150px"></textarea></div>
       <div class="field"><label for="f-link">Link (optional, https://…)</label><input id="f-link" inputmode="url" maxlength="300" autocomplete="off" placeholder="https://github.com/…"></div>
       <div class="form-error" id="form-error" role="alert"></div>
     </div>
@@ -245,13 +266,20 @@ dialog::backdrop { background: var(--scrim); }
   const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
   const STATUSES = [{ id: "todo", name: "To do" }, { id: "doing", name: "In progress" }, { id: "done", name: "Done" }];
   const CHANGE_WORDS = { added: "added", started: "started", finished: "finished", reopened: "reopened", edited: "edited" };
+  const KINDS = [{ id: "task", name: "Task" }, { id: "bug", name: "Bug" }, { id: "balance", name: "Balance" }];
+  const KIND_FILTERS = [{ id: "issue", name: "Issues: bugs and balance" }, { id: "bug", name: "Bugs" }, { id: "balance", name: "Balance" }, { id: "task", name: "Tasks" }];
+  const SEVERITIES = [{ id: "high", name: "High" }, { id: "medium", name: "Medium" }, { id: "low", name: "Low" }];
+  const SEVERITY_ORDER = { high: 0, medium: 1, low: 2, "": 3 };
+  const kindOf = (t) => (t.kind === "bug" || t.kind === "balance" ? t.kind : "task");
+  const isIssue = (t) => kindOf(t) !== "task";
   const DONE_PREVIEW = 6;
   const KEY_SLOT = "dd.questKey";
   const REFRESH_MS = 20000;
 
   const state = {
     tasks: [], meta: null, people: [], loaded: false, problem: null, me: null, key: null,
-    filter: { area: "", owner: "", level: "", q: "" }, showAllDone: false, busy: new Set(),
+    filter: { area: "", owner: "", level: "", kind: "", q: "" }, showAllDone: false, busy: new Set(),
+    openBriefs: new Set(), // briefs the reader opened: they stay open when the board refreshes
     editing: null, confirmDelete: false,
   };
   let toastTimer = null;
@@ -407,15 +435,18 @@ dialog::backdrop { background: var(--scrim); }
       (!f.area || t.area === f.area) &&
       (!f.owner || (f.owner === "~none" ? !t.owner : t.owner === f.owner)) &&
       (!f.level || t.milestone === f.level) &&
-      (!q || ((t.title || "") + " " + (t.notes || "")).toLowerCase().includes(q)));
+      (!f.kind || (f.kind === "issue" ? isIssue(t) : kindOf(t) === f.kind)) &&
+      (!q || ((t.title || "") + " " + (t.notes || "") + " " + (t.details || "")).toLowerCase().includes(q)));
   }
 
   function sortFor(status, list) {
     const stamp = (t, key) => t[key] || "";
     if (status === "todo") {
+      // Open issues lead, the most severe first; then tasks in level order.
+      const rank = (t) => (isIssue(t) ? SEVERITY_ORDER[t.severity || ""] : 9);
       return list.sort((a, b) => {
         const la = levelIndex(a.milestone), lb = levelIndex(b.milestone);
-        return (la < 0 ? 99 : la) - (lb < 0 ? 99 : lb) || (stamp(a, "createdAt") < stamp(b, "createdAt") ? -1 : 1);
+        return rank(a) - rank(b) || (la < 0 ? 99 : la) - (lb < 0 ? 99 : lb) || (stamp(a, "createdAt") < stamp(b, "createdAt") ? -1 : 1);
       });
     }
     return list.sort((a, b) => (stamp(a, "updatedAt") < stamp(b, "updatedAt") ? 1 : -1));
@@ -432,8 +463,9 @@ dialog::backdrop { background: var(--scrim); }
         state.me ? "Use “Add a task” to write the first one." : "They will appear here as the team adds them."));
       return;
     }
+    renderIssuesStrip();
     const shown = visibleTasks(), f = state.filter;
-    const filtered = !!(f.area || f.owner || f.level || f.q.trim());
+    const filtered = !!(f.area || f.owner || f.level || f.kind || f.q.trim());
     $("clear-filters").hidden = !filtered;
     $("filter-note").textContent = filtered ? "Showing " + shown.length + " of " + state.tasks.length : state.tasks.length + " in all";
     for (const s of STATUSES) {
@@ -450,8 +482,26 @@ dialog::backdrop { background: var(--scrim); }
     }
   }
 
+  /** Open bugs and balance problems, counted above the board, with who holds them. */
+  function renderIssuesStrip() {
+    const strip = $("issues-strip");
+    strip.replaceChildren();
+    const open = state.tasks.filter((t) => isIssue(t) && (t.status || "todo") !== "done");
+    if (!open.length) return;
+    const n = (kind, one, many) => { const c = open.filter((t) => kindOf(t) === kind).length; return c ? c + " " + (c === 1 ? one : many) : ""; };
+    const owners = {};
+    for (const t of open) owners[t.owner || "~none"] = (owners[t.owner || "~none"] || 0) + 1;
+    const who = Object.keys(owners).map((id) => ((person(id) || {}).name || "Unassigned") + " " + owners[id]).join(" · ");
+    const showing = state.filter.kind === "issue";
+    strip.append(el("div", { class: "issues-strip" },
+      el("strong", { text: "Open issues: " + [n("bug", "bug", "bugs"), n("balance", "balance problem", "balance problems")].filter(Boolean).join(", ") }),
+      el("span", { class: "who", text: who }),
+      el("span", { class: "spacer" }),
+      el("button", { class: "btn small", type: "button", text: showing ? "Show everything" : "Show only issues", onclick: () => setFilter("kind", showing ? "" : "issue") })));
+  }
+
   function taskCard(t) {
-    const status = t.status || "todo", owner = person(t.owner);
+    const status = t.status || "todo", owner = person(t.owner), kind = kindOf(t);
     const chips = el("div", { class: "chips" },
       owner ? el("span", { class: "chip owner" }, avatar(owner, "tiny"), owner.name) : el("span", { class: "chip", text: "Unassigned" }),
       t.area ? el("span", { class: "chip", text: nameOf(areas(), t.area, t.area) }) : null,
@@ -465,9 +515,17 @@ dialog::backdrop { background: var(--scrim); }
     }
     const href = safeUrl(t.link);
     if (href) foot.append(el("a", { class: "task-link", href, rel: "noopener", text: linkLabel(href) }));
-    return el("article", { class: "task", "data-status": status },
-      el("h3", { class: "task-title", text: t.title || "Untitled" }),
-      t.notes ? el("p", { class: "task-notes", text: t.notes }) : null, chips, foot.childNodes.length ? foot : null);
+    const severity = (SEVERITIES.find((x) => x.id === t.severity) || {}).name;
+    const head = kind === "task" ? null : el("div", { class: "task-head" },
+      el("span", { class: "chip kind " + kind, text: kind === "bug" ? "Bug" : "Balance" }),
+      severity ? el("span", { class: "chip", text: severity + " severity" }) : null);
+    const brief = t.details ? el("details", { class: "brief", open: state.openBriefs.has(t.id),
+        ontoggle: (e) => { if (e.target.open) state.openBriefs.add(t.id); else state.openBriefs.delete(t.id); } },
+      el("summary", { text: kind === "task" ? "The full brief" : "The full brief: what is wrong, where, and how to fix it" }),
+      el("pre", { class: "brief-text", text: t.details })) : null;
+    return el("article", { class: "task", "data-status": status, "data-kind": kind === "task" ? null : kind },
+      head, el("h3", { class: "task-title", text: t.title || "Untitled" }),
+      t.notes ? el("p", { class: "task-notes", text: t.notes }) : null, brief, chips, foot.childNodes.length ? foot : null);
   }
 
   function linkLabel(href) {
@@ -495,6 +553,7 @@ dialog::backdrop { background: var(--scrim); }
     fillSelect($("filter-area"), areas(), state.filter.area, "All workstreams");
     fillSelect($("filter-owner"), [...state.people, { id: "~none", name: "Unassigned" }], state.filter.owner, "Anyone");
     fillSelect($("filter-level"), milestones().map((m) => ({ id: m.id, name: levelLabel(m.id) + " · " + m.name })), state.filter.level, "All levels");
+    fillSelect($("filter-kind"), KIND_FILTERS, state.filter.kind, "Tasks and issues");
   }
 
   function renderAll() { renderPosition(); renderLevels(); renderAreas(); renderMoves(); renderBoard(); renderWho(); }
@@ -540,7 +599,11 @@ dialog::backdrop { background: var(--scrim); }
     const key = JSON.stringify([areas(), milestones(), state.people.map((p) => p.id)]);
     if (key !== filtersKey) { filtersKey = key; renderFilters(); }
     // Don't redraw the board under an open dialog or a status menu being used.
-    if (!$("task-dialog").open && !(document.activeElement && document.activeElement.id.startsWith("status-"))) renderAll();
+    // …or under someone reading a brief: redraw only when the tasks changed.
+    const tasksKey = JSON.stringify(state.tasks);
+    const reading = state.openBriefs.size > 0 && tasksKey === state.tasksKey;
+    state.tasksKey = tasksKey;
+    if (!reading && !$("task-dialog").open && !(document.activeElement && document.activeElement.id.startsWith("status-"))) renderAll();
   }
 
   function writeFailed(error) {
@@ -576,7 +639,10 @@ dialog::backdrop { background: var(--scrim); }
       task ? task.milestone || "" : state.filter.level || (here ? here.m.id : ""), "No level");
     fillSelect($("f-status"), STATUSES, task ? task.status || "todo" : "todo");
     $("f-title").value = task ? task.title || "" : "";
+    fillSelect($("f-kind"), KINDS, task ? kindOf(task) : state.filter.kind === "bug" || state.filter.kind === "balance" ? state.filter.kind : "task");
+    fillSelect($("f-severity"), SEVERITIES, task ? task.severity || "" : "", "Not set");
     $("f-notes").value = task ? task.notes || "" : "";
+    $("f-details").value = task ? task.details || "" : "";
     $("f-link").value = task ? task.link || "" : "";
     $("form-error").textContent = "";
     $("dialog-title").textContent = task ? "Edit task" : "Add a task";
@@ -593,7 +659,8 @@ dialog::backdrop { background: var(--scrim); }
     if (!title) { $("form-error").textContent = "Give the task a short title."; $("f-title").focus(); return; }
     if (link && !safeUrl(link)) { $("form-error").textContent = "Links must start with https://"; $("f-link").focus(); return; }
     const fields = { title, area: $("f-area").value, owner: $("f-owner").value, milestone: $("f-level").value,
-      status: $("f-status").value || "todo", notes: $("f-notes").value.trim(), link };
+      status: $("f-status").value || "todo", notes: $("f-notes").value.trim(), link,
+      kind: $("f-kind").value || "task", severity: $("f-severity").value, details: $("f-details").value.trim() };
     const editing = state.editing;
     $("f-save").disabled = true;
     try {
@@ -679,8 +746,9 @@ dialog::backdrop { background: var(--scrim); }
   $("filter-area").addEventListener("change", (e) => setFilter("area", e.target.value));
   $("filter-owner").addEventListener("change", (e) => setFilter("owner", e.target.value));
   $("filter-level").addEventListener("change", (e) => setFilter("level", e.target.value));
+  $("filter-kind").addEventListener("change", (e) => setFilter("kind", e.target.value));
   $("clear-filters").addEventListener("click", () => {
-    state.filter = { area: "", owner: "", level: "", q: "" };
+    state.filter = { area: "", owner: "", level: "", kind: "", q: "" };
     $("q").value = "";
     renderFilters(); renderLevels(); renderAreas(); renderBoard();
   });

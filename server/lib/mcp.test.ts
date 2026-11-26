@@ -31,7 +31,7 @@ beforeEach(async () => {
     milestones: [{ id: 'door', name: 'The Door', blurb: 'first' }, { id: 'armory', name: 'The Armory', blurb: 'rules' }],
     areas: [{ id: 'rules', name: 'Rules engine' }, { id: 'app', name: 'iOS app' }],
   });
-  await quests().put({ id: 'srd', title: 'Rules data', area: 'rules', milestone: 'door', status: 'done', owner: 'unclebob', notes: '', link: '',
+  await quests().put({ id: 'srd', title: 'Rules data', area: 'rules', milestone: 'door', status: 'done', owner: 'unclebob', notes: '', link: '', kind: 'task', severity: '', details: '',
     createdAt: '2026-11-25T00:00:00Z', updatedAt: '2026-11-25T00:00:00Z', lastChange: 'finished', createdBy: 'unclebob', updatedBy: 'unclebob' });
 });
 
@@ -53,7 +53,7 @@ test('a real MCP client can read the board and manage tasks', async () => {
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), [
     'quest_add_level', 'quest_add_task', 'quest_add_workstream', 'quest_delete_level', 'quest_delete_task', 'quest_delete_workstream',
-    'quest_get_board', 'quest_get_task', 'quest_list_tasks', 'quest_update_board_info', 'quest_update_level', 'quest_update_task',
+    'quest_get_board', 'quest_get_task', 'quest_list_issues', 'quest_list_tasks', 'quest_update_board_info', 'quest_update_level', 'quest_update_task',
     'quest_update_workstream', 'quest_whoami',
   ]);
   assert.ok(tools.every((t) => t.description && t.annotations), 'every tool is described and annotated');
@@ -108,4 +108,49 @@ test('admins can reshape the board through tools; members cannot', async () => {
   assert.match(errorText(await member.callTool({ name: 'quest_update_board_info', arguments: { summary: 'Sneaky' } })), /admin/i);
   assert.equal(data(await member.callTool({ name: 'quest_add_task', arguments: { title: 'Members manage tasks' } })).updated_by, 'slagyr-assistant');
   await member.close();
+});
+
+test('an assistant can ask for its owner’s open issues and get each one’s full brief', async () => {
+  const lupus = await connect('dev-LupusDei');
+  const add = async (args: Record<string, unknown>) => data(await lupus.callTool({ name: 'quest_add_task', arguments: args }));
+  const crash = await add({ title: 'A monster with no attack crashes its turn', kind: 'bug', severity: 'high', owner: 'unclebob', workstream: 'rules', details: 'Reproduce: …\nFix: …' });
+  const deadly = await add({ title: 'Level-1 heroes die too often', kind: 'balance', severity: 'medium', owner: 'unclebob', details: 'Numbers: …' });
+  const typo = await add({ title: 'Treasure line prints a long fraction', kind: 'bug', severity: 'low', owner: 'unclebob', details: 'Where: …' });
+  const fixed = await add({ title: 'Rats deal no damage', kind: 'bug', severity: 'high', owner: 'unclebob', status: 'done', details: 'Fixed.' });
+  const mine = await add({ title: 'App crash on the map', kind: 'bug', severity: 'high', owner: 'LupusDei' });
+  await add({ title: 'Write the docs', owner: 'unclebob' });
+  assert.deepEqual([crash.kind, crash.severity, crash.has_details], ['bug', 'high', true]);
+  assert.equal('details' in crash, false, 'lists and edits stay small: the brief comes from quest_get_task and quest_list_issues');
+
+  const bob = await connect('dev-unclebob');
+  assert.ok((await bob.listTools()).tools.some((t) => t.name === 'quest_list_issues'));
+  const issues = data(await bob.callTool({ name: 'quest_list_issues', arguments: {} }));
+  assert.equal(issues.owner, 'unclebob', 'yours by default');
+  assert.deepEqual(issues.issues.map((i: any) => i.id), [crash.id, deadly.id, typo.id], 'open ones only, the most severe first');
+  assert.deepEqual(issues.issues.map((i: any) => i.details), ['Reproduce: …\nFix: …', 'Numbers: …', 'Where: …']);
+  assert.deepEqual([issues.total, issues.has_more], [3, false]);
+  assert.deepEqual(issues.overview.map((i: any) => [i.id, i.kind, i.severity]), [[crash.id, 'bug', 'high'], [deadly.id, 'balance', 'medium'], [typo.id, 'bug', 'low']]);
+  assert.match(issues.how_to, /doing.*done/s, 'it says how to work one');
+  const page = data(await bob.callTool({ name: 'quest_list_issues', arguments: { limit: 1, offset: 1 } }));
+  assert.deepEqual([page.issues.map((i: any) => i.id), page.overview.length, page.has_more, page.next_offset], [[deadly.id], 3, true, 2], 'a page of briefs, the whole list in overview');
+
+  const everyone = data(await bob.callTool({ name: 'quest_list_issues', arguments: { owner: 'anyone' } }));
+  assert.deepEqual(everyone.issues.map((i: any) => i.id).sort(), [crash.id, deadly.id, typo.id, mine.id].sort());
+  const bugs = data(await bob.callTool({ name: 'quest_list_issues', arguments: { kind: 'bug' } }));
+  assert.deepEqual(bugs.issues.map((i: any) => i.id), [crash.id, typo.id]);
+  const closed = data(await bob.callTool({ name: 'quest_list_issues', arguments: { include_done: true } }));
+  assert.ok(closed.issues.some((i: any) => i.id === fixed.id));
+
+  // The ordinary tools know about issues too.
+  const listed = data(await bob.callTool({ name: 'quest_list_tasks', arguments: { kind: 'issue', owner: 'unclebob', status: 'todo' } }));
+  assert.deepEqual(listed.tasks.map((t: any) => t.id).sort(), [crash.id, deadly.id, typo.id].sort());
+  assert.equal(data(await bob.callTool({ name: 'quest_get_task', arguments: { id: deadly.id } })).details, 'Numbers: …');
+  const board = data(await bob.callTool({ name: 'quest_get_board', arguments: {} }));
+  assert.deepEqual(board.open_issues, { total: 4, bugs: 3, balance: 1, yours: 3, by_owner: { unclebob: 3, LupusDei: 1 } });
+
+  const done = data(await bob.callTool({ name: 'quest_update_task', arguments: { id: typo.id, status: 'done', link: 'https://github.com/LupusDei/the-dungeon-door/pull/9', notes: 'Rounded to copper.' } }));
+  assert.equal(done.status, 'done');
+  assert.equal(data(await bob.callTool({ name: 'quest_list_issues', arguments: {} })).total, 2);
+  await lupus.close();
+  await bob.close();
 });

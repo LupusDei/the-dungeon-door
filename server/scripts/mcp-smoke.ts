@@ -15,7 +15,7 @@ const client = new Client({ name: 'quest-log-smoke', version: '1.0.0' });
 await client.connect(new StreamableHTTPClientTransport(new URL('/api/mcp', base), { authProvider: { token: async () => key } }));
 
 const { tools } = await client.listTools();
-assert.ok(tools.length >= 14, `expected the full tool set, got ${tools.length}`);
+assert.ok(tools.length >= 15, `expected the full tool set, got ${tools.length}`);
 
 const who = await client.callTool({ name: 'quest_whoami', arguments: {} });
 assert.ok(!who.isError, JSON.stringify(who.content));
@@ -28,9 +28,16 @@ const b = board.structuredContent as { overall: { total: number; done: number };
 const list = await client.callTool({ name: 'quest_list_tasks', arguments: { status: 'todo', limit: 3 } });
 assert.ok(!list.isError, JSON.stringify(list.content));
 
+const issues = await client.callTool({ name: 'quest_list_issues', arguments: { owner: 'anyone', limit: 50 } });
+assert.ok(!issues.isError, JSON.stringify(issues.content));
+const open = issues.structuredContent as { total: number; issues: { severity: string | null; kind: string; owner: string | null; title: string; details: string | null }[] };
+assert.ok(open.issues.every((i) => i.kind === 'bug' || i.kind === 'balance'), 'only bugs and balance problems are issues');
+
 const invalid = await client.callTool({ name: 'quest_get_task', arguments: { id: 'definitely-not-a-task' } });
 assert.equal(invalid.isError, true, 'a missing task should come back as a readable tool error');
 
 await client.close();
 console.log(`MCP ok at ${base}: ${tools.length} tools, signed in as ${me.login} (${me.role}); ` +
   `${b.overall.done} of ${b.overall.total} tasks done across ${b.levels.length} levels, standing at ${b.currentLevel?.name ?? 'the end'}.`);
+console.log(`${open.total} open issues:`);
+for (const i of open.issues) console.log(`  ${(i.severity ?? '-').padEnd(6)} ${i.kind.padEnd(7)} ${(i.owner ?? 'unassigned').padEnd(16)} ${i.title}${i.details ? '' : '   (no brief)'}`);
