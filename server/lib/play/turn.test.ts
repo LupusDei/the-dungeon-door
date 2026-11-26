@@ -141,7 +141,7 @@ test('a parley with the foes waiting here: success clears the room (their treasu
   assert.equal(peace.lines.at(-1), 'The Boar ×3 let the party be.');
   const war = talks('indifferent').find((t) => t.success !== true)!;
   assert.deepEqual([war.fight, war.dungeon!.attitudes!.r1], ['started', 'hostile']);
-  assert.match(war.lines.at(-1)!, /^A fight begins: /);
+  assert.ok(war.lines.some((l) => /^A fight begins: /.test(l)));
   const cooler = talks('friendly').find((t) => t.success === false)!;
   assert.deepEqual([cooler.fight, cooler.dungeon!.attitudes!.r1, cooler.dungeon!.cleared.includes('r1')], [null, 'indifferent', false]);
 });

@@ -21,8 +21,12 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
     exhaustion: 0, hitDiceLeft: 0, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0],
     resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true, dead: false,
     passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight,
-    gp: fighter.gp, inventory: fighter.equipment, ...load(fighter),
+    gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0,
   });
+  assert.deepEqual([view.party[1].sight, view.party[1].darkvision], ['dim', 60], 'an elf sees the dark room dimly');
+  assert.deepEqual([view.time, view.light], [{ seconds: 0, label: 'Day 1, 08:00' }, { level: 'dark', source: null }]);
+  const lit = rulesView({ party: { ...party, clock: 2460, lit: { source: 'torch', holder: 'p1', left: 1190 } }, combat: null, dungeon: d }, []);
+  assert.deepEqual([lit.time, lit.light, lit.party[0].sight], [{ seconds: 2460, label: 'Day 1, 08:41' }, { level: 'bright', source: { name: 'Torch', holder: 'Bryn', minutesLeft: 20 } }, 'clear']);
   assert.equal(view.party[0].dragging, false);
   const slain = { party: { ...party, sheets: { p1: { ...fighter, hp: 0, dead: true } } }, combat: null, dungeon: null };
   assert.deepEqual([rulesView(slain, []).party[0].dead, rulesContext(slain).party[0].dead], [true, true]);
@@ -44,8 +48,11 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual(ctx.party[1], {
     name: 'Cleo', level: 1, hp: wizard.hp, maxHp: wizard.maxHp, armorClass: wizard.armorClass, exhaustion: 0, slotsLeft: [1, 0, 0, 0, 0, 0, 0, 0, 0],
     passivePerception: 10 + wizard.skillBonuses.perception, passiveInsight: 10 + wizard.skillBonuses.insight, gp: wizard.gp,
-    items: wizard.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', '), dragging: false, dead: false,
+    items: wizard.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', '), dragging: false, dead: false, sees: 'clear',
   });
+  assert.deepEqual([ctx.party[0].sees, ctx.time, ctx.light], ['dim', 'Day 1, 08:00', 'dim; no light carried']);
+  const lit = rulesContext({ party: { ...party, lit: { source: 'lamp', holder: 'p2', left: 600 } }, combat: null, dungeon: d });
+  assert.equal(lit.light, "bright; the party's light: Cleo's Lamp (10 minutes left)");
   assert.match(ctx.party[1].items, / ×\d/, 'stacks show their count');
   assert.equal(rulesContext({ party: { ...party, sheets: { p1: { ...wizard, equipment: [{ id: 'plate-armor', name: 'Plate Armor', count: 3 }] } } }, combat: null, dungeon: null }).party[0].dragging, true);
   assert.deepEqual(ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior'), { name: 'Goblin Warrior', side: 'foes', hp: combat.combatants['foe-1'].hp, maxHp: combat.combatants['foe-1'].maxHp, status: 'up' });

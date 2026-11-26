@@ -36,6 +36,11 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   Revivifies them on the spot (the engine does that). Where there is a temple or shrine, {"kind":"revive"}
   raises every dead hero (Raise Dead: a party caster's 500 gp diamond, or the temple's 2,500 gp) while the
   party's gold lasts.
+- Time and light: the engine keeps the clock (each choice takes about ten minutes, a rest its length) and the
+  party's light (a torch burns an hour, a lantern's oil six; they are lit from the packs as needed). Describe
+  only what the heroes can see: bright light shows everything; dim light shapes and shadows; a hero who
+  cannot see (darkness, no darkvision) knows only what they hear, smell and touch. In the dark, Perception and
+  Investigation fail and fighters are Blinded. When the light runs low, let the party find or buy more.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
@@ -46,11 +51,13 @@ const slots = (left: number[]) => {
   return last < 0 ? '' : `, spell slots left ${left.slice(0, last + 1).join('/')}`;
 };
 
+const SEES = { clear: '', dim: '; sees only dimly', none: '; CANNOT SEE (darkness)' } as const;
+
 function heroLine(h: RulesContext['party'][number]): string {
   const hp = h.dead ? 'DEAD (only Revivify, Raise Dead or the like brings them back)' : h.hp === 0 ? `DOWN (0/${h.maxHp} HP)` : `${h.hp}/${h.maxHp} HP`;
   const passive = `, passive Perception ${h.passivePerception}, passive Insight ${h.passiveInsight}`;
   const goods = `, ${h.gp} gp${h.dragging ? ', overloaded (Speed 5 ft)' : ''}; carries ${h.items || 'nothing'}`;
-  return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}`;
+  return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}${SEES[h.sees]}`;
 }
 
 function combatLine(c: NonNullable<RulesContext['combat']>): string {
@@ -68,6 +75,7 @@ export function rulesBlock(rules: RulesContext | null): string {
   return [
     'THE RULES ENGINE (SRD 5.2)',
     ...rules.party.map(heroLine),
+    `NOW: ${rules.time}. Light: ${rules.light}`,
     ...(rules.combat ? [combatLine(rules.combat)] : []),
     ...(rules.dungeon ? [dungeonLine(rules.dungeon)] : []),
     `Monsters for fights: ${rules.monsters.join(', ')}`,

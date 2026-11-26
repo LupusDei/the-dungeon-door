@@ -5,7 +5,7 @@ import { fakeDungeonMaster } from './fake.ts';
 import type { DMContext, RulesContext } from './types.ts';
 
 process.env.DD_FAKE_DELAY_MS = '0';
-const rules: RulesContext = { party: [], combat: null, dungeon: null, monsters: ['ogre', 'rat'] };
+const rules: RulesContext = { party: [], combat: null, dungeon: null, monsters: ['ogre', 'rat'], time: 'Day 1, 08:00', light: 'bright; no light carried' };
 const ctx = (r: RulesContext | null): DMContext => ({
   archetype: archetype('chronicler'), adventureTitle: null, party: [], history: [], sceneIndex: 0, sceneCount: 4, recentChat: [], rules: r,
 });

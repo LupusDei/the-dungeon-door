@@ -64,3 +64,10 @@ test('a monster carries its skills, passive Perception and alignment (for checks
   assert.equal(goblin.alignment, 'chaotic neutral');
   assert.deepEqual(monster('animated-armor').skills, {});
 });
+
+test('special senses in feet: darkvision, blindsight, truesight (0 without)', () => {
+  assert.deepEqual(monster('red-dragon-wyrmling').senses, { darkvision: 60, blindsight: 10, truesight: 0 });
+  assert.deepEqual(monster('goblin-warrior').senses, { darkvision: 60, blindsight: 0, truesight: 0 });
+  assert.deepEqual(monster('bandit').senses, { darkvision: 0, blindsight: 0, truesight: 0 });
+  assert.equal(Object.values(Object.fromEntries([...monsters()].map(([id, m]) => [id, m.senses.truesight]))).some((n) => n > 0), true);
+});

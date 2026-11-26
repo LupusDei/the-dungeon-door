@@ -28,6 +28,8 @@ export interface Monster {
   /** Skill bonuses from the stat block, by skill id ("stealth"). */
   skills: Record<string, number>;
   passivePerception: number;
+  /** Feet of each special sense (0 without): darkvision sees darkness as dim light; blindsight and truesight see in it. */
+  senses: { darkvision: number; blindsight: number; truesight: number };
   /** Attack-roll actions only; save-based actions (breath weapons) are left to the DM for now. */
   attacks: MonsterAttack[];
 }
@@ -58,6 +60,8 @@ function damageRolls(rolls: { damageDice: string; damageType: { index: string } 
 }
 
 const SKILL = 'skill-';
+/** "60 ft." → 60; absent → 0. */
+const feet = (text: string | undefined) => (text ? parseInt(text, 10) : 0);
 
 const monsterSchema = z.object({
   index: z.string(), name: z.string(), size: z.string(), type: z.string(),
@@ -66,7 +70,7 @@ const monsterSchema = z.object({
   strength: z.number(), dexterity: z.number(), constitution: z.number(), intelligence: z.number(), wisdom: z.number(), charisma: z.number(),
   damageResistances: damageTypes, damageVulnerabilities: damageTypes, damageImmunities: damageTypes,
   conditionImmunities: z.array(ref), challengeRating: z.number(), xp: z.number(), alignment: z.string(),
-  senses: z.object({ passivePerception: z.number() }),
+  senses: z.object({ passivePerception: z.number(), darkvision: z.string().optional(), blindsight: z.string().optional(), truesight: z.string().optional() }),
   proficiencies: z.array(z.object({ value: z.number(), proficiency: ref })),
   actions: z.array(action).default([]),
 }).transform((m): Monster => {
@@ -82,6 +86,7 @@ const monsterSchema = z.object({
     cr: m.challengeRating, xp: m.xp, alignment: m.alignment,
     skills: Object.fromEntries([...listed].filter(([id]) => id.startsWith(SKILL)).map(([id, value]) => [id.slice(SKILL.length), value])),
     passivePerception: m.senses.passivePerception,
+    senses: { darkvision: feet(m.senses.darkvision), blindsight: feet(m.senses.blindsight), truesight: feet(m.senses.truesight) },
     attacks: m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
       name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
       damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),

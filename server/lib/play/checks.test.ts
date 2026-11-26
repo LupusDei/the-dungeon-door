@@ -189,3 +189,22 @@ test('parley hooks: with the foes in the room, or with monsters the DM names (un
   assert.deepEqual(parseHook({ kind: 'revive', monsters: null }), { kind: 'revive' });
   assert.equal(hookLabel({ kind: 'revive' }), 'Raise the dead');
 });
+
+test('sight: in dim light Perception has Disadvantage; in darkness Perception and Investigation fail; other checks are untouched', () => {
+  const look = { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 };
+  const hero = (sight: 'clear' | 'dim' | 'none') => [{ playerId: 'p1', sheet: SAMPLE, sight }];
+  assert.equal(groupRoll(hero('dim'), look, { p1: 15 }, scriptedRng([3])).rolls[0].mode, 'disadvantage');
+  assert.equal(groupRoll(hero('clear'), look, { p1: 15 }, scriptedRng([3])).rolls[0].mode, 'normal');
+  const blind = groupRoll(hero('none'), look, { p1: 20 }, scriptedRng([]));
+  assert.deepEqual([blind.success, blind.rolls[0].blind, blind.lines], [false, true, ['Bryn cannot see and fails']]);
+  assert.equal(groupRoll(hero('none'), { ...look, ability: 'int', skill: 'investigation' }, { p1: 20 }, scriptedRng([])).success, false);
+  assert.equal(groupRoll(hero('none'), { ...look, ability: 'str', skill: 'athletics' }, { p1: 20 }, scriptedRng([])).success, true);
+  assert.equal(groupRoll(hero('dim'), { ...look, ability: 'int', skill: 'investigation' }, { p1: 15 }, scriptedRng([])).rolls[0].mode, 'normal');
+});
+
+test('in "best" mode a hero who can see does the looking', () => {
+  const look = { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10, mode: 'best' as const };
+  const sharp = { ...SAMPLE, name: 'Ann', skillBonuses: { ...SAMPLE.skillBonuses, perception: 9 } };
+  const r = groupRoll([{ playerId: 'p1', sheet: sharp, sight: 'none' }, { playerId: 'p2', sheet: SAMPLE, sight: 'clear' }], look, { p2: 15 }, scriptedRng([5, 5]));
+  assert.equal(r.rolls[0].name, 'Bryn');
+});

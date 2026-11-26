@@ -7,6 +7,7 @@
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
 import { type Combatant, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
+import { type LightLevel, monsterSight, sightOf } from '../rules/light.ts';
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
 import { monster } from '../rules/monsters.ts';
 import { scriptedRng, seededRng } from '../rules/rng.ts';
@@ -35,26 +36,34 @@ export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: nu
 export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
 
 /** Duplicate monsters are numbered: "Goblin Warrior 1", "Goblin Warrior 2". */
-function foes(ids: readonly string[]): Combatant[] {
+/** Who cannot see in this light fights Blinded (5.2: darkness makes a creature effectively Blinded). */
+const blindedIf = (c: Combatant, blind: boolean): Combatant => (blind ? { ...c, conditions: [...c.conditions, 'blinded'] } : c);
+
+function foes(ids: readonly string[], light: LightLevel): Combatant[] {
   return ids.map((id, i) => {
     const m = monster(id);
     const twins = ids.filter((x) => x === id).length;
     const nth = ids.slice(0, i + 1).filter((x) => x === id).length;
-    return { ...monsterCombatant(`foe-${i + 1}`, m), name: twins > 1 ? `${m.name} ${nth}` : m.name };
+    return blindedIf({ ...monsterCombatant(`foe-${i + 1}`, m), name: twins > 1 ? `${m.name} ${nth}` : m.name }, monsterSight(m, light) === 'none');
   });
 }
 
-const heroOf = (playerId: string, sheet: CharacterSheet): Combatant =>
-  ({ ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' : 'up' });
+const heroOf = (playerId: string, sheet: CharacterSheet, light: LightLevel): Combatant =>
+  blindedIf({ ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' : 'up' }, sightOf(sheet, light) === 'none');
 
-export function startFight(party: PartyState, monsterIds: readonly string[]): { party: PartyState; combat: CombatState; lines: string[] } {
+const blindLine = (all: Combatant[]) => {
+  const blind = all.filter((c) => c.conditions.includes('blinded')).map((c) => c.name);
+  return blind.length ? [`In the dark, ${blind.join(', ')} cannot see (Blinded).`] : [];
+};
+
+export function startFight(party: PartyState, monsterIds: readonly string[], light: LightLevel = 'bright'): { party: PartyState; combat: CombatState; lines: string[] } {
   const rng = seededRng(party.rng);
   const seed = rng.die(1_000_000_000);
-  const heroes = Object.entries(party.sheets).filter(([, sheet]) => !sheet.dead).map(([id, sheet]) => heroOf(id, sheet));
-  const others = foes(monsterIds);
+  const heroes = Object.entries(party.sheets).filter(([, sheet]) => !sheet.dead).map(([id, sheet]) => heroOf(id, sheet, light));
+  const others = foes(monsterIds, light);
   const combat = startCombat(seed, [...heroes, ...others]);
   const order = combat.order.map((id) => `${combat.combatants[id].name} ${combat.initiative[id]}`).join(', ');
-  return { party: { ...party, rng: rng.state() }, combat, lines: [`A fight begins: ${others.map((f) => f.name).join(', ')}. Initiative: ${order}.`] };
+  return { party: { ...party, rng: rng.state() }, combat, lines: [`A fight begins: ${others.map((f) => f.name).join(', ')}. Initiative: ${order}.`, ...blindLine([...heroes, ...others])] };
 }
 
 const living = (c: Combatant) => c.status !== 'dead';

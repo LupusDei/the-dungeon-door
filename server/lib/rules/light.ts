@@ -5,6 +5,7 @@
  * seconds from 8 in the morning of day 1 (an original convention, CC0).
  */
 import type { Dungeon } from './dungeon.ts';
+import type { Monster } from './monsters.ts';
 import { held, removeItem } from './inventory.ts';
 import { derivedRng } from './rng.ts';
 import type { CharacterSheet } from './sheet.ts';
@@ -65,6 +66,10 @@ const PLAIN_SIGHT: Readonly<Record<LightLevel, Sight>> = { bright: 'clear', dim:
 export const seeingIn = (level: LightLevel, darkvisionFeet: number): Sight => (darkvisionFeet > 0 ? DARKVISION_SIGHT : PLAIN_SIGHT)[level];
 
 export const sightOf = (sheet: CharacterSheet, level: LightLevel): Sight => seeingIn(level, darkvision(sheet));
+
+/** A monster sees by blindsight or truesight in any light, otherwise by darkvision or plain sight. */
+export const monsterSight = (m: Pick<Monster, 'senses'>, level: LightLevel): Sight =>
+  (m.senses.blindsight > 0 || m.senses.truesight > 0 ? 'clear' : seeingIn(level, m.senses.darkvision));
 
 const START_HOUR = 8;
 const DAY = 24;

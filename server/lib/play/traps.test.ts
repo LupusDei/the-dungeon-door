@@ -92,3 +92,14 @@ test('an id that is neither trap nor hazard springs nothing', () => {
   const p = party(bryn);
   assert.deepEqual(springTrap(p, 'lava', 1, {}), { party: p, lines: [], success: true });
 });
+
+test('what the party sees by: dim light costs passive Perception 5 (Disadvantage); in darkness only darkvision spots anything', () => {
+  const sharp = { ...vex, skillBonuses: { perception: 10 } };
+  const dim = springTrap(party(bryn, sharp), 'collapsing-roof', 1, {}, 'dim');
+  assert.match(dim.lines[0], /^Vex spots a Collapsing Roof \(passive Perception 15 vs DC 11\)/);
+  assert.equal(springTrap(party(bryn, vex), 'collapsing-roof', 1, {}, 'dim').lines[0], 'Nobody notices the Collapsing Roof.', '15 - 5 misses 11');
+  assert.equal(springTrap(party(bryn, sharp), 'collapsing-roof', 1, {}, 'dark').lines[0], 'Nobody notices the Collapsing Roof.');
+  const seer = springTrap(party(bryn, { ...sharp, traits: ['darkvision-60'] }), 'collapsing-roof', 1, {}, 'dark');
+  assert.match(seer.lines[0], /^Vex spots a Collapsing Roof \(passive Perception 15 vs DC 11\)/, 'darkness is dim light to darkvision');
+  assert.equal(springTrap(party(bryn, sharp), 'falling', 1, {}, 'dark').lines[0], 'The party meets a crumbling floor.');
+});

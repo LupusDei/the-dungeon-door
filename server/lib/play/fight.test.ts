@@ -228,6 +228,8 @@ test('a hero at half HP or less drinks its least healing potion as a Bonus Actio
   assert.deepEqual(result.party.sheets.p1.equipment.filter((e) => e.id.startsWith('potion')).map((e) => [e.id, e.count]), [['potion-of-greater-healing', 1], ['potion-of-healing', 1]]);
   const fine = fightRound(p, patch(combat, { p1: { hp: half + 1 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
   assert.ok(!fine.lines.some((l) => l.includes('drinks')), 'above half: no potion');
+  const exact = fightRound(p, patch(combat, { p1: { hp: 6, maxHp: 12 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
+  assert.ok(exact.lines.some((l) => l.startsWith('Bryn drinks')), 'exactly half: a potion');
   const dry = fightRound(party(), patch(startFight(party(), ['goblin-warrior']).combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), {});
   assert.ok(!dry.lines.some((l) => l.includes('drinks')), 'no potion, none drunk');
   const unvoted = fightRound(p, calm, {});
@@ -245,4 +247,19 @@ test('a hero slain in the fight is Revivified at its end by a party caster with 
   assert.deepEqual(lines.slice(-2), ['Cleo is dead.', 'Mira casts Revivify on Cleo, using up a 300 gp diamond: Cleo lives again with 1 HP.']);
   const lost = winRound(combat, p, { p2: { hp: 0, status: 'dead' } });
   assert.equal(lost.result.party.sheets.p2.dead, true, 'the caster herself slain: nobody to cast');
+});
+
+test('in the dark whoever cannot see fights Blinded: darkvision, blindsight or truesight see; in any light nobody is', () => {
+  const human = { ...heroSheet({ id: 'h', name: 'Ann', race: 'human', characterClass: 'fighter' }) };
+  const dwarf = { ...heroSheet({ id: 'd', name: 'Dun', race: 'dwarf', characterClass: 'fighter' }) };
+  const p: PartyState = { version: 1, rng: 3, sheets: { p1: human, p2: dwarf } };
+  const dark = startFight(p, ['bandit', 'goblin-warrior'], 'dark');
+  const blind = Object.values(dark.combat.combatants).filter((c) => c.conditions.includes('blinded')).map((c) => c.name);
+  assert.deepEqual(blind, ['Ann', 'Bandit']);
+  assert.equal(dark.lines[1], 'In the dark, Ann, Bandit cannot see (Blinded).');
+  for (const light of ['dim', 'bright'] as const) {
+    const lit = startFight(p, ['bandit'], light);
+    assert.equal(Object.values(lit.combat.combatants).some((c) => c.conditions.length > 0), false, light);
+    assert.equal(lit.lines.length, 1);
+  }
 });

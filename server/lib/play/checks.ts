@@ -11,15 +11,19 @@ import { damageHero } from '../rules/dying.ts';
 import { monster } from '../rules/monsters.ts';
 import { d20Modifier } from '../rules/rests.ts';
 import { type D20, type Mode, modeOf, rollD20 } from '../rules/resolve.ts';
+import type { Sight } from '../rules/light.ts';
 import type { Rng } from '../rules/rng.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { type RollHook, rollName } from './hooks.ts';
 
-export interface Hero { playerId: string; sheet: CharacterSheet }
+/** sight: how well the hero sees here (rules/light.ts); absent: clearly. */
+export interface Hero { playerId: string; sheet: CharacterSheet; sight?: Sight }
 export interface Roll {
   playerId: string; name: string;
   /** The d20 kept; null for a hero who is down. */
   natural: number | null; dice: number[]; mode: Mode; bonus: number; total: number | null; success: boolean;
+  /** The check needed sight and the hero could not see: an automatic failure (5.2 Blinded). */
+  blind?: true;
 }
 export interface GroupRoll { rolls: Roll[]; success: boolean; sheets: Hero[]; lines: string[] }
 
@@ -32,14 +36,20 @@ function dcOf(hook: RollHook): number {
   return typeof hook.dc === 'number' ? hook.dc : dcAgainst(monster(hook.against!), hook);
 }
 
+/** Checks that need sight: in darkness they fail; in dim light Perception has Disadvantage (5.2 Lightly Obscured). */
+const SIGHT_SKILLS = ['perception', 'investigation'];
+const cannotSee = (hero: Hero, hook: RollHook) => hook.kind === 'check' && hero.sight === 'none' && SIGHT_SKILLS.includes(hook.skill ?? '');
+const peering = (hero: Hero, hook: Extract<RollHook, { kind: 'check' }>) => hero.sight === 'dim' && hook.skill === 'perception';
+
 function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: boolean): D20 & { bonus: number; mode: Mode } {
-  if (hook.kind === 'check') return abilityCheck(rng, hero.sheet, hook, { natural, advantage: helped || !!hook.advantage, disadvantage: !!hook.disadvantage });
+  if (hook.kind === 'check') return abilityCheck(rng, hero.sheet, hook, { natural, advantage: helped || !!hook.advantage, disadvantage: !!hook.disadvantage || peering(hero, hook) });
   const bonus = hero.sheet.saveBonuses[hook.ability] + d20Modifier(hero.sheet);
   const mode = modeOf(!!hook.advantage, !!hook.disadvantage);
   return { ...rollD20(rng, bonus, mode, natural), bonus, mode };
 }
 
 function rollFor(hero: Hero, hook: RollHook, vote: number, rng: Rng, helped = false): Roll {
+  if (cannotSee(hero, hook)) return { ...downRoll(hero), blind: true };
   const { natural, rolls, total, bonus, mode } = d20For(hero, hook, vote, rng, helped);
   return { playerId: hero.playerId, name: hero.sheet.name, natural, dice: rolls, mode, bonus, total, success: total >= dcOf(hook) };
 }
@@ -55,6 +65,7 @@ function diceText(roll: Roll): string {
 }
 
 function lineOf(roll: Roll, hook: RollHook): string {
+  if (roll.blind) return `${roll.name} cannot see and fails`;
   if (roll.natural === null) return `${roll.name} is down and fails`;
   return `${roll.name}: ${rollName(hook)} ${diceText(roll)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dcOf(hook)}, ${roll.success ? 'success' : 'failure'}`;
 }
@@ -78,7 +89,8 @@ const canHelp = (hero: Hero, hook: Extract<RollHook, { kind: 'check' }>) =>
 function bestRoll(heroes: Hero[], hook: Extract<RollHook, { kind: 'check' }>, votes: Readonly<Record<string, number>>, rng: Rng): GroupRoll {
   const up = heroes.filter(standing);
   if (up.length === 0) return { rolls: heroes.map(downRoll), success: false, sheets: heroes, lines: heroes.map((h) => `${h.sheet.name} is down and fails`) };
-  const roller = up.reduce((best, h) => (checkBonus(h.sheet, hook).bonus > checkBonus(best.sheet, hook).bonus ? h : best));
+  const seeing = up.filter((h) => !cannotSee(h, hook));
+  const roller = (seeing.length ? seeing : up).reduce((best, h) => (checkBonus(h.sheet, hook).bonus > checkBonus(best.sheet, hook).bonus ? h : best));
   const helpers = up.filter((h) => h !== roller && canHelp(h, hook));
   const roll = rollFor(roller, hook, voteOf(votes, roller, rng), rng, helpers.length > 0);
   const help = helpers.length ? [`${helpers.map((h) => h.sheet.name).join(', ')} ${helpers.length > 1 ? 'help' : 'helps'}: Advantage`] : [];

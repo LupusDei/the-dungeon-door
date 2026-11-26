@@ -7,6 +7,7 @@
  * shows up there is original (CC0): DUNGEON_HAZARDS below.
  */
 import { passiveScore } from '../rules/checks.ts';
+import { type LightLevel, sightOf } from '../rules/light.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
 import { damageHero } from '../rules/dying.ts';
 import { type HazardSpec, sufferHazard } from '../rules/hazards.ts';
@@ -28,9 +29,13 @@ const withSheets = (party: PartyState, hs: readonly Hero[], rng: Rng): PartyStat
   ({ ...party, rng: rng.state(), sheets: { ...party.sheets, ...Object.fromEntries(hs.map((h) => [h.playerId, h.sheet])) } });
 
 /** The standing hero with the best passive score for the detect check, if it reaches the DC. */
-function spotter(party: PartyState, detect: Detect | null): { hero: Hero; score: number } | null {
+function spotter(party: PartyState, detect: Detect | null, light: LightLevel): { hero: Hero; score: number } | null {
   if (!detect) return null;
-  const scored = standing(party).map((hero) => ({ hero, score: passiveScore(hero.sheet, detect) }));
+  const scored = standing(party).flatMap((hero) => {
+    const sight = sightOf(hero.sheet, light);
+    if (sight === 'none') return []; // 5.2 Blinded: what must be seen goes unseen
+    return [{ hero, score: passiveScore(hero.sheet, detect, sight === 'dim' && detect.skill === 'perception' ? 'disadvantage' : 'normal') }];
+  });
   const best = scored.reduce<{ hero: Hero; score: number } | null>((top, s) => (top === null || s.score > top.score ? s : top), null);
   return best && best.score >= detect.dc ? best : null;
 }
@@ -92,9 +97,9 @@ function disarm(party: PartyState, trap: Trap, votes: Votes, rng: Rng, before: s
   return { party: sprung.party, lines: [...lines, `The ${trap.name} goes off.`, ...sprung.lines], success: false };
 }
 
-function springSrdTrap(party: PartyState, trap: Trap, votes: Votes): Sprung {
+function springSrdTrap(party: PartyState, trap: Trap, votes: Votes, light: LightLevel): Sprung {
   const rng = seededRng(party.rng);
-  const seen = spotter(party, trap.detect);
+  const seen = spotter(party, trap.detect, light);
   if (seen && trap.disarm) return disarm(party, trap, votes, rng, [spotLine(seen.hero, seen.score, trap.detect, `a ${trap.name}`)]);
   if (seen) return { party, lines: [`${spotLine(seen.hero, seen.score, trap.detect, `a ${trap.name}`)} ${trap.avoid}`], success: true };
   const sprung = trigger(party, trap, targetsOf(party, trap), votes, rng);
@@ -124,16 +129,16 @@ const DUNGEON_HAZARDS: Readonly<Record<string, (level: number) => DungeonHazard>
 
 export const dungeonHazard = (id: string, level: number): DungeonHazard | null => (Object.hasOwn(DUNGEON_HAZARDS, id) ? DUNGEON_HAZARDS[id](level) : null);
 
-function springHazard(party: PartyState, h: DungeonHazard): Sprung {
-  const seen = spotter(party, h.detect);
+function springHazard(party: PartyState, h: DungeonHazard, light: LightLevel): Sprung {
+  const seen = spotter(party, h.detect, light);
   if (seen) return { party, lines: [`${spotLine(seen.hero, seen.score, h.detect!, h.what)} The party finds a way around it.`], success: true };
   const struck = partyHazard(party, h.spec);
   return { party: struck.party, lines: [`The party meets ${h.what}.`, ...struck.lines], success: false };
 }
 
 /** A trap or hazard the party runs into (a dungeon room's, or the DM's), at the party's level. */
-export function springTrap(party: PartyState, id: string, level: number, votes: Votes): Sprung {
-  if (isTrap(id)) return springSrdTrap(party, trapAt(id, level), votes);
+export function springTrap(party: PartyState, id: string, level: number, votes: Votes, light: LightLevel = 'bright'): Sprung {
+  if (isTrap(id)) return springSrdTrap(party, trapAt(id, level), votes, light);
   const hazard = dungeonHazard(id, level);
-  return hazard ? springHazard(party, hazard) : { party, lines: [], success: true };
+  return hazard ? springHazard(party, hazard, light) : { party, lines: [], success: true };
 }

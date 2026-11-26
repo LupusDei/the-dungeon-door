@@ -3,6 +3,7 @@
  * the game (lib/game.ts) loads the state, calls playTurn, and stores what comes back.
  */
 import type { HazardSpec } from '../rules/hazards.ts';
+import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
 import { groupRoll } from './checks.ts';
@@ -15,7 +16,7 @@ import { partyRest } from './rest.ts';
 import { newlyDead, raiseTheDead, revivify } from './revive.ts';
 import type { CombatState, DungeonState, PartyState } from './state.ts';
 import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
-import { ambientLight, clockOf, lightUp, passTime, secondsFor } from './time.ts';
+import { ambientLight, clockOf, lightLevel, lightUp, passTime, secondsFor } from './time.ts';
 import { partyHazard, springTrap } from './traps.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
@@ -44,7 +45,8 @@ const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.l
 
 function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const rng = seededRng(s.party.rng);
-  const heroes = Object.entries(s.party.sheets).filter(([, sheet]) => !sheet.dead).map(([playerId, sheet]) => ({ playerId, sheet }));
+  const light = lightLevel(s);
+  const heroes = Object.entries(s.party.sheets).filter(([, sheet]) => !sheet.dead).map(([playerId, sheet]) => ({ playerId, sheet, sight: sightOf(sheet, light) }));
   const rolled = groupRoll(heroes, hook, votesOf(ballots), rng);
   const sheets = { ...s.party.sheets, ...Object.fromEntries(rolled.sheets.map((h) => [h.playerId, h.sheet])) };
   const settled = harmed(s.party, { party: { ...s.party, rng: rng.state(), sheets }, lines: rolled.lines });
@@ -52,7 +54,7 @@ function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before:
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
-  const started = startFight(s.party, monsterIds);
+  const started = startFight(s.party, monsterIds, lightLevel(s));
   return done({ ...s, party: started.party, combat: started.combat }, [...before, ...started.lines], null, 'started');
 }
 
@@ -75,7 +77,7 @@ function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballo
 }
 
 function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
-  const sprung = springTrap(s.party, id, partyLevel(levelsOf(s)), votesOf(ballots));
+  const sprung = springTrap(s.party, id, partyLevel(levelsOf(s)), votesOf(ballots), lightLevel(s));
   const settled = harmed(s.party, sprung);
   return done({ ...s, party: settled.party }, [...before, ...settled.lines], sprung.success);
 }

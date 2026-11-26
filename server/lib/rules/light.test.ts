@@ -3,7 +3,7 @@ import test from 'node:test';
 import { addItem } from './inventory.ts';
 import { generateDungeon } from './dungeon.ts';
 import { startExplore } from './explore.ts';
-import { areaLight, bestLight, clockLabel, darkvision, kindle, LIGHTS, outdoorLight, seeingIn, sightOf } from './light.ts';
+import { areaLight, bestLight, clockLabel, darkvision, kindle, LIGHTS, monsterSight, outdoorLight, seeingIn, sightOf } from './light.ts';
 import { SAMPLE } from './sheet.fixture.ts';
 
 const human = { ...SAMPLE, speciesId: 'human', traits: [] };
@@ -72,4 +72,13 @@ test('the light in a dungeon area (original table): the entrance dim, rooms 1 in
   const explore = startExplore(3, [1]);
   assert.equal(areaLight(explore, 'e'), 'dim');
   assert.equal(areaLight({ ...explore, nodes: { ...explore.nodes, p: { ...explore.nodes.e, id: 'p', type: 'passage' } } }, 'p'), 'dark', 'passages are dark');
+});
+
+test('a monster sees in the dark by blindsight or truesight, or as dim light by darkvision', () => {
+  const senses = (darkvision: number, blindsight: number, truesight: number) => ({ senses: { darkvision, blindsight, truesight } });
+  assert.equal(monsterSight(senses(0, 0, 0), 'dark'), 'none');
+  assert.equal(monsterSight(senses(60, 0, 0), 'dark'), 'dim');
+  assert.equal(monsterSight(senses(0, 10, 0), 'dark'), 'clear');
+  assert.equal(monsterSight(senses(0, 0, 120), 'dark'), 'clear');
+  assert.equal(monsterSight(senses(0, 0, 0), 'dim'), 'dim');
 });

@@ -4,6 +4,7 @@
  */
 import { passiveScore } from '../rules/checks.ts';
 import { load } from '../rules/inventory.ts';
+import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
 import { encounterBudget, monsters } from '../rules/monsters.ts';
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
@@ -11,6 +12,7 @@ import { waitingFoes } from './delve.ts';
 import { foesNamed } from './hooks.ts';
 import type { Attitude } from './parley.ts';
 import type { DungeonState } from './state.ts';
+import { clockOf, lightLevel } from './time.ts';
 import type { RulesState } from './turn.ts';
 
 export interface Waiting { foes: string; attitude: Attitude }
@@ -32,6 +34,15 @@ export interface HeroView {
   gp: number; inventory: { id: string; name: string; count: number }[];
   /** Pounds carried and the 5.2 carrying capacity; over it the hero is dragging (Speed 5 ft), up to dragLimit. */
   carried: number; capacity: number; dragLimit: number; dragging: boolean;
+  /** How the hero sees here: clear, dim (Disadvantage on Perception) or none (effectively Blinded); feet of darkvision. */
+  sight: Sight; darkvision: number;
+}
+
+/** The party's light: what it is, who carries it, minutes left; null when nothing burns. */
+export interface LitView { name: string; holder: string; minutesLeft: number }
+function litView(s: RulesState): LitView | null {
+  const lit = s.party.lit;
+  return lit ? { name: LIGHTS[lit.source].name, holder: s.party.sheets[lit.holder].name, minutesLeft: Math.ceil(lit.left / 60) } : null;
 }
 
 export interface RulesView {
@@ -47,14 +58,18 @@ export interface RulesView {
     waiting: Waiting | null;
   };
   results: string[];
+  /** Seconds since the adventure began, and the clock ("Day 1, 08:40"). */
+  time: { seconds: number; label: string };
+  /** What the party sees by here: the light level and the light it carries. */
+  light: { level: LightLevel; source: LitView | null };
 }
 
-const heroView = (playerId: string, s: CharacterSheet): HeroView => ({
+const heroView = (playerId: string, s: CharacterSheet, light: LightLevel): HeroView => ({
   playerId, name: s.name, level: s.level, xp: s.xp, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass,
   exhaustion: s.exhaustion, hitDiceLeft: s.level - s.hitDiceSpent, slotsLeft: slotsLeft(s),
   resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
   ...passives(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
-  ...load(s),
+  ...load(s), sight: sightOf(s, light), darkvision: darkvision(s),
 });
 
 const passives = (s: CharacterSheet) => ({
@@ -63,9 +78,11 @@ const passives = (s: CharacterSheet) => ({
 /** "Potion of Healing ×2, Rope". */
 const itemsLine = (s: CharacterSheet) => s.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', ');
 
-export function rulesView({ party, combat, dungeon }: RulesState, results: string[]): RulesView {
+export function rulesView(state: RulesState, results: string[]): RulesView {
+  const { party, combat, dungeon } = state;
+  const light = lightLevel(state);
   return {
-    party: Object.entries(party.sheets).map(([id, s]) => heroView(id, s)),
+    party: Object.entries(party.sheets).map(([id, s]) => heroView(id, s, light)),
     combat: combat && {
       round: combat.round,
       outcome: combat.outcome,
@@ -81,6 +98,8 @@ export function rulesView({ party, combat, dungeon }: RulesState, results: strin
       waiting: waiting(dungeon),
     },
     results,
+    time: { seconds: clockOf(party), label: clockLabel(clockOf(party)) },
+    light: { level: light, source: litView(state) },
   };
 }
 
@@ -88,7 +107,12 @@ export interface RulesContext {
   party: {
     name: string; level: number; hp: number; maxHp: number; armorClass: number; exhaustion: number; slotsLeft: number[];
     passivePerception: number; passiveInsight: number; gp: number; items: string; dragging: boolean; dead: boolean;
+    sees: Sight;
   }[];
+  /** The clock: "Day 1, 08:40". */
+  time: string;
+  /** "dark; the party's light: Bryn's Torch (40 minutes left)", or "dim; no light carried". */
+  light: string;
   combat: null | { round: number; combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string }[] };
   dungeon: null | { kind: string; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
@@ -107,14 +131,24 @@ export function suitableMonsters(levels: readonly number[]): string[] {
     .map((m) => m.id);
 }
 
-export function rulesContext({ party, combat, dungeon }: RulesState): RulesContext {
+function lightLine(s: RulesState): string {
+  const lit = litView(s);
+  const own = s.party.lit ? 'bright' : lightLevel(s);
+  return `${own}; ${lit ? `the party's light: ${lit.holder}'s ${lit.name} (${lit.minutesLeft} minutes left)` : 'no light carried'}`;
+}
+
+export function rulesContext(state: RulesState): RulesContext {
+  const { party, combat, dungeon } = state;
   const sheets = Object.values(party.sheets);
+  const light = lightLevel(state);
   const here = dungeon && dungeon.map.nodes[dungeon.at];
   return {
     party: sheets.map((s) => ({
       name: s.name, level: s.level, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass, exhaustion: s.exhaustion, slotsLeft: slotsLeft(s),
-      ...passives(s), gp: s.gp, items: itemsLine(s), dragging: load(s).dragging, dead: s.dead === true,
+      ...passives(s), gp: s.gp, items: itemsLine(s), dragging: load(s).dragging, dead: s.dead === true, sees: sightOf(s, light),
     })),
+    time: clockLabel(clockOf(party)),
+    light: lightLine(state),
     combat: combat && {
       round: combat.round,
       combatants: combat.order.map((id) => combat.combatants[id]).map(({ name, side, hp, maxHp, status }) => ({ name, side, hp, maxHp, status })),
