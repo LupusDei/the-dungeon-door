@@ -36,6 +36,10 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   easy fight. Those words are in the dungeon and combat blocks.
   When you mention how hard a foe is, repeat them as given. Never invent or change a rating, and still use
   no numbers in the story.
+- A foe's hit points are hidden from you and the players. The combat block gives each foe's wound word:
+  Unhurt, Scratched, Bleeding, Bloodied (half or less), Staggering, Gasping (the undead crumble, constructs
+  crack and oozes dissolve in their own words). Show the wound in the story (a limp, ragged breath, a
+  cracked shell) so the players see their progress; never its hit points, and no damage totals.
 - Foes the party meets roll an attitude. They do not attack at once. Hostile ones bar the way, and the
   engine replaces your three choices with Engage, Run and Parley: still write the scene. Run backs out the
   way the party came (or slips past wanderers); the room stays uncleared, with no loot and no experience.
@@ -99,7 +103,7 @@ function heroLine(h: RulesContext['party'][number]): string {
 
 function combatLine(c: NonNullable<RulesContext['combat']>): string {
   const who = c.combatants.map((x) => {
-    const state = x.status === 'up' ? `${x.hp}/${x.maxHp} HP` : x.status;
+    const state = x.status !== 'up' ? x.status : x.wound ? x.wound.toLowerCase() : `${x.hp}/${x.maxHp} HP`;
     return x.toughness ? `${x.name} ${state} (${x.toughness})` : `${x.name} ${state}`;
   }).join('; ');
   return `COMBAT, round ${c.round} (${c.band}): ${who}`;

@@ -13,6 +13,8 @@ import { candidates, fightBand, rateEncounter, temperedBudget, toughnessFor, typ
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
+import { vigorOf, woundOf } from '../rules/wounds.ts';
+import type { Combatant } from '../rules/combatant.ts';
 import { dungeonLevel, foeLevels, habitatOf, waitingFoes } from './delve.ts';
 import { foesNamed } from './hooks.ts';
 import type { Attitude } from './parley.ts';
@@ -60,6 +62,18 @@ function trekView(state: RulesState): TrekView | null {
 
 /** The dungeon as the party has it, once it is at the door (not on the road). */
 const inDungeon = (dungeon: DungeonState | null) => (dungeon?.trek ? null : dungeon);
+
+/**
+ * A hero's hit points; a foe's are hidden (rules/wounds.ts): its wound, and for the app its vigor (6 unhurt
+ * … 0) for a gauge.
+ */
+function health(c: Combatant, gauge: boolean): Health {
+  if (c.side === 'party') return { hp: c.hp, maxHp: c.maxHp };
+  return gauge ? { wound: woundOf(c), vigor: vigorOf(c.hp, c.maxHp) } : { wound: woundOf(c) };
+}
+
+/** A hero's hit points, or a foe's wound ("Bloodied") and vigor. */
+export interface Health { hp?: number; maxHp?: number; wound?: string; vigor?: number }
 
 function ratedCombat(state: RulesState, combat: NonNullable<RulesState['combat']>) {
   const levels = foeLevels(state.party, state.dungeon);
@@ -118,7 +132,8 @@ export interface RulesView {
     round: number; outcome: 'ongoing' | 'victory' | 'defeat';
     /** The fight against the current party: low, moderate, high, or deadly above high. */
     band: FightBand;
-    combatants: { id: string; name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; conditions: string[]; toughness: Toughness | null }[];
+    /** A hero has hp and maxHp; a foe has wound and vigor instead (its hit points are hidden). */
+    combatants: ({ id: string; name: string; side: 'party' | 'foes'; status: string; conditions: string[]; toughness: Toughness | null } & Health)[];
   };
   /** The road from the tavern to the dungeon door, while the party is on it; then null. */
   trek: TrekView | null;
@@ -189,7 +204,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
         outcome: combat.outcome,
         band: rated.band,
         combatants: rated.ordered.map((c) => ({
-          id: c.id, name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status,
+          id: c.id, name: c.name, side: c.side, ...health(c, true), status: c.status,
           conditions: [...c.conditions], toughness: rated.toughness(c),
         })),
       };
@@ -217,7 +232,7 @@ export interface RulesContext {
   light: string;
   combat: null | {
     round: number; band: FightBand;
-    combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; toughness: Toughness | null }[];
+    combatants: ({ name: string; side: 'party' | 'foes'; status: string; toughness: Toughness | null } & Omit<Health, 'vigor'>)[];
   };
   trek: TrekView | null;
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
@@ -266,7 +281,7 @@ export function rulesContext(state: RulesState): RulesContext {
       return {
         round: combat.round,
         band: rated.band,
-        combatants: rated.ordered.map((c) => ({ name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status, toughness: rated.toughness(c) })),
+        combatants: rated.ordered.map((c) => ({ name: c.name, side: c.side, ...health(c, false), status: c.status, toughness: rated.toughness(c) })),
       };
     })(),
     trek: trekView(state),

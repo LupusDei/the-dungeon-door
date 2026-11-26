@@ -574,6 +574,31 @@ map is still sized for the count asked for).
 - **The DM** sees `trek` (stretch, terrain, what is on it, wares, who waits) and no `dungeon` until the
   door; its instructions say to narrate overland travel, with no corridors, rooms or doors.
 
+## Wounds, not hit points
+
+Robert's design: *"The monster's hp should not be explicitly shown. Instead it should show degrees of
+incapacity like Bleeding, limping, gasping etc. players should see that they are making progress without
+knowing exactly how much."*
+
+`rules/wounds.ts`. A foe's hit points stay in the engine's state; the app and the DM see its **wound**, one
+of six rungs of **vigor** by the share of hit points left:
+
+| Vigor | Hit points left | Flesh | Undead | Construct | Ooze |
+|-------|-----------------|-------|--------|-----------|------|
+| 6 | all | Unhurt | Whole | Intact | Whole |
+| 5 | over 3/4 | Scratched | Torn | Scuffed | Rippling |
+| 4 | over 1/2 | Bleeding | Rent | Dented | Seeping |
+| 3 | over 1/4 (1/2 or less: Bloodied, as in the 2024 rules) | Bloodied | Crumbling | Cracked | Shrinking |
+| 2 | over 1/10 | Staggering | Falling apart | Breaking | Sloughing |
+| 1 | any left | Gasping | Coming undone | Failing | Dissolving |
+| 0 | none | Dead | Destroyed | Destroyed | Destroyed |
+
+- The API's foe combatants carry `wound` and `vigor` and no `hp`/`maxHp`; heroes keep theirs.
+- A round's lines tell a foe's wounds when they change ("Goblin Warrior is bleeding."). Damage rolled on a
+  hit is still shown ("hit for 7"), but never what is left.
+- The DM's combat block gives the wound word for each foe, and its instructions say to show wounds in the
+  story, never hit points.
+
 ## For the app (the game layer on top)
 
 What the game adds around the engine so the app can show it (Justin's side; `docs/api.md` has the shapes):

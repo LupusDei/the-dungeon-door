@@ -304,11 +304,22 @@ RulesView {                          // SRD 5.2 (2024 rules)
     outcome: "ongoing"                // a settled fight is gone (combat: null); its end is in results
     band: "low" | "moderate" | "high" | "deadly"   // the fight against this party; deadly is above high.
                                       // The engine's word. Absent from servers older than toughness ratings.
-    combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
+    combatants: [{ id: string; name: string; side: "party" | "foes";
+                   hp?: number; maxHp?: number      // a hero's hit points; absent for a foe
+                   wound?: string; vigor?: number   // a foe's instead: its hit points are hidden
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
                    toughness: null | "puny" | "weak" | "even" | "strong" | "deadly" }]   // initiative order;
                                       // a hero's id is its playerId; toughness is null for a hero, and the
-                                      // foe's own rating against this party (absent from older servers)
+                                      // foe's own rating against this party (absent from older servers).
+                                      // wound: how hurt the foe looks, by the share of hit points left:
+                                      // "Unhurt" (full), "Scratched" (over 3/4), "Bleeding" (over 1/2),
+                                      // "Bloodied" (1/2 or less, the 2024 term), "Staggering" (over 1/10),
+                                      // "Gasping", "Dead" (0). Undead: Whole, Torn, Rent, Crumbling, Falling
+                                      // apart, Coming undone, Destroyed. Constructs: Intact, Scuffed, Dented,
+                                      // Cracked, Breaking, Failing, Destroyed. Oozes: Whole, Rippling, Seeping,
+                                      // Shrinking, Sloughing, Dissolving, Destroyed. vigor: the same as a rung
+                                      // for a gauge, 6 (unhurt) to 0. Servers before wounds sent a foe's
+                                      // hp and maxHp instead
   }
   trek: null | {                      // the road from the tavern to the dungeon door, while the party is on it
     stretch: number; of: number       // stretch 1 of 2 (each a scene)
