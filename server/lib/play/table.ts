@@ -73,7 +73,10 @@ export interface EngineStep {
 
 /** Resolves a scene through the engine: a combat round, or the chosen choice's hook (ties to the higher roll). */
 export function engineStep(state: RulesState, scene: StoredScene, resolution: Resolution): EngineStep {
-  const ballots = resolution.votes.map(({ playerId, choiceId, roll }) => ({ playerId, choiceId, roll }));
+  const ballots = resolution.votes.map(({ playerId, choiceId, roll }) => {
+    const stored = scene.votes.find((v) => v.playerId === playerId);
+    return { playerId, choiceId, roll, ...(stored?.move ? { move: stored.move } : {}) };
+  });
   const chosen = pickChoice(resolution.leaders, ballots);
   const inFight = state.combat !== null;
   const choice = inFight ? undefined : scene.choices.find((c) => c.id === chosen);

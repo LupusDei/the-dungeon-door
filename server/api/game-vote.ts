@@ -6,6 +6,6 @@ export async function POST(request: Request): Promise<Response> {
   return handle(async () => {
     const player = requirePlayer(request);
     const body = await readBody(request);
-    return castVote(gameCodeOf(request), player, body.sceneIndex, body.choiceId, originOf(request));
+    return castVote(gameCodeOf(request), player, body.sceneIndex, body.choiceId, originOf(request), body.move);
   });
 }

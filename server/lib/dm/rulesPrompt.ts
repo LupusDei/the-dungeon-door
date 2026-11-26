@@ -79,10 +79,16 @@ function heroLine(h: RulesContext['party'][number]): string {
   return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}${h.conditions ? `; ${h.conditions}` : ''}${SEES[h.sees]}`;
 }
 
+function stood(x: NonNullable<RulesContext['combat']>['combatants'][number]): string {
+  if (x.position === 'engaged' && x.engagedWith.length) return `, engaged with ${x.engagedWith.join(' and ')}`;
+  return `, ${x.position}`;
+}
+
 function combatLine(c: NonNullable<RulesContext['combat']>): string {
   const who = c.combatants.map((x) => {
     const state = x.status === 'up' ? `${x.hp}/${x.maxHp} HP` : x.status;
-    return x.toughness ? `${x.name} ${state} (${x.toughness})` : `${x.name} ${state}`;
+    const where = x.position ? stood(x) : '';
+    return x.toughness ? `${x.name} ${state}${where} (${x.toughness})` : `${x.name} ${state}${where}`;
   }).join('; ');
   return `COMBAT, round ${c.round} (${c.band}): ${who}`;
 }

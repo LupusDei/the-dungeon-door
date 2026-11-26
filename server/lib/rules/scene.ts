@@ -2,6 +2,7 @@
  * A combat scene: initiative, turns and rounds over plain-JSON state, resumable from storage. Heroes act by
  * their players' votes (the vote's d20 is the roll); monsters act by simple rules. See docs/rules-design.md.
  */
+import { type Band, type Move, engagedWith, meleeCluster, neededApproach, openingPlaces, placesAfter, powerHits, provokedBy, rangedShot, spellHits, stepToward, validateMove } from './bands.ts';
 import type { Combatant, Condition, Status } from './combatant.ts';
 import type { Power, Rider } from './powers.ts';
 import { parseDice, rollDice } from './dice.ts';
@@ -9,7 +10,8 @@ import { addCondition, type AttackResult, type Cover, type D20, damageAfterDefen
 import { type Rng, seededRng } from './rng.ts';
 import { areaCatch, type Caster, resolveSpell, type SpellOutcome } from './spellEffects.ts';
 import type { Cast } from './spells.ts';
-import { lookup, require } from './violation.ts';
+import { srd } from './srd.ts';
+import { lookup, require, RuleViolation } from './violation.ts';
 
 export type Action =
   /** `then`: the turn's further attacks (Multiattack, Extra Attack), each at the most wounded foe still up. */
@@ -21,7 +23,9 @@ export type Action =
   /** A monster's save ability (powers.ts) at these targets. */
   | { kind: 'power'; power: string; targets: string[] }
   /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
-  | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number };
+  | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number }
+  /** One band, or two when `dash` (and then this is the whole action). */
+  | ({ kind: 'move' } & Move);
 export type CombatEvent =
   /** `rider`: the condition the hit brought, or its save made. */
   | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true; rider?: RiderOutcome }
@@ -36,7 +40,9 @@ export type CombatEvent =
   /** A healing potion drunk as a Bonus Action before the turn's action. */
   | { kind: 'potion'; round: number; actor: string; item: string; healed: number }
   /** A fighter's Second Wind, a Bonus Action before the turn's action. */
-  | { kind: 'secondWind'; round: number; actor: string; healed: number };
+  | { kind: 'secondWind'; round: number; actor: string; healed: number }
+  /** Changed bands. `engage`: who they closed with. */
+  | { kind: 'move'; round: number; actor: string; to: Band; engage?: string[]; dash?: true; disengage?: true };
 export interface Choice { label: string; action: Action }
 export interface RiderOutcome { dc: number; ability: string; roll: D20 | null; success: boolean; condition: Condition | null }
 /** `condition`: what the failed save brought (none if it is immune). */
@@ -54,6 +60,10 @@ export interface CombatState {
   dodging: string[];
   /** The seeded rng's state; seededRng(rng) continues the dice. */
   rng: number;
+  /** Who has spent their reaction since their last turn (an opportunity attack). Absent on a fight stored before range bands. */
+  reacted?: string[];
+  /** Who has used their move this turn. Absent on a fight stored before range bands. */
+  moved?: string[];
   outcome: 'ongoing' | 'victory' | 'defeat';
   /** What happened, oldest first, for the DM to narrate. */
   log: CombatEvent[];
@@ -82,7 +92,7 @@ function advance(state: CombatState, rng: Rng): CombatState {
     const turn = (s.turn + 1) % s.order.length;
     s = { ...s, turn, round: turn === 0 ? s.round + 1 : s.round };
     const id = currentActor(s);
-    s = { ...s, dodging: s.dodging.filter((d) => d !== id) };
+    s = { ...s, dodging: s.dodging.filter((d) => d !== id), reacted: (s.reacted ?? []).filter((d) => d !== id), moved: (s.moved ?? []).filter((d) => d !== id) };
     const c = s.combatants[id];
     if (canAct(c)) return recharged(s, c, rng);
     s = c.status === 'dying' ? afterDeathSave(s, id, rng) : withEvent(s, { kind: 'skip', round: s.round, actor: id }, c);
@@ -118,16 +128,17 @@ function afterDeathSave(state: CombatState, id: string, rng: Rng): CombatState {
   return withEvent(state, { kind: 'deathSave', round: state.round, actor: id, status: c.status }, c);
 }
 
-export function startCombat(seed: number, combatants: readonly Combatant[]): CombatState {
+export function startCombat(seed: number, combatants: readonly Combatant[], surprise?: 'party' | 'foes'): CombatState {
   const rng = seededRng(seed);
   const rolls = combatants.map((c) => ({ id: c.id, roll: rollD20(rng, c.initiative, 'normal').total, bonus: c.initiative }));
   const order = orderByInitiative(rolls);
+  const places = openingPlaces(combatants, surprise);
   const state: CombatState = {
     // Round 0, last turn: advancing once opens round 1 with the highest roll.
     version: 1, round: 0, turn: order.length - 1, order,
     initiative: Object.fromEntries(rolls.map((r) => [r.id, r.roll])),
-    combatants: Object.fromEntries(combatants.map((c) => [c.id, c])),
-    dodging: [], rng: rng.state(), outcome: outcomeOf(Object.fromEntries(combatants.map((c) => [c.id, c]))), log: [],
+    combatants: Object.fromEntries(combatants.map((c) => [c.id, { ...c, place: c.place ?? places[c.id] }])),
+    dodging: [], reacted: [], moved: [], rng: rng.state(), outcome: outcomeOf(Object.fromEntries(combatants.map((c) => [c.id, c]))), log: [],
   };
   const begun = advance(state, rng);
   return { ...begun, rng: rng.state() };
@@ -162,24 +173,99 @@ function ride(rng: Rng, target: Combatant, rider: Rider): { outcome: RiderOutcom
 const upAgainst = (state: CombatState, side: Combatant['side']) => Object.values(state.combatants).filter((c) => c.side !== side && c.status === 'up');
 const fewestHp = (cs: Combatant[]) => cs.reduce((low, c) => (c.hp < low.hp ? c : low));
 
-/** One more attack this turn, at the most wounded foe still up; none left, no attack. */
+/** One more attack this turn, at the most wounded foe still in reach; none left, no attack. */
 function followUp(state: CombatState, actorId: string, attack: string, rng: Rng): CombatState {
-  const targets = upAgainst(state, state.combatants[actorId].side);
-  return targets.length ? strike(state, state.combatants[actorId], fewestHp(targets), { kind: 'attack', attack, target: '' }, rng) : state;
+  const me = state.combatants[actorId];
+  const targets = upAgainst(state, me.side).filter((c) => !me.place || me.place.with.includes(c.id));
+  return targets.length ? strike(state, me, fewestHp(targets), { kind: 'attack', attack, target: '' }, rng) : state;
+}
+
+const outOfReach = (state: CombatState, actor: Combatant, text: string) =>
+  withEvent(state, { kind: 'other', round: state.round, actor: actor.id, text });
+
+/** The move, then any opportunity attacks it provoked. A mover who falls does not leave. Does not spend the turn. */
+function applyMove(state: CombatState, actor: Combatant, move: Move, rng: Rng): CombatState {
+  try {
+    validateMove(state, actor.id, move);
+  } catch (e) {
+    if (e instanceof RuleViolation) return outOfReach(state, actor, e.message);
+    throw e;
+  }
+  let s = state;
+  for (const fid of provokedBy(s, actor.id, move)) {
+    if (s.combatants[actor.id].status !== 'up') break;
+    const foe = s.combatants[fid];
+    const weapon = foe.attacks.filter((a) => !a.ranged).reduce((best, a) => (a.bonus > best.bonus ? a : best));
+    const swung = strike(s, foe, s.combatants[actor.id], { kind: 'attack', attack: weapon.name, target: actor.id }, rng);
+    const event = { ...swung.log[swung.log.length - 1], reaction: true as const };
+    s = { ...swung, reacted: [...(swung.reacted ?? []), fid], log: [...swung.log.slice(0, -1), event] };
+  }
+  if (s.combatants[actor.id].status !== 'up') return s;
+  const combatants = placesAfter(s.combatants, actor.id, move);
+  const changed = Object.values(combatants).filter((c) => c !== s.combatants[c.id]);
+  const left = (actor.place?.with ?? []).some((fid) => move.to !== 'engaged' || !(move.engage ?? []).includes(fid));
+  const event: CombatEvent = {
+    kind: 'move', round: s.round, actor: actor.id, to: move.to,
+    ...(move.engage?.length ? { engage: [...move.engage] } : {}),
+    ...(move.dash ? { dash: true as const } : {}),
+    ...(left && (move.disengage || actor.disengages) ? { disengage: true as const } : {}),
+  };
+  return withEvent({ ...s, moved: [...new Set([...(s.moved ?? []), actor.id])] }, event, ...changed);
+}
+
+/** A move that does not spend the turn (the action is still to come). Opportunity attacks are rolled. */
+export function relocate(state: CombatState, id: string, move: Move): CombatState {
+  const rng = seededRng(state.rng);
+  return { ...applyMove(state, state.combatants[id], move, rng), rng: rng.state() };
 }
 
 function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'attack' }>, rng: Rng): CombatState {
   const target = lookup(new Map(Object.entries(state.combatants)), action.target, 'combatant');
   require(target.side !== actor.side, `${actor.name} will not attack an ally`);
-  return (action.then ?? []).reduce((s, attack) => followUp(s, actor.id, attack, rng), strike(state, actor, target, action, rng));
+  const attack = actor.attacks.find((a) => a.name === action.attack);
+  let s = state;
+  let me = actor;
+  let striking = action;
+  if (attack && me.place && target.place) {
+    const approach = neededApproach(s, me, 'attack', { attack, target });
+    if (approach) {
+      s = applyMove(s, me, approach, rng);
+      me = s.combatants[me.id];
+      if (me.status !== 'up' || s.outcome !== 'ongoing') return s;
+    }
+    const now = s.combatants[target.id];
+    if (!attack.ranged && !engagedWith(me, target.id)) return outOfReach(s, me, `${me.name} cannot reach ${now.name} from ${me.place?.band ?? 'here'}.`);
+    if (attack.ranged) {
+      const shot = rangedShot(me, now, attack);
+      if (!shot.ok) return outOfReach(s, me, `${me.name} cannot reach ${now.name} with ${attack.name}.`);
+      if (shot.longRange || me.place?.band === 'engaged') striking = { ...action, disadvantage: true };
+    }
+  }
+  return (striking.then ?? []).reduce((st, name) => followUp(st, me.id, name, rng), strike(s, me, s.combatants[striking.target], striking, rng));
 }
 
 function resolveCast(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'spell' }>, rng: Rng): CombatState {
-  const byId = new Map(Object.entries(state.combatants));
-  const targets = action.targets.map((id) => lookup(byId, id, 'combatant'));
-  const spare = upAgainst(state, actor.side).filter((c) => !action.targets.includes(c.id)); // where a dart goes on to once its foe falls
-  const resolved = resolveSpell(rng, { ...action.caster, combatant: actor }, action.cast, targets, { attack: { natural: action.natural }, spare });
-  return withEvent(state, { kind: 'spell', round: state.round, actor: actor.id, spellId: action.cast.spellId, outcomes: resolved.outcomes }, ...resolved.targets);
+  const spell = srd().spells.get(action.cast.spellId);
+  let s = state;
+  let me = actor;
+  let cast = action;
+  if (spell && me.place && action.targets.length > 0) {
+    const approach = neededApproach(s, me, 'spell', { spell, targets: action.targets });
+    if (approach) {
+      s = applyMove(s, me, approach, rng);
+      me = s.combatants[me.id];
+      if (me.status !== 'up' || s.outcome !== 'ongoing') return s;
+    }
+    const reachable = action.targets.filter((id) => s.combatants[id] && spellHits(me, s.combatants[id], spell));
+    if (reachable.length === 0) return outOfReach(s, me, `${me.name} cannot reach with ${spell.name}.`);
+    cast = { ...action, targets: reachable };
+  }
+  const byId = new Map(Object.entries(s.combatants));
+  const targets = cast.targets.map((id) => lookup(byId, id, 'combatant'));
+  const spare = upAgainst(s, me.side).filter((c) => !cast.targets.includes(c.id)); // where a dart goes on to once its foe falls
+  const disadvantage = me.place?.band === 'engaged' && spell?.attack === 'ranged';
+  const resolved = resolveSpell(rng, { ...cast.caster, combatant: me }, cast.cast, targets, { attack: { natural: cast.natural, ...(disadvantage ? { disadvantage: true } : {}) }, spare });
+  return withEvent(s, { kind: 'spell', round: s.round, actor: me.id, spellId: cast.cast.spellId, outcomes: resolved.outcomes }, ...resolved.targets);
 }
 
 /** One target's save against a power: all the rolled damage, half or none, after its defenses; a failure may bring the condition. */
@@ -197,11 +283,24 @@ function saveAgainst(rng: Rng, target: Combatant, power: Power, rolled: { type: 
 /** The damage is rolled once for everyone; each target saves (saveAgainst); the use is spent. */
 function resolvePower(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'power' }>, rng: Rng): CombatState {
   const power = actor.powers!.find((p) => p.name === action.power)!;
+  let s = state;
+  let me = actor;
+  let targets = action.targets;
+  if (me.place && targets.length > 0) {
+    const approach = neededApproach(s, me, 'power', { power, targets });
+    if (approach) {
+      s = applyMove(s, me, approach, rng);
+      me = s.combatants[me.id];
+      if (me.status !== 'up' || s.outcome !== 'ongoing') return s;
+    }
+    targets = targets.filter((id) => s.combatants[id] && powerHits(me, s.combatants[id], power));
+    if (targets.length === 0) return outOfReach(s, me, `${me.name} cannot reach with ${power.name}.`);
+  }
   const rolled = power.damage.map((d) => ({ type: d.type, amount: rollDice(rng, parseDice(d.dice)).total }));
-  const hit = action.targets.map((id) => saveAgainst(rng, state.combatants[id], power, rolled));
-  const spent = { ...actor, spent: { ...actor.spent, [power.name]: (actor.spent?.[power.name] ?? 0) + 1 } };
-  const event: CombatEvent = { kind: 'power', round: state.round, actor: actor.id, power: power.name, dc: power.dc, ability: power.ability, outcomes: hit.map((h) => h.outcome) };
-  return withEvent(state, event, spent, ...hit.map((h) => h.target));
+  const hit = targets.map((id) => saveAgainst(rng, s.combatants[id], power, rolled));
+  const spent = { ...me, spent: { ...me.spent, [power.name]: (me.spent?.[power.name] ?? 0) + 1 } };
+  const event: CombatEvent = { kind: 'power', round: s.round, actor: me.id, power: power.name, dc: power.dc, ability: power.ability, outcomes: hit.map((h) => h.outcome) };
+  return withEvent(s, event, spent, ...hit.map((h) => h.target));
 }
 
 const dodge = (state: CombatState, actor: Combatant, as?: string) =>
@@ -212,6 +311,7 @@ const ACTIONS: { [K in Action['kind']]: (state: CombatState, actor: Combatant, a
   spell: resolveCast,
   dodge: (state, actor, action) => dodge(state, actor, action.as),
   power: resolvePower,
+  move: (state, actor, action, rng) => applyMove(state, actor, action, rng),
   other: (state, actor, action) => withEvent(state, { kind: 'other', round: state.round, actor: actor.id, text: action.text }, actor),
 };
 
@@ -220,6 +320,10 @@ export function act(state: CombatState, action: Action): CombatState {
   require(state.outcome === 'ongoing', 'the combat is over');
   const rng = seededRng(state.rng);
   const actor = state.combatants[currentActor(state)];
+  if (!actor || actor.status !== 'up') {
+    const next = advance(state, rng);
+    return { ...next, rng: rng.state() };
+  }
   const done = (ACTIONS[action.kind] as (s: CombatState, a: Combatant, x: Action, r: Rng) => CombatState)(state, actor, action, rng);
   const next = advance(done, rng);
   return { ...next, rng: rng.state() };
@@ -228,9 +332,9 @@ export function act(state: CombatState, action: Action): CombatState {
 /** A reaction attack outside the turn order (an Opportunity Attack on a fleeing foe): nobody's turn is spent. */
 export function reactionAttack(state: CombatState, actor: string, attack: string, target: string): CombatState {
   const rng = seededRng(state.rng);
-  const done = resolveAttack(state, state.combatants[actor], { kind: 'attack', attack, target }, rng);
+  const done = strike(state, state.combatants[actor], state.combatants[target], { kind: 'attack', attack, target }, rng);
   const event = { ...done.log[done.log.length - 1], reaction: true as const };
-  return { ...done, log: [...done.log.slice(0, -1), event], rng: rng.state() };
+  return { ...done, reacted: [...(done.reacted ?? []), actor], log: [...done.log.slice(0, -1), event], rng: rng.state() };
 }
 
 /** The current combatant heals itself by `dice` as a Bonus Action, told by `told`; its action is still to come. */
@@ -262,10 +366,20 @@ function chosenPower(me: Combatant): Power | undefined {
   return powers.find((p) => p.uses !== null && ready(me, p)) ?? (me.attacks.length ? undefined : powers[0]);
 }
 
-/** Those a power catches: the most wounded heroes up, as many as its area holds (areaCatch), or one. */
+/**
+ * Who a power catches now, or after one step into melee when that is what puts them in it. With no places
+ * stored, the old count (areaCatch). The most wounded first; an area takes everyone it reaches.
+ */
 function caughtBy(state: CombatState, me: Combatant, p: Power): string[] {
-  const up = upAgainst(state, me.side).sort((a, b) => a.hp - b.hp);
-  return up.slice(0, p.area ? areaCatch(p.area) : 1).map((c) => c.id);
+  const foes = upAgainst(state, me.side).sort((a, b) => a.hp - b.hp);
+  if (!me.place) return foes.slice(0, p.area ? areaCatch(p.area) : 1).map((c) => c.id);
+  const pick = (list: Combatant[]) => (p.area ? list : list.slice(0, 1)).map((c) => c.id);
+  const now = foes.filter((f) => powerHits(me, f, p));
+  if (now.length) return pick(now);
+  const engage = meleeCluster(state, me.id);
+  if (!engage.length) return [];
+  const closed = { ...me, place: { band: 'engaged' as const, with: engage } };
+  return pick(foes.filter((f) => engage.includes(f.id) && powerHits(closed, { ...f, place: { band: 'engaged', with: [...(f.place?.with ?? []), me.id] } }, p)));
 }
 
 /**
@@ -277,12 +391,21 @@ export function monsterAction(state: CombatState): Action | null {
   const me = state.combatants[currentActor(state)];
   if (me.side === 'party') return null;
   const power = chosenPower(me);
-  if (power) return { kind: 'power', power: power.name, targets: caughtBy(state, me, power) };
+  if (power) {
+    const targets = caughtBy(state, me, power);
+    if (targets.length) return { kind: 'power', power: power.name, targets };
+  }
   if (me.attacks.length === 0) return { kind: 'dodge', ...(me.idle ? { as: me.idle } : {}) }; // nothing to harm anyone with (SRD: Shriek, Bubble Dash)
   const up = upAgainst(state, me.side);
   const open = up.filter((c) => !state.dodging.includes(c.id));
   const target = fewestHp(open.length ? open : up);
   const [first, ...then] = me.multiattack ?? [(me.attacks.find((a) => !a.ranged) ?? me.attacks[0]).name];
+  const chosen = me.attacks.find((a) => a.name === first) ?? me.attacks[0];
+  if (me.place && target.place && !neededApproach(state, me, 'attack', { attack: chosen, target })) {
+    const melee = !chosen.ranged && !engagedWith(me, target.id);
+    const tooFar = chosen.ranged && !rangedShot(me, target, chosen).ok;
+    if (melee || tooFar) return { kind: 'move', to: stepToward(me.place.band, melee ? 'engaged' : target.place.band) };
+  }
   return { kind: 'attack', attack: first, target: target.id, ...(then.length ? { then } : {}) };
 }
 

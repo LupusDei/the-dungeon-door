@@ -1,3 +1,4 @@
+import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, StoredScene, Vote } from '../types.ts';
 import type { GameExpectation, GamePatch, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
@@ -176,15 +177,18 @@ export class MemoryStore implements Store {
     game.updatedAt = now();
   }
 
-  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number) {
+  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, move?: Move | null) {
     await tick();
     const game = this.games.get(code)?.game;
     if (!game || game.status !== 'voting' || game.sceneIndex !== index) return null;
     const scene = game.scenes.find((s) => s.index === index);
     if (!scene) return null;
     let vote: Vote | undefined = scene.votes.find((v) => v.playerId === playerId);
-    if (vote) vote.choiceId = choiceId;
-    else scene.votes.push((vote = { playerId, choiceId, roll }));
+    if (vote) {
+      vote.choiceId = choiceId;
+      if (move) vote.move = move;
+      else delete vote.move;
+    } else scene.votes.push((vote = { playerId, choiceId, roll, ...(move ? { move } : {}) }));
     game.updatedAt = now();
     return { ...vote };
   }

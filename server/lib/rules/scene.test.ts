@@ -85,7 +85,7 @@ test('the side that loses everyone loses: victory when the foes are dead', () =>
   const won = act(s, { kind: 'attack', attack: 'Doom', target: 'g1', natural: 10 });
   assert.equal(won.outcome, 'victory');
   assert.equal(xpEarned(won), 50);
-  assert.deepEqual(won.log.map((e) => e.kind), [...s.log.map((e) => e.kind), 'attack'], 'nothing happens after the end');
+  assert.deepEqual(won.log.map((e) => e.kind), [...s.log.map((e) => e.kind), 'move', 'attack'], 'the hero steps in, then the blow; nothing happens after the end');
   assert.equal(xpEarned({ ...won, combatants: { ...won.combatants, g2: goblin('g2') } }), 50, 'only defeated foes count');
   assert.throws(() => act(won, { kind: 'dodge' }), /the combat is over/);
 });
@@ -201,11 +201,11 @@ const onTurn = (s: CombatState, id: string): CombatState => ({ ...s, turn: s.ord
 
 test('a monster with a ready power uses it: the most wounded heroes up its area catches; then it is spent', () => {
   const s = onTurn(startCombat(3, [hero('bryn', { hp: 30 }), hero('ash', { hp: 20 }), hero('cy', { hp: 25 }), hero('di', { hp: 0, status: 'stable' }), wolf()]), 'ww');
-  assert.deepEqual(monsterAction(s), { kind: 'power', power: 'Cold Breath', targets: ['ash', 'cy'] }, 'a 15-foot Cone catches two');
+  assert.deepEqual(monsterAction(s), { kind: 'power', power: 'Cold Breath', targets: ['ash', 'cy', 'bryn'] }, 'a 15-foot cone, after stepping in, catches every hero near');
   const done = act(s, monsterAction(s)!);
   const e = done.log.find((x) => x.kind === 'power')!;
   assert.ok(e.kind === 'power');
-  assert.deepEqual(e.outcomes.map((o) => o.target), ['ash', 'cy']);
+  assert.deepEqual(e.outcomes.map((o) => o.target), ['ash', 'cy', 'bryn']);
   for (const o of e.outcomes) assert.equal(done.combatants[o.target].hp, s.combatants[o.target].hp - o.damage);
   assert.equal(done.combatants.ww.spent!['Cold Breath'], 1);
   const again = onTurn({ ...done, combatants: { ...done.combatants, ww: { ...done.combatants.ww, spent: { 'Cold Breath': 1 } } } }, 'ww');

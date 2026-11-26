@@ -3,6 +3,7 @@ import type { AttackView } from './attacks.ts';
 import type { RulesHook } from './play/hooks.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { RulesView } from './play/view.ts';
+import type { Move } from './rules/bands.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
@@ -44,6 +45,8 @@ export interface Vote {
   choiceId: ChoiceId;
   /** d20, rolled by the server on the first vote and kept when the vote changes. */
   roll: number;
+  /** A combat move taken with this vote. Absent outside a fight, and on votes from before range bands. */
+  move?: Move;
 }
 
 /** A vote as the app sees it. In a combat round `label` is what that hero is doing, in their own choice's words: "Cast Fire Bolt", "Break Free", "Help Ilsa". */

@@ -123,11 +123,16 @@ const monsterSchema = z.object({
 }).transform((m): Monster => {
   const abilities = { str: m.strength, dex: m.dexterity, con: m.constitution, int: m.intelligence, wis: m.wisdom, cha: m.charisma };
   const listed = new Map(m.proficiencies.map((p) => [p.proficiency.index, p.value]));
-  const attacks = m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
-    name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
-    damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
-    ...withRider(a),
-  }));
+  const attacks = m.actions.filter((a) => a.attackBonus !== undefined).map((a) => {
+    const ranged = a.desc.startsWith('Ranged');
+    const reach = ranged ? /range (\d+)(?:\/(\d+))?/.exec(a.desc) : null;
+    return {
+      name: a.name, bonus: a.attackBonus!, ranged,
+      damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
+      ...(reach ? { normal: Number(reach[1]), long: reach[2] ? Number(reach[2]) : null } : {}),
+      ...withRider(a),
+    };
+  });
   return {
     id: m.index, name: m.name, size: m.size, type: m.type,
     ac: m.armorClass[0].value, hp: m.hitPoints, hitDice: m.hitDice, speed: parseInt(m.speed.walk, 10),

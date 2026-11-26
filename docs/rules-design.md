@@ -327,7 +327,8 @@ All SRD 5.2 unless marked **original** (our own rules, CC0, for what 5.2 leaves 
   fearless foe (undead, construct, ooze) stands. Fleeing foes leave the XP of the slain only.
 - **Area spells** (`rules/spellEffects.ts areaCatch`, **original** rule of thumb for play without a grid):
   1 + radius/5 foes for a sphere, cylinder or emanation, 1 + size/10 for a cone or cube, 1 + length/30
-  for a line; the most wounded first. Damage is rolled once and each target saves.
+  for a line; the most wounded first. Damage is rolled once and each target saves. A fight that tracks
+  range bands (below) catches by band instead.
 - **Potions in combat.** Drinking a potion is a Bonus Action (5.2): a hero at half HP or less drinks the
   least of its healing potions before its action. (Phase 4: a fighter with Second Wind left uses that
   Bonus Action instead, 1d10 + Fighter level; one Bonus Action a turn.)
@@ -403,9 +404,9 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
   clock, so it has no window.
 - **Stored 5.1 trap ids** in old dungeons are mapped to their 5.2 ids when a game is loaded.
 
-Still simplified: legendary actions and legendary resistance; Hide, Dash, Ready and Search as combat
+Still simplified: legendary actions and legendary resistance; Hide, Ready and Search as combat
 actions; rider creature-type and size limits; subspecies resistances (tiefling legacies, dragonborn
-ancestry) until the sheet records the subspecies; overland travel pace.
+ancestry) until the sheet records the subspecies; overland travel pace. Dash is a combat move (range bands).
 
 ## Phase 5: dungeon levels, fights that fit, XP at the quest's end
 
@@ -494,6 +495,35 @@ won and under 5% of heroes dead per fight**.
 
 Not yet: an XP award for finishing a quest, so leveling up still takes many fights.
 
+## Range bands
+
+**Original** (CC0). The fight has no grid. Each combatant is **engaged** with specific creatures, **near**
+(about 30 ft), or **far** (the next band, about 60 ft). Engagement is melee, about 5 ft, and it is
+symmetric: if you are engaged with a foe, that foe is engaged with you. A reach weapon still needs
+engaged. `rules/bands.ts` holds the rule; `play/moves.ts` lists the legal moves for a per-hero action list.
+
+- **A move changes one band. Dash changes two and spends the action.** From near, one move engages a foe
+  who is near, or steps out to far. From far, one move comes to near, or engages a foe who is also far;
+  engaging someone near takes a Dash. Leaving an engaged foe provokes an opportunity attack from each foe
+  you leave, unless you Disengage (or, like a goblin, you Disengage as a Bonus Action). A creature dropped
+  by that attack does not finish the move.
+- **Melee needs engaged.** A ranged weapon or a spell is checked against the feet of the band: within
+  normal range as usual, between normal and long at disadvantage, past long range not at all. A ranged
+  attack made while engaged has disadvantage. A touch spell needs engaged.
+- **Monsters use the same bands.** A melee foe steps in (one band, then the attack; from two bands away it
+  spends the turn moving closer). A ranged foe steps out of melee, Disengaging when it can, and shoots.
+- **A fight starts with both sides near.** When one side surprises the other, it begins in melee.
+- **An area catches by band, where its size fits.** A cone, line, emanation or an area of range Self
+  reaches from the caster: a 15-foot cone catches the creatures they are engaged with, not the near band.
+  Stepping in (one move) and then casting catches that cluster. A sphere, cylinder or cube with a range is
+  placed on a foe within that range and catches whoever is within its size of them: a 20-foot fireball
+  catches the foe it is centred on and anyone in melee with that foe, not everyone merely near. The old
+  count (`areaCatch`) remains only for a stored fight that has no places.
+
+On a hero's turn the one-band step is free with the action, so Attack from near steps in and strikes, and
+the choice says so. A vote may also carry a `move` (`docs/api.md`): one band before the action, or a Dash
+instead of it. An illegal move is refused.
+
 ## For the app (the game layer on top)
 
 What the game adds around the engine so the app can show it (Justin's side; `docs/api.md` has the shapes):
@@ -504,6 +534,9 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
   the SRD text behind a sheet's spells, traits, feats, class features, skills and conditions.
 - **The hero in a game**: `players[].character` carries the live sheet from the game's party state, so
   the sheet screen shows current HP, slots, level and gear during play.
+- **Where everyone stands** (`rules.combat.combatants`): `position` is `engaged`, `near` or `far`, and
+  `engagedWith` names who they are in melee with, by id. The battle map will draw this; until then the
+  choice text says when a hero will step in ("You move to engage Goblin Warrior").
 - **A round written for each player** (`lib/play/your-turn.ts`): the three combat choices say what the
   caller's own hero will do ("Attack with Greatsword", "+5 to hit, 2d6+3 slashing, at Goblin Warrior 2"),
   using the same picks as `play/fight.ts`: an area spell names every foe it will catch, and a hero the

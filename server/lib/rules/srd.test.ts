@@ -156,7 +156,7 @@ test('spells carry their mechanics: attack or save, damage, upcasting, healing, 
   assert.deepEqual(spells.get('fireball'), {
     id: 'fireball', name: 'Fireball', level: 3, classes: ['sorcerer', 'wizard'], concentration: false,
     attack: null, save: 'dex', halfOnSave: true, damage: { dice: '8d6', type: 'fire' }, upcastDice: '1d6',
-    healing: null, area: { shape: 'Sphere', feet: 20 }, darts: null,
+    healing: null, area: { shape: 'Sphere', feet: 20 }, darts: null, range: 150,
   });
   const bolt = spells.get('fire-bolt')!;
   assert.deepEqual([bolt.attack, bolt.save, bolt.damage, bolt.upcastDice, bolt.area], ['ranged', null, { dice: '1d10', type: 'fire' }, null, null]);

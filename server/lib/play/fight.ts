@@ -17,9 +17,11 @@ import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { HEALING_POTIONS, item } from '../rules/items.ts';
 import { held, removeItem } from '../rules/inventory.ts';
 import { resourcesOf, useResource } from '../rules/resources.ts';
-import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
+import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, relocate, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { type Cast, castSpell, endConcentration, slotsLeft, spellDamageDice, strikesAt } from '../rules/spells.ts';
+import { castSpell, endConcentration, slotsLeft, spellDamageDice, strikesAt } from '../rules/spells.ts';
+import { type Move, areaFromSelf, distanceFeet, engagedWith, meleeCluster, neededApproach, rangedShot, spellHits, stepToward, validateMove } from '../rules/bands.ts';
+import { RuleViolation } from '../rules/violation.ts';
 import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
@@ -39,7 +41,7 @@ export const COMBAT_CHOICES = [
 ];
 
 export type FightEnd = 'victory' | 'defeat' | 'fled';
-export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: number }>>;
+export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: number; move?: Move }>>;
 export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
 
 /** Duplicate monsters are numbered: "Goblin Warrior 1", "Goblin Warrior 2". */
@@ -67,14 +69,17 @@ const blindLine = (all: Combatant[]) => {
   return blind.length ? [`In the dark, ${blind.join(', ')} cannot see (Blinded).`] : [];
 };
 
-export function startFight(party: PartyState, monsterIds: readonly string[], light: LightLevel = 'bright'): { party: PartyState; combat: CombatState; lines: string[] } {
+export function startFight(party: PartyState, monsterIds: readonly string[], light: LightLevel = 'bright', surprise?: 'party' | 'foes'): { party: PartyState; combat: CombatState; lines: string[] } {
   const rng = seededRng(party.rng);
   const seed = rng.die(1_000_000_000);
   const heroes = Object.entries(party.sheets).filter(([, sheet]) => !sheet.dead).map(([id, sheet]) => heroOf(id, sheet, light));
   const others = foes(monsterIds, light);
-  const combat = startCombat(seed, [...heroes, ...others]);
+  const combat = startCombat(seed, [...heroes, ...others], surprise);
   const order = combat.order.map((id) => `${combat.combatants[id].name} ${combat.initiative[id]}`).join(', ');
-  return { party: { ...party, rng: rng.state() }, combat, lines: [`A fight begins: ${others.map((f) => f.name).join(', ')}. Initiative: ${order}.`, ...blindLine([...heroes, ...others])] };
+  const stood = surprise
+    ? `${surprise === 'foes' ? 'The foes surprise the party' : 'The party surprises the foes'}: the fight begins in melee.`
+    : 'Both sides begin near, about 30 feet apart.';
+  return { party: { ...party, rng: rng.state() }, combat, lines: [stood, `A fight begins: ${others.map((f) => f.name).join(', ')}. Initiative: ${order}.`, ...blindLine([...heroes, ...others])] };
 }
 
 const living = (c: Combatant) => c.status !== 'dead';
@@ -104,10 +109,66 @@ export function bestSpell(sheet: CharacterSheet): SrdSpell | null {
 /** The attack with the best bonus to hit. */
 export const bestWeapon = (me: Combatant) => me.attacks.reduce((best, a) => (a.bonus > best.bonus ? a : best));
 
+/** One band toward the foe when this action cannot reach them yet. */
+function closer(me: Combatant, foe: Combatant): Action {
+  const to = stepToward(me.place?.band ?? 'near', foe.place?.band ?? 'near');
+  return to === 'engaged' ? { kind: 'move', to, engage: [foe.id] } : { kind: 'move', to };
+}
+
+/** Who a melee or ranged attack can hit this turn, most wounded (and not immune) first, and the step it takes to get there. */
+export function strikePlan(combat: CombatState, me: Combatant): { target: Combatant | null; approach: Move | null } {
+  const attack = bestWeapon(me);
+  const type = attack.damage[0]?.type;
+  const foes = caught(combat, me.side, 99, type).map((id) => combat.combatants[id]);
+  if (!me.place) return { target: foes[0] ?? null, approach: null };
+  if (!attack.ranged) {
+    const cluster = meleeCluster(combat, me.id);
+    const held = foes.filter((f) => engagedWith(me, f.id));
+    const reachable = (held.length ? held : foes.filter((f) => cluster.includes(f.id)));
+    const target = reachable[0] ?? null;
+    const approach = target && !engagedWith(me, target.id) ? neededApproach(combat, me, 'attack', { attack, target }) : null;
+    return { target, approach };
+  }
+  const inRange = foes.filter((f) => rangedShot(me, f, attack).ok);
+  return { target: inRange[0] ?? null, approach: null };
+}
+
+/**
+ * Who a cast hits. A cone, line, emanation or Self area catches every foe in the bands it reaches, stepping
+ * into melee first when that is one move. A placed area is centred on the most wounded foe in range and
+ * catches whoever is within its size of them. Empty when nothing is in reach even after one step.
+ */
+export function castPlan(combat: CombatState, me: Combatant, spell: SrdSpell, sheet: CharacterSheet): { targets: string[]; approach: Move | null } {
+  const type = spell.damage?.type;
+  const foes = caught(combat, me.side, 99, type).map((id) => combat.combatants[id]);
+  if (!spell.area) {
+    if (spell.darts) return { targets: splitDarts(combat, me.side, strikesAt(spell, spell.level, sheet.level), averageDice(parseDice(spell.damage!.dice)), type ?? ''), approach: null };
+    const aimed = foes.filter((f) => !me.place || spellHits(me, f, spell));
+    if (aimed[0]) return { targets: Array<string>(strikesAt(spell, spell.level, sheet.level)).fill(aimed[0].id), approach: null };
+    const step = meleeCluster(combat, me.id, true).map((id) => combat.combatants[id]).filter((f) => f.side !== me.side && spellHits({ ...me, place: { band: 'engaged', with: [f.id] } }, { ...f, place: { band: 'engaged', with: [me.id] } }, spell));
+    return step[0] ? { targets: Array<string>(strikesAt(spell, spell.level, sheet.level)).fill(step[0].id), approach: { to: 'engaged', engage: [step[0].id] } } : { targets: [], approach: null };
+  }
+  if (areaFromSelf(spell)) {
+    const now = foes.filter((f) => spellHits(me, f, spell));
+    if (now.length || !me.place) return { targets: (me.place ? now : foes.slice(0, areaCatch(spell.area))).map((f) => f.id), approach: null };
+    const engage = meleeCluster(combat, me.id);
+    const closed = { ...me, place: { band: 'engaged' as const, with: engage } };
+    const after = foes.filter((f) => engage.includes(f.id) && spellHits(closed, { ...f, place: { band: 'engaged', with: [me.id] } }, spell));
+    return after.length ? { targets: after.map((f) => f.id), approach: { to: 'engaged', engage: after.map((f) => f.id) } } : { targets: [], approach: null };
+  }
+  const inRange = foes.filter((f) => !me.place || spellHits(me, f, spell));
+  if (!inRange.length) return { targets: [], approach: null };
+  const center = inRange[0];
+  const caughtHere = inRange.filter((f) => f.id === center.id || (distanceFeet(center, f) ?? Infinity) <= spell.area!.feet);
+  return { targets: caughtHere.map((f) => f.id), approach: null };
+}
+
 function attackAction(combat: CombatState, me: Combatant, sheet: CharacterSheet, natural: number): Action {
+  const plan = strikePlan(combat, me);
+  if (!plan.target) return closer(me, mostWounded(combat, me.side, weaponType(me)));
   const attack = bestWeapon(me).name;
   const extra = extraAttacks(sheet);
-  return { kind: 'attack', attack, target: mostWounded(combat, me.side, weaponType(me)).id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
+  return { kind: 'attack', attack, target: plan.target.id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
 }
 
 /** The first healing spell the hero has prepared and a slot to cast. */
@@ -141,17 +202,9 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
   const spell = choiceId === 'b' ? bestSpell(sheet) : null;
   if (!spell) return { action: attackAction(combat, me, sheet, natural), sheet };
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
-  const caster = casterOf(sheet);
-  const type = spell.damage!.type;
-  const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area), type) : aimed(combat, me, spell, cast);
-  return { action: { kind: 'spell', caster, cast, targets, natural }, sheet: spent };
-}
-
-/** A cast's targets without an area: darts split to drop foes, beams all at the most wounded. */
-function aimed(combat: CombatState, me: Combatant, spell: SrdSpell, cast: Cast): string[] {
-  const type = spell.damage!.type;
-  if (spell.darts) return splitDarts(combat, me.side, cast.beams, averageDice(parseDice(cast.damageDice!)), type);
-  return Array<string>(cast.beams).fill(mostWounded(combat, me.side, type).id);
+  const plan = castPlan(combat, me, spell, sheet);
+  if (!plan.targets.length) return { action: closer(me, mostWounded(combat, me.side, spell.damage?.type)), sheet };
+  return { action: { kind: 'spell', caster: casterOf(sheet), cast, targets: plan.targets, natural }, sheet: spent };
 }
 
 /**
@@ -192,6 +245,11 @@ const struck = (o: SpellOutcome): string => {
 };
 
 const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names) => string } = {
+  move: ({ actor, to, engage, dash, disengage }, name) => {
+    const how = dash ? 'Dashes' : disengage ? 'Disengages' : 'moves';
+    const where = to === 'engaged' ? `engage ${(engage ?? []).map(name).join(' and ')}` : to;
+    return `${name(actor)} ${how} to ${where}.`;
+  },
   attack: ({ actor, result: r, reaction, rider }, name) =>
     `${reaction ? 'Opportunity Attack: ' : ''}${name(actor)} attacks ${name(r.target)} with ${r.attack}: ${r.roll.natural} (total ${r.roll.total}) vs AC ${r.ac}, ` +
     (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.') + (rider ? ` ${riderLine(rider, name(r.target))}` : ''),
@@ -310,6 +368,19 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   const drunk = bonusAction(state, sheets, id);
   const vote = votes[id];
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
+  if (vote.move) {
+    try {
+      validateMove(drunk.state, id, vote.move);
+    } catch (e) {
+      if (e instanceof RuleViolation) return { action: { kind: 'other', text: e.message }, ...drunk };
+      throw e;
+    }
+    if (vote.move.dash) return { action: { kind: 'move', ...vote.move }, ...drunk };
+    const stepped = relocate(drunk.state, id, vote.move);
+    if (stepped.combatants[id].status !== 'up') return { action: { kind: 'dodge' }, state: stepped, sheets: drunk.sheets };
+    const taken = heroAction(stepped, drunk.sheets[id], id, vote.choiceId, vote.roll);
+    return { action: taken.action, state: stepped, sheets: { ...drunk.sheets, [id]: taken.sheet } };
+  }
   if (vote.choiceId === 'c') {
     const third = takeThird(drunk.state, drunk.sheets[id], id);
     return { action: third.action, state: third.combat, sheets: { ...drunk.sheets, [id]: third.sheet } };

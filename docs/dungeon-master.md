@@ -64,7 +64,8 @@ The engine owns the numbers; you propose and narrate. For a game from before the
     ("restrained (DC 13 Athletics to break free)").
   - `time` and `light`: the clock ("Day 1, 08:40") and the light the party carries. Describe only what
     the heroes can see.
-  - `combat`: the round and every combatant's HP and status, or null.
+  - `combat`: the round, how hard the fight is, and every combatant's HP, status and where they stand
+    (engaged with whom, near or far), or null.
   - `dungeon`: the dungeon's kind and **level**, the area the party is in (its purpose, what is there,
     its exits by id, any foes waiting there and their attitude), or null. The level starts at the living
     heroes' average and can go deeper through a door: deeper means more dangerous, so narrate it (lower,

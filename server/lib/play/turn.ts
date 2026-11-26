@@ -2,6 +2,7 @@
  * One turn of play through the rules engine: the party's choice (and its hook), or a combat round. Pure:
  * the game (lib/game.ts) loads the state, calls playTurn, and stores what comes back.
  */
+import type { Move } from '../rules/bands.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { HazardSpec } from '../rules/hazards.ts';
 import { capFight } from '../rules/encounter.ts';
@@ -25,7 +26,7 @@ import { ambientLight, clockOf, lightLevel, lightUp, passTime, secondsFor } from
 import { partyHazard, springTrap } from './traps.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
-export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number }
+export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; move?: Move }
 export type FightNews = 'started' | FightEnd | null;
 export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews }
 
@@ -75,7 +76,7 @@ function clearHere(s: RulesState, lines: string[]): { state: RulesState; lines: 
 }
 
 function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballot[]): RulesTurn {
-  const votes = Object.fromEntries(ballots.map((b) => [b.playerId, { choiceId: b.choiceId, roll: b.roll }]));
+  const votes = Object.fromEntries(ballots.map((b) => [b.playerId, { choiceId: b.choiceId, roll: b.roll, ...(b.move ? { move: b.move } : {}) }]));
   const round = fightRound(s.party, combat, votes);
   const after = { ...s, party: round.party, combat: round.ended ? null : round.combat };
   if (round.ended === null || round.ended === 'defeat') return done(after, round.lines, null, round.ended);

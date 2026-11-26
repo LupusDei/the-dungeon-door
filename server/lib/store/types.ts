@@ -1,4 +1,5 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
+import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
 
 export interface NewGame {
@@ -82,7 +83,7 @@ export interface Store {
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its
    * original roll. Returns the stored vote, or null when the game isn't voting on that scene.
    */
-  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number): Promise<Vote | null>;
+  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, move?: Move | null): Promise<Vote | null>;
 
   /** Appends a chat/system/dm message with the game's next message id. */
   addMessage(code: string, message: NewMessage): Promise<Message>;

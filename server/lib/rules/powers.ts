@@ -20,6 +20,8 @@ export interface Power {
   uses: Uses;
   /** Its area, or null for one target. */
   area: { shape: AreaShape; feet: number } | null;
+  /** "within N feet" for a single target; absent: melee, or the area's own size. */
+  range?: number;
   lasting: Lasting | null;
 }
 
@@ -63,10 +65,12 @@ export function powersOf(actions: readonly PowerSource[]): Power[] {
   return actions.filter((a) => a.dc && a.attackBonus === undefined).map((a) => {
     const ability = a.dc!.dcType.index as Ability;
     const area = AREA.exec(a.desc);
+    const within = /within (\d+) feet/.exec(a.desc);
     return {
       name: a.name, ability, dc: a.dc!.dcValue, half: a.dc!.successType === 'half',
       damage: (a.damage ?? []).map((d) => ({ dice: d.damageDice, type: d.damageType.index })),
       uses: usesOf(a.usage), area: area ? { shape: area[2] as AreaShape, feet: Number(area[1]) } : null,
+      ...(within ? { range: Number(within[1]) } : {}),
       lasting: lastingOf(a.desc, ability, a.dc!.dcValue),
     };
   });

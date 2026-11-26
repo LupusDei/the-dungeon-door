@@ -96,7 +96,12 @@ export interface RulesView {
     round: number; outcome: 'ongoing' | 'victory' | 'defeat';
     /** The fight against the current party: low, moderate, high, or deadly above high. */
     band: FightBand;
-    combatants: { id: string; name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; conditions: string[]; toughness: Toughness | null }[];
+    combatants: { id: string; name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; conditions: string[]; toughness: Toughness | null;
+      /** Range band: engaged (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). */
+      position: 'engaged' | 'near' | 'far';
+      /** Who they are in melee with, by id. Empty unless engaged. */
+      engagedWith: string[];
+    }[];
   };
   dungeon: null | {
     mode: 'fixed' | 'explore'; kind: string; at: string;
@@ -152,6 +157,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
         combatants: rated.ordered.map((c) => ({
           id: c.id, name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status,
           conditions: [...c.conditions], toughness: rated.toughness(c),
+          position: c.place?.band ?? 'near', engagedWith: [...(c.place?.with ?? [])],
         })),
       };
     })(),
@@ -186,7 +192,9 @@ export interface RulesContext {
   light: string;
   combat: null | {
     round: number; band: FightBand;
-    combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; toughness: Toughness | null }[];
+    combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; toughness: Toughness | null;
+      position: 'engaged' | 'near' | 'far'; engagedWith: string[];
+    }[];
   };
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
@@ -234,7 +242,10 @@ export function rulesContext(state: RulesState): RulesContext {
       return {
         round: combat.round,
         band: rated.band,
-        combatants: rated.ordered.map((c) => ({ name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status, toughness: rated.toughness(c) })),
+        combatants: rated.ordered.map((c) => ({
+          name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status, toughness: rated.toughness(c),
+          position: c.place?.band ?? 'near', engagedWith: (c.place?.with ?? []).map((id) => combat.combatants[id]?.name ?? id),
+        })),
       };
     })(),
     dungeon: dungeon && here && {

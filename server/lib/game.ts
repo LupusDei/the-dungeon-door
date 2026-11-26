@@ -11,6 +11,8 @@ import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
+import { parseMove, validateMove } from './rules/bands.ts';
+import { RuleViolation } from './rules/violation.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
@@ -282,7 +284,7 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
 }
 
 /** POST /api/games/{code}/vote */
-export async function castVote(code: string, playerId: string, sceneIndex: unknown, choiceId: unknown, origin: string): Promise<GameState> {
+export async function castVote(code: string, playerId: string, sceneIndex: unknown, choiceId: unknown, origin: string, moveRaw?: unknown): Promise<GameState> {
   if (typeof sceneIndex !== 'number' || !Number.isInteger(sceneIndex)) throw badRequest('sceneIndex must be a whole number');
   if (!CHOICE_IDS.includes(choiceId as ChoiceId)) throw badRequest('choiceId must be "a", "b" or "c"');
   const game = await loadGame(code);
@@ -290,7 +292,18 @@ export async function castVote(code: string, playerId: string, sceneIndex: unkno
   if (game.status !== 'voting') throw conflict(`can't vote: the game is ${game.status}`);
   if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
   if (!canAct(game.combat, playerId)) return viewGame(code, playerId); // a fallen hero has no action: nothing to record
-  const vote = await getStore().castVote(code, sceneIndex, playerId, choiceId as ChoiceId, dice.d20());
+  let move: ReturnType<typeof parseMove>;
+  if (moveRaw !== undefined) {
+    try {
+      move = parseMove(moveRaw);
+      if (move && !game.combat) throw badRequest('there is no fight to move in');
+      if (move && game.combat) validateMove(game.combat, playerId, move);
+    } catch (e) {
+      if (e instanceof RuleViolation) throw badRequest(e.message);
+      throw e;
+    }
+  }
+  const vote = await getStore().castVote(code, sceneIndex, playerId, choiceId as ChoiceId, dice.d20(), move);
   if (!vote) throw conflict('voting on that scene has closed');
   await resolveIfAllVoted(code, sceneIndex, origin);
   return viewGame(code, playerId);

@@ -79,9 +79,12 @@ CREATE TABLE IF NOT EXISTS votes (
   player_id  text NOT NULL,
   choice_id  text NOT NULL CHECK (choice_id IN ('a', 'b', 'c')),
   roll       int  NOT NULL CHECK (roll BETWEEN 1 AND 20),
+  move       jsonb,                   -- a combat move taken with the vote: {to, engage?, dash?, disengage?}
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (game_code, scene_idx, player_id)
 );
+
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS move jsonb;
 
 CREATE TABLE IF NOT EXISTS messages (
   game_code      text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
