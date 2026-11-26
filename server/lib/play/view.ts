@@ -7,7 +7,17 @@ import { load } from '../rules/inventory.ts';
 import { encounterBudget, monsters } from '../rules/monsters.ts';
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
+import { waitingFoes } from './delve.ts';
+import { foesNamed } from './hooks.ts';
+import type { Attitude } from './parley.ts';
+import type { DungeonState } from './state.ts';
 import type { RulesState } from './turn.ts';
+
+export interface Waiting { foes: string; attitude: Attitude }
+function waiting(dungeon: DungeonState): Waiting | null {
+  const here = waitingFoes(dungeon);
+  return here && { foes: foesNamed(here.monsters), attitude: here.attitude };
+}
 
 const NO_SLOTS = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 const slotsLeft = (s: CharacterSheet) => (s.spellcasting ? s.spellcasting.slots.map((n, i) => n - s.spellcasting!.expended[i]) : NO_SLOTS);
@@ -33,6 +43,8 @@ export interface RulesView {
   dungeon: null | {
     mode: 'fixed' | 'explore'; kind: string; at: string;
     areas: { id: string; name: string; purpose: string | null; cleared: boolean; exits: { id: string; connection: string; to: string | null }[] }[];
+    /** Foes in this area who did not attack: "Boar ×3" and their attitude. */
+    waiting: Waiting | null;
   };
   results: string[];
 }
@@ -66,6 +78,7 @@ export function rulesView({ party, combat, dungeon }: RulesState, results: strin
       at: dungeon.at,
       areas: dungeon.visited.map((id) => dungeon.map.nodes[id]).map(({ id, name, purpose, exits }) =>
         ({ id, name, purpose, cleared: dungeon.cleared.includes(id), exits: exits.map(({ id: x, connection, to }) => ({ id: x, connection, to })) })),
+      waiting: waiting(dungeon),
     },
     results,
   };
@@ -77,7 +90,7 @@ export interface RulesContext {
     passivePerception: number; passiveInsight: number; gp: number; items: string; dragging: boolean; dead: boolean;
   }[];
   combat: null | { round: number; combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string }[] };
-  dungeon: null | { kind: string; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[] };
+  dungeon: null | { kind: string; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
   monsters: string[];
 }
@@ -111,6 +124,7 @@ export function rulesContext({ party, combat, dungeon }: RulesState): RulesConte
       area: here.name,
       purpose: here.purpose,
       exits: here.exits.map((x) => ({ id: x.id, connection: x.connection, leadsTo: x.to === null ? null : dungeon.map.nodes[x.to].name })),
+      waiting: waiting(dungeon),
     },
     monsters: suitableMonsters(sheets.map((s) => s.level)),
   };

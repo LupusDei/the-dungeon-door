@@ -69,18 +69,78 @@ test('in a fight every vote is that hero’s action; a won fight ends and clears
   assert.deepEqual([lost.fight, lost.combat], ['defeat', null]);
 });
 
+/** The fixed map's r1 holds three boars; here they guard 60 gp too. */
+function boarRoom(): DungeonState {
+  const d = startDungeon('fixed', 3, [1, 1], 4);
+  const r1 = d.map.nodes.r1;
+  return { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r1: { ...r1, contents: { ...r1.contents!, treasure: { gp: 60, sp: 0, gems: 0, jewellery: 0, magicItem: null } } } } } };
+}
+const intoBoars = (rng: number) => playTurn({ ...state({ dungeon: boarRoom() }), party: { ...party(), rng } }, { kind: 'move', exit: 'r1' }, ballots(5, 5));
+const boarMeetings = Array.from({ length: 40 }, (_, i) => intoBoars(i + 1));
+const met = (attitude: string) => boarMeetings.find((t) => t.dungeon!.attitudes!.r1 === attitude)!;
+
 test('a way on: the party moves, and what is in the room springs: monsters fight, loot is taken and the room cleared', () => {
   const d = startDungeon('fixed', 3, [1, 1], 4);
-  const boars = playTurn(state({ dungeon: d }), { kind: 'move', exit: 'r1' }, ballots(5, 5));
+  const boars = met('hostile');
   assert.equal(boars.dungeon!.at, 'r1');
   assert.equal(boars.fight, 'started');
   assert.match(boars.lines[0], /^The party enters Cramped \(15 x 15 ft\.\): Failed experiment\.$/);
+  assert.match(boars.lines[1], /^Boar ×3: hostile \(2d6: [2-5]\)\.$/);
+  assert.match(boars.lines[2], /^A fight begins: /);
   assert.ok(!boars.dungeon!.cleared.includes('r1'), 'cleared once the boars are beaten');
   const loot = playTurn(state({ dungeon: d }), { kind: 'move', exit: 'r4' }, ballots(5, 5));
   assert.deepEqual([loot.fight, loot.dungeon!.cleared.includes('r4')], [null, true]);
   assert.equal(loot.lines[1], 'Treasure: 60 gp in coin (30 each).');
   const back = playTurn(state({ dungeon: clearRoom(d, 'r1') }), { kind: 'move', exit: 'r1' }, []);
   assert.deepEqual([back.fight, back.lines.length], [null, 1]);
+});
+
+test('foes who are not Hostile watch and wait: no fight, the room not cleared, its treasure untouched', () => {
+  for (const attitude of ['indifferent', 'friendly']) {
+    const calm = met(attitude);
+    assert.equal(calm.fight, null);
+    assert.match(calm.lines[1], new RegExp(`^Boar ×3: ${attitude} \\(2d6: \\d+\\)\\. They watch and wait\\.$`));
+    assert.deepEqual([calm.dungeon!.cleared.includes('r1'), calm.party.sheets.p1.gp], [false, fighter.gp]);
+    assert.notEqual(calm.party.rng, party().rng);
+  }
+  const s = met('indifferent');
+  const away = { ...s, dungeon: { ...s.dungeon!, at: 'r0' } };
+  const again = playTurn(away, { kind: 'move', exit: 'r1' }, ballots(5, 5));
+  assert.deepEqual([again.lines[1], again.party.rng], ['Boar ×3: indifferent. They watch and wait.', away.party.rng], 'met before: their attitude is remembered');
+});
+
+test('undead, constructs and oozes always attack', () => {
+  const d = boarRoom();
+  const r1 = d.map.nodes.r1;
+  const crypt = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r1: { ...r1, contents: { ...r1.contents!, encounter: { ...r1.contents!.encounter!, monsters: ['skeleton'] } } } } } };
+  const t = playTurn(state({ dungeon: crypt }), { kind: 'move', exit: 'r1' }, ballots(5, 5));
+  assert.deepEqual([t.lines[1], t.fight], ['Skeleton: hostile.', 'started']);
+});
+
+test('a parley with the foes waiting here: success clears the room (their treasure stays theirs); failure sours them', () => {
+  const talks = (attitude: string, vote = 1) => Array.from({ length: 30 }, (_, i) => {
+    const s = met(attitude);
+    return playTurn({ ...s, party: { ...s.party, rng: i + 1 } }, { kind: 'parley' }, ballots(vote, vote));
+  });
+  const peace = talks('indifferent', 20).find((t) => t.success === true)!;
+  assert.deepEqual([peace.dungeon!.cleared.includes('r1'), peace.party.sheets.p1.gp, peace.fight], [true, fighter.gp, null]);
+  assert.equal(peace.lines.at(-1), 'The Boar ×3 let the party be.');
+  const war = talks('indifferent').find((t) => t.success !== true)!;
+  assert.deepEqual([war.fight, war.dungeon!.attitudes!.r1], ['started', 'hostile']);
+  assert.match(war.lines.at(-1)!, /^A fight begins: /);
+  const cooler = talks('friendly').find((t) => t.success === false)!;
+  assert.deepEqual([cooler.fight, cooler.dungeon!.attitudes!.r1, cooler.dungeon!.cleared.includes('r1')], [null, 'indifferent', false]);
+});
+
+test('a parley the DM offers outside a room of waiting foes is with the monsters it names, who start Indifferent', () => {
+  assert.deepEqual(playTurn(state(), { kind: 'parley' }, ballots(10, 10)).lines, ['There is no one here to talk to.']);
+  assert.deepEqual(playTurn(state(), { kind: 'parley', monsters: [] }, ballots(10, 10)).lines, ['There is no one here to talk to.']);
+  const offered = Array.from({ length: 30 }, (_, i) => playTurn({ ...state(), party: { ...party(), rng: i + 1 } }, { kind: 'parley', monsters: ['goblin-warrior'] }, ballots(1, 1)));
+  const ok = playTurn(state(), { kind: 'parley', monsters: ['goblin-warrior'] }, ballots(20, 20));
+  assert.deepEqual([ok.fight, ok.dungeon, ok.lines.at(-1)], [null, null, 'The Goblin Warrior let the party be.']);
+  assert.equal(offered.find((t) => t.success !== true)!.fight, 'started');
+  const cleared = { ...state({ dungeon: clearRoom(met('friendly').dungeon!, 'r1') }) };
+  assert.deepEqual(playTurn(cleared, { kind: 'parley' }, ballots(10, 10)).lines, ['There is no one here to talk to.'], 'the room is dealt with');
 });
 
 test('a trapped room springs its SRD 5.2 trap (or the 5.2 counterpart of an old 5.1 id)', () => {

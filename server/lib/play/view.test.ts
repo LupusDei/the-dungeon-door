@@ -52,9 +52,17 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual(ctx.dungeon, {
     kind: d.map.kind, area: d.map.nodes.r0.name, purpose: 'Threshold',
     exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.)' }, { id: 'r4', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.)' }],
+    waiting: null,
   });
   assert.deepEqual(ctx.monsters, suitableMonsters([1, 1]));
   assert.deepEqual([rulesContext({ party, combat: null, dungeon: null }).combat, rulesContext({ party, combat: null, dungeon: null }).dungeon], [null, null]);
+});
+
+test('foes who did not attack are shown waiting, with their attitude, to the app and the DM', () => {
+  const met = { ...enter(startDungeon('fixed', 3, [1, 1], 4), 'r1')!.dungeon, attitudes: { r1: 'friendly' as const } };
+  const s = { party, combat: null, dungeon: met };
+  const expected = { foes: 'Boar ×3', attitude: 'friendly' };
+  assert.deepEqual([rulesView(s, []).dungeon!.waiting, rulesContext(s).dungeon!.waiting], [expected, expected]);
 });
 
 test('an exit not yet explored leads to the unknown', () => {

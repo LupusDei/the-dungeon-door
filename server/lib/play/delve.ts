@@ -1,12 +1,13 @@
 /**
  * The party in a dungeon (PR C's maps): fixed (the whole map from a seed) or explore (each area rolled as
- * it is opened). Entering a room that isn't cleared springs what is there: its monsters are a fight, its
- * trap or hazard goes off (play/traps.ts), its treasure is loot.
+ * it is opened). Entering a room that isn't cleared springs what is there: its monsters are met (a fight if
+ * they are Hostile, play/parley.ts), its trap or hazard goes off (play/traps.ts), its treasure is loot.
  */
 import type { DungeonNode, Treasure } from '../rules/dungeon.ts';
 import { generateDungeon } from '../rules/dungeon.ts';
 import type { MapSize } from '../rules/dungeonTables.ts';
 import { expand, startExplore } from '../rules/explore.ts';
+import type { Attitude } from './parley.ts';
 import type { DungeonState, PartyState } from './state.ts';
 import { itemIdOf, stow } from './trade.ts';
 
@@ -49,6 +50,18 @@ export function arrival(dungeon: DungeonState, node: DungeonNode): Arrival {
     treasure: contents.treasure,
   };
 }
+
+/** The foes met in the room the party is in who did not attack and are still there; null if none. */
+export function waitingFoes(dungeon: DungeonState): { monsters: string[]; attitude: Attitude } | null {
+  const attitude = dungeon.attitudes?.[dungeon.at];
+  const encounter = dungeon.map.nodes[dungeon.at].contents?.encounter;
+  if (!attitude || !encounter || dungeon.cleared.includes(dungeon.at)) return null;
+  return { monsters: encounter.monsters, attitude };
+}
+
+/** The foes' attitude in the room the party is in. */
+export const withAttitude = (dungeon: DungeonState, attitude: Attitude): DungeonState =>
+  ({ ...dungeon, attitudes: { ...dungeon.attitudes, [dungeon.at]: attitude } });
 
 const SP_PER_GP = 10;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

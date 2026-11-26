@@ -27,6 +27,12 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   example traps; the engine checks the party's passive scores, disarms or springs it, and scales it to their
   level), or {"kind":"hazard","hazard":"falling","feet":30} (also burning; suffocation with "minutes";
   extreme-cold or extreme-heat with "hours"; dehydration; malnutrition with "days").
+- Foes the party meets in a room roll an attitude: Hostile ones attack at once; Indifferent or Friendly ones
+  wait (the dungeon block says so). Offer {"kind":"parley"} (the best talker tries to sway them: success and
+  they let the party be, failure sours them and Hostile foes attack), a fight with them, or a way past. Outside
+  a dungeon, {"kind":"parley","monsters":["goblin-warrior"]} talks with creatures you name.
+- In a fight the foes check morale when shaken (first death, half their strength gone, leader down): they may
+  stand, flee (the heroes get Opportunity Attacks) or surrender. Slain heroes stay dead.
 - When you resolve, the engine has already rolled: your outcome must match its results. Colour them, never
   change them, and still use no numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
@@ -50,7 +56,8 @@ function combatLine(c: NonNullable<RulesContext['combat']>): string {
 
 function dungeonLine(d: NonNullable<RulesContext['dungeon']>): string {
   const exits = d.exits.map((x) => `${x.id} ${x.connection} to ${x.leadsTo === null ? 'unexplored' : x.leadsTo}`).join('; ') || 'none';
-  return `DUNGEON (${d.kind}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}`;
+  const foes = d.waiting ? `. Waiting here, not attacking: ${d.waiting.foes} (${d.waiting.attitude})` : '';
+  return `DUNGEON (${d.kind}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}${foes}`;
 }
 
 export function rulesBlock(rules: RulesContext | null): string {

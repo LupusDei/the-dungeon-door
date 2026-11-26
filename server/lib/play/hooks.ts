@@ -32,7 +32,9 @@ export type RulesHook =
   /** An SRD 5.2 example trap (by id) the party may run into. */
   | { kind: 'trap'; trap: string }
   /** An SRD 5.2 hazard that befalls every living hero; feet, minutes, hours or days as the hazard needs. */
-  | { kind: 'hazard'; hazard: HazardKind; feet?: number; minutes?: number; hours?: number; days?: number };
+  | { kind: 'hazard'; hazard: HazardKind; feet?: number; minutes?: number; hours?: number; days?: number }
+  /** Talk to the foes waiting in the room, or to these (play/parley.ts). */
+  | { kind: 'parley'; monsters?: string[] | null };
 
 interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
 
@@ -74,6 +76,7 @@ const HookSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('use'), item: z.string().refine((id) => Object.hasOwn(HEALING_POTIONS, id)) }),
   z.object({ kind: z.literal('trap'), trap: z.string().refine(isTrap) }),
   hazardSchema,
+  z.object({ kind: z.literal('parley'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).nullish() }),
 ]);
 
 /** The hook, or null when there is none or it doesn't hold up (unknown skill or monster, DC out of 1–30…). */
@@ -96,6 +99,8 @@ function countedList(ids: readonly string[], nameOf: (id: string) => string, man
 const monsterName = (id: string) => monsters().get(id)!.name;
 const itemName = (id: string) => items().get(id)!.name;
 const times = (n: number, name: string) => `${name} ×${n}`;
+/** "Goblin Warrior ×2, Bugbear Warrior". */
+export const foesNamed = (ids: readonly string[]) => countedList(ids, monsterName, times);
 
 /** "Sleight Of Hand with Thieves' Tools", "Thieves' Tools", "Athletics", "Dexterity save". */
 export function rollName(hook: RollHook): string {
@@ -126,6 +131,7 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   use: (h) => `Drink a ${itemName(h.item)}`,
   trap: () => 'Risk a trap',
   hazard: (h) => `Hazard: ${titleCase(h.hazard)}${hazardAmount(h)}`,
+  parley: (h) => (h.monsters && h.monsters.length > 0 ? `Parley with ${foesNamed(h.monsters)}` : 'Parley'),
 };
 
 /** What the app shows under the choice. */

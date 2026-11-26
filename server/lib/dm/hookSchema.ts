@@ -9,7 +9,7 @@ import { z } from 'zod';
 const NONE = 'none';
 
 export const FlatHook = z.object({
-  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use', 'trap', 'hazard']),
+  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use', 'trap', 'hazard', 'parley']),
   ability: z.enum([NONE, 'str', 'dex', 'con', 'int', 'wis', 'cha']).describe('check or save: the ability; "none" otherwise'),
   skill: z.string().describe('check: an SRD skill id such as "athletics"; "" for a plain ability check and for other kinds'),
   tool: z.string().describe('check: a tool id such as "thieves-tools" when a tool does the work; "" otherwise'),
@@ -20,7 +20,7 @@ export const FlatHook = z.object({
   disadvantage: z.boolean().describe('check or save: true when circumstances hinder the heroes'),
   damage: z.string().describe('save: damage dice on a failure, e.g. "2d6"; "" for none'),
   damageType: z.string().describe('save: e.g. "fire"; "" for none'),
-  monsters: z.array(z.string()).describe('fight: monster ids from the list you are given; [] otherwise'),
+  monsters: z.array(z.string()).describe('fight: monster ids from the list you are given; parley: the creatures to talk to ([] for the foes waiting in the room); [] otherwise'),
   rest: z.enum([NONE, 'short', 'long']).describe('rest: "short" or "long"; "none" otherwise'),
   exit: z.string().describe('move: an exit id from the dungeon block; "" otherwise'),
   items: z.array(z.string()).describe('buy or sell: SRD item ids, e.g. ["potion-of-healing"]; [] otherwise'),

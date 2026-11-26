@@ -5,6 +5,7 @@
 import type { Dungeon } from '../rules/dungeon.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
+import type { Attitude } from './parley.ts';
 
 export type { CombatState } from '../rules/scene.ts';
 
@@ -28,4 +29,6 @@ export interface DungeonState {
   visited: string[];
   /** Rooms whose monsters, trap and treasure are dealt with. */
   cleared: string[];
+  /** The attitude of the foes met in each room (play/parley.ts); absent in games from before it. */
+  attitudes?: Record<string, Attitude>;
 }

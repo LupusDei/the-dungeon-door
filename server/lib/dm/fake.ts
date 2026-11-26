@@ -9,8 +9,8 @@ import type { DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, Nex
 const PLACES = ['a drowned chapel', 'a goblin market under the bridge', 'the clockwork library', 'a frozen lighthouse', 'the hollow hill', 'a ship of bones', 'the moonlit orchard', 'a collapsed dwarven forge'];
 
 /**
- * In a rules-engine game: go on (in a dungeon) or force the way, look around, talk. It never picks a fight
- * itself (tests that want one register a DM that does), so a fake game keeps the length it was given.
+ * In a rules-engine game: go on (in a dungeon) or force the way, look around, talk (a parley with foes
+ * waiting in the room). It never picks a fight itself (tests that want one register a DM that does), so a fake game keeps the length it was given.
  */
 const STORY_HOOKS = [
   { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 },
@@ -24,7 +24,8 @@ function hooksFor(rules: RulesContext) {
   if (brawl?.length && !exit) return [{ kind: 'fight' as const, monsters: brawl }, ...STORY_HOOKS];
   return [
     exit ? { kind: 'move' as const, exit: exit.id } : { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', dc: 10 },
-    ...STORY_HOOKS,
+    STORY_HOOKS[0],
+    rules.dungeon?.waiting ? { kind: 'parley' as const } : STORY_HOOKS[1],
   ];
 }
 

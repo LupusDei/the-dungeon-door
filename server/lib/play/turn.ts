@@ -6,10 +6,11 @@ import type { HazardSpec } from '../rules/hazards.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
 import { groupRoll } from './checks.ts';
-import { arrival, claimTreasure, clearRoom, enter, partyLevel } from './delve.ts';
+import { arrival, claimTreasure, clearRoom, enter, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { afterHarm } from './dying.ts';
 import { fightRound, startFight, type FightEnd } from './fight.ts';
-import type { RollHook, RulesHook } from './hooks.ts';
+import { foesNamed, type RollHook, type RulesHook } from './hooks.ts';
+import { parley, rollAttitude } from './parley.ts';
 import { partyRest } from './rest.ts';
 import type { CombatState, DungeonState, PartyState } from './state.ts';
 import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
@@ -70,13 +71,37 @@ function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: str
   return done({ ...s, party: settled.party }, [...before, ...sprung.lines, ...settled.lines], sprung.success);
 }
 
+/** Foes met in a room: Hostile ones attack; the others watch and wait (their attitude is kept for the room). */
+function meet(s: RulesState, monsters: string[], before: string[]): RulesTurn {
+  const dungeon = s.dungeon!;
+  const known = dungeon.attitudes?.[dungeon.at];
+  const rng = seededRng(s.party.rng);
+  const met = known ? { attitude: known, roll: null } : rollAttitude(rng, monsters);
+  const here = { ...s, party: { ...s.party, rng: rng.state() }, dungeon: withAttitude(dungeon, met.attitude) };
+  const told = `${foesNamed(monsters)}: ${met.attitude}${met.roll === null ? '' : ` (2d6: ${met.roll})`}.`;
+  if (met.attitude === 'hostile') return fight(here, monsters, [...before, told]);
+  return done(here, [...before, `${told} They watch and wait.`]);
+}
+
+/** The party parleys with the foes waiting here, or with those the DM names (Indifferent). */
+function talk(s: RulesState, offered: readonly string[] | null | undefined, ballots: readonly Ballot[]): RulesTurn {
+  const waiting = s.dungeon && waitingFoes(s.dungeon);
+  const monsters = waiting ? waiting.monsters : offered;
+  if (!monsters || monsters.length === 0) return done(s, ['There is no one here to talk to.']);
+  const talked = parley(s.party, monsters, waiting ? waiting.attitude : 'indifferent', votesOf(ballots));
+  const dungeon = waiting ? (talked.success ? clearRoom(s.dungeon!, s.dungeon!.at) : withAttitude(s.dungeon!, talked.attitude)) : s.dungeon;
+  const after = { ...s, party: talked.party, dungeon };
+  if (talked.attitude === 'hostile') return fight(after, monsters, talked.lines);
+  return done(after, talked.lines, talked.success);
+}
+
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
   const moved = s.dungeon && enter(s.dungeon, exit);
   if (!moved) return done(s, ['That way is closed.']);
   const here = { ...s, dungeon: moved.dungeon };
   const lines = [`The party enters ${moved.node.name}: ${moved.node.purpose}.`];
   const found = arrival(moved.dungeon, moved.node);
-  if (found.fight) return fight(here, found.fight, lines);
+  if (found.fight) return meet(here, found.fight, lines);
   const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
   const cleared = clearHere(trapped, trapped.lines);
   return { ...trapped, ...cleared.state, lines: cleared.lines };
@@ -101,6 +126,7 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   use: (s, hook) => traded(s, usePotion(s.party, hook.item)),
   trap: (s, hook, ballots) => trap(s, hook.trap, ballots),
   hazard: (s, { kind: _, hazard, ...amount }) => traded(s, harmed(partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec))),
+  parley: (s, hook, ballots) => talk(s, hook.monsters, ballots),
 };
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */

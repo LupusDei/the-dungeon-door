@@ -179,3 +179,11 @@ test('trap and hazard hooks: a 5.2 trap id (or an old 5.1 one); a hazard with th
   assert.equal(hookLabel({ kind: 'hazard', hazard: 'malnutrition', days: 5 }), 'Hazard: Malnutrition (5 days)');
   assert.equal(hookLabel({ kind: 'hazard', hazard: 'burning' }), 'Hazard: Burning');
 });
+
+test('parley hooks: with the foes in the room, or with monsters the DM names (unknown ones dropped)', () => {
+  assert.deepEqual(parseHook({ kind: 'parley', monsters: null }), { kind: 'parley', monsters: null });
+  assert.deepEqual(parseHook({ kind: 'parley', monsters: ['goblin-warrior', 'dragon-of-nowhere'] }), { kind: 'parley', monsters: ['goblin-warrior'] });
+  assert.equal(hookLabel({ kind: 'parley' }), 'Parley');
+  assert.equal(hookLabel({ kind: 'parley', monsters: [] }), 'Parley');
+  assert.equal(hookLabel({ kind: 'parley', monsters: ['goblin-warrior', 'goblin-warrior'] }), 'Parley with Goblin Warrior ×2');
+});

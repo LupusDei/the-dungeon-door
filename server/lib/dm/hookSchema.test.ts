@@ -47,6 +47,8 @@ test('a hook as the model writes it (unused fields empty) is the hook the engine
   assert.deepEqual(hook({ kind: 'trap', trap: 'poisoned-needle' }), { kind: 'trap', trap: 'poisoned-needle' });
   assert.deepEqual(hook({ kind: 'hazard', hazard: 'falling', feet: 30 }), { kind: 'hazard', hazard: 'falling', feet: 30 });
   assert.deepEqual(hook({ kind: 'hazard', hazard: 'burning' }), { kind: 'hazard', hazard: 'burning' });
+  assert.deepEqual(hook({ kind: 'parley' }), { kind: 'parley' }, 'the foes waiting in the room');
+  assert.deepEqual(hook({ kind: 'parley', monsters: ['goblin-warrior'] }), { kind: 'parley', monsters: ['goblin-warrior'] });
 });
 
 test('a hook left empty, or filled for the wrong kind, is no hook: the choice is pure story', () => {
