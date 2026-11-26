@@ -24,6 +24,10 @@ export interface Monster {
   abilities: AbilityScores; saveBonuses: Record<Ability, number>;
   resistances: string[]; vulnerabilities: string[]; immunities: string[]; conditionImmunities: string[];
   cr: number; xp: number;
+  alignment: string;
+  /** Skill bonuses from the stat block, by skill id ("stealth"). */
+  skills: Record<string, number>;
+  passivePerception: number;
   /** Attack-roll actions only; save-based actions (breath weapons) are left to the DM for now. */
   attacks: MonsterAttack[];
 }
@@ -46,13 +50,16 @@ function damageRolls(rolls: { damageDice: string; damageType: { index: string } 
   });
 }
 
+const SKILL = 'skill-';
+
 const monsterSchema = z.object({
   index: z.string(), name: z.string(), size: z.string(), type: z.string(),
   armorClass: z.array(z.object({ value: z.number() })).min(1), hitPoints: z.number(), hitDice: z.string(),
   speed: z.object({ walk: z.string() }),
   strength: z.number(), dexterity: z.number(), constitution: z.number(), intelligence: z.number(), wisdom: z.number(), charisma: z.number(),
   damageResistances: damageTypes, damageVulnerabilities: damageTypes, damageImmunities: damageTypes,
-  conditionImmunities: z.array(ref), challengeRating: z.number(), xp: z.number(),
+  conditionImmunities: z.array(ref), challengeRating: z.number(), xp: z.number(), alignment: z.string(),
+  senses: z.object({ passivePerception: z.number() }),
   proficiencies: z.array(z.object({ value: z.number(), proficiency: ref })),
   actions: z.array(action).default([]),
 }).transform((m): Monster => {
@@ -65,7 +72,9 @@ const monsterSchema = z.object({
     saveBonuses: Object.fromEntries(ABILITIES.map((a) => [a, listed.get(`saving-throw-${a}`) ?? abilityModifier(abilities[a])])) as Record<Ability, number>,
     resistances: m.damageResistances, vulnerabilities: m.damageVulnerabilities, immunities: m.damageImmunities,
     conditionImmunities: m.conditionImmunities.map((c) => c.index),
-    cr: m.challengeRating, xp: m.xp,
+    cr: m.challengeRating, xp: m.xp, alignment: m.alignment,
+    skills: Object.fromEntries([...listed].filter(([id]) => id.startsWith(SKILL)).map(([id, value]) => [id.slice(SKILL.length), value])),
+    passivePerception: m.senses.passivePerception,
     attacks: m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
       name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
       damage: damageRolls(a.damage ?? [], ADVANTAGE_ONLY.test(a.desc)),
