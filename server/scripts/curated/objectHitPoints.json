@@ -1,0 +1,26 @@
+[
+  {
+    "size": "Tiny",
+    "examples": "bottle, lock",
+    "fragile": "2 (1d4)",
+    "resilient": "5 (2d4)"
+  },
+  {
+    "size": "Small",
+    "examples": "chest, lute",
+    "fragile": "3 (1d6)",
+    "resilient": "10 (3d6)"
+  },
+  {
+    "size": "Medium",
+    "examples": "barrel, chandelier",
+    "fragile": "4 (1d8)",
+    "resilient": "18 (4d8)"
+  },
+  {
+    "size": "Large",
+    "examples": "cart, dining table",
+    "fragile": "5 (1d10)",
+    "resilient": "27 (5d10)"
+  }
+]

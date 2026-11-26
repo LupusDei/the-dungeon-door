@@ -1,0 +1,100 @@
+{
+  "meta": {
+    "title": "Proficiency Bonus by Level",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 20,
+    "additionalSources": [
+      "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
+    ],
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "level": 1,
+      "proficiencyBonus": 2
+    },
+    {
+      "level": 2,
+      "proficiencyBonus": 2
+    },
+    {
+      "level": 3,
+      "proficiencyBonus": 2
+    },
+    {
+      "level": 4,
+      "proficiencyBonus": 2
+    },
+    {
+      "level": 5,
+      "proficiencyBonus": 3
+    },
+    {
+      "level": 6,
+      "proficiencyBonus": 3
+    },
+    {
+      "level": 7,
+      "proficiencyBonus": 3
+    },
+    {
+      "level": 8,
+      "proficiencyBonus": 3
+    },
+    {
+      "level": 9,
+      "proficiencyBonus": 4
+    },
+    {
+      "level": 10,
+      "proficiencyBonus": 4
+    },
+    {
+      "level": 11,
+      "proficiencyBonus": 4
+    },
+    {
+      "level": 12,
+      "proficiencyBonus": 4
+    },
+    {
+      "level": 13,
+      "proficiencyBonus": 5
+    },
+    {
+      "level": 14,
+      "proficiencyBonus": 5
+    },
+    {
+      "level": 15,
+      "proficiencyBonus": 5
+    },
+    {
+      "level": 16,
+      "proficiencyBonus": 5
+    },
+    {
+      "level": 17,
+      "proficiencyBonus": 6
+    },
+    {
+      "level": 18,
+      "proficiencyBonus": 6
+    },
+    {
+      "level": 19,
+      "proficiencyBonus": 6
+    },
+    {
+      "level": 20,
+      "proficiencyBonus": 6
+    }
+  ]
+}

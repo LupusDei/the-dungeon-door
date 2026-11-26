@@ -1,0 +1,238 @@
+{
+  "meta": {
+    "title": "Old-School Essentials Random Dungeon Stocking",
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "version": "OSE SRD",
+    "srd": "OSE",
+    "ruleset": "Old-School Essentials",
+    "license": "CC-BY-4.0 (also OGL 1.0a Open Game Content)",
+    "attribution": "This work includes material from the Old-School Essentials System Reference Document by Gavin Norman, published by Necrotic Gnome, available at https://oldschoolessentials.necroticgnome.com/srd/. The OSE SRD text used here is Open Game Content and is also offered by the publisher for use under the Creative Commons Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/legalcode).",
+    "sourceUrl": "https://oldschoolessentials.necroticgnome.com/srd/index.php/Designing_a_Dungeon",
+    "additionalSources": [
+      "https://github.com/oldmanumby/ose.srd/blob/main/6_Running_Adventures/6_Designing_a_Dungeon.md"
+    ],
+    "notes": "Open-licensed dungeon stocking and setting tables. This is a stocking method, not a geomorphic map generator like the copyrighted DMG Appendix A (which is not used). Old-School Essentials and Necrotic Gnome are trademarks of Necrotic Gnome; no affiliation is claimed. Example traps use OSE saving throws and should be reskinned to 5e saves if used in The Dungeon Door."
+  },
+  "records": [
+    {
+      "index": "ose-designing-a-dungeon",
+      "name": "Old-School Essentials: Designing a Dungeon",
+      "settings": [
+        {
+          "roll": 1,
+          "setting": "Crypt or tomb complex"
+        },
+        {
+          "roll": 2,
+          "setting": "Natural caverns"
+        },
+        {
+          "roll": 3,
+          "setting": "Settlement (e.g., stronghold, city)"
+        },
+        {
+          "roll": 4,
+          "setting": "Subterranean delving (e.g. mine)"
+        },
+        {
+          "roll": 5,
+          "setting": "Temple"
+        },
+        {
+          "roll": 6,
+          "setting": "Tower or fortification"
+        }
+      ],
+      "mappingNotes": [
+        "The dungeon setting determines the structure of rooms and connecting passages.",
+        "Typically, dungeon maps are drawn on graph paper with a 10-foot per square scale.",
+        "Number each area so the map can be cross-referenced with its contents.",
+        "Stock important monsters, treasures, and story areas first; use the random table for areas of less importance.",
+        "Deeper dungeon levels should generally have greater risks and rewards. Normally, 1 HD monsters live on the 1st level, 2 HD on the 2nd, and so on.",
+        "For experienced players, place very few completely unguarded treasures. The referee may wish not to place any unguarded treasures on the 9th or deeper levels."
+      ],
+      "roomContents": [
+        {
+          "roll": [
+            1,
+            2
+          ],
+          "contents": "empty",
+          "chanceOfTreasure": "1-in-6"
+        },
+        {
+          "roll": [
+            3,
+            4
+          ],
+          "contents": "monster",
+          "chanceOfTreasure": "3-in-6"
+        },
+        {
+          "roll": 5,
+          "contents": "special",
+          "chanceOfTreasure": "none"
+        },
+        {
+          "roll": 6,
+          "contents": "trap",
+          "chanceOfTreasure": "2-in-6"
+        }
+      ],
+      "dice": "1d6",
+      "guidance": {
+        "monsters": "May be selected by hand or rolled on an encounter table.",
+        "specials": "Weird or magical features of an area, including tricks or puzzles.",
+        "traps": "If treasure is present, the trap may be set so that it is triggered when the treasure is tampered with (a treasure trap). Otherwise, the trap may be triggered by simply entering the room or a certain area of it (a room trap).",
+        "treasure": "If a monster is in the room, roll the treasure type indicated in its description. Otherwise, the treasure depends on the dungeon level."
+      },
+      "exampleRoomTraps": [
+        {
+          "name": "Falling block",
+          "description": "Inflicts 1d10 damage (save versus petrification to avoid)."
+        },
+        {
+          "name": "Gas",
+          "description": "Poisonous gas fills the room (save versus poison or die)."
+        },
+        {
+          "name": "Mist",
+          "description": "Harmless; looks like poison gas."
+        },
+        {
+          "name": "Pit",
+          "description": "Opens up beneath characters' feet, inflicting falling damage on any who fall in."
+        },
+        {
+          "name": "Scything blade",
+          "description": "Swings from the ceiling, attacking for 1d8 damage."
+        },
+        {
+          "name": "Slide",
+          "description": "Opens up beneath characters' feet, sending them to a lower level."
+        }
+      ],
+      "exampleTreasureTraps": [
+        {
+          "name": "Darts",
+          "description": "1d6 spring-loaded darts fire at the character, doing 1d4 damage each."
+        },
+        {
+          "name": "Flash of light",
+          "description": "Causes blindness for 1d8 turns (save versus spells)."
+        },
+        {
+          "name": "Hidden monster",
+          "description": "e.g., a snake; released when the treasure is disturbed."
+        },
+        {
+          "name": "Illusion",
+          "description": "Typically of a monster. The monster has AC 9 [10] and vanishes if hit in combat. Its attacks do not inflict real damage: a PC who appears to die just falls unconscious for 1d4 turns."
+        },
+        {
+          "name": "Spray",
+          "description": "A mysterious liquid covers the character. Monsters are attracted to the smell: the chance of wandering monsters is doubled for 1d6 hours."
+        },
+        {
+          "name": "Sprung needle",
+          "description": "A needle coated with poison jabs out (save vs. poison or die)."
+        }
+      ],
+      "exampleSpecials": [
+        {
+          "name": "Alarms",
+          "description": "Entry alarm that attracts nearby guardians."
+        },
+        {
+          "name": "Animating objects",
+          "description": "Inanimate objects that attack if disturbed."
+        },
+        {
+          "name": "Falling blocks",
+          "description": "Stone block falls to prevent passage."
+        },
+        {
+          "name": "Illusions",
+          "description": "Illusionary passages, doors, or stairways."
+        },
+        {
+          "name": "Shifting architecture",
+          "description": "Doors lock, and the room rotates, rises, or falls."
+        },
+        {
+          "name": "Strange waters",
+          "description": "Pool or fountain with weird, magical effects."
+        },
+        {
+          "name": "Teleports",
+          "description": "Magical portal or teleporter to another area of the dungeon."
+        },
+        {
+          "name": "Trapdoors",
+          "description": "Leading to a hidden area."
+        },
+        {
+          "name": "Voices",
+          "description": "Walls or architectural features speak or moan (e.g., a talking statue)."
+        }
+      ],
+      "treasureInEmptyOrTrappedRooms": [
+        {
+          "levels": [
+            1
+          ],
+          "silver": "1d6 x 100 sp",
+          "gold": "50%: 1d6 x 10 gp",
+          "gems": "5%: 1d6 gems",
+          "jewellery": "2%: 1d6 pieces of jewellery",
+          "magicItem": "2%: 1 magic item"
+        },
+        {
+          "levels": [
+            2,
+            3
+          ],
+          "silver": "1d12 x 100 sp",
+          "gold": "50%: 1d6 x 100 gp",
+          "gems": "10%: 1d6 gems",
+          "jewellery": "5%: 1d6 pieces of jewellery",
+          "magicItem": "8%: 1 magic item"
+        },
+        {
+          "levels": [
+            4,
+            5
+          ],
+          "silver": "1d6 x 1,000 sp",
+          "gold": "1d6 x 200 gp",
+          "gems": "20%: 1d6 gems",
+          "jewellery": "10%: 1d6 pieces of jewellery",
+          "magicItem": "10%: 1 magic item"
+        },
+        {
+          "levels": [
+            6,
+            7
+          ],
+          "silver": "1d6 x 2,000 sp",
+          "gold": "1d6 x 500 gp",
+          "gems": "30%: 1d6 gems",
+          "jewellery": "15%: 1d6 pieces of jewellery",
+          "magicItem": "15%: 1 magic item"
+        },
+        {
+          "levels": [
+            8,
+            9
+          ],
+          "silver": "1d6 x 5,000 sp",
+          "gold": "1d6 x 1,000 gp",
+          "gems": "40%: 1d12 gems",
+          "jewellery": "20%: 1d12 pieces of jewellery",
+          "magicItem": "20%: 1 magic item"
+        }
+      ]
+    }
+  ]
+}

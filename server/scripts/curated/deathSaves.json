@@ -1,0 +1,18 @@
+[
+  {
+    "index": "death-saving-throws",
+    "name": "Death Saving Throws",
+    "when": "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw.",
+    "roll": "1d20; 10 or higher succeeds, otherwise you fail. This save is not tied to an ability score.",
+    "successesToStabilize": 3,
+    "failuresToDie": 3,
+    "successesAndFailuresNeedNotBeConsecutive": true,
+    "resetWhen": "The number of successes and failures is reset to zero when you regain any Hit Points or become Stable.",
+    "natural1": "Two failures",
+    "natural20": "You regain 1 Hit Point.",
+    "damageAtZeroHp": "You suffer a Death Saving Throw failure. A Critical Hit causes two failures. If the damage equals or exceeds your Hit Point maximum, you die.",
+    "instantDeath": "When damage reduces you to 0 Hit Points and there is damage remaining, you die if the remaining damage equals or exceeds your Hit Point maximum.",
+    "stabilize": "You can take the Help action to try to stabilize a creature with 0 Hit Points, which requires a successful DC 10 Wisdom (Medicine) check. A Stable creature doesn't make Death Saving Throws even though it has 0 Hit Points, but it still has the Unconscious condition. If the creature takes damage, it stops being Stable and starts making Death Saving Throws again.",
+    "knockOut": "When you would reduce a creature to 0 Hit Points with a melee attack, you can instead reduce the creature to 1 Hit Point and give it the Unconscious condition."
+  }
+]

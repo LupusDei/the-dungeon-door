@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "title": "Action Economy Bands (original multiple-monster guidance)",
+    "version": "original",
+    "srd": "original",
+    "ruleset": "2024/2014 5e-compatible",
+    "license": "CC0-1.0",
+    "attribution": "Original guidance dedicated to the public domain under CC0 1.0.",
+    "sourceUrl": null,
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "notes": "Does not reproduce the 2014 DMG multiplier table (x1, x1.5, x2, x2.5, x3, x4 by creature count)."
+  },
+  "records": [
+    {
+      "index": "action-economy-bands",
+      "name": "Action Economy Bands",
+      "origin": "original",
+      "license": "CC0-1.0",
+      "replaces": "The 2014 DMG multiple-monster XP multipliers, which are not in the SRD and are not reproduced here.",
+      "preferredOpenMethod": "Use extras/encounterDifficultyA5e.json: sum monster CRs, double elite CRs, and bump fractional CRs for levels 1-4. No multiplier is required.",
+      "optionalOriginalRule": {
+        "description": "If you are using SRD 5.2 per-character XP budgets (5.2/encounterBudgets.json) instead of A5E CR ratios, adjust the listed difficulty band after spending the budget:",
+        "rows": [
+          {
+            "condition": "Monsters outnumber the party 2-to-1 or more",
+            "effect": "Treat the encounter as one band harder (low becomes moderate, moderate becomes high, high becomes higher than the budget allows)."
+          },
+          {
+            "condition": "The party outnumbers the monsters 2-to-1 or more",
+            "effect": "Treat the encounter as one band easier."
+          },
+          {
+            "condition": "Exactly one non-legendary, non-elite monster",
+            "effect": "No change, but prefer a legendary or elite opponent (or add minions) if you want a hard fight for four or more characters."
+          }
+        ]
+      }
+    }
+  ]
+}

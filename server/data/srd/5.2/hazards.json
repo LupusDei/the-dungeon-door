@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "title": "Hazards",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 5,
+    "additionalSources": [
+      "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
+    ],
+    "notes": "Falling, Suffocation, and Malnutrition wording is taken from the SRD 5.2 Rules Glossary.",
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "index": "burning",
+      "name": "Burning",
+      "description": "A burning creature or object takes 1d4 Fire damage at the start of each of its turns. As an action, you can extinguish fire on yourself by giving yourself the Prone condition and rolling on the ground. The fire also goes out if it is doused, submerged, or suffocated."
+    },
+    {
+      "index": "dehydration",
+      "name": "Dehydration",
+      "description": "A creature that drinks less than half the required water for a day gains 1 Exhaustion level at the day's end. Exhaustion caused by dehydration can't be removed until the creature drinks the full amount of water required for a day.",
+      "waterNeedsPerDay": [
+        {
+          "size": "Tiny",
+          "water": "1/4 gallon"
+        },
+        {
+          "size": "Small",
+          "water": "1 gallon"
+        },
+        {
+          "size": "Medium",
+          "water": "1 gallon"
+        },
+        {
+          "size": "Large",
+          "water": "4 gallons"
+        },
+        {
+          "size": "Huge",
+          "water": "16 gallons"
+        },
+        {
+          "size": "Gargantuan",
+          "water": "64 gallons"
+        }
+      ]
+    },
+    {
+      "index": "falling",
+      "name": "Falling",
+      "description": "A creature takes 1d6 Bludgeoning damage for every 10 feet it fell, to a maximum of 20d6, and lands Prone unless it avoids taking any damage from the fall."
+    },
+    {
+      "index": "suffocation",
+      "name": "Suffocation",
+      "description": "A creature can hold its breath for a number of minutes equal to 1 plus its Constitution modifier (minimum 30 seconds). When it runs out of breath, it starts suffocating: at the end of each of its turns, it gains 1 Exhaustion level. If the creature has 6 Exhaustion levels, it dies. When it can breathe again, it removes all Exhaustion levels gained from suffocating."
+    },
+    {
+      "index": "malnutrition",
+      "name": "Malnutrition",
+      "description": "A creature that goes without food for a number of days equal to 3 plus its Constitution modifier (minimum 1) gains 1 Exhaustion level at the day's end, and it gains an additional Exhaustion level at the end of each subsequent day without food. Exhaustion caused by malnutrition can't be removed until the creature eats."
+    }
+  ]
+}

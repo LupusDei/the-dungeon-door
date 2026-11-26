@@ -1,0 +1,615 @@
+{
+  "meta": {
+    "title": "Equipment Packs",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 7
+  },
+  "records": [
+    {
+      "index": "burglars-pack",
+      "name": "Burglar's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        },
+        {
+          "index": "equipment-packs",
+          "name": "Equipment Packs"
+        }
+      ],
+      "cost": {
+        "quantity": 16,
+        "unit": "gp"
+      },
+      "contents": [
+        {
+          "item": {
+            "index": "backpack",
+            "name": "Backpack"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "ball-bearings",
+            "name": "Ball bearings"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "bell",
+            "name": "Bell"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "candle",
+            "name": "Candle"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "crowbar",
+            "name": "Crowbar"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "lantern-hooded",
+            "name": "Lantern, Hooded"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "flask",
+            "name": "Flask"
+          },
+          "quantity": 7
+        },
+        {
+          "item": {
+            "index": "oil",
+            "name": "Oil"
+          },
+          "quantity": 7
+        },
+        {
+          "item": {
+            "index": "rations",
+            "name": "Rations"
+          },
+          "quantity": 5
+        },
+        {
+          "item": {
+            "index": "rope",
+            "name": "Rope"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "tinderbox",
+            "name": "Tinderbox"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "waterskin",
+            "name": "Waterskin"
+          },
+          "quantity": 1
+        }
+      ],
+      "description": "A Burglar's Pack contains the following items: Backpack, Ball Bearings, Bell, 10 Candles, Crowbar, Hooded Lantern, 7 flasks of Oil, 5 days of Rations, Rope, Tinderbox, and Waterskin.",
+      "weight": 20
+    },
+    {
+      "index": "diplomat-pack",
+      "name": "Diplomat's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        },
+        {
+          "index": "equipment-packs",
+          "name": "Equipment Packs"
+        }
+      ],
+      "cost": {
+        "quantity": 39,
+        "unit": "gp"
+      },
+      "contents": [
+        {
+          "item": {
+            "index": "chest",
+            "name": "Chest"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "clothes-fine",
+            "name": "Clothes, Fine"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "ink",
+            "name": "Ink"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "ink-pen",
+            "name": "Ink Pen"
+          },
+          "quantity": 5
+        },
+        {
+          "item": {
+            "index": "lamp",
+            "name": "Lamp"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "case-map-or-scroll",
+            "name": "Case, Map or Scroll"
+          },
+          "quantity": 2
+        },
+        {
+          "item": {
+            "index": "flask",
+            "name": "Flask"
+          },
+          "quantity": 4
+        },
+        {
+          "item": {
+            "index": "oil",
+            "name": "Oil"
+          },
+          "quantity": 4
+        },
+        {
+          "item": {
+            "index": "paper",
+            "name": "Paper"
+          },
+          "quantity": 5
+        },
+        {
+          "item": {
+            "index": "parchment",
+            "name": "Parchment"
+          },
+          "quantity": 5
+        },
+        {
+          "item": {
+            "index": "perfume",
+            "name": "Perfume"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "tinderbox",
+            "name": "Tinderbox"
+          },
+          "quantity": 1
+        }
+      ],
+      "description": "A Diplomat's Pack contains the following items: Chest, Fine Clothes, Ink, 5 Ink Pens, Lamp, 2 Map or Scroll Cases, 4 flasks of Oil, 5 sheets of Paper, 5 sheets of Parchment, Perfume, and Tinderbox.",
+      "weight": 20
+    },
+    {
+      "index": "dungeoneer-pack",
+      "name": "Dungeoneer's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        },
+        {
+          "index": "equipment-packs",
+          "name": "Equipment Packs"
+        }
+      ],
+      "cost": {
+        "quantity": 12,
+        "unit": "gp"
+      },
+      "contents": [
+        {
+          "item": {
+            "index": "backpack",
+            "name": "Backpack"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "caltrops",
+            "name": "Caltrops"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "crowbar",
+            "name": "Crowbar"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "flask",
+            "name": "Flask"
+          },
+          "quantity": 2
+        },
+        {
+          "item": {
+            "index": "oil",
+            "name": "Oil"
+          },
+          "quantity": 2
+        },
+        {
+          "item": {
+            "index": "rations",
+            "name": "Rations"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "rope",
+            "name": "Rope"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "tinderbox",
+            "name": "Tinderbox"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "torch",
+            "name": "Torch"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "waterskin",
+            "name": "Waterskin"
+          },
+          "quantity": 1
+        }
+      ],
+      "description": "A Dungeoneer's Pack contains the following items: Backpack, Caltrops, Crowbar, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin.",
+      "weight": 55
+    },
+    {
+      "index": "entertainers-pack",
+      "name": "Entertainer's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        }
+      ],
+      "cost": {
+        "quantity": 40,
+        "unit": "gp"
+      },
+      "contents": [
+        {
+          "item": {
+            "index": "backpack",
+            "name": "Backpack"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "bedroll",
+            "name": "Bedroll"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "costume",
+            "name": "Costume"
+          },
+          "quantity": 2
+        },
+        {
+          "item": {
+            "index": "candle",
+            "name": "Candle"
+          },
+          "quantity": 5
+        },
+        {
+          "item": {
+            "index": "rations",
+            "name": "Rations"
+          },
+          "quantity": 5
+        },
+        {
+          "item": {
+            "index": "waterskin",
+            "name": "Waterskin"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "disguise-kit",
+            "name": "Disguise Kit"
+          },
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "index": "explorers-pack",
+      "name": "Explorer's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        }
+      ],
+      "contents": [
+        {
+          "item": {
+            "index": "backpack",
+            "name": "Backpack"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "bedroll",
+            "name": "Bedroll"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "oil",
+            "name": "Oil"
+          },
+          "quantity": 2
+        },
+        {
+          "item": {
+            "index": "rations",
+            "name": "Rations"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "rope",
+            "name": "Rope"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "tinderbox",
+            "name": "Tinderbox"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "torch",
+            "name": "Torch"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "waterskin",
+            "name": "Waterskin"
+          },
+          "quantity": 1
+        }
+      ],
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "description": "An Explorer’s Pack contains the following items: Backpack, Bedroll, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin.",
+      "weight": 55
+    },
+    {
+      "index": "priests-pack",
+      "name": "Priest's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        },
+        {
+          "index": "equipment-packs",
+          "name": "Equipment Packs"
+        }
+      ],
+      "contents": [
+        {
+          "item": {
+            "index": "backpack",
+            "name": "Backpack"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "blanket",
+            "name": "Blanket"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "holy-water",
+            "name": "Holy Water"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "lamp",
+            "name": "Lamp"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "rations",
+            "name": "Rations"
+          },
+          "quantity": 7
+        },
+        {
+          "item": {
+            "index": "robe",
+            "name": "Robe"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "tinderbox",
+            "name": "Tinderbox"
+          },
+          "quantity": 1
+        }
+      ],
+      "cost": {
+        "quantity": 33,
+        "unit": "gp"
+      },
+      "description": "A Priest's Pack contains the following items: Backpack, Blanket, Holy Water, Lamp, 7 days of Rations, Robe, and Tinderbox.",
+      "weight": 29
+    },
+    {
+      "index": "scholars-pack",
+      "name": "Scholar's Pack",
+      "equipmentCategories": [
+        {
+          "index": "adventuring-gear",
+          "name": "Adventuring Gear"
+        },
+        {
+          "index": "equipment-packs",
+          "name": "Equipment Packs"
+        }
+      ],
+      "contents": [
+        {
+          "item": {
+            "index": "backpack",
+            "name": "Backpack"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "blanket",
+            "name": "Blanket"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "book",
+            "name": "Book"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "ink",
+            "name": "Ink"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "ink-pen",
+            "name": "Ink Pen"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "lamp",
+            "name": "Lamp"
+          },
+          "quantity": 1
+        },
+        {
+          "item": {
+            "index": "oil",
+            "name": "Oil"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "parchment",
+            "name": "Parchment"
+          },
+          "quantity": 10
+        },
+        {
+          "item": {
+            "index": "tinderbox",
+            "name": "Tinderbox"
+          },
+          "quantity": 1
+        }
+      ],
+      "cost": {
+        "quantity": 40,
+        "unit": "gp"
+      },
+      "description": "A Scholar's Pack contains the following items: Backpack, Blanket, Book, Ink, Ink Pen, Lamp, 10 flasks of Oil, 10 sheets of Parchment, and Tinderbox.",
+      "weight": 22
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "size": "Tiny",
+    "space": "2.5 by 2.5 ft."
+  },
+  {
+    "size": "Small",
+    "space": "5 by 5 ft."
+  },
+  {
+    "size": "Medium",
+    "space": "5 by 5 ft."
+  },
+  {
+    "size": "Large",
+    "space": "10 by 10 ft."
+  },
+  {
+    "size": "Huge",
+    "space": "15 by 15 ft."
+  },
+  {
+    "size": "Gargantuan",
+    "space": "20 by 20 ft. or larger"
+  }
+]

@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "title": "Pathfinder RPG Starting Character Wealth",
+    "fetched": "2026-11-25",
+    "recordCount": 11,
+    "version": "Pathfinder RPG Core Rulebook (OGL)",
+    "srd": "PF1",
+    "ruleset": "Pathfinder 1e",
+    "license": "OGL 1.0a",
+    "attribution": "Open Game Content from the Pathfinder RPG Core Rulebook, used under the Open Game License v1.0a. See extras/OGL-LICENSE.md for the full license and Section 15.",
+    "sourceUrl": "https://pathfinder.d20srd.org/coreRulebook/equipment.html",
+    "notes": "Open-licensed random starting-wealth table (dice x 10 gp) that serves the same function as the 2014 5e PHB table. The dice, averages, and class list are Pathfinder's, not 5e's. Each character also begins play with an outfit worth 10 gp or less. This file is Open Game Content. Pathfinder and Paizo are trademarks of Paizo Inc.; no challenge to those trademarks is intended, and this is not an official Paizo product."
+  },
+  "records": [
+    {
+      "index": "barbarian",
+      "name": "Barbarian",
+      "dice": "3d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 105
+    },
+    {
+      "index": "bard",
+      "name": "Bard",
+      "dice": "3d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 105
+    },
+    {
+      "index": "cleric",
+      "name": "Cleric",
+      "dice": "4d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 140
+    },
+    {
+      "index": "druid",
+      "name": "Druid",
+      "dice": "2d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 70
+    },
+    {
+      "index": "fighter",
+      "name": "Fighter",
+      "dice": "5d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 175
+    },
+    {
+      "index": "monk",
+      "name": "Monk",
+      "dice": "1d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 35
+    },
+    {
+      "index": "paladin",
+      "name": "Paladin",
+      "dice": "5d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 175
+    },
+    {
+      "index": "ranger",
+      "name": "Ranger",
+      "dice": "5d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 175
+    },
+    {
+      "index": "rogue",
+      "name": "Rogue",
+      "dice": "4d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 140
+    },
+    {
+      "index": "sorcerer",
+      "name": "Sorcerer",
+      "dice": "2d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 70
+    },
+    {
+      "index": "wizard",
+      "name": "Wizard",
+      "dice": "2d6",
+      "multiplier": 10,
+      "unit": "gp",
+      "averageGp": 70
+    }
+  ]
+}

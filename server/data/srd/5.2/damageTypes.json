@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "title": "Damage Types",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 13
+  },
+  "records": [
+    {
+      "index": "acid",
+      "name": "Acid",
+      "description": "Corrosive liquids, digestive enzymes"
+    },
+    {
+      "index": "bludgeoning",
+      "name": "Bludgeoning",
+      "description": "Blunt objects, constriction, falling"
+    },
+    {
+      "index": "cold",
+      "name": "Cold",
+      "description": "Freezing water, icy blasts"
+    },
+    {
+      "index": "fire",
+      "name": "Fire",
+      "description": "Flames, unbearable heat"
+    },
+    {
+      "index": "force",
+      "name": "Force",
+      "description": "Pure magical energy"
+    },
+    {
+      "index": "lightning",
+      "name": "Lightning",
+      "description": "Electricity"
+    },
+    {
+      "index": "necrotic",
+      "name": "Necrotic",
+      "description": "Life-draining energy"
+    },
+    {
+      "index": "piercing",
+      "name": "Piercing",
+      "description": "Fangs, puncturing objects"
+    },
+    {
+      "index": "poison",
+      "name": "Poison",
+      "description": "Toxic gas, venom"
+    },
+    {
+      "index": "psychic",
+      "name": "Psychic",
+      "description": "Mind-rending energy"
+    },
+    {
+      "index": "radiant",
+      "name": "Radiant",
+      "description": "Holy energy, searing radiation"
+    },
+    {
+      "index": "slashing",
+      "name": "Slashing",
+      "description": "Claws, cutting objects"
+    },
+    {
+      "index": "thunder",
+      "name": "Thunder",
+      "description": "Concussive sound"
+    }
+  ]
+}

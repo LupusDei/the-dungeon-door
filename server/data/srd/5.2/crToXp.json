@@ -1,0 +1,152 @@
+{
+  "meta": {
+    "title": "Experience Points by Challenge Rating",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 31,
+    "additionalSources": [
+      "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf"
+    ],
+    "notes": "CR 11-13 XP values were taken from SRD 5.2 monster stat blocks because the two-column PDF table extract omitted those three rows. The 5e-srd-api Archmage stat block lists 8,000 XP at CR 12; the standard table value is 8,400.",
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "challengeRating": "0",
+      "xp": 10,
+      "notes": "0 or 10; most CR 0 creatures are worth 10 XP"
+    },
+    {
+      "challengeRating": "1/8",
+      "xp": 25
+    },
+    {
+      "challengeRating": "1/4",
+      "xp": 50
+    },
+    {
+      "challengeRating": "1/2",
+      "xp": 100
+    },
+    {
+      "challengeRating": "1",
+      "xp": 200
+    },
+    {
+      "challengeRating": "2",
+      "xp": 450
+    },
+    {
+      "challengeRating": "3",
+      "xp": 700
+    },
+    {
+      "challengeRating": "4",
+      "xp": 1100
+    },
+    {
+      "challengeRating": "5",
+      "xp": 1800
+    },
+    {
+      "challengeRating": "6",
+      "xp": 2300
+    },
+    {
+      "challengeRating": "7",
+      "xp": 2900
+    },
+    {
+      "challengeRating": "8",
+      "xp": 3900
+    },
+    {
+      "challengeRating": "9",
+      "xp": 5000
+    },
+    {
+      "challengeRating": "10",
+      "xp": 5900
+    },
+    {
+      "challengeRating": "11",
+      "xp": 7200,
+      "notes": "Filled from SRD 5.2 monster XP; left column of the PDF table extract ends at CR 10.",
+      "fromMonsterStatBlocks": true
+    },
+    {
+      "challengeRating": "12",
+      "xp": 8400,
+      "notes": "Filled from SRD 5.2 monster XP; the Archmage stat block lists 8000 XP.",
+      "fromMonsterStatBlocks": true
+    },
+    {
+      "challengeRating": "13",
+      "xp": 10000,
+      "notes": "Filled from SRD 5.2 monster XP; right column of the PDF table extract begins at CR 14.",
+      "fromMonsterStatBlocks": true
+    },
+    {
+      "challengeRating": "14",
+      "xp": 11500
+    },
+    {
+      "challengeRating": "15",
+      "xp": 13000
+    },
+    {
+      "challengeRating": "16",
+      "xp": 15000
+    },
+    {
+      "challengeRating": "17",
+      "xp": 18000
+    },
+    {
+      "challengeRating": "18",
+      "xp": 20000
+    },
+    {
+      "challengeRating": "19",
+      "xp": 22000
+    },
+    {
+      "challengeRating": "20",
+      "xp": 25000
+    },
+    {
+      "challengeRating": "21",
+      "xp": 33000
+    },
+    {
+      "challengeRating": "22",
+      "xp": 41000
+    },
+    {
+      "challengeRating": "23",
+      "xp": 50000
+    },
+    {
+      "challengeRating": "24",
+      "xp": 62000
+    },
+    {
+      "challengeRating": "25",
+      "xp": 75000
+    },
+    {
+      "challengeRating": "26",
+      "xp": 90000
+    },
+    {
+      "challengeRating": "27",
+      "xp": 105000
+    }
+  ]
+}

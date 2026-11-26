@@ -1,0 +1,135 @@
+{
+  "meta": {
+    "title": "Ability Scores",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 6
+  },
+  "records": [
+    {
+      "index": "str",
+      "name": "STR",
+      "fullName": "Strength",
+      "description": "Physical might",
+      "skills": [
+        {
+          "name": "Athletics",
+          "index": "athletics"
+        }
+      ]
+    },
+    {
+      "index": "dex",
+      "name": "DEX",
+      "fullName": "Dexterity",
+      "description": "Agility, reflexes, and balance",
+      "skills": [
+        {
+          "name": "Acrobatics",
+          "index": "acrobatics"
+        },
+        {
+          "name": "Sleight of Hand",
+          "index": "sleight-of-hand"
+        },
+        {
+          "name": "Stealth",
+          "index": "stealth"
+        }
+      ]
+    },
+    {
+      "index": "con",
+      "name": "CON",
+      "fullName": "Constitution",
+      "description": "Health and stamina",
+      "skills": []
+    },
+    {
+      "index": "int",
+      "name": "INT",
+      "fullName": "Intelligence",
+      "description": "Reasoning and memory",
+      "skills": [
+        {
+          "name": "Arcana",
+          "index": "arcana"
+        },
+        {
+          "name": "History",
+          "index": "history"
+        },
+        {
+          "name": "Investigation",
+          "index": "investigation"
+        },
+        {
+          "name": "Nature",
+          "index": "nature"
+        },
+        {
+          "name": "Religion",
+          "index": "religion"
+        }
+      ]
+    },
+    {
+      "index": "wis",
+      "name": "WIS",
+      "fullName": "Wisdom",
+      "description": "Perceptiveness and mental fortitude",
+      "skills": [
+        {
+          "name": "Animal Handling",
+          "index": "animal-handling"
+        },
+        {
+          "name": "Insight",
+          "index": "insight"
+        },
+        {
+          "name": "Medicine",
+          "index": "medicine"
+        },
+        {
+          "name": "Perception",
+          "index": "perception"
+        },
+        {
+          "name": "Survival",
+          "index": "survival"
+        }
+      ]
+    },
+    {
+      "index": "cha",
+      "name": "CHA",
+      "fullName": "Charisma",
+      "description": "Confidence, poise, and charm",
+      "skills": [
+        {
+          "name": "Deception",
+          "index": "deception"
+        },
+        {
+          "name": "Intimidation",
+          "index": "intimidation"
+        },
+        {
+          "name": "Performance",
+          "index": "performance"
+        },
+        {
+          "name": "Persuasion",
+          "index": "persuasion"
+        }
+      ]
+    }
+  ]
+}

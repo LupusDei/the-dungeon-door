@@ -1,0 +1,30 @@
+[
+  {
+    "ac": 11,
+    "substance": "Cloth, paper, rope"
+  },
+  {
+    "ac": 13,
+    "substance": "Crystal, glass, ice"
+  },
+  {
+    "ac": 15,
+    "substance": "Wood"
+  },
+  {
+    "ac": 17,
+    "substance": "Stone"
+  },
+  {
+    "ac": 19,
+    "substance": "Iron, steel"
+  },
+  {
+    "ac": 21,
+    "substance": "Mithral"
+  },
+  {
+    "ac": 23,
+    "substance": "Adamantine"
+  }
+]

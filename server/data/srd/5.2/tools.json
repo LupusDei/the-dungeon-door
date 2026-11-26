@@ -1,0 +1,2156 @@
+{
+  "meta": {
+    "title": "Tools",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 36
+  },
+  "records": [
+    {
+      "index": "alchemists-supplies",
+      "name": "Alchemist's Supplies",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "craft": [
+        {
+          "index": "acid",
+          "name": "Acid"
+        },
+        {
+          "index": "alchemists-fire",
+          "name": "Alchemist's Fire"
+        },
+        {
+          "index": "component-pouch",
+          "name": "Component Pouch"
+        },
+        {
+          "index": "oil",
+          "name": "Oil"
+        },
+        {
+          "index": "paper",
+          "name": "Paper"
+        },
+        {
+          "index": "perfume",
+          "name": "Perfume"
+        }
+      ],
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Identify a substance",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Start a fire",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 8
+    },
+    {
+      "index": "bagpipes",
+      "name": "Bagpipes",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 30,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 6
+    },
+    {
+      "index": "brewers-supplies",
+      "name": "Brewer's Supplies",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "craft": [
+        {
+          "index": "antitoxin",
+          "name": "Antitoxin"
+        }
+      ],
+      "cost": {
+        "quantity": 20,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Detect poisoned drink",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Identify alcohol",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 9
+    },
+    {
+      "index": "calligraphers-supplies",
+      "name": "Calligrapher's Supplies",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "craft": [
+        {
+          "index": "ink",
+          "name": "Ink"
+        },
+        {
+          "index": "spell-scroll-cantrip",
+          "name": "Spell Scroll, Cantrip"
+        },
+        {
+          "index": "spell-scroll-level-1",
+          "name": "Spell Scroll, Level 1"
+        }
+      ],
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Write text with impressive flourishes that guard against forgery",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "carpenters-tools",
+      "name": "Carpenter's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "str",
+        "name": "STR"
+      },
+      "craft": [
+        {
+          "index": "club",
+          "name": "Club"
+        },
+        {
+          "index": "greatclub",
+          "name": "Greatclub"
+        },
+        {
+          "index": "quarterstaff",
+          "name": "Quarterstaff"
+        },
+        {
+          "index": "barrel",
+          "name": "Barrel"
+        },
+        {
+          "index": "chest",
+          "name": "Chest"
+        },
+        {
+          "index": "ladder",
+          "name": "Ladder"
+        },
+        {
+          "index": "pole",
+          "name": "Pole"
+        },
+        {
+          "index": "ram-portable",
+          "name": "Ram, Portable"
+        },
+        {
+          "index": "torch",
+          "name": "Torch"
+        }
+      ],
+      "cost": {
+        "quantity": 8,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": ": Seal or pry open a door or container",
+          "dc": {
+            "dcType": {
+              "index": "str",
+              "name": "STR"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 6
+    },
+    {
+      "index": "cartographer-tools",
+      "name": "Cartographer's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "craft": [
+        {
+          "index": "map",
+          "name": "Map"
+        }
+      ],
+      "cost": {
+        "quantity": 15,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Draft a map of a small area",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 6
+    },
+    {
+      "index": "cobblers-tools",
+      "name": "Cobbler's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "climbers-kit",
+          "name": "Climber's Kit"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Modify footwear to give Advantage on the wearer's next Dexterity (Acrobatics) check",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "cooks-utensils",
+      "name": "Cook's Utensils",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "rations",
+          "name": "Rations"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Improve food's flavor",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Detect spoiled or poisoned food",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 8
+    },
+    {
+      "index": "dice",
+      "name": "Dice",
+      "equipmentCategories": [
+        {
+          "index": "gaming-sets",
+          "name": "Gaming Sets"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 1,
+        "unit": "sp"
+      },
+      "utilize": [
+        {
+          "name": "Discern whether someone is cheating",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Win the game",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 0
+    },
+    {
+      "index": "dragonchess",
+      "name": "Dragonchess",
+      "equipmentCategories": [
+        {
+          "index": "gaming-sets",
+          "name": "Gaming Sets"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Discern whether someone is cheating",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Win the game",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 0
+    },
+    {
+      "index": "drum",
+      "name": "Drum",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 6,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 3
+    },
+    {
+      "index": "dulcimer",
+      "name": "Dulcimer",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "index": "flute",
+      "name": "Flute",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 2,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 1
+    },
+    {
+      "index": "forgery-kit",
+      "name": "Forgery Kit",
+      "equipmentCategories": [
+        {
+          "index": "other-tools",
+          "name": "Other Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 15,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Mimic 10 or fewer words of someone else's handwriting",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Duplicate a wax seal",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "glassblowers-tools",
+      "name": "Glassblower's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "cost": {
+        "quantity": 30,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "bottle-glass",
+          "name": "Bottle, Glass"
+        },
+        {
+          "index": "magnifying-glass",
+          "name": "Magnifying Glass"
+        },
+        {
+          "index": "spyglass",
+          "name": "Spyglass"
+        },
+        {
+          "index": "vial",
+          "name": "Vial"
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "herbalism-kit",
+      "name": "Herbalism Kit",
+      "equipmentCategories": [
+        {
+          "index": "other-tools",
+          "name": "Other Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "antitoxin",
+          "name": "Antitoxin"
+        },
+        {
+          "index": "candle",
+          "name": "Candle"
+        },
+        {
+          "index": "healers-kit",
+          "name": "Healer's Kit"
+        },
+        {
+          "index": "potion-of-healing",
+          "name": "Potion of Healing"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Identify a plant",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 3
+    },
+    {
+      "index": "horn",
+      "name": "Horn",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 3,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "jewelers-tools",
+      "name": "Jeweler's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "crystal",
+          "name": "Crystal"
+        },
+        {
+          "index": "orb",
+          "name": "Orb"
+        },
+        {
+          "index": "quarterstaff",
+          "name": "Quarterstaff"
+        },
+        {
+          "index": "rod",
+          "name": "Rod"
+        },
+        {
+          "index": "staff",
+          "name": "Staff"
+        },
+        {
+          "index": "wand",
+          "name": "Wand"
+        },
+        {
+          "index": "amulet",
+          "name": "Amulet"
+        },
+        {
+          "index": "emblem",
+          "name": "Emblem"
+        },
+        {
+          "index": "reliquary",
+          "name": "Reliquary"
+        }
+      ],
+      "utilize": [
+        {
+          "name": " Discern a gem's value",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "leatherworkers-tools",
+      "name": "Leatherworker's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "sling",
+          "name": "Sling"
+        },
+        {
+          "index": "whip",
+          "name": "Whip"
+        },
+        {
+          "index": "hide-armor",
+          "name": "Hide Armor"
+        },
+        {
+          "index": "leather-armor",
+          "name": "Leather Armor"
+        },
+        {
+          "index": "studded-leather-armor",
+          "name": "Studded Leather Armor"
+        },
+        {
+          "index": "backpack",
+          "name": "Backpack"
+        },
+        {
+          "index": "case-crossbow-bolt",
+          "name": "Case, Crossbow Bolt"
+        },
+        {
+          "index": "case-map-or-scroll",
+          "name": "Case, Map or Scroll"
+        },
+        {
+          "index": "parchment",
+          "name": "Parchment"
+        },
+        {
+          "index": "pouch",
+          "name": "Pouch"
+        },
+        {
+          "index": "quiver",
+          "name": "Quiver"
+        },
+        {
+          "index": "waterskin",
+          "name": "Waterskin"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Add a design to a leather item",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "lute",
+      "name": "Lute",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 35,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "lyre",
+      "name": "Lyre",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 30,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "masons-tools",
+      "name": "Mason's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "str",
+        "name": "STR"
+      },
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "block-and-tackle",
+          "name": "Block and tackle"
+        }
+      ],
+      "utilize": [
+        {
+          "name": ": Chisel a symbol or hole in stone",
+          "dc": {
+            "dcType": {
+              "index": "str",
+              "name": "STR"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 8
+    },
+    {
+      "index": "navigators-tools",
+      "name": "Navigator's Tools",
+      "equipmentCategories": [
+        {
+          "index": "other-tools",
+          "name": "Other Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Plot a course",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Determine position by stargazing",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "painters-supplies",
+      "name": "Painter's Supplies",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "quarterstaff",
+          "name": "Quarterstaff"
+        },
+        {
+          "index": "sprig-of-mistletoe",
+          "name": "Sprig of Mistletoe"
+        },
+        {
+          "index": "staff",
+          "name": "Staff"
+        },
+        {
+          "index": "yew-wand",
+          "name": "Yew Wand"
+        },
+        {
+          "index": "amulet",
+          "name": "Amulet"
+        },
+        {
+          "index": "emblem",
+          "name": "Emblem"
+        },
+        {
+          "index": "reliquary",
+          "name": "Reliquary"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Paint a recognizable image of something you've seen",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "pan-flute",
+      "name": "Pan flute",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 12,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "poisoners-kit",
+      "name": "Poisoner's Kit",
+      "equipmentCategories": [
+        {
+          "index": "other-tools",
+          "name": "Other Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "poison-basic",
+          "name": "Poison, Basic"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Detect a poisoned object",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "playing-cards",
+      "name": "Playing Cards",
+      "equipmentCategories": [
+        {
+          "index": "gaming-sets",
+          "name": "Gaming Sets"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 5,
+        "unit": "sp"
+      },
+      "utilize": [
+        {
+          "name": "Discern whether someone is cheating",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Win the game",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 0
+    },
+    {
+      "index": "potters-tools",
+      "name": "Potter's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "int",
+        "name": "INT"
+      },
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "jug",
+          "name": "Jug"
+        },
+        {
+          "index": "lamp",
+          "name": "Lamp"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Discern what a ceramic object held in the past 24 hours",
+          "dc": {
+            "dcType": {
+              "index": "int",
+              "name": "INT"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 3
+    },
+    {
+      "index": "shawm",
+      "name": "Shawm",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 2,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 1
+    },
+    {
+      "index": "smiths-tools",
+      "name": "Smith's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "str",
+        "name": "STR"
+      },
+      "cost": {
+        "quantity": 20,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "battleaxe",
+          "name": "Battleaxe"
+        },
+        {
+          "index": "dagger",
+          "name": "Dagger"
+        },
+        {
+          "index": "flail",
+          "name": "Flail"
+        },
+        {
+          "index": "glaive",
+          "name": "Glaive"
+        },
+        {
+          "index": "greataxe",
+          "name": "Greataxe"
+        },
+        {
+          "index": "greatsword",
+          "name": "Greatsword"
+        },
+        {
+          "index": "halberd",
+          "name": "Halberd"
+        },
+        {
+          "index": "handaxe",
+          "name": "Handaxe"
+        },
+        {
+          "index": "javelin",
+          "name": "Javelin"
+        },
+        {
+          "index": "lance",
+          "name": "Lance"
+        },
+        {
+          "index": "light-hammer",
+          "name": "Light Hammer"
+        },
+        {
+          "index": "longsword",
+          "name": "Longsword"
+        },
+        {
+          "index": "mace",
+          "name": "Mace"
+        },
+        {
+          "index": "maul",
+          "name": "Maul"
+        },
+        {
+          "index": "sickle",
+          "name": "Sickle"
+        },
+        {
+          "index": "spear",
+          "name": "Spear"
+        },
+        {
+          "index": "trident",
+          "name": "Trident"
+        },
+        {
+          "index": "warhammer",
+          "name": "Warhammer"
+        },
+        {
+          "index": "war-pick",
+          "name": "War Pick"
+        },
+        {
+          "index": "breastplate",
+          "name": "Breastplate"
+        },
+        {
+          "index": "chain-shirt",
+          "name": "Chain Shirt"
+        },
+        {
+          "index": "half-plate-armor",
+          "name": "Half-Plate Armor"
+        },
+        {
+          "index": "scale-mail",
+          "name": "Scale Mail"
+        },
+        {
+          "index": "chain-mail",
+          "name": "Chain Mail"
+        },
+        {
+          "index": "plate-armor",
+          "name": "Plate Armor"
+        },
+        {
+          "index": "ring-mail",
+          "name": "Ring Mail"
+        },
+        {
+          "index": "splint-armor",
+          "name": "Splint Armor"
+        },
+        {
+          "index": "ball-bearings",
+          "name": "Ball bearings"
+        },
+        {
+          "index": "bucket",
+          "name": "Bucket"
+        },
+        {
+          "index": "caltrops",
+          "name": "Caltrops"
+        },
+        {
+          "index": "chain",
+          "name": "Chain"
+        },
+        {
+          "index": "crowbar",
+          "name": "Crowbar"
+        },
+        {
+          "index": "bullets-firearm",
+          "name": "Bullets, Firearm"
+        },
+        {
+          "index": "grappling-hook",
+          "name": "Grappling Hook"
+        },
+        {
+          "index": "pot-iron",
+          "name": "Pot, Iron"
+        },
+        {
+          "index": "spikes-iron",
+          "name": "Spikes, Iron"
+        },
+        {
+          "index": "bullets-sling",
+          "name": "Bullets, Sling"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Pry open a door or container",
+          "dc": {
+            "dcType": {
+              "index": "str",
+              "name": "STR"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 8
+    },
+    {
+      "index": "thieves-tools",
+      "name": "Thieves' Tools",
+      "equipmentCategories": [
+        {
+          "index": "other-tools",
+          "name": "Other Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Pick a lock",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Disarm a trap",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 1
+    },
+    {
+      "index": "three-dragon-ante",
+      "name": "Three-Dragon Ante",
+      "equipmentCategories": [
+        {
+          "index": "gaming-sets",
+          "name": "Gaming Sets"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "wis",
+        "name": "WIS"
+      },
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Discern whether someone is cheating",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Win the game",
+          "dc": {
+            "dcType": {
+              "index": "wis",
+              "name": "WIS"
+            },
+            "dcValue": 20,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 0
+    },
+    {
+      "index": "tinkers-tools",
+      "name": "Tinker's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "musket",
+          "name": "Musket"
+        },
+        {
+          "index": "pistol",
+          "name": "Pistol"
+        },
+        {
+          "index": "bell",
+          "name": "Bell"
+        },
+        {
+          "index": "lantern-bullseye",
+          "name": "Lantern, Bullseye"
+        },
+        {
+          "index": "flask",
+          "name": "Flask"
+        },
+        {
+          "index": "lantern-hooded",
+          "name": "Lantern, Hooded"
+        },
+        {
+          "index": "hunting-trap",
+          "name": "Hunting Trap"
+        },
+        {
+          "index": "lock",
+          "name": "Lock"
+        },
+        {
+          "index": "manacles",
+          "name": "Manacles"
+        },
+        {
+          "index": "mirror",
+          "name": "Mirror"
+        },
+        {
+          "index": "shovel",
+          "name": "Shovel"
+        },
+        {
+          "index": "signal-whistle",
+          "name": "Signal Whistle"
+        },
+        {
+          "index": "tinderbox",
+          "name": "Tinderbox"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Assemble a Tiny item composed of scrap, which falls apart in 1 minute",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "index": "viol",
+      "name": "Viol",
+      "equipmentCategories": [
+        {
+          "index": "musical-instruments",
+          "name": "Musical Instruments"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "cha",
+        "name": "CHA"
+      },
+      "cost": {
+        "quantity": 30,
+        "unit": "gp"
+      },
+      "utilize": [
+        {
+          "name": "Play a known tune",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "Improvise a song",
+          "dc": {
+            "dcType": {
+              "index": "cha",
+              "name": "CHA"
+            },
+            "dcValue": 15,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 2
+    },
+    {
+      "index": "weavers-tools",
+      "name": "Weaver's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "padded-armor",
+          "name": "Padded Armor"
+        },
+        {
+          "index": "basket",
+          "name": "Basket"
+        },
+        {
+          "index": "bedroll",
+          "name": "Bedroll"
+        },
+        {
+          "index": "blanket",
+          "name": "Blanket"
+        },
+        {
+          "index": "clothes-fine",
+          "name": "Clothes, Fine"
+        },
+        {
+          "index": "net",
+          "name": "Net"
+        },
+        {
+          "index": "robe",
+          "name": "Robe"
+        },
+        {
+          "index": "rope",
+          "name": "Rope"
+        },
+        {
+          "index": "sack",
+          "name": "Sack"
+        },
+        {
+          "index": "string",
+          "name": "String"
+        },
+        {
+          "index": "tent",
+          "name": "Tent"
+        },
+        {
+          "index": "clothes-travelers",
+          "name": "Clothes, Traveler's"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Mend a tear in clothing",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        },
+        {
+          "name": "sew a Tiny design",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    },
+    {
+      "index": "woodcarvers-tools",
+      "name": "Woodcarver's Tools",
+      "equipmentCategories": [
+        {
+          "index": "artisans-tools",
+          "name": "Artisan's Tools"
+        },
+        {
+          "index": "tools",
+          "name": "Tools"
+        }
+      ],
+      "ability": {
+        "index": "dex",
+        "name": "DEX"
+      },
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "craft": [
+        {
+          "index": "club",
+          "name": "Club"
+        },
+        {
+          "index": "greatclub",
+          "name": "Greatclub"
+        },
+        {
+          "index": "quarterstaff",
+          "name": "Quarterstaff"
+        },
+        {
+          "index": "blowgun",
+          "name": "Blowgun"
+        },
+        {
+          "index": "dart",
+          "name": "Dart"
+        },
+        {
+          "index": "hand-crossbow",
+          "name": "Hand Crossbow"
+        },
+        {
+          "index": "heavy-crossbow",
+          "name": "Heavy Crossbow"
+        },
+        {
+          "index": "light-crossbow",
+          "name": "Light Crossbow"
+        },
+        {
+          "index": "longbow",
+          "name": "Longbow"
+        },
+        {
+          "index": "shortbow",
+          "name": "Shortbow"
+        },
+        {
+          "index": "crystal",
+          "name": "Crystal"
+        },
+        {
+          "index": "orb",
+          "name": "Orb"
+        },
+        {
+          "index": "quarterstaff",
+          "name": "Quarterstaff"
+        },
+        {
+          "index": "rod",
+          "name": "Rod"
+        },
+        {
+          "index": "staff",
+          "name": "Staff"
+        },
+        {
+          "index": "wand",
+          "name": "Wand"
+        },
+        {
+          "index": "arrows",
+          "name": "Arrows"
+        },
+        {
+          "index": "bolts",
+          "name": "Bolts"
+        },
+        {
+          "index": "sprig-of-mistletoe",
+          "name": "Sprig of Mistletoe"
+        },
+        {
+          "index": "staff",
+          "name": "Staff"
+        },
+        {
+          "index": "yew-wand",
+          "name": "Yew Wand"
+        },
+        {
+          "index": "ink-pen",
+          "name": "Ink Pen"
+        },
+        {
+          "index": "needles",
+          "name": "Needles"
+        }
+      ],
+      "utilize": [
+        {
+          "name": "Carve a pattern in wood",
+          "dc": {
+            "dcType": {
+              "index": "dex",
+              "name": "DEX"
+            },
+            "dcValue": 10,
+            "successType": "none"
+          }
+        }
+      ],
+      "weight": 5
+    }
+  ]
+}

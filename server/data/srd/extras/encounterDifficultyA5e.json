@@ -1,0 +1,940 @@
+{
+  "meta": {
+    "title": "A5E Combat Encounter Difficulty (Easy / Medium / Hard / Deadly)",
+    "version": "A5ESRD",
+    "srd": "A5E",
+    "ruleset": "A5E",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the A5E System Reference Document (A5ESRD) by EN Publishing and available at A5ESRD.com, based on Level Up: Advanced 5th Edition, available at www.levelup5e.com. The A5ESRD is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceUrl": "https://a5esrd.com/a5esrd",
+    "additionalSources": [
+      "https://a5e.tools/rules/designing-encounters"
+    ],
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "notes": "Open-licensed equivalent to 2014 5e easy/medium/hard/deadly encounter building. Uses total-CR ratios instead of per-character XP thresholds and instead of the 2014 multiple-monster XP multipliers. The 2014 DMG threshold and multiplier numbers are not reproduced here. Also see 5.2/encounterBudgets.json for the official SRD 5.2 low/moderate/high XP budgets."
+  },
+  "records": [
+    {
+      "index": "a5e-combat-encounter-difficulty",
+      "name": "A5E Combat Encounter Difficulty",
+      "method": "Compare encounter CR (the total CR of all opponents) to total character level. The ratio determines difficulty. No multiple-monster XP multiplier is used; action economy is handled by summing CRs, doubling elite CRs, and bumping fractional CRs for low-level parties.",
+      "ratios": [
+        {
+          "difficulty": "easy",
+          "encounterCrVsTotalLevel": "1/6",
+          "summary": "A fight which isn't in doubt that drains little or no resources."
+        },
+        {
+          "difficulty": "medium",
+          "encounterCrVsTotalLevel": "1/3",
+          "summary": "A fight which isn't in doubt but may cost a few spells or healing resources."
+        },
+        {
+          "difficulty": "hard",
+          "encounterCrVsTotalLevel": "1/2",
+          "summary": "The adventurers must spend significant resources to triumph. Losing is possible but the odds are on the party's side."
+        },
+        {
+          "difficulty": "deadly",
+          "encounterCrVsTotalLevel": "2/3",
+          "summary": "Winning and losing are both possible. The party must spend its best resources."
+        },
+        {
+          "difficulty": "impossible",
+          "encounterCrVsTotalLevel": "1 or more",
+          "summary": "Almost certain to result in the adventurers losing."
+        }
+      ],
+      "allies": "If the adventurers have monster or NPC allies, add their CR times 3 to the total character level.",
+      "elites": "When calculating encounter CR, double the CR of elite monsters. When checking maximum monster CR, use the elite monster's actual CR.",
+      "maximumMonsterCrRule": "A battle is an impossible matchup if the maximum monster CR is higher than 1.5 times the average character level, even if the total-CR ratio looks manageable.",
+      "maximumMonsterCrByCharacterLevel": [
+        {
+          "characterLevel": 1,
+          "maximumMonsterCr": 1
+        },
+        {
+          "characterLevel": 2,
+          "maximumMonsterCr": 3
+        },
+        {
+          "characterLevel": 3,
+          "maximumMonsterCr": 4
+        },
+        {
+          "characterLevel": 4,
+          "maximumMonsterCr": 6
+        },
+        {
+          "characterLevel": 5,
+          "maximumMonsterCr": 7
+        },
+        {
+          "characterLevel": 6,
+          "maximumMonsterCr": 9
+        },
+        {
+          "characterLevel": 7,
+          "maximumMonsterCr": 10
+        },
+        {
+          "characterLevel": 8,
+          "maximumMonsterCr": 12
+        },
+        {
+          "characterLevel": 9,
+          "maximumMonsterCr": 13
+        },
+        {
+          "characterLevel": 10,
+          "maximumMonsterCr": 15
+        },
+        {
+          "characterLevel": 11,
+          "maximumMonsterCr": 16
+        },
+        {
+          "characterLevel": 12,
+          "maximumMonsterCr": 18
+        },
+        {
+          "characterLevel": 13,
+          "maximumMonsterCr": 19
+        },
+        {
+          "characterLevel": 14,
+          "maximumMonsterCr": 21
+        },
+        {
+          "characterLevel": 15,
+          "maximumMonsterCr": 22
+        },
+        {
+          "characterLevel": 16,
+          "maximumMonsterCr": 24
+        },
+        {
+          "characterLevel": 17,
+          "maximumMonsterCr": 25
+        },
+        {
+          "characterLevel": 18,
+          "maximumMonsterCr": 27
+        },
+        {
+          "characterLevel": 19,
+          "maximumMonsterCr": 28
+        },
+        {
+          "characterLevel": 20,
+          "maximumMonsterCr": 30
+        }
+      ],
+      "lowLevelFractionalCrBump": {
+        "appliesToTiers": [
+          "0",
+          "1"
+        ],
+        "appliesToLevels": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "rule": "When determining encounter CR for Tier 0 or Tier 1 adventurers, treat any monster with a CR below 1 as if its CR were one step higher.",
+        "steps": [
+          {
+            "actual": "0",
+            "effective": "1/8"
+          },
+          {
+            "actual": "1/8",
+            "effective": "1/4"
+          },
+          {
+            "actual": "1/4",
+            "effective": "1/2"
+          },
+          {
+            "actual": "1/2",
+            "effective": "1"
+          }
+        ]
+      },
+      "budgetByPartySize": {
+        "2": [
+          {
+            "level": 1,
+            "easy": "1/4",
+            "medium": "1/2",
+            "hard": "3/4",
+            "deadly": 1
+          },
+          {
+            "level": 2,
+            "easy": "1/2",
+            "medium": 1,
+            "hard": 2,
+            "deadly": 3
+          },
+          {
+            "level": 3,
+            "easy": 1,
+            "medium": 2,
+            "hard": 3,
+            "deadly": 4
+          },
+          {
+            "level": 4,
+            "easy": 1,
+            "medium": 3,
+            "hard": 4,
+            "deadly": 5
+          },
+          {
+            "level": 5,
+            "easy": 2,
+            "medium": 3,
+            "hard": 5,
+            "deadly": 7
+          },
+          {
+            "level": 6,
+            "easy": 2,
+            "medium": 4,
+            "hard": 6,
+            "deadly": 8
+          },
+          {
+            "level": 7,
+            "easy": 2,
+            "medium": 5,
+            "hard": 7,
+            "deadly": 9
+          },
+          {
+            "level": 8,
+            "easy": 3,
+            "medium": 5,
+            "hard": 8,
+            "deadly": 11
+          },
+          {
+            "level": 9,
+            "easy": 3,
+            "medium": 6,
+            "hard": 9,
+            "deadly": 12
+          },
+          {
+            "level": 10,
+            "easy": 3,
+            "medium": 7,
+            "hard": 10,
+            "deadly": 13
+          },
+          {
+            "level": 11,
+            "easy": 4,
+            "medium": 7,
+            "hard": 11,
+            "deadly": 15
+          },
+          {
+            "level": 12,
+            "easy": 4,
+            "medium": 8,
+            "hard": 12,
+            "deadly": 16
+          },
+          {
+            "level": 13,
+            "easy": 4,
+            "medium": 9,
+            "hard": 13,
+            "deadly": 17
+          },
+          {
+            "level": 14,
+            "easy": 4,
+            "medium": 9,
+            "hard": 14,
+            "deadly": 18
+          },
+          {
+            "level": 15,
+            "easy": 5,
+            "medium": 10,
+            "hard": 15,
+            "deadly": 20
+          },
+          {
+            "level": 16,
+            "easy": 5,
+            "medium": 11,
+            "hard": 16,
+            "deadly": 21
+          },
+          {
+            "level": 17,
+            "easy": 5,
+            "medium": 11,
+            "hard": 17,
+            "deadly": 22
+          },
+          {
+            "level": 18,
+            "easy": 6,
+            "medium": 12,
+            "hard": 18,
+            "deadly": 24
+          },
+          {
+            "level": 19,
+            "easy": 6,
+            "medium": 13,
+            "hard": 19,
+            "deadly": 25
+          },
+          {
+            "level": 20,
+            "easy": 6,
+            "medium": 13,
+            "hard": 20,
+            "deadly": 26
+          }
+        ],
+        "3": [
+          {
+            "level": 1,
+            "easy": "1/2",
+            "medium": 1,
+            "hard": "1 1/2",
+            "deadly": 2
+          },
+          {
+            "level": 2,
+            "easy": 1,
+            "medium": 2,
+            "hard": 3,
+            "deadly": 4
+          },
+          {
+            "level": 3,
+            "easy": 1,
+            "medium": 3,
+            "hard": 5,
+            "deadly": 6
+          },
+          {
+            "level": 4,
+            "easy": 2,
+            "medium": 4,
+            "hard": 6,
+            "deadly": 8
+          },
+          {
+            "level": 5,
+            "easy": 2,
+            "medium": 5,
+            "hard": 8,
+            "deadly": 10
+          },
+          {
+            "level": 6,
+            "easy": 3,
+            "medium": 6,
+            "hard": 9,
+            "deadly": 12
+          },
+          {
+            "level": 7,
+            "easy": 3,
+            "medium": 7,
+            "hard": 11,
+            "deadly": 14
+          },
+          {
+            "level": 8,
+            "easy": 4,
+            "medium": 8,
+            "hard": 12,
+            "deadly": 16
+          },
+          {
+            "level": 9,
+            "easy": 4,
+            "medium": 9,
+            "hard": 14,
+            "deadly": 18
+          },
+          {
+            "level": 10,
+            "easy": 5,
+            "medium": 10,
+            "hard": 15,
+            "deadly": 20
+          },
+          {
+            "level": 11,
+            "easy": 5,
+            "medium": 11,
+            "hard": 17,
+            "deadly": 22
+          },
+          {
+            "level": 12,
+            "easy": 6,
+            "medium": 12,
+            "hard": 18,
+            "deadly": 24
+          },
+          {
+            "level": 13,
+            "easy": 6,
+            "medium": 13,
+            "hard": 20,
+            "deadly": 26
+          },
+          {
+            "level": 14,
+            "easy": 7,
+            "medium": 14,
+            "hard": 21,
+            "deadly": 28
+          },
+          {
+            "level": 15,
+            "easy": 7,
+            "medium": 15,
+            "hard": 23,
+            "deadly": 30
+          },
+          {
+            "level": 16,
+            "easy": 8,
+            "medium": 16,
+            "hard": 24,
+            "deadly": 32
+          },
+          {
+            "level": 17,
+            "easy": 8,
+            "medium": 17,
+            "hard": 26,
+            "deadly": 34
+          },
+          {
+            "level": 18,
+            "easy": 9,
+            "medium": 18,
+            "hard": 27,
+            "deadly": 36
+          },
+          {
+            "level": 19,
+            "easy": 9,
+            "medium": 19,
+            "hard": 29,
+            "deadly": 38
+          },
+          {
+            "level": 20,
+            "easy": 10,
+            "medium": 20,
+            "hard": 30,
+            "deadly": 40
+          }
+        ],
+        "4": [
+          {
+            "level": 1,
+            "easy": "3/4",
+            "medium": 1,
+            "hard": 2,
+            "deadly": 3
+          },
+          {
+            "level": 2,
+            "easy": 1,
+            "medium": 3,
+            "hard": 4,
+            "deadly": 5
+          },
+          {
+            "level": 3,
+            "easy": 2,
+            "medium": 4,
+            "hard": 6,
+            "deadly": 8
+          },
+          {
+            "level": 4,
+            "easy": 3,
+            "medium": 5,
+            "hard": 8,
+            "deadly": 11
+          },
+          {
+            "level": 5,
+            "easy": 3,
+            "medium": 7,
+            "hard": 10,
+            "deadly": 13
+          },
+          {
+            "level": 6,
+            "easy": 4,
+            "medium": 8,
+            "hard": 12,
+            "deadly": 16
+          },
+          {
+            "level": 7,
+            "easy": 4,
+            "medium": 9,
+            "hard": 14,
+            "deadly": 18
+          },
+          {
+            "level": 8,
+            "easy": 5,
+            "medium": 11,
+            "hard": 16,
+            "deadly": 21
+          },
+          {
+            "level": 9,
+            "easy": 6,
+            "medium": 12,
+            "hard": 18,
+            "deadly": 24
+          },
+          {
+            "level": 10,
+            "easy": 6,
+            "medium": 13,
+            "hard": 20,
+            "deadly": 26
+          },
+          {
+            "level": 11,
+            "easy": 7,
+            "medium": 15,
+            "hard": 22,
+            "deadly": 29
+          },
+          {
+            "level": 12,
+            "easy": 8,
+            "medium": 16,
+            "hard": 24,
+            "deadly": 32
+          },
+          {
+            "level": 13,
+            "easy": 8,
+            "medium": 17,
+            "hard": 26,
+            "deadly": 34
+          },
+          {
+            "level": 14,
+            "easy": 9,
+            "medium": 18,
+            "hard": 28,
+            "deadly": 37
+          },
+          {
+            "level": 15,
+            "easy": 10,
+            "medium": 20,
+            "hard": 30,
+            "deadly": 40
+          },
+          {
+            "level": 16,
+            "easy": 10,
+            "medium": 21,
+            "hard": 32,
+            "deadly": 42
+          },
+          {
+            "level": 17,
+            "easy": 11,
+            "medium": 22,
+            "hard": 34,
+            "deadly": 45
+          },
+          {
+            "level": 18,
+            "easy": 12,
+            "medium": 24,
+            "hard": 36,
+            "deadly": 48
+          },
+          {
+            "level": 19,
+            "easy": 12,
+            "medium": 25,
+            "hard": 38,
+            "deadly": 50
+          },
+          {
+            "level": 20,
+            "easy": 13,
+            "medium": 26,
+            "hard": 40,
+            "deadly": 53
+          }
+        ],
+        "5": [
+          {
+            "level": 1,
+            "easy": 1,
+            "medium": "1 1/2",
+            "hard": 2,
+            "deadly": 3
+          },
+          {
+            "level": 2,
+            "easy": 2,
+            "medium": 3,
+            "hard": 5,
+            "deadly": 7
+          },
+          {
+            "level": 3,
+            "easy": 2,
+            "medium": 5,
+            "hard": 8,
+            "deadly": 10
+          },
+          {
+            "level": 4,
+            "easy": 3,
+            "medium": 7,
+            "hard": 10,
+            "deadly": 13
+          },
+          {
+            "level": 5,
+            "easy": 4,
+            "medium": 8,
+            "hard": 13,
+            "deadly": 17
+          },
+          {
+            "level": 6,
+            "easy": 5,
+            "medium": 10,
+            "hard": 15,
+            "deadly": 20
+          },
+          {
+            "level": 7,
+            "easy": 6,
+            "medium": 12,
+            "hard": 18,
+            "deadly": 23
+          },
+          {
+            "level": 8,
+            "easy": 6,
+            "medium": 13,
+            "hard": 20,
+            "deadly": 26
+          },
+          {
+            "level": 9,
+            "easy": 7,
+            "medium": 15,
+            "hard": 23,
+            "deadly": 30
+          },
+          {
+            "level": 10,
+            "easy": 8,
+            "medium": 17,
+            "hard": 25,
+            "deadly": 33
+          },
+          {
+            "level": 11,
+            "easy": 9,
+            "medium": 18,
+            "hard": 28,
+            "deadly": 36
+          },
+          {
+            "level": 12,
+            "easy": 10,
+            "medium": 20,
+            "hard": 30,
+            "deadly": 40
+          },
+          {
+            "level": 13,
+            "easy": 10,
+            "medium": 21,
+            "hard": 33,
+            "deadly": 43
+          },
+          {
+            "level": 14,
+            "easy": 11,
+            "medium": 23,
+            "hard": 35,
+            "deadly": 46
+          },
+          {
+            "level": 15,
+            "easy": 12,
+            "medium": 25,
+            "hard": 38,
+            "deadly": 50
+          },
+          {
+            "level": 16,
+            "easy": 13,
+            "medium": 26,
+            "hard": 40,
+            "deadly": 53
+          },
+          {
+            "level": 17,
+            "easy": 14,
+            "medium": 28,
+            "hard": 43,
+            "deadly": 56
+          },
+          {
+            "level": 18,
+            "easy": 14,
+            "medium": 30,
+            "hard": 45,
+            "deadly": 59
+          },
+          {
+            "level": 19,
+            "easy": 15,
+            "medium": 31,
+            "hard": 48,
+            "deadly": 63
+          },
+          {
+            "level": 20,
+            "easy": 16,
+            "medium": 33,
+            "hard": 50,
+            "deadly": 66
+          }
+        ],
+        "6+": [
+          {
+            "level": 1,
+            "easy": 1,
+            "medium": 2,
+            "hard": 3,
+            "deadly": 4
+          },
+          {
+            "level": 2,
+            "easy": 2,
+            "medium": 4,
+            "hard": 6,
+            "deadly": 8
+          },
+          {
+            "level": 3,
+            "easy": 3,
+            "medium": 6,
+            "hard": 9,
+            "deadly": 12
+          },
+          {
+            "level": 4,
+            "easy": 4,
+            "medium": 8,
+            "hard": 12,
+            "deadly": 16
+          },
+          {
+            "level": 5,
+            "easy": 5,
+            "medium": 10,
+            "hard": 15,
+            "deadly": 20
+          },
+          {
+            "level": 6,
+            "easy": 6,
+            "medium": 12,
+            "hard": 18,
+            "deadly": 24
+          },
+          {
+            "level": 7,
+            "easy": 7,
+            "medium": 14,
+            "hard": 21,
+            "deadly": 28
+          },
+          {
+            "level": 8,
+            "easy": 8,
+            "medium": 16,
+            "hard": 24,
+            "deadly": 32
+          },
+          {
+            "level": 9,
+            "easy": 9,
+            "medium": 18,
+            "hard": 27,
+            "deadly": 36
+          },
+          {
+            "level": 10,
+            "easy": 10,
+            "medium": 20,
+            "hard": 30,
+            "deadly": 40
+          },
+          {
+            "level": 11,
+            "easy": 11,
+            "medium": 22,
+            "hard": 33,
+            "deadly": 44
+          },
+          {
+            "level": 12,
+            "easy": 12,
+            "medium": 24,
+            "hard": 36,
+            "deadly": 48
+          },
+          {
+            "level": 13,
+            "easy": 12,
+            "medium": 26,
+            "hard": 39,
+            "deadly": 51
+          },
+          {
+            "level": 14,
+            "easy": 13,
+            "medium": 28,
+            "hard": 42,
+            "deadly": 55
+          },
+          {
+            "level": 15,
+            "easy": 14,
+            "medium": 30,
+            "hard": 45,
+            "deadly": 59
+          },
+          {
+            "level": 16,
+            "easy": 15,
+            "medium": 32,
+            "hard": 48,
+            "deadly": 63
+          },
+          {
+            "level": 17,
+            "easy": 16,
+            "medium": 34,
+            "hard": 51,
+            "deadly": 67
+          },
+          {
+            "level": 18,
+            "easy": 17,
+            "medium": 36,
+            "hard": 54,
+            "deadly": 71
+          },
+          {
+            "level": 19,
+            "easy": 18,
+            "medium": 38,
+            "hard": 57,
+            "deadly": 75
+          },
+          {
+            "level": 20,
+            "easy": 19,
+            "medium": 40,
+            "hard": 60,
+            "deadly": 80
+          }
+        ]
+      },
+      "adventuringDay": {
+        "unit": "encounterPoints",
+        "easyCost": 0.5,
+        "mediumCost": 1,
+        "hardCost": 2,
+        "deadlyCost": 4,
+        "tiers": [
+          {
+            "tier": 0,
+            "levels": [
+              1,
+              2
+            ],
+            "encounterPoints": 1
+          },
+          {
+            "tier": 1,
+            "levels": [
+              3,
+              4
+            ],
+            "encounterPoints": 2
+          },
+          {
+            "tier": 2,
+            "levels": [
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "encounterPoints": 4
+          },
+          {
+            "tier": 3,
+            "levels": [
+              11,
+              12,
+              13,
+              14,
+              15,
+              16
+            ],
+            "encounterPoints": 6
+          },
+          {
+            "tier": 4,
+            "levels": [
+              17,
+              18,
+              19,
+              20
+            ],
+            "encounterPoints": 8
+          }
+        ],
+        "notes": "For each encounter point, a party can face one medium encounter before needing a long rest. This budget is an estimate and is superseded by the Narrator's experience with a particular group."
+      },
+      "simplifiedXpOptional": "Whenever a party fights a battle, each adventurer gains XP equal to the encounter point cost of the battle (a medium battle is always worth 1 XP). For every 15 XP that an adventurer accumulates they gain a level."
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "title": "A5E Starting Gold Per Class",
+    "fetched": "2026-11-25",
+    "recordCount": 13,
+    "version": "A5ESRD",
+    "srd": "A5E",
+    "ruleset": "A5E",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the A5E System Reference Document (A5ESRD) by EN Publishing and available at A5ESRD.com, based on Level Up: Advanced 5th Edition, available at www.levelup5e.com. The A5ESRD is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceUrl": "https://a5esrd.com/a5esrd",
+    "additionalSources": [
+      "https://www.a5e.tools/rules/equipment-0"
+    ],
+    "notes": "Open 5e-family starting-wealth table: a fixed gold budget used instead of default starting gear. This is not the 2014 Player's Handbook random-dice table (which is not in the SRD). fiveEAnalogue is an editorial mapping, not from the A5ESRD."
+  },
+  "records": [
+    {
+      "index": "adept",
+      "name": "Adept",
+      "startingGoldGp": 30,
+      "fiveEAnalogue": "monk"
+    },
+    {
+      "index": "bard",
+      "name": "Bard",
+      "startingGoldGp": 135,
+      "fiveEAnalogue": "bard"
+    },
+    {
+      "index": "berserker",
+      "name": "Berserker",
+      "startingGoldGp": 120,
+      "fiveEAnalogue": "barbarian"
+    },
+    {
+      "index": "cleric",
+      "name": "Cleric",
+      "startingGoldGp": 125,
+      "fiveEAnalogue": "cleric"
+    },
+    {
+      "index": "druid",
+      "name": "Druid",
+      "startingGoldGp": 115,
+      "fiveEAnalogue": "druid"
+    },
+    {
+      "index": "fighter",
+      "name": "Fighter",
+      "startingGoldGp": 140,
+      "fiveEAnalogue": "fighter"
+    },
+    {
+      "index": "herald",
+      "name": "Herald",
+      "startingGoldGp": 200,
+      "fiveEAnalogue": "paladin"
+    },
+    {
+      "index": "marshal",
+      "name": "Marshal",
+      "startingGoldGp": 200,
+      "fiveEAnalogue": null
+    },
+    {
+      "index": "ranger",
+      "name": "Ranger",
+      "startingGoldGp": 150,
+      "fiveEAnalogue": "ranger"
+    },
+    {
+      "index": "rogue",
+      "name": "Rogue",
+      "startingGoldGp": 125,
+      "fiveEAnalogue": "rogue"
+    },
+    {
+      "index": "sorcerer",
+      "name": "Sorcerer",
+      "startingGoldGp": 100,
+      "fiveEAnalogue": "sorcerer"
+    },
+    {
+      "index": "warlock",
+      "name": "Warlock",
+      "startingGoldGp": 110,
+      "fiveEAnalogue": "warlock"
+    },
+    {
+      "index": "wizard",
+      "name": "Wizard",
+      "startingGoldGp": 100,
+      "fiveEAnalogue": "wizard"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "index": "traps-guidance",
+    "name": "Traps",
+    "description": "The SRD 5.2 Gameplay Toolbox (p. 199) describes how to present traps (severity and levels, trigger, effect) and advises using them sparingly. It does not include the 2014 Dungeon Master's Guide Appendix A random dungeon generation tables, which are not part of the SRD.",
+    "parts": [
+      {
+        "name": "Severity and Levels",
+        "description": "A trap is designated as a nuisance or as deadly for characters of certain levels. A nuisance trap is unlikely to seriously harm characters of the indicated levels, whereas a deadly trap can grievously damage characters of the indicated levels."
+      },
+      {
+        "name": "Trigger",
+        "description": "Traps are often set to go off when a creature enters an area or touches an object. Examples include stepping on a pressure plate, crossing a trip wire, turning a doorknob, or using the wrong key in a lock."
+      }
+    ]
+  }
+]

@@ -1,0 +1,481 @@
+{
+  "meta": {
+    "title": "The Dungeon Door Map Procedure (original random dungeon generator)",
+    "version": "original",
+    "srd": "original (trap and hazard targets are SRD)",
+    "ruleset": "2024/2014 5e-compatible",
+    "license": "CC0-1.0",
+    "attribution": "Original procedure dedicated to the public domain under CC0 1.0. Trap and hazard entries point at SRD 5.1 and SRD 5.2 material already attributed in those files.",
+    "sourceUrl": null,
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "notes": "Authored for The Dungeon Door to fill the gap left by the copyrighted DMG Appendix A random dungeon tables, which are not in the SRD and were not copied or closely paraphrased. The Basic Fantasy RPG 'Dungeon Generator' supplement (OGL 1.0a, Roberto Bisceglie, 2021) is another open mapping procedure, but a complete copy could not be retrieved here (the publisher's downloads returned 403). Prefer this graph procedure for the 5e server; see also extras/oseDungeonStocking.json for an open old-school stocking table."
+  },
+  "records": [
+    {
+      "index": "dungeon-door-map-procedure",
+      "name": "The Dungeon Door Map Procedure",
+      "origin": "original",
+      "license": "CC0-1.0",
+      "purpose": "A seeded, graph-based way to build a small 5e adventure map (about 5 to 9 rooms) for The Dungeon Door. It is not a geomorphic 'draw the next 30-foot passage' generator and is not adapted from the 2014 or 1e DMG Appendix A tables.",
+      "seeding": {
+        "description": "All rolls use a deterministic RNG seeded from the adventure id (for example the party door code plus the adventure name). The same seed always yields the same map, which keeps tests and replays stable.",
+        "recommendedSeed": "hash(doorCode + ':' + adventureSlug)"
+      },
+      "steps": [
+        "1. Choose or roll a dungeon kind.",
+        "2. Choose a size (short / standard / delve), which sets the room count.",
+        "3. Create rooms as graph nodes: always include entrance and goal, then fill the rest.",
+        "4. Connect them: a path from entrance to goal, plus branches and a few loops.",
+        "5. Label each connection with a passage or door type.",
+        "6. Give each room a size, a purpose drawn from the dungeon kind, and a contents result.",
+        "7. If the contents call for a trap or hazard, roll on the SRD-based trap table.",
+        "8. Add one or two dressing tags for atmosphere."
+      ],
+      "sizes": [
+        {
+          "index": "short",
+          "rooms": 5,
+          "pathRoomsBetweenEntranceAndGoal": 2,
+          "branchRooms": 1,
+          "extraLoops": 0
+        },
+        {
+          "index": "standard",
+          "rooms": 7,
+          "pathRoomsBetweenEntranceAndGoal": 3,
+          "branchRooms": 2,
+          "extraLoops": 1
+        },
+        {
+          "index": "delve",
+          "rooms": 9,
+          "pathRoomsBetweenEntranceAndGoal": 4,
+          "branchRooms": 3,
+          "extraLoops": 2
+        }
+      ],
+      "dungeonKinds": {
+        "dice": "1d8",
+        "rows": [
+          {
+            "roll": 1,
+            "index": "crypt",
+            "name": "Crypt"
+          },
+          {
+            "roll": 2,
+            "index": "caves",
+            "name": "Natural caves"
+          },
+          {
+            "roll": 3,
+            "index": "stronghold",
+            "name": "Abandoned stronghold"
+          },
+          {
+            "roll": 4,
+            "index": "mine",
+            "name": "Mine or delving"
+          },
+          {
+            "roll": 5,
+            "index": "temple",
+            "name": "Forgotten temple"
+          },
+          {
+            "roll": 6,
+            "index": "laboratory",
+            "name": "Wizard's laboratory"
+          },
+          {
+            "roll": 7,
+            "index": "prison",
+            "name": "Prison or oubliette"
+          },
+          {
+            "roll": 8,
+            "index": "ruins",
+            "name": "Buried ruins"
+          }
+        ]
+      },
+      "graphRules": [
+        "Every map has exactly one entrance room and exactly one goal room.",
+        "Build a single path from entrance to goal that visits the listed number of intermediate rooms. The goal is at the end of this path.",
+        "Place the remaining rooms as branches: each branch room connects to one room already on the main path (not the entrance, unless the size is short).",
+        "Add the listed number of extra loop edges between already-placed rooms that are not already adjacent, so explorers can take a second route.",
+        "Do not connect the entrance directly to the goal."
+      ],
+      "connectionTypes": {
+        "dice": "1d10",
+        "rows": [
+          {
+            "roll": [
+              1,
+              2,
+              3
+            ],
+            "index": "open-passage",
+            "name": "Open passage"
+          },
+          {
+            "roll": [
+              4,
+              5
+            ],
+            "index": "unlocked-door",
+            "name": "Unlocked door"
+          },
+          {
+            "roll": 6,
+            "index": "stuck-door",
+            "name": "Stuck door",
+            "suggestedCheck": "DC 13 Strength (Athletics) to force, or 1 minute of noisy work"
+          },
+          {
+            "roll": 7,
+            "index": "locked-door",
+            "name": "Locked door",
+            "suggestedCheck": "DC 15 Dexterity (Sleight of Hand) with thieves' tools, or force DC 18"
+          },
+          {
+            "roll": 8,
+            "index": "secret-door",
+            "name": "Secret door",
+            "suggestedCheck": "DC 15 Wisdom (Perception) to notice; opens by a visible catch once found"
+          },
+          {
+            "roll": 9,
+            "index": "stairs",
+            "name": "Stairs or steep slope",
+            "notes": "Changes elevation by one level. If rolled on a loop edge, treat as an unlocked door instead."
+          },
+          {
+            "roll": 10,
+            "index": "blocked-way",
+            "name": "Rubble, portcullis, or collapse",
+            "suggestedCheck": "DC 15 Strength (Athletics) or a suitable tool/spell to clear; noisy"
+          }
+        ]
+      },
+      "roomSizes": {
+        "dice": "1d6",
+        "rows": [
+          {
+            "roll": 1,
+            "index": "cramped",
+            "name": "Cramped",
+            "approxFeet": "15 x 15"
+          },
+          {
+            "roll": 2,
+            "index": "small",
+            "name": "Small",
+            "approxFeet": "20 x 20"
+          },
+          {
+            "roll": 3,
+            "index": "standard",
+            "name": "Standard",
+            "approxFeet": "30 x 30"
+          },
+          {
+            "roll": 4,
+            "index": "hall",
+            "name": "Long hall",
+            "approxFeet": "40 x 20"
+          },
+          {
+            "roll": 5,
+            "index": "grand",
+            "name": "Grand chamber",
+            "approxFeet": "50 x 40"
+          },
+          {
+            "roll": 6,
+            "index": "split",
+            "name": "Split level or gallery",
+            "approxFeet": "30 x 30 with a ledge or pit"
+          }
+        ]
+      },
+      "roomPurposes": {
+        "notes": "Roll 1d8 on the list for this dungeon kind. The entrance is always a threshold (gate, cave mouth, stairhead). The goal is always the last entry of the kind's list, or a rolled purpose marked as a fitting climax.",
+        "byKind": {
+          "crypt": [
+            "Bone gallery",
+            "Offering alcove",
+            "Mourning chapel",
+            "False tomb",
+            "Ossuary",
+            "Watcher's niche",
+            "Reliquary",
+            "True sarcophagus (goal)"
+          ],
+          "caves": [
+            "Dripstone chamber",
+            "Underground stream",
+            "Bat roost",
+            "Fungus grotto",
+            "Sinkhole",
+            "Nesting den",
+            "Crystal cleft",
+            "Air shaft to the surface or a deeper dark (goal)"
+          ],
+          "stronghold": [
+            "Guard room",
+            "Armory",
+            "Barracks",
+            "Kitchen or mess",
+            "Well room",
+            "Commander's office",
+            "Holding cell",
+            "Vault or war room (goal)"
+          ],
+          "mine": [
+            "Headframe or lift",
+            "Tool cache",
+            "Collapsed gallery",
+            "Ore bin",
+            "Foreman hut",
+            "Flooded working",
+            "Survey station",
+            "Rich vein or sealed bore (goal)"
+          ],
+          "temple": [
+            "Narthex",
+            "Cloister walk",
+            "Scripture room",
+            "Offering hall",
+            "Priest's cell",
+            "Baptistry or font",
+            "Inner sanctuary",
+            "Sanctum or idol (goal)"
+          ],
+          "laboratory": [
+            "Entry ward",
+            "Supply closet",
+            "Dissection or forge",
+            "Library nook",
+            "Specimen pens",
+            "Failed experiment",
+            "Binding circle",
+            "Master's workroom (goal)"
+          ],
+          "prison": [
+            "Intake gate",
+            "Guard post",
+            "Cell block",
+            "Interrogation room",
+            "Mess or yard",
+            "Oubliette",
+            "Warden's desk",
+            "Escape tunnel or the prisoner's cell (goal)"
+          ],
+          "ruins": [
+            "Rubble-choked court",
+            "Fallen hall",
+            "Cistern",
+            "Shrine remnant",
+            "Market stall row",
+            "Buried stair",
+            "Mosaic chamber",
+            "Sealed vault (goal)"
+          ]
+        }
+      },
+      "contents": {
+        "dice": "1d20",
+        "notes": "Original distribution meant to feel like a 5e adventure: plenty of empty or social space, a solid number of fights, and a minority of traps, puzzles, and loot. The entrance is usually empty or a weak watch. The goal is never empty: treat a roll of 1-6 as creature-with-treasure and a roll of 15-16 as a trap protecting the goal.",
+        "rows": [
+          {
+            "roll": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "index": "empty",
+            "name": "Dressing only",
+            "weight": "30%"
+          },
+          {
+            "roll": [
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "index": "creature",
+            "name": "Creature",
+            "weight": "25%"
+          },
+          {
+            "roll": [
+              12,
+              13,
+              14
+            ],
+            "index": "creature-treasure",
+            "name": "Creature with treasure",
+            "weight": "15%"
+          },
+          {
+            "roll": [
+              15,
+              16
+            ],
+            "index": "trap-hazard",
+            "name": "Trap or hazard",
+            "weight": "10%"
+          },
+          {
+            "roll": 17,
+            "index": "trap-treasure",
+            "name": "Trap protecting treasure",
+            "weight": "5%"
+          },
+          {
+            "roll": 18,
+            "index": "puzzle",
+            "name": "Puzzle, locked barrier, or strange feature",
+            "weight": "5%"
+          },
+          {
+            "roll": 19,
+            "index": "cache",
+            "name": "Unguarded cache or useful stores",
+            "weight": "5%"
+          },
+          {
+            "roll": 20,
+            "index": "roleplay",
+            "name": "Someone to talk to (prisoner, rival, denizen)",
+            "weight": "5%"
+          }
+        ],
+        "encounterDifficultyHint": "Size creature encounters with extras/encounterDifficultyA5e.json or 5.2/encounterBudgets.json. A standard adventure should mix mostly easy and medium fights, with the goal at hard."
+      },
+      "trapsAndHazards": {
+        "dice": "1d12",
+        "notes": "Points at SRD 5.1 sample traps and SRD 5.2 hazards already in this dataset. Damage and DCs should be scaled to the party's level (easy DC 10, medium 15, hard 20 is a fair default).",
+        "rows": [
+          {
+            "roll": 1,
+            "index": "collapsing-roof",
+            "name": "Collapsing Roof",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 2,
+            "index": "falling-net",
+            "name": "Falling Net",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 3,
+            "index": "fire-breathing-statue",
+            "name": "Fire-Breathing Statue",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 4,
+            "index": "pits",
+            "name": "Pit",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 5,
+            "index": "poison-darts",
+            "name": "Poison Darts",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 6,
+            "index": "poison-needle",
+            "name": "Poison Needle",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 7,
+            "index": "rolling-sphere",
+            "name": "Rolling Sphere",
+            "source": "5.1/traps.json"
+          },
+          {
+            "roll": 8,
+            "index": "burning",
+            "name": "Burning",
+            "source": "5.2/hazards.json"
+          },
+          {
+            "roll": 9,
+            "index": "falling",
+            "name": "Falling (drop, shaft, or slick ledge)",
+            "source": "5.2/hazards.json"
+          },
+          {
+            "roll": 10,
+            "index": "suffocation",
+            "name": "Suffocation (bad air or rising water)",
+            "source": "5.2/hazards.json"
+          },
+          {
+            "roll": 11,
+            "index": "dehydration",
+            "name": "Dehydration (sealed, salt, or heat)",
+            "source": "5.2/hazards.json"
+          },
+          {
+            "roll": 12,
+            "index": "sphere-of-annihilation",
+            "name": "Sphere of Annihilation",
+            "source": "5.1/traps.json",
+            "notes": "Rare and deadly; if the party is below 7th level, reroll or treat as a pit."
+          }
+        ]
+      },
+      "dressing": {
+        "dice": "1d8",
+        "rows": [
+          {
+            "roll": 1,
+            "tag": "Drips and standing puddles"
+          },
+          {
+            "roll": 2,
+            "tag": "Old smoke or incense"
+          },
+          {
+            "roll": 3,
+            "tag": "Scratched tallies or graffiti"
+          },
+          {
+            "roll": 4,
+            "tag": "Bones, nests, or molt"
+          },
+          {
+            "roll": 5,
+            "tag": "A draft from somewhere you cannot see"
+          },
+          {
+            "roll": 6,
+            "tag": "Broken furniture or tools"
+          },
+          {
+            "roll": 7,
+            "tag": "Faint light (fungus, coals, a cracked door)"
+          },
+          {
+            "roll": 8,
+            "tag": "A sound that does not match this room (hammering, singing, dripping far off)"
+          }
+        ]
+      }
+    }
+  ]
+}

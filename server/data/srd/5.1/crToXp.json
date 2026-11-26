@@ -1,0 +1,221 @@
+{
+  "meta": {
+    "title": "Challenge Rating to XP (derived from monster stat blocks)",
+    "version": "SRD 5.1",
+    "srd": "5.1",
+    "ruleset": "2014",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2014/en",
+    "sourcePdf": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 28,
+    "notes": "SRD 5.1 has no standalone extractable CR-to-XP table; values are derived from official SRD monster XP. The 2014 DMG easy/medium/hard/deadly XP-threshold table and the multiple-monster encounter multipliers are not in the SRD and are omitted."
+  },
+  "records": [
+    {
+      "challengeRating": "0",
+      "xpValuesInStatBlocks": [
+        0,
+        10
+      ],
+      "xp": 10,
+      "notes": "Some SRD 5.1 stat blocks list [0, 10]; the standard table value is 10."
+    },
+    {
+      "challengeRating": "1/8",
+      "xpValuesInStatBlocks": [
+        25
+      ],
+      "xp": 25
+    },
+    {
+      "challengeRating": "1/4",
+      "xpValuesInStatBlocks": [
+        25,
+        50
+      ],
+      "xp": 50,
+      "notes": "Some SRD 5.1 stat blocks list [25, 50]; the standard table value is 50."
+    },
+    {
+      "challengeRating": "1/2",
+      "xpValuesInStatBlocks": [
+        50,
+        100
+      ],
+      "xp": 100,
+      "notes": "Some SRD 5.1 stat blocks list [50, 100]; the standard table value is 100."
+    },
+    {
+      "challengeRating": "1",
+      "xpValuesInStatBlocks": [
+        100,
+        200
+      ],
+      "xp": 200,
+      "notes": "Some SRD 5.1 stat blocks list [100, 200]; the standard table value is 200."
+    },
+    {
+      "challengeRating": "2",
+      "xpValuesInStatBlocks": [
+        450
+      ],
+      "xp": 450
+    },
+    {
+      "challengeRating": "3",
+      "xpValuesInStatBlocks": [
+        700
+      ],
+      "xp": 700
+    },
+    {
+      "challengeRating": "4",
+      "xpValuesInStatBlocks": [
+        1100
+      ],
+      "xp": 1100
+    },
+    {
+      "challengeRating": "5",
+      "xpValuesInStatBlocks": [
+        1800
+      ],
+      "xp": 1800
+    },
+    {
+      "challengeRating": "6",
+      "xpValuesInStatBlocks": [
+        2300
+      ],
+      "xp": 2300
+    },
+    {
+      "challengeRating": "7",
+      "xpValuesInStatBlocks": [
+        2900
+      ],
+      "xp": 2900
+    },
+    {
+      "challengeRating": "8",
+      "xpValuesInStatBlocks": [
+        3900
+      ],
+      "xp": 3900
+    },
+    {
+      "challengeRating": "9",
+      "xpValuesInStatBlocks": [
+        5000
+      ],
+      "xp": 5000
+    },
+    {
+      "challengeRating": "10",
+      "xpValuesInStatBlocks": [
+        5900
+      ],
+      "xp": 5900
+    },
+    {
+      "challengeRating": "11",
+      "xpValuesInStatBlocks": [
+        7200
+      ],
+      "xp": 7200
+    },
+    {
+      "challengeRating": "12",
+      "xpValuesInStatBlocks": [
+        8400
+      ],
+      "xp": 8400
+    },
+    {
+      "challengeRating": "13",
+      "xpValuesInStatBlocks": [
+        10000
+      ],
+      "xp": 10000
+    },
+    {
+      "challengeRating": "14",
+      "xpValuesInStatBlocks": [
+        11500
+      ],
+      "xp": 11500
+    },
+    {
+      "challengeRating": "15",
+      "xpValuesInStatBlocks": [
+        13000
+      ],
+      "xp": 13000
+    },
+    {
+      "challengeRating": "16",
+      "xpValuesInStatBlocks": [
+        15000
+      ],
+      "xp": 15000
+    },
+    {
+      "challengeRating": "17",
+      "xpValuesInStatBlocks": [
+        18000
+      ],
+      "xp": 18000
+    },
+    {
+      "challengeRating": "19",
+      "xpValuesInStatBlocks": [
+        22000
+      ],
+      "xp": 22000
+    },
+    {
+      "challengeRating": "20",
+      "xpValuesInStatBlocks": [
+        25000
+      ],
+      "xp": 25000
+    },
+    {
+      "challengeRating": "21",
+      "xpValuesInStatBlocks": [
+        33000
+      ],
+      "xp": 33000
+    },
+    {
+      "challengeRating": "22",
+      "xpValuesInStatBlocks": [
+        41000
+      ],
+      "xp": 41000
+    },
+    {
+      "challengeRating": "23",
+      "xpValuesInStatBlocks": [
+        50000
+      ],
+      "xp": 50000
+    },
+    {
+      "challengeRating": "24",
+      "xpValuesInStatBlocks": [
+        62000
+      ],
+      "xp": 62000
+    },
+    {
+      "challengeRating": "30",
+      "xpValuesInStatBlocks": [
+        155000
+      ],
+      "xp": 155000
+    }
+  ]
+}

@@ -1,0 +1,263 @@
+{
+  "meta": {
+    "title": "Armor and Shields",
+    "version": "SRD 5.2",
+    "srd": "5.2",
+    "ruleset": "2024",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2024/en",
+    "sourcePdf": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 13
+  },
+  "records": [
+    {
+      "index": "breastplate",
+      "name": "Breastplate",
+      "category": "medium",
+      "armorClass": {
+        "base": 14,
+        "dexBonus": true,
+        "maxBonus": 2
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": false,
+      "cost": {
+        "quantity": 400,
+        "unit": "gp"
+      },
+      "weight": 20,
+      "donTime": "5 minutes",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "chain-mail",
+      "name": "Chain Mail",
+      "category": "heavy",
+      "armorClass": {
+        "base": 16,
+        "dexBonus": false,
+        "maxBonus": 0
+      },
+      "strengthMinimum": 13,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 75,
+        "unit": "gp"
+      },
+      "weight": 55,
+      "donTime": "10 minutes",
+      "doffTime": "5 minutes"
+    },
+    {
+      "index": "chain-shirt",
+      "name": "Chain Shirt",
+      "category": "medium",
+      "armorClass": {
+        "base": 13,
+        "dexBonus": true,
+        "maxBonus": 2
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": false,
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "weight": 14,
+      "donTime": "5 minutes",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "half-plate-armor",
+      "name": "Half-Plate Armor",
+      "category": "medium",
+      "armorClass": {
+        "base": 15,
+        "dexBonus": true,
+        "maxBonus": 2
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 750,
+        "unit": "gp"
+      },
+      "weight": 40,
+      "donTime": "5 minutes",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "hide-armor",
+      "name": "Hide Armor",
+      "category": "light",
+      "armorClass": {
+        "base": 12,
+        "dexBonus": true,
+        "maxBonus": 2
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": false,
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 12,
+      "donTime": "5 minutes",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "leather-armor",
+      "name": "Leather Armor",
+      "category": "light",
+      "armorClass": {
+        "base": 11,
+        "dexBonus": true,
+        "maxBonus": null
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": false,
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 10,
+      "donTime": "1 minute",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "padded-armor",
+      "name": "Padded Armor",
+      "category": "light",
+      "armorClass": {
+        "base": 11,
+        "dexBonus": true,
+        "maxBonus": null
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "weight": 8,
+      "donTime": "1 minute",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "plate-armor",
+      "name": "Plate Armor",
+      "category": "heavy",
+      "armorClass": {
+        "base": 18,
+        "dexBonus": false,
+        "maxBonus": 0
+      },
+      "strengthMinimum": 15,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 1500,
+        "unit": "gp"
+      },
+      "weight": 65,
+      "donTime": "10 minutes",
+      "doffTime": "5 minutes"
+    },
+    {
+      "index": "ring-mail",
+      "name": "Ring Mail",
+      "category": "heavy",
+      "armorClass": {
+        "base": 14,
+        "dexBonus": false,
+        "maxBonus": 0
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 30,
+        "unit": "gp"
+      },
+      "weight": 40,
+      "donTime": "10 minutes",
+      "doffTime": "5 minutes"
+    },
+    {
+      "index": "scale-mail",
+      "name": "Scale Mail",
+      "category": "medium",
+      "armorClass": {
+        "base": 14,
+        "dexBonus": true,
+        "maxBonus": 2
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "weight": 45,
+      "donTime": "5 minutes",
+      "doffTime": "1 minute"
+    },
+    {
+      "index": "shield",
+      "name": "Shield",
+      "category": "shield",
+      "armorClass": {
+        "base": 2,
+        "dexBonus": false,
+        "maxBonus": null
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": false,
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 6,
+      "donTime": null,
+      "doffTime": null
+    },
+    {
+      "index": "splint-armor",
+      "name": "Splint Armor",
+      "category": "heavy",
+      "armorClass": {
+        "base": 17,
+        "dexBonus": false,
+        "maxBonus": 0
+      },
+      "strengthMinimum": 15,
+      "stealthDisadvantage": true,
+      "cost": {
+        "quantity": 200,
+        "unit": "gp"
+      },
+      "weight": 60,
+      "donTime": "10 minutes",
+      "doffTime": "5 minutes"
+    },
+    {
+      "index": "studded-leather-armor",
+      "name": "Studded Leather Armor",
+      "category": "light",
+      "armorClass": {
+        "base": 12,
+        "dexBonus": true,
+        "maxBonus": null
+      },
+      "strengthMinimum": 0,
+      "stealthDisadvantage": false,
+      "cost": {
+        "quantity": 45,
+        "unit": "gp"
+      },
+      "weight": 13,
+      "donTime": "1 minute",
+      "doffTime": "1 minute"
+    }
+  ]
+}
