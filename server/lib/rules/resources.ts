@@ -47,17 +47,19 @@ function shortRestOf(sheet: CharacterSheet, def: Definition, data: Srd): ShortRe
   return data.classes.get(sheet.classId)!.levels.flatMap((l) => l.features).find((f) => f.name === name)!.shortRest;
 }
 
-/** The hero's limited features: those its class has given it so far, with uses left. */
+/**
+ * The hero's limited features: those its class has given it so far, with uses left. Every one has at least
+ * one use from the level its feature arrives (the class tables say so), so none is listed empty.
+ */
 export function resourcesOf(sheet: CharacterSheet, data: Srd = bundledSrd()): Resource[] {
   const counts = data.classes.get(sheet.classId)!.levels[sheet.level - 1].counts;
   return DEFINITIONS
     .filter((def) => def.classId === sheet.classId && sheet.features.includes(def.feature))
     .map((def) => {
       const max = def.max(sheet, counts);
-      const used = sheet.resourcesUsed[def.id] ?? 0;
+      const { [def.id]: used = 0 } = sheet.resourcesUsed;
       return { id: def.id, name: def.feature, max, used, left: max - used, shortRest: shortRestOf(sheet, def, data) };
-    })
-    .filter((r) => r.max > 0);
+    });
 }
 
 /** Spends `amount` uses (points, for a pool like Lay On Hands or Focus). */
