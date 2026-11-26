@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { beforeEach, test } from 'node:test';
 import * as catalogApi from '../api/catalog.ts';
+import * as reviveApi from '../api/character-revive.ts';
 import * as charactersApi from '../api/characters.ts';
 import * as gamesApi from '../api/games.ts';
 import { call, makeCharacter } from './api.fixture.ts';
@@ -102,4 +103,37 @@ test('the old race ids are still accepted on save, as their SRD 5.2 species', as
 test('the catalog lists the SRD 5.2 backgrounds', async () => {
   const { body } = await call(catalogApi.GET, '/api/catalog');
   assert.deepEqual(body.backgrounds.map((b: { id: string; name: string }) => ({ id: b.id, name: b.name })), [...srd().backgrounds.values()].map((b) => ({ id: b.id, name: b.name })));
+});
+
+test('between adventures a dead hero can buy a temple’s Raise Dead (2,500 gp): from its own purse or a friend’s', async () => {
+  const player = randomUUID();
+  const fallen = await makeCharacter(player, 'Fallen', { race: 'human', characterClass: 'fighter' });
+  const friend = await makeCharacter(player, 'Friend', { race: 'human', characterClass: 'rogue' });
+  const setSheet = async (c: Character, patch: Partial<Character['sheet']>) => {
+    const stored = (await getStore().getCharacter(c.id))!;
+    await getStore().saveCharacter({ ...stored, sheet: { ...c.sheet, ...patch } });
+  };
+  const revive = (body: unknown, who = player) => call<Character & { error?: string }>(reviveApi.POST, '/api/characters/revive', { player: who, body });
+  assert.deepEqual([(await revive({ characterId: fallen.id })).status, (await revive({ characterId: fallen.id })).body.error], [409, 'Fallen is not dead']);
+  await setSheet(fallen, { hp: 0, dead: true, gp: 2499 });
+  const poor = await revive({ characterId: fallen.id });
+  assert.deepEqual([poor.status, poor.body.error], [409, 'the temple asks 2500 gp; Fallen has 2499']);
+  await setSheet(fallen, { hp: 0, dead: true, gp: 2600 });
+  const own = await revive({ characterId: fallen.id, payerId: fallen.id });
+  assert.equal(own.status, 200);
+  assert.deepEqual([own.body.sheet.dead, own.body.sheet.hp, own.body.sheet.gp, own.body.sheet.revivalPenalty], [undefined, 1, 100, 4]);
+  assert.deepEqual((await mine(player)).find((c) => c.id === fallen.id)!.sheet.gp, 100, 'saved');
+  await setSheet(fallen, { hp: 0, dead: true, gp: 0 });
+  await setSheet(friend, { gp: 2500 });
+  const helped = await revive({ characterId: fallen.id, payerId: friend.id });
+  assert.deepEqual([helped.status, helped.body.sheet.hp, helped.body.sheet.gp], [200, 1, 0]);
+  assert.equal((await mine(player)).find((c) => c.id === friend.id)!.sheet.gp, 0, 'the friend paid it all: exactly enough will do');
+  await setSheet(fallen, { hp: 0, dead: true, gp: 0 });
+  await setSheet(friend, { hp: 0, dead: true, gp: 3000 });
+  const ghost = await revive({ characterId: fallen.id, payerId: friend.id });
+  assert.deepEqual([ghost.status, ghost.body.error], [409, 'Friend is dead']);
+  assert.equal((await revive({ characterId: fallen.id }, randomUUID())).status, 404, 'only your own heroes');
+  assert.equal((await revive({ characterId: fallen.id, payerId: null })).body.error, 'the temple asks 2500 gp; Fallen has 0');
+  const stranger = await makeCharacter(randomUUID(), 'Stranger', { race: 'human', characterClass: 'rogue' });
+  assert.equal((await revive({ characterId: fallen.id, payerId: stranger.id })).status, 404, 'nor someone else’s purse');
 });

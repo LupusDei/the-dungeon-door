@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { heroAttacks } from './attacks.ts';
 import { isValid } from './catalog.ts';
-import { badRequest, forbidden, isUUID, notFound } from './http.ts';
+import { badRequest, conflict, forbidden, isUUID, notFound } from './http.ts';
 import { buildCharacter, quickChoices } from './rules/character.ts';
+import { revive, TEMPLE_RAISE_DEAD } from './rules/revive.ts';
 import { derivedRng } from './rules/rng.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 import { srd } from './rules/srd.ts';
@@ -138,4 +139,24 @@ export async function ownCharacter(playerId: string, id: unknown): Promise<Chara
   const character = await getStore().getCharacter(id);
   if (!character || character.ownerId !== playerId) throw notFound('no such character');
   return upgradeCharacter(character);
+}
+
+/**
+ * POST /api/characters/revive — a temple's Raise Dead between adventures (SRD 5.2: a level-5 spellcasting
+ * service, 2,000 GP, plus the 500 GP diamond). The dead hero's own purse pays, or another living hero of the
+ * same player (payerId). The hero comes back with 1 HP and -4 on D20 Tests, easing with each Long Rest.
+ */
+export async function reviveCharacter(playerId: string, characterId: unknown, payerId: unknown): Promise<Character> {
+  const hero = await ownCharacter(playerId, characterId);
+  if (!hero.sheet.dead) throw conflict(`${hero.name} is not dead`);
+  const payer = payerId === undefined || payerId === null || payerId === hero.id ? hero : await ownCharacter(playerId, payerId);
+  if (payer.sheet.dead && payer !== hero) throw conflict(`${payer.name} is dead`);
+  if (payer.sheet.gp < TEMPLE_RAISE_DEAD) throw conflict(`the temple asks ${TEMPLE_RAISE_DEAD} gp; ${payer.name} has ${payer.sheet.gp}`);
+  const store = getStore();
+  const now = new Date().toISOString();
+  const paid = (c: Character) => ({ ...c.sheet, gp: c.sheet.gp - TEMPLE_RAISE_DEAD });
+  if (payer !== hero) await store.saveCharacter(storable({ ...payer, sheet: paid(payer), updatedAt: now }));
+  const sheet = revive(payer === hero ? paid(hero) : hero.sheet, 'raise-dead');
+  await store.saveCharacter(storable({ ...hero, sheet, updatedAt: now }));
+  return upgradeCharacter(storable({ ...hero, sheet, updatedAt: now }));
 }

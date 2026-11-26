@@ -7,6 +7,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/characters/revive",
+      "destination": "/api/character-revive"
+    },
+    {
       "source": "/api/games/:code/join",
       "destination": "/api/game-join?code=:code"
     },
