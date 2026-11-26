@@ -107,8 +107,14 @@ function withEvent(state: CombatState, event: CombatEvent, ...changed: Combatant
   return { ...state, combatants, log: [...state.log, event], outcome: outcomeOf(combatants) };
 }
 
+/** A dying hero's death save; a monster makes none (one left dying by an older rule is dead, unlogged). */
 function afterDeathSave(state: CombatState, id: string, rng: Rng): CombatState {
-  const c = deathSave(rng, state.combatants[id]);
+  const dying = state.combatants[id];
+  if (dying.side === 'foes') {
+    const combatants = { ...state.combatants, [id]: { ...dying, status: 'dead' as const } };
+    return { ...state, combatants, outcome: outcomeOf(combatants) };
+  }
+  const c = deathSave(rng, dying);
   return withEvent(state, { kind: 'deathSave', round: state.round, actor: id, status: c.status }, c);
 }
 
@@ -171,7 +177,8 @@ function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Act
 function resolveCast(state: CombatState, actor: Combatant, action: Extract<Action, { kind: 'spell' }>, rng: Rng): CombatState {
   const byId = new Map(Object.entries(state.combatants));
   const targets = action.targets.map((id) => lookup(byId, id, 'combatant'));
-  const resolved = resolveSpell(rng, { ...action.caster, combatant: actor }, action.cast, targets, { attack: { natural: action.natural } });
+  const spare = upAgainst(state, actor.side).filter((c) => !action.targets.includes(c.id)); // where a dart goes on to once its foe falls
+  const resolved = resolveSpell(rng, { ...action.caster, combatant: actor }, action.cast, targets, { attack: { natural: action.natural }, spare });
   return withEvent(state, { kind: 'spell', round: state.round, actor: actor.id, spellId: action.cast.spellId, outcomes: resolved.outcomes }, ...resolved.targets);
 }
 

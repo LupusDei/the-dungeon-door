@@ -338,3 +338,21 @@ test('a vote at a living foe, or not at a foe, stands; with no foe left it becom
   assert.deepEqual(aimAgain(none, 'bryn', { kind: 'spell', caster, cast: fireBolt, targets: ['g1'] }), { kind: 'dodge' });
   assert.deepEqual(aimAgain(none, 'bryn', { kind: 'dodge' }), { kind: 'dodge' });
 });
+
+test('Magic Missile at a foe that drops goes on to the other foes in the fight; the slain one is dead, not dying (q-mwxx6wwz)', () => {
+  const missile = { spellId: 'magic-missile', slotLevel: 1, damageDice: '1d4+1', beams: 3, healingDice: null, endedConcentration: null };
+  const s = heroFirst([hero('bryn'), goblin('g1', { hp: 2, attacks: harmless }), goblin('g2', { attacks: harmless })]);
+  const after = act(s, { kind: 'spell', caster, cast: missile, targets: ['g1', 'g1', 'g1'] });
+  const event = after.log.find((e) => e.kind === 'spell')!;
+  assert.deepEqual(event.kind === 'spell' && event.outcomes.map((o) => o.target), ['g1', 'g2', 'g2']);
+  assert.deepEqual([after.combatants.g1.status, after.combatants.g1.deathSaves.failures], ['dead', 0]);
+  assert.ok(!after.log.some((e) => e.kind === 'deathSave'));
+});
+
+test('a foe left dying by the old rule makes no death save: on its turn it is dead, and the fight is won', () => {
+  const s = heroFirst([hero('bryn'), goblin('g1', { hp: 0, status: 'dying', conditions: ['unconscious'] })]);
+  const after = act(s, { kind: 'dodge' });
+  assert.equal(after.combatants.g1.status, 'dead');
+  assert.equal(after.outcome, 'victory');
+  assert.ok(!after.log.some((e) => e.kind === 'deathSave'));
+});

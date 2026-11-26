@@ -19,6 +19,8 @@ export interface SpellRolls {
   attack?: RollOptions;
   /** For every target's saving throw. */
   save?: RollOptions;
+  /** Foes not aimed at, that a dart or beam goes on to once its own target has fallen in the cast. */
+  spare?: readonly Combatant[];
 }
 interface Resolved { outcomes: SpellOutcome[]; targets: Combatant[] }
 
@@ -38,18 +40,40 @@ function settle(targets: readonly Combatant[], byId: ReadonlyMap<string, Combata
   return [...new Set(targets.map((t) => t.id))].map((id) => byId.get(id)!);
 }
 
-function spellAttacks(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], options: RollOptions): Resolved {
+/**
+ * Where a dart or beam goes in its turn: at its own target, or, once that has fallen in this cast, at the most
+ * wounded still up of those aimed at and the spare foes (the caster chooses each one's target); none: nowhere.
+ */
+function aimedAt(byId: ReadonlyMap<string, Combatant>, id: string): Combatant | undefined {
+  const own = byId.get(id)!;
+  if (own.status !== 'dead') return own;
+  const up = [...byId.values()].filter((c) => c.status === 'up');
+  return up.length ? up.reduce((low, c) => (c.hp < low.hp ? c : low)) : undefined;
+}
+
+/** Each dart or beam in turn, struck where it is aimed (aimedAt); one with nowhere to go is not struck or listed. */
+function oneByOne(targets: readonly Combatant[], spare: readonly Combatant[], strike: (target: Combatant) => { outcome: SpellOutcome; target: Combatant }): Resolved {
+  const all = [...targets, ...spare];
+  const byId = new Map(all.map((t) => [t.id, t]));
+  const outcomes = targets.flatMap((t) => {
+    const aimed = aimedAt(byId, t.id);
+    if (!aimed) return [];
+    const { outcome, target } = strike(aimed);
+    byId.set(target.id, target);
+    return [outcome];
+  });
+  return { outcomes, targets: settle(all, byId) };
+}
+
+function spellAttacks(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], spare: readonly Combatant[], options: RollOptions): Resolved {
   const s = cast.beams === 1 ? '' : 's';
   require(targets.length === cast.beams, `${spell.name} makes ${cast.beams} attack${s}: give ${cast.beams} target${s}`);
   const attack = { name: spell.name, bonus: caster.attackBonus, ranged: spell.attack === 'ranged', damage: [{ dice: cast.damageDice!, type: spell.damage!.type }] };
   const attacker = { ...caster.combatant, attacks: [attack] };
-  const byId = new Map(targets.map((t) => [t.id, t]));
-  const outcomes = targets.map((t) => {
-    const { result, target } = attackRoll(rng, attacker, spell.name, byId.get(t.id)!, options);
-    byId.set(t.id, target);
-    return { ...nothing(t.id), attack: result, damage: result.damage };
+  return oneByOne(targets, spare, (aimed) => {
+    const { result, target } = attackRoll(rng, attacker, spell.name, aimed, options);
+    return { outcome: { ...nothing(aimed.id), attack: result, damage: result.damage }, target };
   });
-  return { outcomes, targets: settle(targets, byId) };
 }
 
 function spellSaves(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], options: RollOptions): Resolved {
@@ -64,16 +88,12 @@ function spellSaves(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targe
 }
 
 /** Darts that never miss: each rolls its own damage against its target (several may share one, in turn). */
-function spellDarts(rng: Rng, spell: SrdSpell, cast: Cast, targets: readonly Combatant[]): Resolved {
+function spellDarts(rng: Rng, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], spare: readonly Combatant[]): Resolved {
   require(targets.length === cast.beams, `${spell.name} makes ${cast.beams} darts: give ${cast.beams} targets`);
-  const byId = new Map(targets.map((t) => [t.id, t]));
-  const outcomes = targets.map((t) => {
-    const target = byId.get(t.id)!;
-    const damage = damageAfterDefenses(target, rollDice(rng, parseDice(cast.damageDice!)).total, spell.damage!.type);
-    byId.set(t.id, takeDamage(target, damage, false));
-    return { ...nothing(t.id), damage };
+  return oneByOne(targets, spare, (aimed) => {
+    const damage = damageAfterDefenses(aimed, rollDice(rng, parseDice(cast.damageDice!)).total, spell.damage!.type);
+    return { outcome: { ...nothing(aimed.id), damage }, target: takeDamage(aimed, damage, false) };
   });
-  return { outcomes, targets: settle(targets, byId) };
 }
 
 function spellHealing(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[]): Resolved {
@@ -86,10 +106,10 @@ function spellHealing(rng: Rng, caster: Caster, cast: Cast, targets: readonly Co
  * Resolves a cast (from castSpell) against its targets: a spell attack per beam, a sure hit per dart, a
  * saving throw per target against damage rolled once, or healing rolled once. A spell with none of these is the DM's.
  */
-export function resolveSpell(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[], { attack = {}, save = {} }: SpellRolls = {}, data: Srd = bundledSrd()): Resolved {
+export function resolveSpell(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[], { attack = {}, save = {}, spare = [] }: SpellRolls = {}, data: Srd = bundledSrd()): Resolved {
   const spell = data.spells.get(cast.spellId)!;
-  if (spell.attack && cast.damageDice) return spellAttacks(rng, caster, spell, cast, targets, attack);
-  if (spell.darts) return spellDarts(rng, spell, cast, targets);
+  if (spell.attack && cast.damageDice) return spellAttacks(rng, caster, spell, cast, targets, spare, attack);
+  if (spell.darts) return spellDarts(rng, spell, cast, targets, spare);
   if (spell.save) return spellSaves(rng, caster, spell, cast, targets, save);
   if (cast.healingDice) return spellHealing(rng, caster, cast, targets);
   return { outcomes: targets.map((t) => nothing(t.id)), targets: [...targets] };

@@ -102,6 +102,16 @@ test('a monster at 0 HP is dead', () => {
   assert.equal(takeDamage(goblin(), 9, false).status, 'up');
 });
 
+test('a dead creature stays dead whatever strikes it, and a monster at 0 HP never starts dying (q-mwxx6wwz)', () => {
+  const slain = takeDamage(goblin(), 12, false);
+  assert.equal(takeDamage(slain, 5, false), slain, 'damage to the dead does nothing');
+  assert.equal(takeDamage(slain, 5, true), slain);
+  const deadHero = takeDamage(hero(), 26, false);
+  assert.equal(takeDamage(deadHero, 3, false), deadHero);
+  const lingering = goblin({ hp: 0, status: 'dying', deathSaves: { successes: 0, failures: 1 } });
+  assert.deepEqual([takeDamage(lingering, 2, false).status, takeDamage(lingering, 2, false).deathSaves.failures], ['dead', 1], 'a foe left dying by the old rule dies at the next blow');
+});
+
 test('a hero at 0 HP falls unconscious and starts dying', () => {
   const down = takeDamage(hero(), 13, false);
   assert.deepEqual([down.hp, down.status, down.conditions], [0, 'dying', ['unconscious']]);
