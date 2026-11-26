@@ -1,0 +1,102 @@
+/**
+ * Resolving a cast against combatants, with PR B's resolver: spell attacks are attack rolls, save spells
+ * are saving throws, healing heals. Targets are passed in; `targetsInRadius` picks them for the simple
+ * radius shapes on a 5-foot grid. Concentration checks after damage. See docs/rules-design.md.
+ */
+import type { Combatant } from './combatant.ts';
+import { parseDice, rollDice } from './dice.ts';
+import { type AttackResult, type D20, type RollOptions, attackRoll, damageAfterDefenses, heal, savingThrow, takeDamage } from './resolve.ts';
+import type { Rng } from './rng.ts';
+import type { CharacterSheet } from './sheet.ts';
+import { type Cast, concentrationDc } from './spells.ts';
+import { type AreaShape, type Srd, type SrdSpell, srd as bundledSrd } from './srd.ts';
+import { require } from './violation.ts';
+
+export interface Caster { combatant: Combatant; saveDc: number; attackBonus: number; modifier: number }
+export interface SpellOutcome { target: string; attack: AttackResult | null; save: { roll: D20 | null; success: boolean } | null; damage: number; healed: number }
+export interface SpellRolls {
+  /** For the spell attack: a voter's natural d20, advantage, cover. */
+  attack?: RollOptions;
+  /** For every target's saving throw. */
+  save?: RollOptions;
+}
+interface Resolved { outcomes: SpellOutcome[]; targets: Combatant[] }
+
+const FEET_PER_SQUARE = 5;
+const RADIAL: readonly AreaShape[] = ['Sphere', 'Cylinder', 'Emanation'];
+
+export function casterOf(sheet: CharacterSheet, combatant: Combatant): Caster {
+  require(sheet.spellcasting !== null, `${sheet.name} casts no spells`);
+  const { saveDc, attackBonus } = sheet.spellcasting;
+  return { combatant, saveDc, attackBonus, modifier: attackBonus - sheet.proficiencyBonus };
+}
+
+const nothing = (target: string): SpellOutcome => ({ target, attack: null, save: null, damage: 0, healed: 0 });
+
+/** The targets after the spell, each once, in the order first given. */
+function settle(targets: readonly Combatant[], byId: ReadonlyMap<string, Combatant>): Combatant[] {
+  return [...new Set(targets.map((t) => t.id))].map((id) => byId.get(id)!);
+}
+
+function spellAttacks(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], options: RollOptions): Resolved {
+  const s = cast.beams === 1 ? '' : 's';
+  require(targets.length === cast.beams, `${spell.name} makes ${cast.beams} attack${s}: give ${cast.beams} target${s}`);
+  const attack = { name: spell.name, bonus: caster.attackBonus, ranged: spell.attack === 'ranged', damage: [{ dice: cast.damageDice!, type: spell.damage!.type }] };
+  const attacker = { ...caster.combatant, attacks: [attack] };
+  const byId = new Map(targets.map((t) => [t.id, t]));
+  const outcomes = targets.map((t) => {
+    const { result, target } = attackRoll(rng, attacker, spell.name, byId.get(t.id)!, options);
+    byId.set(t.id, target);
+    return { ...nothing(t.id), attack: result, damage: result.damage };
+  });
+  return { outcomes, targets: settle(targets, byId) };
+}
+
+function spellSaves(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], options: RollOptions): Resolved {
+  const rolled = cast.damageDice ? rollDice(rng, parseDice(cast.damageDice)).total : 0;
+  const results = targets.map((t) => {
+    const save = savingThrow(rng, t, spell.save!, caster.saveDc, options);
+    const taken = save.success ? (spell.halfOnSave ? Math.floor(rolled / 2) : 0) : rolled;
+    const damage = spell.damage ? damageAfterDefenses(t, taken, spell.damage.type) : 0;
+    return { outcome: { ...nothing(t.id), save, damage }, target: takeDamage(t, damage, false) };
+  });
+  return { outcomes: results.map((r) => r.outcome), targets: results.map((r) => r.target) };
+}
+
+function spellHealing(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[]): Resolved {
+  const amount = rollDice(rng, parseDice(cast.healingDice!)).total + caster.modifier;
+  const healed = targets.map((t) => heal(t, amount));
+  return { outcomes: targets.map((t, i) => ({ ...nothing(t.id), healed: healed[i].hp - t.hp })), targets: healed };
+}
+
+/**
+ * Resolves a cast (from castSpell) against its targets: a spell attack per beam, a saving throw per
+ * target against damage rolled once, or healing rolled once. A spell with none of these is the DM's.
+ */
+export function resolveSpell(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[], { attack = {}, save = {} }: SpellRolls = {}, data: Srd = bundledSrd()): Resolved {
+  const spell = data.spells.get(cast.spellId)!;
+  if (spell.attack && cast.damageDice) return spellAttacks(rng, caster, spell, cast, targets, attack);
+  if (spell.save) return spellSaves(rng, caster, spell, cast, targets, save);
+  if (cast.healingDice) return spellHealing(rng, caster, cast, targets);
+  return { outcomes: targets.map((t) => nothing(t.id)), targets: [...targets] };
+}
+
+/** The Constitution save to keep concentrating after taking damage; a caster who is down loses it. */
+export function concentrationCheck(rng: Rng, target: Combatant, damage: number, options: RollOptions = {}): { dc: number; roll: D20 | null; success: boolean } {
+  const dc = concentrationDc(damage);
+  if (target.status !== 'up') return { dc, roll: null, success: false };
+  return { dc, ...savingThrow(rng, target, 'con', dc, options) };
+}
+
+export interface Position { id: string; x: number; y: number }
+
+/**
+ * Who a sphere, cylinder or emanation of `feet` radius takes, from its center, on a 5-foot grid where a
+ * diagonal counts as 5 feet. Cones, cubes and lines are left to whoever places them.
+ */
+export function targetsInRadius(area: { shape: AreaShape; feet: number }, center: { x: number; y: number }, positions: readonly Position[]): string[] {
+  require(RADIAL.includes(area.shape), `give the targets of a ${area.shape} yourself`);
+  return positions
+    .filter((p) => Math.max(Math.abs(p.x - center.x), Math.abs(p.y - center.y)) * FEET_PER_SQUARE <= area.feet)
+    .map((p) => p.id);
+}

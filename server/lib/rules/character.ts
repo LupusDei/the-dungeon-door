@@ -8,7 +8,7 @@ import {
 } from './abilities.ts';
 import { type Rng, pick, sample } from './rng.ts';
 import { type CharacterSheet, parseCharacterSheet } from './sheet.ts';
-import type { EquipmentOption, Item, Size, Srd, SrdBackground, SrdClass, SrdSpecies } from './srd.ts';
+import type { EquipmentOption, Item, Size, Srd, SrdBackground, SrdClass, SrdSpecies, SrdSpellcasting } from './srd.ts';
 import { srd as bundledSrd } from './srd.ts';
 import { lookup, require } from './violation.ts';
 
@@ -30,7 +30,6 @@ export interface CharacterChoices {
   prepared?: string[];
 }
 
-const PROFICIENCY_BONUS_AT_1 = 2;
 const SKILL_PREFIX = 'skill-';
 const SPELLCASTING_ABILITY: Readonly<Record<string, Ability>> = {
   bard: 'cha', cleric: 'wis', druid: 'wis', paladin: 'cha', ranger: 'wis', sorcerer: 'cha', warlock: 'cha', wizard: 'int',
@@ -101,16 +100,16 @@ export function armorClass(classId: string, scores: AbilityScores, proficiencies
   return Math.max(bare, ...bodies);
 }
 
-interface SpellPick { count: number; noun: string; list: string; onList: (id: string) => boolean }
+export interface SpellPick { count: number; noun: string; list: string; onList: (id: string) => boolean }
 
-function requireSpells(chosen: readonly string[], pick: SpellPick): string[] {
+export function requireSpells(chosen: readonly string[], pick: SpellPick): string[] {
   require(chosen.length === pick.count, `choose ${pick.count} ${pick.noun}`);
   requireDistinct(chosen);
   for (const id of chosen) require(pick.onList(id), `${id} is not a ${pick.list}`);
   return [...chosen];
 }
 
-function spellcasting(cls: SrdClass, scores: AbilityScores, choices: CharacterChoices, data: Srd): CharacterSheet['spellcasting'] {
+function spellcasting(cls: SrdClass, choices: CharacterChoices, data: Srd): CharacterSheet['spellcasting'] {
   const casting = data.spellcasting.get(cls.id);
   const { cantrips = [], prepared = [] } = choices;
   if (!casting) {
@@ -119,20 +118,55 @@ function spellcasting(cls: SrdClass, scores: AbilityScores, choices: CharacterCh
   }
   const level = casting.byLevel[0];
   const onList = (spellLevel: number) => (id: string) => data.spells.get(id)?.level === spellLevel && data.spells.get(id)!.classes.includes(cls.id);
-  const ability = SPELLCASTING_ABILITY[cls.id];
-  const bonus = PROFICIENCY_BONUS_AT_1 + abilityModifier(scores[ability]);
   return {
-    ability,
-    saveDc: 8 + bonus,
-    attackBonus: bonus,
-    slots: [...level.slots],
+    ability: SPELLCASTING_ABILITY[cls.id],
+    ...UNDERIVED_SPELLCASTING,
     cantrips: requireSpells(cantrips, { count: level.cantrips, noun: 'cantrips', list: `${cls.name} cantrip`, onList: onList(0) }),
     prepared: requireSpells(prepared, { count: level.prepared, noun: 'prepared spells', list: `${cls.name} level-1 spell`, onList: onList(1) }),
   };
 }
 
-function bonus(score: number, proficient: boolean): number {
-  return abilityModifier(score) + (proficient ? PROFICIENCY_BONUS_AT_1 : 0);
+/** Placeholders for the numbers rederive fills in. */
+const UNDERIVED_SPELLCASTING = { saveDc: 0, attackBonus: 0, slots: [], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null };
+const UNDERIVED = {
+  proficiencyBonus: 0, maxHp: 0, hp: 0, armorClass: 0, passivePerception: 0, skillBonuses: {},
+  saveBonuses: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 },
+};
+
+/**
+ * The slots for a level, keeping what was spent. Pact slots are all of one level, which rises with the
+ * warlock's level, so the spent ones move up with it.
+ */
+function slotsAt(casting: SrdSpellcasting, level: number, expended: readonly number[]): { slots: number[]; expended: number[] } {
+  const slots = [...casting.byLevel[level - 1].slots];
+  if (casting.casterType !== 'pact') return { slots, expended: expended.map((n, i) => Math.min(n, slots[i])) };
+  const spent = expended.reduce((sum, n) => sum + n, 0);
+  return { slots, expended: slots.map((n) => Math.min(n, spent)) };
+}
+
+/**
+ * Every number that follows from the rest of the sheet: proficiency bonus by level, max HP from the hit
+ * die rolls (each level at least 1), AC, save and skill bonuses, passive Perception, and the spell save
+ * DC, attack bonus and slots. HP is kept, but not above the new maximum.
+ */
+export function rederive(sheet: CharacterSheet, data: Srd = bundledSrd()): CharacterSheet {
+  const pb = data.advancement[sheet.level - 1].proficiencyBonus;
+  const scores = sheet.abilityScores;
+  const bonus = (score: number, proficient: boolean) => abilityModifier(score) + (proficient ? pb : 0);
+  const skillBonuses = Object.fromEntries([...data.skills].map(([skill, ability]) => [skill, bonus(scores[ability], sheet.skills.includes(skill))]));
+  const perLevel = abilityModifier(scores.con) + (sheet.traits.includes('dwarven-toughness') ? 1 : 0);
+  const maxHp = sheet.hpRolls.reduce((sum, roll) => sum + Math.max(1, roll + perLevel), 0);
+  const casting = sheet.spellcasting;
+  return {
+    ...sheet, proficiencyBonus: pb, maxHp, hp: Math.min(sheet.hp, maxHp),
+    armorClass: armorClass(sheet.classId, scores, sheet.otherProficiencies, sheet.equipment, data),
+    saveBonuses: Object.fromEntries(ABILITIES.map((a) => [a, bonus(scores[a], sheet.savingThrows.includes(a))])) as CharacterSheet['saveBonuses'],
+    skillBonuses, passivePerception: 10 + skillBonuses.perception,
+    spellcasting: casting && {
+      ...casting, saveDc: 8 + bonus(scores[casting.ability], true), attackBonus: bonus(scores[casting.ability], true),
+      ...slotsAt(data.spellcasting.get(sheet.classId)!, sheet.level, casting.expended),
+    },
+  };
 }
 
 /** Builds a level-1 hero from the player's choices. Throws RuleViolation on a choice the rules forbid. */
@@ -147,22 +181,18 @@ export function buildCharacter(choices: CharacterChoices, rng: Rng, data: Srd = 
   const kit = [equipmentOption(cls, choices.classEquipment), equipmentOption(background, choices.backgroundEquipment)];
   const equipment = pooled(kit.flatMap((o) => o.items));
   const skills = proficiencies.filter((p) => p.startsWith(SKILL_PREFIX)).map((p) => p.slice(SKILL_PREFIX.length)).sort();
-  const skillBonuses = Object.fromEntries([...data.skills].map(([skill, ability]) => [skill, bonus(scores[ability], skills.includes(skill))]));
   const otherProficiencies = [...cls.proficiencies, ...proficiencies.filter((p) => !p.startsWith(SKILL_PREFIX))];
-  const toughness = species.traits.includes('dwarven-toughness') ? 1 : 0;
-  const maxHp = cls.hitDie + abilityModifier(scores.con) + toughness;
-  return parseCharacterSheet({
-    version: 1, name: choices.name, level: 1, classId: cls.id, speciesId: species.id, backgroundId: background.id,
-    size, speed: species.speed, abilityScores: scores, abilityRolls: rolled.rolls,
-    proficiencyBonus: PROFICIENCY_BONUS_AT_1, maxHp, hp: maxHp,
-    armorClass: armorClass(cls.id, scores, otherProficiencies, equipment, data),
+  const sheet = rederive({
+    ...UNDERIVED,
+    version: 1, name: choices.name, level: 1, xp: 0, classId: cls.id, speciesId: species.id, backgroundId: background.id,
+    subclassId: null, size, speed: species.speed, abilityScores: scores, abilityRolls: rolled.rolls, hpRolls: [cls.hitDie],
+    hitDiceSpent: 0, exhaustion: 0, resourcesUsed: {},
     savingThrows: cls.saves, skills, otherProficiencies,
-    saveBonuses: Object.fromEntries(ABILITIES.map((a) => [a, bonus(scores[a], cls.saves.includes(a))])),
-    skillBonuses, passivePerception: 10 + skillBonuses.perception,
     equipment, gp: kit[0].gp + kit[1].gp, pendingChoices: kit.flatMap((o) => o.pending),
-    traits: species.traits, feat: background.feat,
-    spellcasting: spellcasting(cls, scores, choices, data),
-  });
+    traits: species.traits, feat: background.feat, feats: [], features: cls.levels[0].features.map((f) => f.name),
+    spellcasting: spellcasting(cls, choices, data),
+  }, data);
+  return parseCharacterSheet({ ...sheet, hp: sheet.maxHp });
 }
 
 /** What to fill in: anything left out is chosen at random. */

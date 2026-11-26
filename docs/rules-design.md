@@ -20,6 +20,8 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   violation.ts               RuleViolation: a choice the rules forbid
   dice, monsters, combatant, resolve, encounter, scene (PR B): combat
   dungeonTables, dungeon, explore (PR C): fixed room graph or explore-as-you-go, stocking, loot
+  leveling (PR D)            XP awards and thresholds, milestones, level-up
+  spells, spellEffects (PR E): preparing, casting, slots, concentration; resolving casts
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
 ```
 
@@ -192,6 +194,79 @@ As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once 
   the SRD 5.2 magic items (common and uncommon, rare from level 4).
 - Not yet: wandering monsters, traps' DCs and damage, treasure values for gems and jewellery, and
   marking rooms cleared (the game stores that beside the dungeon).
+
+## Leveling (PR D)
+
+`leveling.ts`, on the same `CharacterSheet` (still version 1; nothing stores sheets yet):
+
+- **XP.** `encounterXp(crs)` sums the SRD CR-to-XP values; `splitXp(total, heroes)` gives each hero an
+  equal share (the remainder is lost); `awardXp` adds it. `levelForXp` and `canLevelUp` read the SRD 5.2
+  thresholds (300, 900, 2,700 … 355,000).
+- **Milestones.** `levelUp(…, { advancement: 'milestone' })` skips the XP check and raises the hero's XP
+  to the new level's threshold, so switching back to XP later stays consistent.
+- **Hit points.** The sheet keeps one hit die result per level (`hpRolls`; level 1 is the die's
+  maximum). A level-up takes the fixed value (die / 2 + 1) or a seeded roll. Max HP is always derived:
+  each level adds its roll + CON modifier (+1 Dwarven Toughness), at least 1, so raising CON raises every
+  past level too. A wounded hero gains the new hit points but is not healed.
+- **Everything else is rederived** by `rederive(sheet)` (also used by `buildCharacter`): proficiency
+  bonus by level, saves, skills, passive Perception, AC, spell save DC, attack bonus and slots.
+- **Features.** The class's features for the new level, and the subclass's, are appended by name. The
+  subclass is chosen at the class's subclass level (3 in SRD 5.2), from the class's SRD subclasses.
+- **Improvements.** At an Ability Score Improvement level: +2 to one score or +1 to two (max 20), or a
+  general feat the hero qualifies for (Grappler: STR or DEX 13; its +1 to STR or DEX), each feat once.
+  At 19, an Epic Boon (its +1 can reach 30; Boon of Spell Recall needs spellcasting) or a general feat.
+  A feat's +1 options are read from its SRD text where it enters (`srd.ts`).
+- Not yet: new cantrips and prepared spells at higher levels (PR E validates them), class resources
+  such as Rage uses (PR F), feats' other benefits, fighting styles, and multiclassing.
+
+## Spellcasting (PR E)
+
+- **Data.** `srd.ts` reads each SRD 5.2 spell's mechanics where the JSON enters: spell attack (melee or
+  ranged), the saving throw its text names, half damage on a save, damage dice and type, upcast dice
+  per slot level, healing dice, area (shape and size) and concentration. Cantrip upgrades come from
+  `cantripScaling.json` (more dice, or Eldritch Blast's beams).
+- **On the sheet** (`spells.ts`): `prepareSpells` takes exactly the class's cantrip and prepared counts
+  for the hero's level, from its list, no higher than its highest slot level. `castSpell` needs the
+  cantrip known or the spell prepared, spends the slot asked for (or the lowest left at or above the
+  spell's level), and returns the dice: cantrips by character level (5, 11, 17), upcasting by slot.
+  Warlock pact slots need no special case: they are all of the pact level, so that is the lowest
+  slot left. `slots` and `expended` live on the sheet; rederive moves spent pact slots up a level when
+  the pact slot level rises.
+- **Concentration.** One spell at a time: a new concentration spell ends the old (the cast reports
+  which). `concentrationCheck` is a CON save at max(10, half the damage), capped at 30, and is lost
+  outright if the caster is down.
+- **Resolution** (`spellEffects.ts`) reuses PR B's resolver: a spell attack is `attackRoll` with the
+  spell attack bonus (one per beam), a save spell rolls its damage once and each target makes
+  `savingThrow` (half or nothing on a success, then resistances), healing is rolled once plus the
+  spellcasting modifier. A spell with no attack, save or healing (Bless) changes nothing; the DM
+  narrates it. Targets are passed in; `targetsInRadius` picks them for spheres, cylinders and
+  emanations on a 5-foot grid (diagonals 5 ft). Cones, cubes and lines are placed by whoever casts.
+- **Deferred:** the multiclass spellcaster table (the sheet is single-class); upcast dice of a
+  different die than the base (Ice Knife's cold burst); extra rays or darts by slot level (Scorching
+  Ray, Magic Missile); conditions a failed save imposes (reported, applied by the DM); ritual casting;
+  subclass always-prepared spells; concentration ending on incapacitation outside the check.
+
+## Rests and resources (PR F)
+
+- **Class resources** (`resources.ts`): Rage, Bardic Inspiration, Channel Divinity, Wild Shape, Second
+  Wind, Action Surge, Focus Points, Lay On Hands, Sorcery Points, Magical Cunning and Arcane Recovery.
+  A hero has one once its class has given it the feature. The number of uses comes from the class table
+  (`rageCount`, `channelDivinityCharges`, `focusPoints`, `secondWindUses`, `wildShapeUses`,
+  `sorceryPoints`) or from the rule: Lay On Hands is 5 × level, Bardic Inspiration is the CHA modifier
+  (at least 1), and Action Surge counts how many times the hero has gained it (twice at 17). Uses spent
+  live on the sheet as `resourcesUsed`. What a Short Rest gives back comes from each feature's own text:
+  one use, all of them, or none. Font of Inspiration changes Bardic Inspiration from none to all. A Long
+  Rest restores everything.
+- **Short Rest** (`rests.ts`): the hero spends any number of its remaining hit dice (one per level).
+  Each die heals its roll plus the CON modifier, at least 1, and HP never goes above the maximum.
+  Features recharge as above, and a warlock gets its pact slots back. Arcane Recovery and Magical
+  Cunning are separate calls made after it, each once per Long Rest.
+- **Long Rest:** full HP, every spent hit die back (SRD 5.2; `{ hitDice: 'half' }` is the 2014 rule),
+  every slot back, concentration ends, every feature recharges, and exhaustion goes down by 1.
+- **Exhaustion:** levels 0 to 6, stored on the sheet. Each level gives -2 on every d20 test and -5 feet
+  of speed, and level 6 is death. `exhaustionEffects` reports these numbers; the callers apply them.
+- **Both rests need at least 1 HP.** The engine doesn't track the rule of one Long Rest per 24 hours or
+  interrupted rests, because the game has no clock. The DM decides when a rest happens.
 
 ## Integration (later, contract first)
 

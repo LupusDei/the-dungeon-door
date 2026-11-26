@@ -9,7 +9,7 @@ test('a sheet survives a trip through JSON and the parser unchanged', () => {
 });
 
 test('a caster sheet keeps its spellcasting', () => {
-  const caster = { ...SAMPLE, spellcasting: { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: ['guidance'], prepared: ['bless'] } };
+  const caster = { ...SAMPLE, spellcasting: { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: ['guidance'], prepared: ['bless'], expended: [1, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: 'bless' } };
   assert.deepEqual(parseCharacterSheet(caster), caster);
 });
 
@@ -24,4 +24,25 @@ test('a sheet cannot have more hit points than its maximum', () => {
 
 test('a sheet with an ability score out of range is refused', () => {
   assert.throws(() => parseCharacterSheet({ ...SAMPLE, abilityScores: { ...SAMPLE.abilityScores, str: 31 } }), /abilityScores\.str/);
+});
+
+test('a sheet has a level from 1 to 20 and one hit die roll per level', () => {
+  assert.equal(parseCharacterSheet({ ...SAMPLE, level: 20, hpRolls: Array(20).fill(5), hp: 1 }).level, 20);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 21, hpRolls: Array(21).fill(5) }), /level: /);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 0, hpRolls: [] }), /level: /);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, level: 2 }), /hpRolls: one hit die roll per level/);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, xp: -1 }), /xp: /);
+});
+
+test('a caster cannot have spent more slots than it has', () => {
+  const casting = { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: [], prepared: [], expended: [3, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: null };
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, spellcasting: casting }), /spellcasting\.expended: no more slots can be spent than there are/);
+});
+
+test('a sheet tracks spent hit dice (no more than its level), exhaustion 0 to 6, and spent class resources', () => {
+  const tired = parseCharacterSheet({ ...SAMPLE, hitDiceSpent: 1, exhaustion: 6, resourcesUsed: { 'second-wind': 1 } });
+  assert.deepEqual([tired.hitDiceSpent, tired.exhaustion, tired.resourcesUsed], [1, 6, { 'second-wind': 1 }]);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, hitDiceSpent: 2 }), /hitDiceSpent: no more hit dice can be spent than the hero's level/);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, exhaustion: 7 }), /exhaustion: /);
+  assert.throws(() => parseCharacterSheet({ ...SAMPLE, resourcesUsed: { rage: -1 } }), /resourcesUsed\.rage: /);
 });

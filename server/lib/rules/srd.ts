@@ -5,9 +5,13 @@
 import { z } from 'zod';
 import armorJson from '../../data/srd/5.2/armor.json' with { type: 'json' };
 import backgroundsJson from '../../data/srd/5.2/backgrounds.json' with { type: 'json' };
+import advancementJson from '../../data/srd/5.2/characterAdvancement.json' with { type: 'json' };
+import cantripScalingJson from '../../data/srd/5.2/cantripScaling.json' with { type: 'json' };
 import classesJson from '../../data/srd/5.2/classes.json' with { type: 'json' };
+import featsJson from '../../data/srd/5.2/feats.json' with { type: 'json' };
 import pointCostsJson from '../../data/srd/5.2/abilityScorePointCosts.json' with { type: 'json' };
 import skillsJson from '../../data/srd/5.2/skills.json' with { type: 'json' };
+import subclassesJson from '../../data/srd/5.2/subclasses.json' with { type: 'json' };
 import speciesJson from '../../data/srd/5.2/species.json' with { type: 'json' };
 import spellSlotsJson from '../../data/srd/5.2/spellSlots.json' with { type: 'json' };
 import spellsJson from '../../data/srd/5.2/spells.json' with { type: 'json' };
@@ -26,6 +30,25 @@ export interface SrdClass {
   proficiencies: string[];
   choices: ProficiencyChoice[];
   equipment: EquipmentOption[];
+  /** Levels 1 to 20: the features gained at each, and the class's own numbers there (Rages, Focus Points…). */
+  levels: { level: number; features: SrdFeature[]; counts: Record<string, number> }[];
+  subclasses: string[];
+  /** The class level at which the subclass is chosen (its first "<class>-subclass" feature). */
+  subclassLevel: number;
+}
+/** What finishing a Short Rest gives back of a limited feature: one use, all of them, or nothing. */
+export type ShortRestRecharge = 'one' | 'all' | 'none';
+export interface SrdFeature { id: string; name: string; shortRest: ShortRestRecharge }
+export interface SrdSubclass { id: string; name: string; classId: string; features: { name: string; level: number }[] }
+export interface Advancement { level: number; xp: number; proficiencyBonus: number }
+export type FeatType = 'origin' | 'general' | 'fighting-style' | 'epic-boon';
+export interface SrdFeat {
+  id: string; name: string; type: FeatType; minLevel: number;
+  /** One of `abilities` must be at least `minimum` (Grappler: STR or DEX 13). */
+  prerequisite: { abilities: Ability[]; minimum: number } | null;
+  /** The +1 the feat grants: to one of `from`, up to `max`. */
+  increase: { from: Ability[]; max: number } | null;
+  needsSpellcasting: boolean;
 }
 export interface SrdSpecies { id: string; name: string; sizes: Size[]; speed: number; traits: string[] }
 export interface SrdBackground { id: string; name: string; abilities: Ability[]; feat: string; proficiencies: string[]; equipment: EquipmentOption[] }
@@ -38,7 +61,24 @@ export interface SrdWeapon {
   damage: string; damageType: string; versatileDamage: string | null; properties: string[];
   normalRange: number; longRange: number | null; mastery: string | null;
 }
-export interface SrdSpell { id: string; name: string; level: number; classes: string[] }
+export type AreaShape = 'Sphere' | 'Cone' | 'Cube' | 'Line' | 'Cylinder' | 'Emanation';
+export interface SrdSpell {
+  id: string; name: string; level: number; classes: string[]; concentration: boolean;
+  /** A spell attack, if the spell makes one. */
+  attack: 'melee' | 'ranged' | null;
+  /** The saving throw its targets make, if any (the first one its text names). */
+  save: Ability | null;
+  halfOnSave: boolean;
+  /** Damage at the spell's own level. */
+  damage: { dice: string; type: string } | null;
+  /** Extra damage dice per slot level above the spell's. */
+  upcastDice: string | null;
+  /** Hit points regained (plus the caster's spellcasting modifier), and the extra per slot level above. */
+  healing: { dice: string; upcastDice: string | null } | null;
+  area: { shape: AreaShape; feet: number } | null;
+}
+/** A cantrip's damage from a character level on: more dice, or more beams (separate attacks). */
+export interface CantripStep { level: number; dice: string | null; beams: number | null }
 export interface CastingLevel { cantrips: number; prepared: number; slots: number[] }
 export interface SrdSpellcasting { classId: string; casterType: string; byLevel: CastingLevel[] }
 
@@ -51,9 +91,15 @@ export interface Srd {
   /** skill id ("stealth") → its ability. */
   skills: ReadonlyMap<string, Ability>;
   spells: ReadonlyMap<string, SrdSpell>;
+  /** cantrip id → its damage steps by character level (empty when the upgrade isn't damage). */
+  cantripScaling: ReadonlyMap<string, CantripStep[]>;
   spellcasting: ReadonlyMap<string, SrdSpellcasting>;
   /** point-buy score → cost. */
   pointCosts: ReadonlyMap<number, number>;
+  /** Levels 1 to 20, in order. */
+  advancement: Advancement[];
+  subclasses: ReadonlyMap<string, SrdSubclass>;
+  feats: ReadonlyMap<string, SrdFeat>;
 }
 
 const ref = z.object({ index: z.string(), name: z.string() });
@@ -94,12 +140,65 @@ const choiceOption = z.union([
 const proficiencyChoice = z.object({ choose: z.number(), from: z.object({ options: z.array(choiceOption) }) })
   .transform((c) => ({ choose: c.choose, from: c.from.options.flat() }));
 
+const SHORT_REST_ONE = /regain one (?:of its )?expended uses? when you finish a Short Rest/;
+const SHORT_REST_ALL = /finish a Short or Long Rest/;
+
+function shortRestOf(description: string): ShortRestRecharge {
+  if (SHORT_REST_ONE.test(description)) return 'one';
+  return SHORT_REST_ALL.test(description) ? 'all' : 'none';
+}
+
 const classSchema = z.object({
   index: z.string(), name: z.string(), hitDie: z.number(), savingThrows: z.array(z.enum(ABILITIES)),
   proficiencies: z.array(ref), proficiencyChoices: z.array(proficiencyChoice), startingEquipmentOptions: equipmentOptions,
+  subclasses: z.array(ref),
+  levels: z.array(z.object({
+    level: z.number(), features: z.array(ref.extend({ description: z.string() })),
+    classSpecific: z.record(z.string(), z.unknown()).nullable(),
+  })).length(20),
 }).transform((c): SrdClass => ({
   id: c.index, name: c.name, hitDie: c.hitDie, saves: c.savingThrows, proficiencies: c.proficiencies.map((p) => p.index),
   choices: c.proficiencyChoices, equipment: c.startingEquipmentOptions,
+  levels: c.levels.map((l) => ({
+    level: l.level,
+    features: l.features.map((f) => ({ id: f.index, name: f.name, shortRest: shortRestOf(f.description) })),
+    counts: Object.fromEntries(Object.entries(l.classSpecific ?? {}).filter((e): e is [string, number] => typeof e[1] === 'number')),
+  })),
+  subclasses: c.subclasses.map((s) => s.index),
+  subclassLevel: c.levels.find((l) => l.features.some((f) => f.index === `${c.index}-subclass`))!.level,
+}));
+
+const subclassSchema = z.object({
+  index: z.string(), name: z.string(), class: ref, features: z.array(z.object({ name: z.string(), level: z.number() })),
+}).transform((s): SrdSubclass => ({ id: s.index, name: s.name, classId: s.class.index, features: s.features }));
+
+const advancementSchema = z.object({ level: z.number(), experiencePoints: z.number(), proficiencyBonus: z.number() })
+  .transform((a): Advancement => ({ level: a.level, xp: a.experiencePoints, proficiencyBonus: a.proficiencyBonus }));
+
+const ABILITY_NAMES: Readonly<Record<string, Ability>> = {
+  Strength: 'str', Dexterity: 'dex', Constitution: 'con', Intelligence: 'int', Wisdom: 'wis', Charisma: 'cha',
+};
+/** "Increase your Strength or Dexterity score by 1, to a maximum of 20" (or "one ability score of your choice"). */
+const INCREASE = /Increase (?:one ability score of your choice|your ([A-Za-z, ]+?) score) by 1, to a maximum of (\d+)/;
+
+function featIncrease(description: string): SrdFeat['increase'] {
+  const match = INCREASE.exec(description);
+  if (!match) return null;
+  const from = match[1] ? match[1].split(/, (?:or )?| or /).map((name) => ABILITY_NAMES[name]) : [...ABILITIES];
+  return { from, max: Number(match[2]) };
+}
+
+const featSchema = z.object({
+  index: z.string(), name: z.string(), type: z.enum(['origin', 'general', 'fighting-style', 'epic-boon']), description: z.string(),
+  prerequisites: z.object({ minimumLevel: z.number().optional(), featureNamed: z.string().optional() }).optional(),
+  prerequisiteOptions: z.object({ from: z.object({ options: z.array(z.object({ abilityScore: ability, minimumScore: z.number() })) }) }).optional(),
+}).transform((f): SrdFeat => ({
+  id: f.index, name: f.name, type: f.type, minLevel: f.prerequisites?.minimumLevel ?? 1,
+  prerequisite: f.prerequisiteOptions
+    ? { abilities: f.prerequisiteOptions.from.options.map((o) => o.abilityScore), minimum: f.prerequisiteOptions.from.options[0].minimumScore }
+    : null,
+  increase: featIncrease(f.description),
+  needsSpellcasting: f.prerequisites?.featureNamed === 'Spellcasting',
 }));
 
 const speciesSchema = z.object({
@@ -141,8 +240,46 @@ const weaponSchema = z.object({
 }));
 
 const skillSchema = z.object({ index: z.string(), abilityScore: ability });
-const spellSchema = z.object({ index: z.string(), name: z.string(), level: z.number(), classes: z.array(z.string()) })
-  .transform((s): SrdSpell => ({ id: s.index, name: s.name, level: s.level, classes: s.classes }));
+const SAVE = /(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) saving throw/;
+const HALF_ON_SAVE = /half as much damage|half damage/i;
+/** "The damage increases by…", "The damage (both initial and later) increases…", "…Radiant damage increase by…". */
+const DAMAGE_UPCAST = /damage(?: \([^)]*\))? increases? by (\d+d\d+) for each (?:spell )?slot level above/;
+const HEALING = /Hit Points equal to (\d+d\d+) plus your spellcasting ability modifier/;
+const HEALING_UPCAST = /healing(?: and damage)? increases? by (\d+d\d+) for each (?:spell )?slot level above/;
+const AREA = /(\d+)-foot(?:-radius|-long|-wide|-tall|-high)?,? ?(?:\d+-foot[- ](?:wide|tall|high|radius),? ?)?(Sphere|Cone|Cube|Line|Cylinder|Emanation)/;
+
+const spellSchema = z.object({
+  index: z.string(), name: z.string(), level: z.number(), classes: z.array(z.string()), concentration: z.boolean(),
+  attackType: z.enum(['melee', 'ranged']).nullable(), description: z.string(), higherLevel: z.string().nullable(),
+  damage: z.object({ damageType: ref, damageAtSlotLevel: z.record(z.string(), z.string()) }).nullable(),
+}).transform((s): SrdSpell => {
+  const text = `${s.higherLevel ?? ''} ${s.description}`;
+  const save = SAVE.exec(s.description)?.[1];
+  const healing = HEALING.exec(s.description)?.[1];
+  const area = AREA.exec(s.description);
+  const damage = s.damage ? { dice: Object.values(s.damage.damageAtSlotLevel)[0], type: s.damage.damageType.index } : null;
+  const upcast = DAMAGE_UPCAST.exec(text)?.[1] ?? null;
+  return {
+    id: s.index, name: s.name, level: s.level, classes: s.classes, concentration: s.concentration, attack: s.attackType,
+    save: save ? ABILITY_NAMES[save] : null, halfOnSave: HALF_ON_SAVE.test(s.description),
+    damage,
+    /** Only when it adds the same die (Ice Knife's extra d6s are for its second, cold part: left to the DM). */
+    upcastDice: upcast && damage && sameDie(upcast, damage.dice) ? upcast : null,
+    healing: healing ? { dice: healing, upcastDice: HEALING_UPCAST.exec(text)?.[1] ?? null } : null,
+    area: area ? { shape: area[2] as AreaShape, feet: Number(area[1]) } : null,
+  };
+});
+
+const sameDie = (a: string, b: string) => a.split('d')[1] === b.split('d')[1];
+
+const BEAMS: Readonly<Record<string, number>> = { 'two beams': 2, 'three beams': 3, 'four beams': 4 };
+const cantripScalingSchema = z.object({ index: z.string(), atCharacterLevel: z.record(z.string(), z.string()) })
+  .transform((c) => ({
+    id: c.index,
+    steps: Object.entries(c.atCharacterLevel)
+      .map(([level, value]): CantripStep => ({ level: Number(level), dice: /^\d+d\d+$/.test(value) ? value : null, beams: BEAMS[value] ?? null }))
+      .filter((step) => step.dice !== null || step.beams !== null),
+  }));
 const spellcastingSchema = z.object({
   class: z.string(), casterType: z.string(),
   byLevel: z.array(z.object({ cantripsKnown: z.number(), preparedSpells: z.number(), slots: z.array(z.number()) })),
@@ -173,8 +310,12 @@ function load(): Srd {
     weapons: byId(parseTable('weapons', weaponSchema, weaponsJson)),
     skills: new Map(parseTable('skills', skillSchema, skillsJson).map((s) => [s.index, s.abilityScore])),
     spells: byId(parseTable('spells', spellSchema, spellsJson)),
+    cantripScaling: new Map(parseTable('cantripScaling', cantripScalingSchema, cantripScalingJson).map((c) => [c.id, c.steps])),
     spellcasting: new Map(parseTable('spellSlots', spellcastingSchema, spellSlotsJson).map((s) => [s.classId, s])),
     pointCosts: new Map(parseTable('abilityScorePointCosts', pointCostSchema, pointCostsJson).map((c) => [c.score, c.cost])),
+    advancement: parseTable('characterAdvancement', advancementSchema, advancementJson),
+    subclasses: byId(parseTable('subclasses', subclassSchema, subclassesJson)),
+    feats: byId(parseTable('feats', featSchema, featsJson)),
   };
 }
 
