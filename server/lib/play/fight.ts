@@ -1,6 +1,7 @@
 /**
  * Combat in the voting flow: a fight is a run of scenes, one per round. Each player's vote is their own
- * hero's action: (a) Attack, (b) Cast, (c) Dodge, or Break Free or Help when that is called for (actions.ts); the vote's d20 is the attack roll. Monsters act by the
+ * hero's action. A vote that names a legal action (play/legal.ts) is that action; otherwise it is
+ * (a) Attack, (b) Cast, (c) Dodge, or Break Free or Help when that is called for (actions.ts). The vote's d20 is the attack roll. Monsters act by the
  * engine's rules. Shaken foes check morale (morale.ts). When it ends the living heroes split the XP and level
  * up: all of it on a victory or surrender, the slain foes' when the rest flee. See docs/api.md.
  */
@@ -17,13 +18,14 @@ import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { HEALING_POTIONS, item } from '../rules/items.ts';
 import { held, removeItem } from '../rules/inventory.ts';
 import { resourcesOf, useResource } from '../rules/resources.ts';
-import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
+import { type Action, act, aimAgain, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, secondWind, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { type Cast, castSpell, endConcentration, slotsLeft, spellDamageDice, strikesAt } from '../rules/spells.ts';
 import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
 import { adjudicateCheck, takeThird, type CheckRuling } from './actions.ts';
+import { resolveNamedAction, skipsBonusHeal } from './legal.ts';
 import { keepConcentration } from './concentration.ts';
 import { shakeOff } from './conditions.ts';
 import { afterFight } from './dying.ts';
@@ -39,8 +41,9 @@ export const COMBAT_CHOICES = [
 ];
 
 export type FightEnd = 'victory' | 'defeat' | 'fled';
-/** `freeform` is a written check, already classified; it is this hero's action instead of `choiceId`. */
-export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: number; text?: string; freeform?: CheckRuling }>>;
+/** A letter vote, a named legal action, or a written check (`freeform`) already classified. The roll is the hero's d20. */
+export type CombatVote = { choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[]; text?: string; freeform?: CheckRuling };
+export type CombatVotes = Readonly<Record<string, CombatVote>>;
 export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
 
 /** Duplicate monsters are numbered: "Goblin Warrior 1", "Goblin Warrior 2". */
@@ -308,8 +311,9 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   const ruled = monsterAction(state);
   if (ruled) return { action: ruled, state, sheets };
   const id = currentActor(state);
-  const drunk = bonusAction(state, sheets, id);
   const vote = votes[id];
+  // A potion or Second Wind named as the action is that heal, so the automatic one does not also happen.
+  const drunk = vote && skipsBonusHeal(vote.actionId, vote.targets) ? { state, sheets } : bonusAction(state, sheets, id);
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
   if (vote.freeform && vote.text) {
     const rng = seededRng(drunk.state.rng);
@@ -317,6 +321,10 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
     const done = adjudicateCheck(rng, drunk.sheets[id], vote.text, vote.freeform, vote.roll, foeId ? drunk.state.combatants[foeId] : null);
     const combatants = done.foe ? { ...drunk.state.combatants, [done.foe.id]: done.foe } : drunk.state.combatants;
     return { action: { kind: 'other', text: done.text }, state: { ...drunk.state, rng: rng.state(), combatants }, sheets: drunk.sheets };
+  }
+  if (vote.actionId) {
+    const taken = resolveNamedAction(drunk.state, drunk.sheets[id], id, vote.actionId, vote.targets ?? [], vote.roll);
+    return { action: aimAgain(taken.combat, id, taken.action), state: taken.combat, sheets: { ...drunk.sheets, [id]: taken.sheet } };
   }
   if (vote.choiceId === 'c') {
     const third = takeThird(drunk.state, drunk.sheets[id], id);

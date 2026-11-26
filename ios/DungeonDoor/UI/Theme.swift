@@ -137,7 +137,8 @@ extension ButtonStyle where Self == GildedButtonStyle {
     static var gildedOutline: GildedButtonStyle { GildedButtonStyle(prominent: false) }
 }
 
-/// A character portrait, or their class sigil while there isn't one yet.
+/// A character portrait, or their class sigil while there isn't one yet. A painted portrait opens
+/// full screen when tapped; the sigil (no picture yet) does not.
 struct PortraitView: View {
     let url: URL?
     var symbol: String = "person.fill"
@@ -162,10 +163,12 @@ struct PortraitView: View {
         .frame(width: size, height: size)
         .clipShape(shape)
         .overlay { shape.stroke(Palette.gold.opacity(0.55), lineWidth: 1) }
+        .generatedImageViewer(url: url, title: "Portrait")
     }
 }
 
-/// A wide illustration that holds its space while the art is still being painted.
+/// A wide illustration that holds its space while the art is still being painted. Once it has a
+/// picture, a tap opens that picture full screen.
 struct IllustrationView: View {
     let url: URL?
     var aspect: CGFloat = 4 / 3
@@ -193,6 +196,7 @@ struct IllustrationView: View {
             }
             .clipShape(.rect(cornerRadius: 14))
             .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Palette.gold.opacity(0.3)) }
+            .generatedImageViewer(url: url, title: "Scene")
     }
 }
 

@@ -12,6 +12,7 @@
 (defgiven "no fight is underway" subject.no-fight)
 
 (defwhen "the player writes {text:string}" subject.player-writes)
+(defwhen "the player names their weapon" subject.player-writes-their-attack)
 (defwhen "the dungeon master returns something unreadable" subject.unreadable)
 
 (defthen "the action maps to today's choice {choice:string}" subject.maps-to)

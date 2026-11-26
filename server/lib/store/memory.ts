@@ -176,17 +176,20 @@ export class MemoryStore implements Store {
     game.updatedAt = now();
   }
 
-  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number) {
+  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null) {
     await tick();
     const game = this.games.get(code)?.game;
     if (!game || game.status !== 'voting' || game.sceneIndex !== index) return null;
     const scene = game.scenes.find((s) => s.index === index);
     if (!scene) return null;
-    let vote: Vote | undefined = scene.votes.find((v) => v.playerId === playerId);
+    const action = named ? { actionId: named.actionId, ...(named.targets.length ? { targets: [...named.targets] } : {}) } : {};
+    let vote = scene.votes.find((v) => v.playerId === playerId);
     if (vote) {
-      vote.choiceId = choiceId;
+      delete vote.actionId;
+      delete vote.targets;
       delete vote.freeform;
-    } else scene.votes.push((vote = { playerId, choiceId, roll }));
+      Object.assign(vote, { choiceId, ...action });
+    } else scene.votes.push((vote = { playerId, choiceId, roll, ...action }));
     game.updatedAt = now();
     return { ...vote };
   }
@@ -198,8 +201,11 @@ export class MemoryStore implements Store {
     const scene = game.scenes.find((s) => s.index === index);
     if (!scene) return null;
     let vote: Vote | undefined = scene.votes.find((v) => v.playerId === playerId);
-    if (vote) vote.freeform = structuredClone(freeform);
-    else scene.votes.push((vote = { playerId, choiceId: 'a', roll, freeform: structuredClone(freeform) }));
+    if (vote) {
+      delete vote.actionId;
+      delete vote.targets;
+      vote.freeform = structuredClone(freeform);
+    } else scene.votes.push((vote = { playerId, choiceId: 'a', roll, freeform: structuredClone(freeform) }));
     game.updatedAt = now();
     return structuredClone(vote);
   }

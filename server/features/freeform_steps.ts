@@ -7,6 +7,8 @@ import { heroSheet } from '../lib/characters.ts';
 import { classifyFreeform } from '../lib/dm/fake.ts';
 import { adjudicateCheck, DAMAGE_BY_SEVERITY, knownActionIds, settleRuling, type CheckRuling, type Settled } from '../lib/play/actions.ts';
 import { fightRound, startFight } from '../lib/play/fight.ts';
+import { legalActions, type LegalInput } from '../lib/play/legal.ts';
+import type { LegalAction } from '../lib/types.ts';
 import { scriptedRng } from '../lib/rules/rng.ts';
 import type { CharacterSheet } from '../lib/rules/sheet.ts';
 import type { CombatState } from '../lib/rules/scene.ts';
@@ -16,6 +18,7 @@ const NATURAL = 15;
 export class FreeformSteps {
   private inCombat = false;
   private sheet: CharacterSheet = this.hero();
+  private legal: LegalAction[] = [];
   private combat: CombatState | null = null;
   private foeHp = 0;
   private settled: Settled | null = null;
@@ -33,19 +36,37 @@ export class FreeformSteps {
     const started = startFight({ version: 1, rng: 1, sheets: { p1: this.sheet } }, ['goblin-warrior']);
     this.combat = started.combat;
     this.foeHp = started.combat.combatants['foe-1'].hp;
+    this.legal = this.list();
   }
 
   noFight(): void {
     this.inCombat = false;
     this.combat = null;
     this.sheet = this.hero();
+    this.legal = this.list();
+  }
+
+  private list(): LegalAction[] {
+    const input: LegalInput = {
+      combat: this.combat, sheet: this.sheet, playerId: 'p1', canAct: true,
+      choices: this.inCombat ? [] : [
+        { id: 'a', label: 'Charge straight in', detail: '' },
+        { id: 'b', label: 'Look for another way', detail: '' },
+        { id: 'c', label: 'Parley first', detail: '' },
+      ],
+    };
+    return legalActions(input);
+  }
+
+  playerWritesTheirAttack(): void {
+    const attack = this.legal.find((a) => a.kind === 'attack' && a.available);
+    if (!attack) throw new Error('no attack on the legal list');
+    this.playerWrites(attack.label);
   }
 
   playerWrites(text: string): void {
-    const actions = knownActionIds(this.inCombat);
-    const choices = this.inCombat
-      ? [{ id: 'attack', label: 'Attack' }, { id: 'cast', label: 'Cast' }, { id: 'dodge', label: 'Dodge' }]
-      : [{ id: 'a', label: 'Charge straight in' }, { id: 'b', label: 'Look for another way' }, { id: 'c', label: 'Parley first' }];
+    const actions = knownActionIds(this.legal);
+    const choices = this.legal.filter((a) => a.available).map((a) => ({ id: a.id, label: a.label }));
     this.settled = settleRuling(classifyFreeform({ characterName: 'Bryn', text, inCombat: this.inCombat, actions, choices }), actions);
     this.dice = '';
     this.log = '';
@@ -55,7 +76,7 @@ export class FreeformSteps {
   }
 
   unreadable(): void {
-    this.settled = settleRuling({ kind: 'nope' }, knownActionIds(this.inCombat));
+    this.settled = settleRuling({ kind: 'nope' }, knownActionIds(this.legal));
     this.log = '';
   }
 

@@ -59,7 +59,10 @@ test('kicking the brazier is a check in the dice log, and it does not pick the p
   );
   assert.equal(acted.status, 200);
   assert.deepEqual([acted.body.action.spent, acted.body.action.ruling, acted.body.action.roll, acted.body.action.choiceId], [true, 'check', 15, null]);
-  assert.deepEqual(acted.body.scene!.actions, [{ playerId: host, text: 'I kick the brazier onto the goblins', roll: 15 }]);
+  assert.deepEqual(acted.body.scene!.freeforms, [{ playerId: host, text: 'I kick the brazier onto the goblins', roll: 15 }]);
+  assert.equal(acted.body.scene!.myFreeform?.text, 'I kick the brazier onto the goblins');
+  assert.equal(acted.body.scene!.myAction, null);
+  assert.ok(acted.body.scene!.actions.some((a) => a.id === 'choice:a'), 'the legal actions stay on the scene');
   assert.equal(acted.body.scene!.myVote, null);
   assert.equal(acted.body.scene!.votes.length, 0, 'a written check is not a vote for a choice');
 

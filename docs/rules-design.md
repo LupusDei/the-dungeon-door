@@ -417,10 +417,12 @@ engine owns every number.
 
 The classification is one of three:
 
-- **A known action.** It maps onto today's actions: in a fight, Attack, Cast or Dodge (the third choice,
-  so Break Free or Help when that is what Dodge means now); outside a fight, one of the three choices on
-  offer. `knownActionIds` is that list. A later per-hero legal-actions list replaces the body of that
-  function; `choiceFor` is the only place the id becomes a choice.
+- **A known action.** It maps onto an id from this hero's legal actions (scene.actions): a weapon, a
+  spell, a common action such as Dodge, or one of the three choices (choice:a and so on). knownActionIds
+  is those available ids. choiceFor is the only place an id becomes a choice letter (an attack is a, a
+  spell is b, anything else known is c). An id that needs a target is stored as the letter: the
+  classification does not name who. TODO: pass a target the words name. A later kind (a move) has no
+  letter until choiceFor learns it.
 - **A check.** An ability, or a skill, a tier, and an effect category. Tiers are the 5e ones: easy DC 10,
   medium DC 15, hard DC 20. A natural 20 or 1 is not automatic, same as any other check. The player's d20
   is the one rolled for a vote, and the line is posted with the other dice.

@@ -26,7 +26,7 @@ import { ambientLight, clockOf, lightLevel, lightUp, passTime, secondsFor } from
 import { partyHazard, springTrap } from './traps.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
-export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number }
+export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[] }
 /** A written check, already accepted by the engine. It is this hero's action and not a vote for a choice. */
 export interface FreeformBallot { playerId: string; roll: number; text: string; ruling: CheckRuling }
 export type FightNews = 'started' | FightEnd | null;
@@ -79,7 +79,9 @@ function clearHere(s: RulesState, lines: string[]): { state: RulesState; lines: 
 
 function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {
   const votes = {
-    ...Object.fromEntries(ballots.map((b) => [b.playerId, { choiceId: b.choiceId, roll: b.roll }])),
+    ...Object.fromEntries(ballots.map((b) => [b.playerId, {
+      choiceId: b.choiceId, roll: b.roll, ...(b.actionId ? { actionId: b.actionId, targets: b.targets ?? [] } : {}),
+    }])),
     ...Object.fromEntries(freeforms.map((f) => [f.playerId, { choiceId: 'c' as const, roll: f.roll, text: f.text, freeform: f.ruling }])),
   };
   const round = fightRound(s.party, combat, votes);

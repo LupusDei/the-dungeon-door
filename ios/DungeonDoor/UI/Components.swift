@@ -63,6 +63,19 @@ struct TagLabel: View {
     }
 }
 
+/// The colour of the engine's words for how hard a foe or a fight is: calm for what the party should
+/// win ("puny", "weak", a "low" fight), gold for an even match ("even", "moderate"), ember for what
+/// may kill ("strong", "high", "deadly"). A word the app doesn't know is drawn in ember.
+enum Danger {
+    static func tint(_ word: String?) -> Color {
+        switch word?.lowercased() {
+        case "puny", "weak", "low": Palette.verdigris
+        case "even", "moderate": Palette.gold
+        default: Palette.ember
+        }
+    }
+}
+
 /// A hit-point bar. The caller picks the tint; `Health.tint` has the party's colours.
 struct HPBar: View {
     let hp: Int

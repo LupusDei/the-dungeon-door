@@ -83,29 +83,38 @@ const strong = { ...fighter, abilityScores: { ...fighter.abilityScores, str: 16 
 const kickFlat = { kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'damage', severity: 'moderate', damageType: 'bludgeoning' };
 const kick = { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', tier: 'medium' as const, effect: { category: 'damage' as const, severity: 'moderate' as const, damageType: 'bludgeoning' } };
 
-test('a written action maps onto today\'s choices, and a bad classification spends nothing', () => {
-  assert.deepEqual(knownActionIds(true), ['attack', 'cast', 'dodge']);
-  assert.deepEqual(knownActionIds(false), ['a', 'b', 'c']);
-  assert.equal(choiceFor('attack'), 'a');
-  assert.equal(choiceFor('cast'), 'b');
-  assert.equal(choiceFor('dodge'), 'c');
-  assert.equal(choiceFor('a'), 'a');
+const offered = [
+  { id: 'attack:longsword', available: true },
+  { id: 'spell:fire-bolt', available: true },
+  { id: 'common:dodge', available: true },
+  { id: 'choice:a', available: true },
+  { id: 'common:dash', available: false },
+];
+
+test('a written action maps onto the hero\'s legal actions, and a bad classification spends nothing', () => {
+  assert.deepEqual(knownActionIds(offered), ['attack:longsword', 'spell:fire-bolt', 'common:dodge', 'choice:a']);
+  assert.equal(choiceFor('attack:longsword'), 'a');
+  assert.equal(choiceFor('common:attack'), 'a');
+  assert.equal(choiceFor('spell:fire-bolt'), 'b');
+  assert.equal(choiceFor('common:dodge'), 'c');
+  assert.equal(choiceFor('choice:a'), 'a');
+  assert.equal(choiceFor('move:north'), null);
   assert.equal(DC_BY_TIER.easy, 10);
   assert.equal(DC_BY_TIER.medium, 15);
   assert.equal(DC_BY_TIER.hard, 20);
   assert.deepEqual(DAMAGE_BY_SEVERITY, { light: '1d6', moderate: '2d6', severe: '4d6' });
 
-  const known = settleRuling({ kind: 'known', action: 'attack' }, knownActionIds(true));
+  const known = settleRuling({ kind: 'known', action: 'attack:longsword' }, knownActionIds(offered));
   assert.deepEqual([known.spent, known.choiceId], [true, 'a']);
-  assert.equal(settleRuling({ kind: 'known', action: 'attack' }, knownActionIds(false)).spent, false, 'attack is not a choice outside a fight');
-  const refused = settleRuling({ kind: 'impossible', narration: 'The moon is too far.' }, knownActionIds(true));
+  assert.equal(settleRuling({ kind: 'known', action: 'common:dash' }, knownActionIds(offered)).spent, false, 'an unavailable action is not offered');
+  const refused = settleRuling({ kind: 'impossible', narration: 'The moon is too far.' }, knownActionIds(offered));
   assert.equal(refused.spent, false);
   assert.equal(refused.narration, 'The moon is too far.');
-  assert.equal(settleRuling({ kind: 'impossible', narration: 'DC 30' }, knownActionIds(true)).narration, REFUSED);
-  assert.equal(settleRuling({ kind: 'banana' }, knownActionIds(true)).narration, UNREADABLE);
-  assert.equal(settleRuling(null, knownActionIds(true)).spent, false);
-  assert.equal(settleRuling({ kind: 'check', ability: 'str', skill: 'not-a-skill', tier: 'medium', effect: 'none' }, knownActionIds(true)).spent, false);
-  const check = settleRuling(kickFlat, knownActionIds(true));
+  assert.equal(settleRuling({ kind: 'impossible', narration: 'DC 30' }, knownActionIds(offered)).narration, REFUSED);
+  assert.equal(settleRuling({ kind: 'banana' }, knownActionIds(offered)).narration, UNREADABLE);
+  assert.equal(settleRuling(null, knownActionIds(offered)).spent, false);
+  assert.equal(settleRuling({ kind: 'check', ability: 'str', skill: 'not-a-skill', tier: 'medium', effect: 'none' }, knownActionIds(offered)).spent, false);
+  const check = settleRuling(kickFlat, knownActionIds(offered));
   assert.equal(check.spent, true);
   assert.equal(check.ruling.kind, 'check');
 });

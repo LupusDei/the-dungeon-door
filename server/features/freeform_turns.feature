@@ -5,7 +5,7 @@ Feature: Freeform turns
 
   Scenario: A known action maps onto today's attack
     Given a fight is underway
-    When the player writes "attack"
+    When the player names their weapon
     Then the action maps to today's choice "a"
     And the turn is spent
 

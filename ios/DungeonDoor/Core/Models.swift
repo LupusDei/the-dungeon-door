@@ -644,6 +644,9 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     let dead: Bool
     let passivePerception: Int
     let passiveInsight: Int
+    /// Feet the hero moves now: their own speed less exhaustion, 5 at most while dragging. Nil from
+    /// a server older than that.
+    var speed: Int? = nil
     let gp: Double
     let inventory: [EquipmentItem]
     /// Pounds. Over `capacity` the hero is dragging (speed 5 ft), up to `dragLimit`.
@@ -691,6 +694,7 @@ extension HeroStanding {
         down = try c.value(.down, or: points <= 0)
         passivePerception = try c.whole(.passivePerception, or: 10)
         passiveInsight = try c.whole(.passiveInsight, or: 10)
+        speed = (try? c.decodeIfPresent(Double.self, forKey: .speed)).flatMap { $0 }.map { Int($0.rounded()) }
         gp = try c.value(.gp, or: 0)
         inventory = try c.value(.inventory, or: [])
         carried = try c.value(.carried, or: 0)
@@ -867,10 +871,10 @@ struct WaitingFoes: Codable, Hashable {
     var isFriendly: Bool { attitude == "friendly" }
     var isHostile: Bool { attitude == "hostile" }
 
-    /// "Each Skeleton is weak. A moderate fight."
+    /// "Each Skeleton is weak. A moderate fight."; for one of a kind, "The Giant Rat is weak."
     var rating: String? {
         guard let band else { return nil }
-        let each = monsters.map { "each \($0.name) is \($0.toughness)" }.joined(separator: ", ")
+        let each = monsters.map { "\($0.count > 1 ? "each" : "the") \($0.name) is \($0.toughness)" }.joined(separator: ", ")
         guard !each.isEmpty else { return "A \(band) fight." }
         return "\(each.prefix(1).uppercased())\(each.dropFirst()). A \(band) fight."
     }

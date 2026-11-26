@@ -14,7 +14,7 @@ import { type Rng, seededRng } from '../rules/rng.ts';
 import type { Action, CombatState } from '../rules/scene.ts';
 import { srd } from '../rules/srd.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import type { ChoiceId } from '../types.ts';
+import { CHOICE_IDS, type ChoiceId } from '../types.ts';
 import { signed } from './checks.ts';
 import { ABILITY_NAMES, SAVE_CONDITIONS, titleCase, type SaveCondition } from './hooks.ts';
 
@@ -95,20 +95,25 @@ export type Severity = keyof typeof DAMAGE_BY_SEVERITY;
 const TIERS = Object.keys(DC_BY_TIER) as Tier[];
 const SEVERITIES = Object.keys(DAMAGE_BY_SEVERITY) as Severity[];
 
-/**
- * The actions a written line may map onto today: Attack, Cast and Dodge in a fight, and the three
- * choices outside one. A later per-hero legal-actions list replaces this body; `choiceFor` stays the
- * only place an id becomes a choice.
- */
-export function knownActionIds(inCombat: boolean): readonly string[] {
-  return inCombat ? ['attack', 'cast', 'dodge'] : ['a', 'b', 'c'];
+/** The ids a written line may map onto: the hero's available legal actions (`scene.actions`). */
+export function knownActionIds(actions: readonly { id: string; available: boolean }[]): string[] {
+  return actions.filter((a) => a.available).map((a) => a.id);
 }
 
-const CHOICE_OF: Readonly<Record<string, ChoiceId>> = { attack: 'a', a: 'a', cast: 'b', b: 'b', dodge: 'c', c: 'c' };
-
-/** Today's choice for a known action, or null when the id is not one of today's. */
+/**
+ * The choice letter a legal-action id is stored as. An attack is a, a spell is b, and the other ids
+ * this knows (common, item, feature, choice) are c, or the choice's own letter.
+ * TODO: a later kind, such as a move once a fight has positions, has no letter here.
+ */
 export function choiceFor(action: string): ChoiceId | null {
-  return CHOICE_OF[action] ?? null;
+  if (action.startsWith('choice:')) {
+    const letter = action.slice('choice:'.length);
+    return (CHOICE_IDS as readonly string[]).includes(letter) ? letter as ChoiceId : null;
+  }
+  if (action.startsWith('attack:') || action === 'common:attack') return 'a';
+  if (action.startsWith('spell:')) return 'b';
+  if (action.startsWith('common:') || action.startsWith('item:') || action.startsWith('feature:')) return 'c';
+  return null;
 }
 
 export type ImprovisedEffect =

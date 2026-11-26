@@ -107,9 +107,8 @@ struct CombatView: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel("Initiative order")
                 if let band = combat.band {
-                    Text("a \(band) fight")
-                        .font(.caption)
-                        .foregroundStyle(Palette.ember)
+                    TagLabel("\(band) fight", tint: Danger.tint(band))
+                        .accessibilityLabel("A \(band) fight for this party")
                 }
                 Spacer()
                 HStack(spacing: 10) {
@@ -176,7 +175,9 @@ struct CombatView: View {
                     if let toughness = combatant.toughness {
                         Text(titled(toughness))
                             .font(.system(size: 10, weight: .semibold, design: .serif))
-                            .foregroundStyle(Palette.ember)
+                            .foregroundStyle(out ? Palette.muted : Danger.tint(toughness))
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     Spacer(minLength: 2)
                     if acted && !out {
@@ -270,9 +271,8 @@ struct CombatView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     if let toughness = combatant.toughness {
-                        Text(titled(toughness))
-                            .font(.system(size: 12, weight: .semibold, design: .serif))
-                            .foregroundStyle(Palette.ember)
+                        TagLabel(toughness, tint: out ? Palette.muted : Danger.tint(toughness))
+                            .fixedSize()
                     }
                     if mine { Text("you").font(.caption2).foregroundStyle(Palette.muted) }
                     Spacer(minLength: 4)
