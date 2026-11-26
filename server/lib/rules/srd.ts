@@ -5,9 +5,12 @@
 import { z } from 'zod';
 import armorJson from '../../data/srd/5.2/armor.json' with { type: 'json' };
 import backgroundsJson from '../../data/srd/5.2/backgrounds.json' with { type: 'json' };
+import advancementJson from '../../data/srd/5.2/characterAdvancement.json' with { type: 'json' };
 import classesJson from '../../data/srd/5.2/classes.json' with { type: 'json' };
+import featsJson from '../../data/srd/5.2/feats.json' with { type: 'json' };
 import pointCostsJson from '../../data/srd/5.2/abilityScorePointCosts.json' with { type: 'json' };
 import skillsJson from '../../data/srd/5.2/skills.json' with { type: 'json' };
+import subclassesJson from '../../data/srd/5.2/subclasses.json' with { type: 'json' };
 import speciesJson from '../../data/srd/5.2/species.json' with { type: 'json' };
 import spellSlotsJson from '../../data/srd/5.2/spellSlots.json' with { type: 'json' };
 import spellsJson from '../../data/srd/5.2/spells.json' with { type: 'json' };
@@ -26,6 +29,22 @@ export interface SrdClass {
   proficiencies: string[];
   choices: ProficiencyChoice[];
   equipment: EquipmentOption[];
+  /** Levels 1 to 20: the features gained at each. */
+  levels: { level: number; features: { id: string; name: string }[] }[];
+  subclasses: string[];
+  /** The class level at which the subclass is chosen (its first "<class>-subclass" feature). */
+  subclassLevel: number;
+}
+export interface SrdSubclass { id: string; name: string; classId: string; features: { name: string; level: number }[] }
+export interface Advancement { level: number; xp: number; proficiencyBonus: number }
+export type FeatType = 'origin' | 'general' | 'fighting-style' | 'epic-boon';
+export interface SrdFeat {
+  id: string; name: string; type: FeatType; minLevel: number;
+  /** One of `abilities` must be at least `minimum` (Grappler: STR or DEX 13). */
+  prerequisite: { abilities: Ability[]; minimum: number } | null;
+  /** The +1 the feat grants: to one of `from`, up to `max`. */
+  increase: { from: Ability[]; max: number } | null;
+  needsSpellcasting: boolean;
 }
 export interface SrdSpecies { id: string; name: string; sizes: Size[]; speed: number; traits: string[] }
 export interface SrdBackground { id: string; name: string; abilities: Ability[]; feat: string; proficiencies: string[]; equipment: EquipmentOption[] }
@@ -54,6 +73,10 @@ export interface Srd {
   spellcasting: ReadonlyMap<string, SrdSpellcasting>;
   /** point-buy score → cost. */
   pointCosts: ReadonlyMap<number, number>;
+  /** Levels 1 to 20, in order. */
+  advancement: Advancement[];
+  subclasses: ReadonlyMap<string, SrdSubclass>;
+  feats: ReadonlyMap<string, SrdFeat>;
 }
 
 const ref = z.object({ index: z.string(), name: z.string() });
@@ -97,9 +120,46 @@ const proficiencyChoice = z.object({ choose: z.number(), from: z.object({ option
 const classSchema = z.object({
   index: z.string(), name: z.string(), hitDie: z.number(), savingThrows: z.array(z.enum(ABILITIES)),
   proficiencies: z.array(ref), proficiencyChoices: z.array(proficiencyChoice), startingEquipmentOptions: equipmentOptions,
+  subclasses: z.array(ref), levels: z.array(z.object({ level: z.number(), features: z.array(ref) })).length(20),
 }).transform((c): SrdClass => ({
   id: c.index, name: c.name, hitDie: c.hitDie, saves: c.savingThrows, proficiencies: c.proficiencies.map((p) => p.index),
   choices: c.proficiencyChoices, equipment: c.startingEquipmentOptions,
+  levels: c.levels.map((l) => ({ level: l.level, features: l.features.map((f) => ({ id: f.index, name: f.name })) })),
+  subclasses: c.subclasses.map((s) => s.index),
+  subclassLevel: c.levels.find((l) => l.features.some((f) => f.index === `${c.index}-subclass`))!.level,
+}));
+
+const subclassSchema = z.object({
+  index: z.string(), name: z.string(), class: ref, features: z.array(z.object({ name: z.string(), level: z.number() })),
+}).transform((s): SrdSubclass => ({ id: s.index, name: s.name, classId: s.class.index, features: s.features }));
+
+const advancementSchema = z.object({ level: z.number(), experiencePoints: z.number(), proficiencyBonus: z.number() })
+  .transform((a): Advancement => ({ level: a.level, xp: a.experiencePoints, proficiencyBonus: a.proficiencyBonus }));
+
+const ABILITY_NAMES: Readonly<Record<string, Ability>> = {
+  Strength: 'str', Dexterity: 'dex', Constitution: 'con', Intelligence: 'int', Wisdom: 'wis', Charisma: 'cha',
+};
+/** "Increase your Strength or Dexterity score by 1, to a maximum of 20" (or "one ability score of your choice"). */
+const INCREASE = /Increase (?:one ability score of your choice|your ([A-Za-z, ]+?) score) by 1, to a maximum of (\d+)/;
+
+function featIncrease(description: string): SrdFeat['increase'] {
+  const match = INCREASE.exec(description);
+  if (!match) return null;
+  const from = match[1] ? match[1].split(/, (?:or )?| or /).map((name) => ABILITY_NAMES[name]) : [...ABILITIES];
+  return { from, max: Number(match[2]) };
+}
+
+const featSchema = z.object({
+  index: z.string(), name: z.string(), type: z.enum(['origin', 'general', 'fighting-style', 'epic-boon']), description: z.string(),
+  prerequisites: z.object({ minimumLevel: z.number().optional(), featureNamed: z.string().optional() }).optional(),
+  prerequisiteOptions: z.object({ from: z.object({ options: z.array(z.object({ abilityScore: ability, minimumScore: z.number() })) }) }).optional(),
+}).transform((f): SrdFeat => ({
+  id: f.index, name: f.name, type: f.type, minLevel: f.prerequisites?.minimumLevel ?? 1,
+  prerequisite: f.prerequisiteOptions
+    ? { abilities: f.prerequisiteOptions.from.options.map((o) => o.abilityScore), minimum: f.prerequisiteOptions.from.options[0].minimumScore }
+    : null,
+  increase: featIncrease(f.description),
+  needsSpellcasting: f.prerequisites?.featureNamed === 'Spellcasting',
 }));
 
 const speciesSchema = z.object({
@@ -175,6 +235,9 @@ function load(): Srd {
     spells: byId(parseTable('spells', spellSchema, spellsJson)),
     spellcasting: new Map(parseTable('spellSlots', spellcastingSchema, spellSlotsJson).map((s) => [s.classId, s])),
     pointCosts: new Map(parseTable('abilityScorePointCosts', pointCostSchema, pointCostsJson).map((c) => [c.score, c.cost])),
+    advancement: parseTable('characterAdvancement', advancementSchema, advancementJson),
+    subclasses: byId(parseTable('subclasses', subclassSchema, subclassesJson)),
+    feats: byId(parseTable('feats', featSchema, featsJson)),
   };
 }
 
