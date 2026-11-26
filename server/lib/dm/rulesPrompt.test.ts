@@ -98,5 +98,5 @@ test('the LLM DM opens a road game on the road from the tavern, not at the door'
 });
 
 test('a foe\u2019s hit points are hidden: the DM tells its wounds by the wound word, never in numbers', () => {
-  for (const words of ['wound word', 'Unhurt, Scratched, Bleeding, Bloodied (half or less), Staggering, Gasping', 'never its hit points']) assert.ok(RULES_INSTRUCTIONS.includes(words), words);
+  for (const words of ['wound word', 'without its damage', 'Unhurt, Scratched, Bleeding, Bloodied (half or less), Staggering, Gasping', 'never its hit points']) assert.ok(RULES_INSTRUCTIONS.includes(words), words);
 });

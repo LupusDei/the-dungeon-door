@@ -123,8 +123,11 @@ test('kicking the brazier is a check: the engine sets the DC and the damage, in 
   const started = fight(strong);
   const foe = started.combat.combatants['foe-1'];
   const hit = adjudicateCheck(scriptedRng([3, 4]), strong, 'I kick the brazier onto the goblins', kick, 15, foe);
-  assert.match(hit.text, /Bryn \("I kick the brazier onto the goblins"\): Athletics 15 \+ 5 = 20 vs DC 15, success\. Goblin Warrior takes 7 bludgeoning\./);
+  assert.match(hit.text, /Bryn \("I kick the brazier onto the goblins"\): Athletics 15 \+ 5 = 20 vs DC 15, success\. Goblin Warrior takes bludgeoning damage\.$/, 'a foe\u2019s hit points are hidden: no number');
   assert.equal(hit.foe!.hp, foe.hp - 7);
+  const stone = adjudicateCheck(scriptedRng([3, 4]), strong, 'I kick the brazier onto the goblins', kick, 15, { ...foe, immunities: ['bludgeoning'] });
+  assert.match(stone.text, /success\. Goblin Warrior is unharmed\.$/);
+  assert.equal(stone.foe!.hp, foe.hp);
   const miss = adjudicateCheck(scriptedRng([]), strong, 'I kick the brazier onto the goblins', kick, 4, foe);
   assert.match(miss.text, /vs DC 15, failure\./);
   assert.equal(miss.foe, foe, 'a failure does not touch the foe');

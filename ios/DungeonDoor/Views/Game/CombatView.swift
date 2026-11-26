@@ -192,9 +192,9 @@ struct CombatView: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
-                HPBar(hp: out ? 0 : combatant.gauge.now, maxHp: combatant.gauge.most,
+                HPBar(fraction: out ? 0 : combatant.gauge,
                       tint: foe ? Palette.ember : Health.tint(hp: combatant.hp, maxHp: combatant.maxHp, standing: !out),
-                      height: 4)
+                      height: 4, soft: combatant.gaugeIsFuzzy)
                 if !combatant.conditions.isEmpty {
                     Text(combatant.conditions.map(SRD.name).joined(separator: ", "))
                         .font(.system(size: 10, weight: .medium, design: .serif))
@@ -281,9 +281,9 @@ struct CombatView: View {
                         .monospacedDigit()
                         .foregroundStyle(Palette.muted)
                 }
-                HPBar(hp: combatant.isDead ? 0 : combatant.gauge.now, maxHp: combatant.gauge.most,
+                HPBar(fraction: combatant.isDead ? 0 : combatant.gauge,
                       tint: foe ? Palette.ember : Health.tint(hp: combatant.hp, maxHp: combatant.maxHp, standing: !out),
-                      height: 5)
+                      height: 5, soft: combatant.gaugeIsFuzzy)
                 if out || !combatant.conditions.isEmpty || acted {
                     FlowLayout(spacing: 4, lineSpacing: 4) {
                         if out { TagLabel(statusWord(combatant), tint: Palette.ember) }

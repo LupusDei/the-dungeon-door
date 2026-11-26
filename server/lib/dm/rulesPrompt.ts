@@ -39,7 +39,8 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
 - A foe's hit points are hidden from you and the players. The combat block gives each foe's wound word:
   Unhurt, Scratched, Bleeding, Bloodied (half or less), Staggering, Gasping (the undead crumble, constructs
   crack and oozes dissolve in their own words). Show the wound in the story (a limp, ragged breath, a
-  cracked shell) so the players see their progress; never its hit points, and no damage totals.
+  cracked shell) so the players see their progress; never its hit points, and no damage totals. The
+  results tell a hit on a foe without its damage ("hit."), and a hero's with it ("hit for 6.").
 - Foes the party meets roll an attitude. They do not attack at once. Hostile ones bar the way, and the
   engine replaces your three choices with Engage, Run and Parley: still write the scene. Run backs out the
   way the party came (or slips past wanderers); the room stays uncleared, with no loot and no experience.

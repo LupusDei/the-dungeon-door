@@ -5,6 +5,8 @@
  * constructs crack, oozes dissolve.
  */
 
+import { derivedRng } from './rng.ts';
+
 export type Body = 'flesh' | 'undead' | 'construct' | 'ooze';
 
 export const WOUND_RUNGS = 6;
@@ -25,6 +27,26 @@ export function vigorOf(hp: number, maxHp: number): number {
   if (hp <= 0) return 0;
   if (hp >= maxHp) return WOUND_RUNGS;
   return 1 + FLOORS.filter((floor) => hp / maxHp > floor).length;
+}
+
+/** The share of hit points at each rung's lower edge, rung 1 (Gasping) up: a rung r holds shares above BOUNDS[r-1], up to BOUNDS[r]. */
+const BOUNDS = [0, ...[...FLOORS].reverse(), 1];
+const LEAST_SHOWN = 0.001;
+
+/**
+ * How full a foe's gauge looks, 0 to 1, fuzzy so that its hit points cannot be read off it (Robert: "make the
+ * wound slider fuzzy so that discrete values are unknown"). Its share of hit points is bent inside its wound's
+ * band by a curve seeded from `salt` (the foe in this fight) and the band: so the gauge stays inside the band
+ * its wound word names, never rises as the foe is hurt, is the same for the same state, and differs from fight
+ * to fight. Unhurt is full; down is empty.
+ */
+export function fillOf(hp: number, maxHp: number, salt: string): number {
+  const rung = vigorOf(hp, maxHp);
+  if (rung === 0 || rung === WOUND_RUNGS) return rung / WOUND_RUNGS;
+  const [lo, hi] = [BOUNDS[rung - 1], BOUNDS[rung]];
+  const bend = 2 ** ((derivedRng(rung, salt).die(1001) - 501) / 500); // 1/2 to 2
+  const fill = lo + (hi - lo) * ((hp / maxHp - lo) / (hi - lo)) ** bend;
+  return Math.max(LEAST_SHOWN, Math.round(fill * 1000) / 1000);
 }
 
 export const woundOf = (c: { hp: number; maxHp: number; body?: Body }): string => (c.body ? LADDERS[c.body] : LADDERS.flesh)[WOUND_RUNGS - vigorOf(c.hp, c.maxHp)];

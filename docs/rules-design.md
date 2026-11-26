@@ -645,9 +645,17 @@ of six rungs of **vigor** by the share of hit points left:
 | 1 | any left | Gasping | Coming undone | Failing | Dissolving |
 | 0 | none | Dead | Destroyed | Destroyed | Destroyed |
 
-- The API's foe combatants carry `wound` and `vigor` and no `hp`/`maxHp`; heroes keep theirs.
-- A round's lines tell a foe's wounds when they change ("Goblin Warrior is bleeding."). Damage rolled on a
-  hit is still shown ("hit for 7"), but never what is left.
+- The API's foe combatants carry `wound` and a fuzzy gauge, `fill`, and no `hp`/`maxHp`; heroes keep
+  theirs. Robert: *"make the wound slider fuzzy so that discrete values are unknown."* The vigor rung is not
+  sent. `fill` (0–1, three decimals) is the foe's share of hit points bent inside its wound's band by a curve
+  (an exponent from 1/2 to 2) seeded by the foe, the fight (its turn order) and the band (`fillOf`). So it
+  stays inside the band its wound word names, never rises as the foe is hurt, is the same for the same
+  state, and differs from fight to fight. A living foe never shows empty; Unhurt is full. The DM gets no gauge.
+- **No damage numbers against foes.** A round's lines tell a hit on a foe as just a hit ("vs AC 15, hit."),
+  a spell by who it struck or who saved ("Goblin Warrior is hit", "Goblin Warrior fails the save"), and an
+  improvised blow by its damage type ("Goblin Warrior takes bludgeoning damage." or "is unharmed."). Then
+  the wound line says what changed ("Goblin Warrior is bleeding."). Damage to heroes keeps its numbers
+  ("hit for 7", ", 9 damage"), since their hit points show.
 - The DM's combat block gives the wound word for each foe, and its instructions say to show wounds in the
   story, never hit points.
 

@@ -78,26 +78,50 @@ enum Danger {
 
 /// A hit-point bar. The caller picks the tint; `Health.tint` has the party's colours.
 struct HPBar: View {
-    let hp: Int
-    let maxHp: Int
+    /// How full, 0 to 1.
+    let fraction: CGFloat
     var tint: Color = Palette.verdigris
     var height: CGFloat = 6
+    /// A foe's fuzzy gauge: its end fades out instead of stopping sharp, so it reads as an impression.
+    var soft = false
 
-    private var fraction: CGFloat {
-        guard maxHp > 0 else { return 0 }
-        return min(1, max(0, CGFloat(hp) / CGFloat(maxHp)))
+    init(hp: Int, maxHp: Int, tint: Color = Palette.verdigris, height: CGFloat = 6) {
+        self.init(fraction: maxHp > 0 ? Double(hp) / Double(maxHp) : 0, tint: tint, height: height)
     }
+
+    init(fraction: Double, tint: Color = Palette.verdigris, height: CGFloat = 6, soft: Bool = false) {
+        self.fraction = CGFloat(min(1, max(0, fraction.isFinite ? fraction : 0)))
+        self.tint = tint
+        self.height = height
+        self.soft = soft
+    }
+
+    /// The length over which a soft bar's end fades.
+    private static let fade: CGFloat = 16
 
     var body: some View {
         GeometryReader { geo in
+            let width = geo.size.width * fraction
             ZStack(alignment: .leading) {
                 Capsule(style: .circular).fill(Color.black.opacity(0.45))
-                Capsule(style: .circular).fill(tint).frame(width: geo.size.width * fraction)
+                if soft && fraction < 1 {
+                    let reach = min(geo.size.width, width + Self.fade / 2)
+                    Capsule(style: .circular)
+                        .fill(LinearGradient(stops: [
+                            .init(color: tint, location: 0),
+                            .init(color: tint, location: max(0, (reach - Self.fade) / max(reach, 1))),
+                            .init(color: tint.opacity(0), location: 1),
+                        ], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: reach)
+                        .blur(radius: 0.8)
+                } else {
+                    Capsule(style: .circular).fill(tint).frame(width: width)
+                }
             }
         }
         .frame(height: height)
         .overlay { Capsule(style: .circular).strokeBorder(Palette.gold.opacity(0.18), lineWidth: 0.5) }
-        .animation(.easeOut(duration: 0.5), value: hp)
+        .animation(.easeOut(duration: 0.5), value: fraction)
         .accessibilityHidden(true)
     }
 }

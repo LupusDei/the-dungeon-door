@@ -227,7 +227,7 @@ struct MessageLine: View {
     private static let more = ["🔥", "👀", "🎲", "⚔️", "🙏", "😅", "🎉", "💯", "🤔", "👏", "😭", "🙌", "✨", "🐉", "🚪"]
 
     var body: some View {
-        if onReply != nil || onReact != nil {
+        if message.kind == .chat, onReply != nil || onReact != nil {
             content.contextMenu {
                 if let onReply {
                     Button("Reply", systemImage: "arrowshape.turn.up.left") { onReply() }
@@ -252,7 +252,7 @@ struct MessageLine: View {
                         .font(.caption2)
                         .foregroundStyle(Palette.muted)
                 }
-            } else if onReact != nil {
+            } else if onReact != nil, message.kind == .chat {
                 reactions
             }
         }
@@ -291,6 +291,7 @@ struct MessageLine: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(speaker)
                             .font(.caption.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(message.inCharacter ? (isMine ? Palette.gold : Palette.verdigris) : Palette.parchment)
                         if message.voice == "out" {
                             Text("out of character").font(.caption2).foregroundStyle(Palette.muted)
@@ -298,6 +299,8 @@ struct MessageLine: View {
                         if let quote = message.reply { quoteView(quote) }
                         styled(message.text)
                             .font(message.inCharacter ? .prose.italic() : .prose)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -321,14 +324,13 @@ struct MessageLine: View {
 
     private var reactions: some View {
         HStack(spacing: 6) {
-            ForEach(Self.quick, id: \.self) { emoji in reactionButton(emoji) }
-            ForEach(message.reactions.filter { !Self.quick.contains($0.emoji) }) { reaction in
+            ForEach(message.reactions) { reaction in
                 reactionButton(reaction.emoji)
             }
             Button { pickingEmoji = true } label: {
-                Image(systemName: "face.smiling").font(.footnote)
+                Image(systemName: "plus.bubble").font(.footnote)
             }
-            .accessibilityLabel("More reactions")
+            .accessibilityLabel("Add a reaction")
             .popover(isPresented: $pickingEmoji) {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(36)), count: 6), spacing: 8) {
                     ForEach(Self.quick + Self.more, id: \.self) { emoji in

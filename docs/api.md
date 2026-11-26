@@ -330,7 +330,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // The engine's word. Absent from servers older than toughness ratings.
     combatants: [{ id: string; name: string; side: "party" | "foes";
                    hp?: number; maxHp?: number      // a hero's hit points; absent for a foe
-                   wound?: string; vigor?: number   // a foe's instead: its hit points are hidden
+                   wound?: string; fill?: number    // a foe's instead: its hit points are hidden
                    status: "up" | "dying" | "stable" | "dead"; conditions: string[];
                    toughness: null | "puny" | "weak" | "even" | "strong" | "deadly";
                    position: "engaged" | "near" | "far";   // derived from the squares (see Positions):
@@ -350,9 +350,12 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // "Gasping", "Dead" (0). Undead: Whole, Torn, Gouged, Crumbling, Falling
                                       // apart, Coming undone, Destroyed. Constructs: Intact, Scuffed, Dented,
                                       // Cracked, Breaking, Failing, Destroyed. Oozes: Whole, Rippling, Seeping,
-                                      // Shrinking, Sloughing, Dissolving, Destroyed. vigor: the same as a rung
-                                      // for a gauge, 6 (unhurt) to 0. Servers before wounds sent a foe's
-                                      // hp and maxHp instead
+                                      // Shrinking, Sloughing, Dissolving, Destroyed. fill: how full the foe's
+                                      // gauge looks, 0 to 1 (three decimals), fuzzy: inside its wound's band,
+                                      // never rising as it is hurt, stable for the same state, not its exact
+                                      // share. Servers before this sent vigor (6 unhurt to 0) instead, and
+                                      // servers before wounds a foe's hp and maxHp. Round lines tell hits
+                                      // on a foe without damage numbers ("hit."); a hero's keep them.
   }
   trek: null | {                      // the road from the tavern, while the party is on it (any kind of game)
     stretch: number; of: number       // stretch 1 of 2 (each a scene)

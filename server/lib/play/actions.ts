@@ -234,7 +234,8 @@ function strike(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { cate
   const rolled = rollDice(rng, parseDice(DAMAGE_BY_SEVERITY[effect.severity])).total;
   if (!foe) return { text: `${head}. Improvised damage ${rolled} ${effect.damageType}.`, foe: null };
   const taken = damageAfterDefenses(foe, rolled, effect.damageType);
-  return { text: `${head}. ${foe.name} takes ${taken} ${effect.damageType}.`, foe: takeDamage(foe, taken, false) };
+  const told = taken > 0 ? `takes ${effect.damageType} damage` : 'is unharmed'; // a foe's hit points are hidden (rules/wounds.ts)
+  return { text: `${head}. ${foe.name} ${told}.`, foe: takeDamage(foe, taken, false) };
 }
 
 function afflict(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'condition' }>, dc: number, foe: Combatant | null): Adjudicated {

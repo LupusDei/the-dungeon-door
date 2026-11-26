@@ -32,6 +32,8 @@ final class GameSession {
     /// The line the next message will quote.
     var replyingTo: Message?
     var chatOpen = false { didSet { if chatOpen { unreadChat = 0 } } }
+    /// True while the play screen's Chat tab is the one on show. New lines then are not unread.
+    private(set) var chatVisible = false
     private var lastTypingPing: Date?
     private var announcedTyping = false
     var error: String?
@@ -152,6 +154,30 @@ final class GameSession {
         await run { self.absorb(try await self.api.vote(self.code, sceneIndex: scene.index, choiceId: choice.id)) }
     }
 
+    /// Votes an id from `scene.actions`. `targets` are that action's target ids. `square` is a move's destination.
+    func vote(actionId: String, targets: [String] = [], square: GridPoint? = nil) async {
+        guard let scene = state.scene else { return }
+        let move = square.map { VoteMove(x: $0.x, y: $0.y) }
+        await run {
+            self.absorb(try await self.api.vote(self.code, sceneIndex: scene.index, choiceId: nil,
+                                                actionId: actionId, targets: targets, move: move))
+        }
+    }
+
+    /// The player's own action, 1–280 characters. A known deed becomes a vote; a check is a written roll.
+    func act(inOwnWords text: String) async {
+        guard let scene = state.scene else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        await run { self.absorb(try await self.api.act(self.code, sceneIndex: scene.index, text: String(trimmed.prefix(280)))) }
+    }
+
+    /// The Chat tab is showing, or it isn't. Unread counts only lines that arrive while it is hidden.
+    func setChatVisible(_ visible: Bool) {
+        chatVisible = visible
+        if visible { unreadChat = 0 }
+    }
+
     func advance() async {
         await run { self.absorb(try await self.api.advance(self.code)) }
     }
@@ -220,7 +246,7 @@ final class GameSession {
         let new = incoming.filter { !known.contains($0.id) }
         guard !new.isEmpty else { return }
         messages = (messages + new).sorted { $0.id < $1.id }
-        if countUnread && !chatOpen {
+        if countUnread && !chatOpen && !chatVisible {
             unreadChat += new.filter { $0.kind == .chat && $0.playerId != playerId }.count
         }
     }
