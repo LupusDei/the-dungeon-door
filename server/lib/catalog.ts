@@ -39,8 +39,8 @@ export const RACES: Option[] = [
   { id: 'dwarf', name: 'Dwarf', blurb: 'Stone-stubborn, ale-proud and as tough as the mountains they carve, dwarves keep their grudges and their oaths alike.' },
   { id: 'halfling', name: 'Halfling', blurb: 'Small, quick and uncannily lucky, halflings love a full pantry and a good story — and somehow survive both.' },
   { id: 'gnome', name: 'Gnome', blurb: 'Bright-eyed tinkerers and illusionists who treat the world as one enormous, fascinating puzzle box.' },
-  { id: 'half-elf', name: 'Half-Elf', blurb: 'At home in two worlds and fully welcome in neither, half-elves are charming wanderers and natural diplomats.' },
-  { id: 'half-orc', name: 'Half-Orc', blurb: 'Fierce, scarred and fiercely loyal, half-orcs carry a fire in the blood that refuses to stay down.' },
+  { id: 'goliath', name: 'Goliath', blurb: 'Towering mountain-born wanderers with the blood of giants, goliaths prize a fair contest and never back down from a climb.' },
+  { id: 'orc', name: 'Orc', blurb: 'Big-hearted, hard-hitting and hard to put down, orcs push on through wounds that would stop anyone else.' },
   { id: 'tiefling', name: 'Tiefling', blurb: 'Horned, tailed and marked by an infernal bargain they never made, tieflings carve their own destiny out of distrust.' },
   { id: 'dragonborn', name: 'Dragonborn', blurb: 'Proud, scaled descendants of dragons, honour-bound and able to breathe the elemental fury of their ancestors.' },
 ];
@@ -205,7 +205,7 @@ export function archetype(id: string): DungeonMasterArchetype {
   return DUNGEON_MASTERS.find((d) => d.id === id) ?? DUNGEON_MASTERS[0];
 }
 
-/** Display name for a catalog id ("half-orc" → "Half-Orc"), or the id itself. */
+/** Display name for a catalog id ("dragonborn" → "Dragonborn"), or the id itself. */
 export function nameOf(kind: 'race' | 'characterClass' | 'temperament' | 'gender' | 'alignment', id: string): string {
   const list = { race: RACES, characterClass: CLASSES, temperament: TEMPERAMENTS, gender: GENDERS, alignment: ALIGNMENTS }[kind];
   return list.find((o) => o.id === id)?.name ?? id;

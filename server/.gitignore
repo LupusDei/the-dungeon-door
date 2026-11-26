@@ -1,3 +1,8 @@
 .vercel
 .env*
 node_modules
+
+# Quality-gate output (crapper, mutator, coverage)
+coverage
+target
+.metrics

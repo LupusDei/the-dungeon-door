@@ -6,11 +6,12 @@
     "dev": "DD_FAKE_AI=${DD_FAKE_AI:-1} node --experimental-strip-types scripts/dev.ts",
     "dev:real": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/dev.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types lib/*.test.ts",
+    "test": "node --test --experimental-strip-types \"lib/**/*.test.ts\"",
     "migrate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/migrate.ts",
     "seed:quests": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/seed-quests.ts",
     "mcp:smoke": "node --experimental-strip-types scripts/mcp-smoke.ts",
-    "bot": "node --experimental-strip-types scripts/bot.ts"
+    "bot": "node --experimental-strip-types scripts/bot.ts",
+    "coverage": "mkdir -p coverage && node --test --experimental-strip-types --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"lib/**/*.test.ts\""
   },
   "engines": {
     "node": "24.x"
