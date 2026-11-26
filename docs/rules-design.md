@@ -17,6 +17,7 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   srd.ts                     the SRD 5.2 tables, parsed and checked once where they enter
   character.ts               character generation: choices -> CharacterSheet
   sheet.ts                   the CharacterSheet type and its stored (JSON) shape
+  violation.ts               RuleViolation: a choice the rules forbid
   combat/…  (PR B)           initiative, attacks, damage, saves, conditions, scenes
   dungeon/… (PR C)           fixed room graph or explore-as-you-go, stocking, encounters, loot
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
