@@ -52,6 +52,8 @@ export const CharacterSheetSchema = z.object({
   dead: z.boolean().optional(),
   /** The game clock (seconds, play/time.ts) at the start of the turn it died: Raise Dead reaches back 10 days. */
   diedAt: z.number().int().nonnegative().optional(),
+  /** Days in a row without food (play/provisions.ts); absent: 0. */
+  hungry: z.number().int().nonnegative().optional(),
   /** Raised from the dead (Raise Dead): this much off every D20 Test, one less after each Long Rest (5.2). */
   revivalPenalty: int.min(0).max(4).optional(),
   /** Conditions the hero carries outside a fight, each with how it ends (conditions.ts). */

@@ -199,7 +199,17 @@ test('trap and hazard hooks from the DM', () => {
   assert.deepEqual(fall.lines.map((l) => l.split(' falls')[0]), ['Bryn', 'Cleo']);
   assert.equal(fall.success, null);
   const thirst = playTurn(state(), { kind: 'hazard', hazard: 'dehydration' }, ballots(1, 1));
-  assert.equal(thirst.lines.length, 2);
+  assert.deepEqual(thirst.lines.slice(0, 2).map((l) => l.split(' has')[0]), ['Bryn', 'Cleo']);
+  assert.equal(thirst.lines[2], 'A new day.', 'a day passes, and the morning comes');
+});
+
+test('each morning by the clock the heroes eat their Rations, or go without', () => {
+  const late = { ...party(), clock: 86_400 - 600 };
+  const morning = playTurn(state({ party: late }), null, []);
+  assert.equal(morning.lines[0], 'A new day.', morning.lines.join(' | '));
+  assert.ok(morning.lines.some((l) => /^Bryn (eats a day.s Rations \(\d+ left\)|goes hungry but holds up)\.$/.test(l)), morning.lines.join(' | '));
+  const noon = playTurn(state({ party: { ...party(), clock: 600 } }), null, []);
+  assert.equal(noon.lines.includes('A new day.'), false);
 });
 
 test('a way that is not there, or no dungeon at all: nothing happens but a line saying so', () => {
