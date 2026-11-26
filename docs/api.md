@@ -369,7 +369,10 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     when ready: Recharge 5–6 is rolled at the start of its turn ("Recharge" line), "1/Day" means once per
     fight; each caught hero saves, half on a success where the text says so, and a lasting effect
     (Poisoned, Paralyzed, Restrained…) sticks with its own way to end. Attack riders (a ghoul's paralyzing
-    claws, a spider's web, a grapple) work the same way. A monster that can Disengage as a Bonus Action
+    claws, a spider's web, a grapple) work the same way. A monster with no attack and no save ability
+    (Shrieker Fungus, Seahorse, a vampire's mist form) Dodges, using its own action if it has one
+    ("Shrieker Fungus uses Shriek, and dodges."). Rooms and wanderers are never stocked with these; only
+    the DM can bring one. A monster that can Disengage as a Bonus Action
     flees without Opportunity Attacks. Monsters prefer a hero who isn't Dodging. Heroes skip a foe
     immune to their damage (Fire Bolt past a fire elemental) when another can be hurt.
   - **Conditions and concentration.** Conditions from saves, traps and riders stay on the hero after the

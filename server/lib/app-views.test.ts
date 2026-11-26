@@ -403,8 +403,10 @@ test('a picture still painting when the next round begins reaches that round too
 });
 
 test('a rules error never strands the table: the fight breaks off, the log says so, and the story goes on', async () => {
-  // A Shrieker Fungus has no attack, which the engine's monster turn does not expect (it throws).
-  const { code, host } = await intoFight(['fighter'], ['shrieker-fungus'], 4);
+  // A stored goblin whose Multiattack names an attack it does not have: the engine throws on its turn.
+  const { code, host } = await intoFight(['fighter'], ['goblin-warrior'], 4);
+  const { combat } = (await getStore().getGame(code))!;
+  await getStore().updateGame(code, {}, { combat: { ...combat!, combatants: { ...combat!.combatants, 'foe-1': { ...combat!.combatants['foe-1'], multiattack: ['Tail Lash', 'Tail Lash'] } } } });
   const errors: unknown[][] = [];
   const realError = console.error;
   console.error = (...args: unknown[]) => { errors.push(args); };

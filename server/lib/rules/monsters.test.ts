@@ -90,3 +90,8 @@ test('a monster that can Disengage as a Bonus Action', () => {
   assert.equal(monster('goblin-warrior').disengages, true);
   assert.equal(monster('bugbear-warrior').disengages, false);
 });
+
+test('a monster with no attack knows what it does instead: its first other action, else its reaction', () => {
+  assert.deepEqual(['shrieker-fungus', 'seahorse', 'vampire-mist', 'goblin-warrior', 'adult-red-dragon'].map((id) => monster(id).idle), ['Shriek', 'Bubble Dash', null, null, null]);
+  assert.deepEqual([...monsters().values()].filter((m) => m.attacks.length === 0 && m.powers.length === 0).map((m) => m.id).sort(), ['seahorse', 'shrieker-fungus', 'vampire-mist'], 'the only ones with neither an attack nor a power');
+});

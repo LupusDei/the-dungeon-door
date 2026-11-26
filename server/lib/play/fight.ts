@@ -199,7 +199,7 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
     `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) =>
       (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${struck(o)}`) +
       (o.damage > 0 ? `, ${o.damage} damage` : '')).join('; ') + '.',
-  dodge: ({ actor }, name) => `${name(actor)} dodges.`,
+  dodge: ({ actor, as }, name) => `${name(actor)}${as ? ` uses ${as}, and` : ''} dodges.`,
   other: ({ text }) => text,
   power: ({ actor, power, dc, ability, outcomes }, name) =>
     `${name(actor)} uses ${power} (DC ${dc} ${ability.toUpperCase()} save): ` + outcomes.map((o) =>

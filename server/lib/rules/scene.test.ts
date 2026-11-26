@@ -291,3 +291,18 @@ test('a monster spares a hero who Dodges when another is up, however wounded; wi
   assert.equal(monsterCombatant('b', monster('bugbear-warrior')).disengages, undefined);
   assert.equal(goblin('g').disengages, true);
 });
+
+test('a monster with no attack and no power Dodges on its turn, using its own action if it has one (SRD 5.2: Shriek, Bubble Dash)', () => {
+  const hero = heroCombatant('p1', SAMPLE);
+  const turnOf = (id: string) => {
+    const s = startCombat(1, [hero, monsterCombatant('m', monster(id))]);
+    return monsterAction({ ...s, turn: s.order.indexOf('m') });
+  };
+  assert.deepEqual(turnOf('shrieker-fungus'), { kind: 'dodge', as: 'Shriek' });
+  assert.deepEqual(turnOf('seahorse'), { kind: 'dodge', as: 'Bubble Dash' });
+  assert.deepEqual(turnOf('vampire-mist'), { kind: 'dodge' });
+  const s = startCombat(1, [hero, monsterCombatant('m', monster('shrieker-fungus'))]);
+  const after = act({ ...s, turn: s.order.indexOf('m') }, { kind: 'dodge', as: 'Shriek' });
+  assert.ok(after.dodging.includes('m'));
+  assert.deepEqual(after.log.at(-1), { kind: 'dodge', round: s.round, actor: 'm', as: 'Shriek' });
+});

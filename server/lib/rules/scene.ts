@@ -14,7 +14,8 @@ import { lookup, require } from './violation.ts';
 export type Action =
   /** `then`: the turn's further attacks (Multiattack, Extra Attack), each at the most wounded foe still up. */
   | { kind: 'attack'; attack: string; target: string; natural?: number; cover?: Cover; advantage?: boolean; disadvantage?: boolean; then?: string[] }
-  | { kind: 'dodge' }
+  /** `as`: the monster's own action it Dodges with (it has no attack: Shriek, Bubble Dash). */
+  | { kind: 'dodge'; as?: string }
   /** Any other action, already resolved by the caller (play/actions.ts): it is told and spends the turn. */
   | { kind: 'other'; text: string }
   /** A monster's save ability (powers.ts) at these targets. */
@@ -25,7 +26,7 @@ export type CombatEvent =
   /** `rider`: the condition the hit brought, or its save made. */
   | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true; rider?: RiderOutcome }
   | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
-  | { kind: 'dodge'; round: number; actor: string }
+  | { kind: 'dodge'; round: number; actor: string; as?: string }
   | { kind: 'other'; round: number; actor: string; text: string }
   | { kind: 'power'; round: number; actor: string; power: string; dc: number; ability: string; outcomes: PowerOutcome[] }
   /** A spent power comes back on its d6 at the start of the monster's turn. */
@@ -196,13 +197,13 @@ function resolvePower(state: CombatState, actor: Combatant, action: Extract<Acti
   return withEvent(state, event, spent, ...hit.map((h) => h.target));
 }
 
-const dodge = (state: CombatState, actor: Combatant) =>
-  withEvent({ ...state, dodging: [...state.dodging, actor.id] }, { kind: 'dodge', round: state.round, actor: actor.id }, actor);
+const dodge = (state: CombatState, actor: Combatant, as?: string) =>
+  withEvent({ ...state, dodging: [...state.dodging, actor.id] }, { kind: 'dodge', round: state.round, actor: actor.id, ...(as ? { as } : {}) }, actor);
 
 const ACTIONS: { [K in Action['kind']]: (state: CombatState, actor: Combatant, action: Extract<Action, { kind: K }>, rng: Rng) => CombatState } = {
   attack: resolveAttack,
   spell: resolveCast,
-  dodge: (state, actor) => dodge(state, actor),
+  dodge: (state, actor, action) => dodge(state, actor, action.as),
   power: resolvePower,
   other: (state, actor, action) => withEvent(state, { kind: 'other', round: state.round, actor: actor.id, text: action.text }, actor),
 };
@@ -262,13 +263,15 @@ function caughtBy(state: CombatState, me: Combatant, p: Power): string[] {
 
 /**
  * A monster's turn: a ready power that recharges or runs out; else its Multiattack, or its first melee attack (or
- * first attack), on the up hero with the fewest HP, sparing one who Dodges if it can. Null on a hero's turn.
+ * first attack), on the up hero with the fewest HP, sparing one who Dodges if it can; with neither, it Dodges.
+ * Null on a hero's turn.
  */
 export function monsterAction(state: CombatState): Action | null {
   const me = state.combatants[currentActor(state)];
   if (me.side === 'party') return null;
   const power = chosenPower(me);
   if (power) return { kind: 'power', power: power.name, targets: caughtBy(state, me, power) };
+  if (me.attacks.length === 0) return { kind: 'dodge', ...(me.idle ? { as: me.idle } : {}) }; // nothing to harm anyone with (SRD: Shriek, Bubble Dash)
   const up = upAgainst(state, me.side);
   const open = up.filter((c) => !state.dodging.includes(c.id));
   const target = fewestHp(open.length ? open : up);

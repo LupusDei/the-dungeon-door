@@ -106,3 +106,11 @@ test('a fight the DM proposes always keeps one foe: the least of them, when none
   assert.deepEqual(capFight(['ogre'], [1, 1]), ['ogre']);
   assert.deepEqual(capFight(['adult-red-dragon', 'ghast', 'ogre'], [1]), ['ghast'], 'the first, among equals');
 });
+
+test('rooms and wanderers are never stocked with a monster that cannot attack (a Shrieker is the DM’s to place)', () => {
+  const harmless = ['shrieker-fungus', 'seahorse', 'vampire-mist'];
+  assert.ok(candidates([20], undefined).every((m) => m.attacks.length > 0 && !harmless.includes(m.id)));
+  for (let seed = 0; seed < 50; seed++) {
+    for (const level of [1, 5, 13, 20]) assert.ok(buildEncounter(seededRng(seed), [level, level], 'high').monsters.every((id) => !harmless.includes(id) && monster(id).attacks.length > 0));
+  }
+});

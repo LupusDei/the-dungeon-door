@@ -39,6 +39,8 @@ export interface Monster {
   powers: Power[];
   /** The attacks its Multiattack makes in a turn, by name (two or more); [] without one. */
   multiattack: string[];
+  /** With no attack and no power, what it does instead (its first action, else its reaction: Shriek, Bubble Dash); null otherwise. */
+  idle: string | null;
 }
 
 const ref = z.object({ index: z.string() });
@@ -102,6 +104,10 @@ const SKILL = 'skill-';
 /** "60 ft." → 60; absent → 0. */
 const feet = (text: string | undefined) => (text ? parseInt(text, 10) : 0);
 
+/** What a monster that can't harm anyone does on its turn: its first action, else its first reaction (a Shrieker's Shriek). */
+const idleOf = (actions: readonly { name: string }[], reactions: readonly { name: string }[], harms: number): string | null =>
+  (harms > 0 ? null : (actions[0] ?? reactions[0])?.name ?? null);
+
 const monsterSchema = z.object({
   index: z.string(), name: z.string(), size: z.string(), type: z.string(),
   armorClass: z.array(z.object({ value: z.number() })).min(1), hitPoints: z.number(), hitDice: z.string(),
@@ -113,6 +119,7 @@ const monsterSchema = z.object({
   proficiencies: z.array(z.object({ value: z.number(), proficiency: ref })),
   actions: z.array(action).default([]),
   bonusActions: z.array(z.object({ desc: z.string() })).default([]),
+  reactions: z.array(z.object({ name: z.string() })).default([]),
 }).transform((m): Monster => {
   const abilities = { str: m.strength, dex: m.dexterity, con: m.constitution, int: m.intelligence, wis: m.wisdom, cha: m.charisma };
   const listed = new Map(m.proficiencies.map((p) => [p.proficiency.index, p.value]));
@@ -134,6 +141,7 @@ const monsterSchema = z.object({
     senses: { darkvision: feet(m.senses.darkvision), blindsight: feet(m.senses.blindsight), truesight: feet(m.senses.truesight) },
     attacks, multiattack: multiattackOf(m.actions, attacks), powers: powersOf(m.actions),
     disengages: m.bonusActions.some((b) => /Disengage/.test(b.desc)),
+    idle: idleOf(m.actions, m.reactions, attacks.length + powersOf(m.actions).length),
   };
 });
 

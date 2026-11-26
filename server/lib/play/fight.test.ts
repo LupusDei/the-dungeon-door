@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { monsters } from '../rules/monsters.ts';
 import { heroSheet } from '../characters.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
@@ -442,4 +443,25 @@ test('Magic Missile is cast in a fight: it outscores Fire Bolt at level 1 (three
   const round = fightRound(party({ p1: fighter, p2: mm }), hurt, { p1: { choiceId: 'c', roll: 10 }, p2: { choiceId: 'b', roll: 10 } });
   const line = round.lines.find((l) => l.startsWith(`${mm.name} casts Magic Missile: `))!;
   assert.match(line, /^Cleo casts Magic Missile: Goblin Warrior 2 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage\.$/);
+});
+
+test('a fight with a monster that cannot attack goes on: the Shrieker shrieks, the Seahorse dashes, the Mist drifts, the Bat bites (by save)', () => {
+  const expected: Record<string, RegExp> = {
+    'shrieker-fungus': /^Shrieker Fungus uses Shriek, and dodges\.$/,
+    seahorse: /^Seahorse uses Bubble Dash, and dodges\.$/,
+    'vampire-mist': /^Vampire, Mist Form dodges\.$/,
+    'vampire-bat': /^Vampire, Bat Form uses Bite \(DC 17 CON save\): /,
+  };
+  for (const [id, line] of Object.entries(expected)) {
+    const { party: p, combat } = startFight(party({ p1: fighter }), [id]);
+    const round = fightRound(p, combat, { p1: { choiceId: 'c', roll: 10 } }); // Bryn Dodges, so the monster has its turn
+    assert.ok(round.lines.some((l) => line.test(l)), `${id}: ${round.lines.join(' | ')}`);
+  }
+});
+
+test('no SRD monster can make a fight throw: one hero against each, to the fight’s end', () => {
+  for (const m of monsters().values()) {
+    let { party: p, combat } = startFight(party({ p1: fighter }), [m.id]);
+    for (let ended = null; ended === null;) ({ party: p, combat, ended } = fightRound(p, combat, { p1: { choiceId: 'a', roll: 10 } }));
+  }
 });

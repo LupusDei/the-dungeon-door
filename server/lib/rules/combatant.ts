@@ -41,6 +41,8 @@ export interface Combatant {
   xp: number;
   /** A monster that Disengages as a Bonus Action: it flees without Opportunity Attacks. */
   disengages?: true;
+  /** A monster with no attack and no power: the action it Dodges with (Monster.idle). */
+  idle?: string;
   /** A monster's save abilities (powers.ts), and the uses spent of those that recharge or run out. */
   powers?: Power[];
   spent?: Record<string, number>;
@@ -108,5 +110,6 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     ...(m.multiattack.length ? { multiattack: m.multiattack } : {}),
     ...(m.powers.length ? { powers: m.powers } : {}),
     ...(m.disengages ? { disengages: true as const } : {}),
+    ...(m.idle ? { idle: m.idle } : {}),
   };
 }
