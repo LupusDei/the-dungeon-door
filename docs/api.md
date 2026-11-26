@@ -70,6 +70,8 @@ Attack {
   ranged: boolean
   kind: "weapon" | "spell"
   save: string | null             // spells only: the save the target makes instead ("dex"), with the hero's spell save DC
+  neverMisses: boolean            // spells only: no roll to hit and no save, every strike lands (Magic Missile).
+                                  // Show this instead of the bonus, which is 0 and means nothing here
 }
 
 CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see server/lib/rules/sheet.ts

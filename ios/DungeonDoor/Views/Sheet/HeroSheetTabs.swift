@@ -202,6 +202,11 @@ struct CombatTab: View {
                 row.value = dc.map { "DC \($0)" } ?? "Save"
                 row.valueNote = "\(SRD.ability(save).capitalized) save"
                 row.spoken = "\(attack.name), \(SRD.abilityName(save)) save\(dc.map { " against DC \($0)" } ?? ""), \(attack.damage), spell"
+            } else if attack.neverMisses {
+                // Darts that strike without a roll or a save (Magic Missile): the bonus means nothing.
+                row.value = "Always"
+                row.valueNote = "hits"
+                row.spoken = "\(attack.name), always hits with no roll, \(attack.damage), spell"
             } else {
                 row.value = SRD.signed(attack.bonus)
                 row.valueNote = "to hit"
