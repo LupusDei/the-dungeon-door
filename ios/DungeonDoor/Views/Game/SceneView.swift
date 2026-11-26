@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One scene as it was drawn before the play dashboard: the art, the narration, and the choices.
-/// `GameView` now plays on `PlayDashboard`. This screen stays because the dashboard still uses the
+/// `GameView` now plays on `PlayShell`. This screen stays because the play tabs still use the
 /// narrator bar, the time and light line, the waiting-foes notice, and the resolving and level-up
 /// covers that live here.
 struct SceneView: View {

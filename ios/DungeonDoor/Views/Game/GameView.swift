@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// The whole game, full screen: lobby, then the play dashboard (the hero's sheet, which is where
-/// the game is played), then the finale on that same screen. Chat, the chronicle, the full tabbed
-/// sheet and (in a dungeon) the map open as sheets from the toolbar.
+/// The whole game, full screen: lobby, then the tabbed play screen (Story, Sheet, Map, Chat),
+/// then the finale on that same screen. The chronicle and another hero's full sheet open from here.
 struct GameView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -27,6 +26,15 @@ struct GameView: View {
 
     private var hasMap: Bool { session.state.rules?.dungeon != nil }
 
+    /// The door is open and there is a scene to play. Lobby and the preparing beat keep the old chrome.
+    private var playing: Bool {
+        switch session.state.status {
+        case .lobby: false
+        case .preparing: session.state.scene != nil
+        default: true
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -36,9 +44,7 @@ struct GameView: View {
                 case .preparing where session.state.scene == nil:
                     PreparingView(title: session.state.title)
                 default:
-                    PlayDashboard(session: session, narrator: narrator, openMap: { showMap = true }) {
-                        sheetHero = SheetHero(playerId: $0)
-                    }
+                    PlayShell(session: session, narrator: narrator, openHero: { sheetHero = SheetHero(playerId: $0) })
                 }
             }
             .animation(.easeInOut(duration: 0.4), value: session.state.status)
@@ -56,8 +62,8 @@ struct GameView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                // The sheet has its own composer. This one stays on the table while chat is closed.
-                if !session.chatOpen {
+                // The play screen's composer is the Chat tab. The lobby still talks from here.
+                if !playing && !session.chatOpen {
                     ChatComposerBar(session: session, showsThread: true)
                 }
             }
@@ -134,7 +140,7 @@ struct GameView: View {
                 Button { sheetHero = SheetHero(playerId: session.playerId) } label: { Image(systemName: "person.text.rectangle") }
                     .accessibilityLabel("My hero")
             }
-            if hasMap {
+            if !playing && hasMap {
                 Button { showMap = true } label: { Image(systemName: "map") }
                     .accessibilityLabel("The dungeon map")
             }
@@ -142,20 +148,22 @@ struct GameView: View {
                 Button { showChronicle = true } label: { Image(systemName: "book.pages") }
                     .accessibilityLabel("The story so far")
             }
-            Button { session.chatOpen = true } label: {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .overlay(alignment: .topTrailing) {
-                        if session.unreadChat > 0 {
-                            Text("\(min(session.unreadChat, 99))")
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 4).padding(.vertical, 1)
-                                .background(Palette.ember, in: .capsule)
-                                .foregroundStyle(.white)
-                                .offset(x: 10, y: -8)
+            if !playing {
+                Button { session.chatOpen = true } label: {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .overlay(alignment: .topTrailing) {
+                            if session.unreadChat > 0 {
+                                Text("\(min(session.unreadChat, 99))")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .padding(.horizontal, 4).padding(.vertical, 1)
+                                    .background(Palette.ember, in: .capsule)
+                                    .foregroundStyle(.white)
+                                    .offset(x: 10, y: -8)
+                            }
                         }
-                    }
+                }
+                .accessibilityLabel("Party chat")
             }
-            .accessibilityLabel("Party chat")
         }
     }
 }

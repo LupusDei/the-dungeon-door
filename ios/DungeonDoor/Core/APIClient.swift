@@ -124,8 +124,40 @@ struct APIClient: Sendable {
     }
 
     func vote(_ code: String, sceneIndex: Int, choiceId: String) async throws -> GameState {
-        struct Body: Encodable { let sceneIndex: Int; let choiceId: String }
-        return try await send("POST", "api/games/\(code)/vote", body: Body(sceneIndex: sceneIndex, choiceId: choiceId))
+        try await vote(code, sceneIndex: sceneIndex, choiceId: choiceId, actionId: nil, targets: [], move: nil)
+    }
+
+    /// Votes a letter, an action from `scene.actions`, or both. `move` is a band and/or a square.
+    /// Targets are omitted when the action needs none.
+    func vote(_ code: String, sceneIndex: Int, choiceId: String?, actionId: String?, targets: [String], move: VoteMove?) async throws -> GameState {
+        struct Body: Encodable {
+            let sceneIndex: Int
+            let choiceId: String?
+            let actionId: String?
+            let targets: [String]
+            let move: VoteMove?
+
+            enum CodingKeys: String, CodingKey {
+                case sceneIndex, choiceId, actionId, targets, move
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(sceneIndex, forKey: .sceneIndex)
+                try c.encodeIfPresent(choiceId, forKey: .choiceId)
+                try c.encodeIfPresent(actionId, forKey: .actionId)
+                if !targets.isEmpty { try c.encode(targets, forKey: .targets) }
+                if let move, move.isSendable { try c.encode(move, forKey: .move) }
+            }
+        }
+        return try await send("POST", "api/games/\(code)/vote",
+                              body: Body(sceneIndex: sceneIndex, choiceId: choiceId, actionId: actionId, targets: targets, move: move))
+    }
+
+    /// What the player does, in their own words. The dungeon master classifies it; the engine keeps the numbers.
+    func act(_ code: String, sceneIndex: Int, text: String) async throws -> GameState {
+        struct Body: Encodable { let sceneIndex: Int; let text: String }
+        return try await send("POST", "api/games/\(code)/action", body: Body(sceneIndex: sceneIndex, text: text))
     }
 
     func advance(_ code: String) async throws -> GameState {

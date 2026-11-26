@@ -23,44 +23,54 @@ enum DungeonNames {
 struct DungeonMapView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: GameSession
+    /// The Map tab draws the map in place. A sheet keeps the title and Done.
+    var embedded = false
     /// The area whose details are on show; nil follows the party.
     @State private var selectedId: String?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let dungeon = session.state.rules?.dungeon, !dungeon.areas.isEmpty {
-                        let shown = dungeon.area(selectedId) ?? dungeon.here ?? dungeon.areas[0]
-                        VStack(alignment: .leading, spacing: 4) {
-                            SectionLabel(dungeon.kind)
-                            Text(dungeon.mode == "explore"
-                                 ? "A dungeon that grows where you go. \(found(dungeon.areas.count)) so far."
-                                 : "A mapped dungeon. \(found(dungeon.areas.count)) so far.")
-                                .font(.proseSmall.italic())
-                                .foregroundStyle(Palette.muted)
-                        }
-                        MapCanvas(dungeon: dungeon, selectedId: shown.id) { id in
-                            withAnimation(.snappy) { selectedId = id }
-                        }
-                        MapLegend()
-                        AreaDetails(area: shown, dungeon: dungeon)
-                    } else {
-                        Text("There is no map for this adventure.")
+        if embedded {
+            mapBody
+        } else {
+            NavigationStack {
+                mapBody
+                    .navigationTitle("The Map")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            }
+        }
+    }
+
+    private var mapBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let dungeon = session.state.rules?.dungeon, !dungeon.areas.isEmpty {
+                    let shown = dungeon.area(selectedId) ?? dungeon.here ?? dungeon.areas[0]
+                    VStack(alignment: .leading, spacing: 4) {
+                        SectionLabel(dungeon.kind)
+                        Text(dungeon.mode == "explore"
+                             ? "A dungeon that grows where you go. \(found(dungeon.areas.count)) so far."
+                             : "A mapped dungeon. \(found(dungeon.areas.count)) so far.")
                             .font(.proseSmall.italic())
                             .foregroundStyle(Palette.muted)
                     }
+                    MapCanvas(dungeon: dungeon, selectedId: shown.id) { id in
+                        withAnimation(.snappy) { selectedId = id }
+                    }
+                    MapLegend()
+                    AreaDetails(area: shown, dungeon: dungeon)
+                } else {
+                    Text("There is no map for this adventure.")
+                        .font(.proseSmall.italic())
+                        .foregroundStyle(Palette.muted)
                 }
-                .padding(20)
-                .frame(maxWidth: 720)
-                .frame(maxWidth: .infinity)
             }
-            .defaultScrollAnchor(AppConfig.launchScrollAnchor)
-            .screenChrome()
-            .navigationTitle("The Map")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .padding(20)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
         }
+        .defaultScrollAnchor(AppConfig.launchScrollAnchor)
+        .screenChrome()
     }
 
     private func found(_ count: Int) -> String {
