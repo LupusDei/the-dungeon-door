@@ -113,6 +113,7 @@ GameState {
   scene: Scene | null                // the current scene (null in lobby)
   chronicle: ChronicleEntry[]        // resolved scenes, oldest first (the story so far)
   messages: Message[]                // newest last; only those after `since` when given
+  rules: RulesView | null            // the rules engine's numbers; null for games started before it
   updatedAt: string
 }
 
@@ -121,7 +122,9 @@ Scene {
   title: string
   narration: string                  // 2–4 short paragraphs
   imageUrl: string | null            // null while the art is still painting
-  choices: [{ id: "a"|"b"|"c", label: string, detail: string }]   // exactly 3; empty for the epilogue
+  choices: [{ id: "a"|"b"|"c", label: string, detail: string,
+              rules: string | null }]  // e.g. "Athletics check, DC 12"; exactly 3; empty for the epilogue
+  combat: boolean                    // true for a combat round: each vote is that player's own hero's action
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
   votes: [{ playerId, choiceId, roll: number /* d20 */ }]
   myVote: string | null              // choiceId of the caller
@@ -132,6 +135,31 @@ ChronicleEntry {
   index: number; title: string; imageUrl: string | null
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick)
   outcome: string                    // what happened, as the DM resolved it
+}
+
+RulesView {                          // SRD 5.2 (2024 rules)
+  party: [{
+    playerId: string; name: string; level: number; xp: number
+    hp: number; maxHp: number; armorClass: number
+    exhaustion: number                // 0–6
+    hitDiceLeft: number
+    slotsLeft: number[]               // 9 entries, spell levels 1–9; all 0 for non-casters
+    resources: [{ id: string; name: string; left: number; max: number }]   // Rage, Second Wind, …
+    down: boolean                     // at 0 HP
+  }]
+  combat: null | {
+    round: number
+    outcome: "ongoing" | "victory" | "defeat" | "fled"
+    combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
+                   status: "up" | "dying" | "stable" | "dead"; conditions: string[] }]   // initiative order
+  }
+  dungeon: null | {
+    mode: "fixed" | "explore"; kind: string
+    at: string                        // area id the party is in
+    areas: [{ id: string; name: string; purpose: string | null; cleared: boolean;
+              exits: [{ id: string; connection: string; to: string | null }] }]   // visited areas only
+  }
+  results: string[]                   // the engine's dice lines for the last resolved scene
 }
 
 Message {
@@ -152,8 +180,11 @@ Message {
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
 - `POST /api/games/{code}/messages` body `{ text }` → `Message`.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
-- `POST /api/games/{code}/start` body `{ sceneCount? }` (2–8) → `GameState` with status `preparing`.
-  Host only. The DM writes scene 0 in the background; status becomes `voting` when it's ready.
+- `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
+  Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
+  map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
+  The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
+  becomes `voting` when it's ready.
 - `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId }` → `GameState`.
   Voting status only; you can change your vote until the scene resolves. The server rolls a d20
   for each vote (kept when you change your vote). When every player has voted the scene resolves:
@@ -161,6 +192,33 @@ Message {
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
 - `POST /api/games/{code}/advance` → `GameState`. Host only: resolve now with the votes that are in
   (for an AFK player). Needs at least one vote.
+
+### The rules engine in play
+
+Games started after the engine shipped carry `rules`. The DM proposes and narrates; the engine owns the
+numbers (see docs/rules-design.md and docs/dungeon-master.md).
+
+- **Choices with `rules`.** A choice may be a check ("Athletics check, DC 12"), a saving throw ("Dexterity
+  save, DC 13"), a fight ("Fight: 2 Goblin Warriors"), a rest ("Short rest", "Long rest") or, in a
+  dungeon, a way on ("Through the locked door"). The party still goes with the most-voted choice. Ties go
+  to the choice whose voters rolled highest. Every hero makes the check or save with their vote's d20
+  (or a fresh one if they didn't vote) plus their own bonus. In 5.2 a natural 20 or 1 is not automatic on
+  a check or save. The party succeeds if at least half the heroes do (5.2 group check). A failed save
+  can deal damage.
+- **Combat rounds** (`scene.combat`). The choices are always: (a) Attack: your best weapon against the
+  most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none); (c) Dodge.
+  Each player's vote is their own hero's action, and the vote's d20 is their attack roll. Monsters act
+  by simple rules. Each round is a scene, so `sceneCount` grows by one for each round. When the foes all
+  fall, the living heroes split the XP and level up on the spot (average hit points; 5.2 thresholds). If
+  every hero is down, the next scene is the epilogue. A fight still going after 10 rounds ends with the
+  foes fleeing (no XP).
+- **Rests.** Short rest: heroes spend hit dice until healed or out of dice, features recharge, and
+  warlocks get pact slots back. Long rest: full HP, all hit dice, slots and features, and 1 exhaustion
+  removed. A hero at 0 HP regains 1 HP first.
+- **Dice in chat.** The engine posts its results as `system` messages ("Bryn: Athletics 14 + 5 = 19 vs DC
+  12, success"), so the current app shows them without an update. The same lines are in `rules.results`.
+- **When it ends.** The heroes' sheets (level, XP, features; HP and slots restored) are saved back to
+  each player's character, so the next adventure starts where this one left off.
 
 Images may arrive after their text: a scene can be `voting` with `imageUrl: null`; keep polling.
 
