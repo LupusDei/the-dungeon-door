@@ -53,8 +53,9 @@ struct PartyStrip: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(name)
                         .font(.system(size: 13, weight: .semibold, design: .serif))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(member.playerId == me ? Palette.gold : Palette.parchment)
                     Text("Level \(member.level)")
                         .font(.system(size: 10.5, design: .serif))
