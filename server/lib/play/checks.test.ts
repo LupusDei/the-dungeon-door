@@ -216,3 +216,22 @@ test('the damage of a save of a type the hero resists is halved', () => {
   const untyped = groupRoll([{ playerId: 'p1', sheet: { ...SAMPLE, traits: ['draconic-damage-resistance-cold'] } }], { ...hook, damageType: null }, { p1: 2 }, scriptedRng([]));
   assert.equal(untyped.lines.at(-1), 'Damage 10: Bryn takes 10');
 });
+
+test('Restrained, a hero has Disadvantage on Dexterity saves only', () => {
+  const caught = { ...SAMPLE, conditions: [{ condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'athletics', dc: 10 } }] };
+  const save = (ability: 'dex' | 'con') => groupRoll([{ playerId: 'p1', sheet: caught }], { kind: 'save', ability, dc: 10 }, { p1: 12 }, scriptedRng([3])).rolls[0].mode;
+  assert.deepEqual([save('dex'), save('con')], ['disadvantage', 'normal']);
+});
+
+test('a failed save can bring a condition: for its minutes, or until a long rest; a dwarf saves against poison with Advantage', () => {
+  const hook = { kind: 'save' as const, ability: 'con' as const, dc: 15, condition: 'poisoned' as const, minutes: 60 };
+  const r = groupRoll([{ playerId: 'p1', sheet: SAMPLE }, { playerId: 'p2', sheet: { ...SAMPLE, name: 'Ann' } }], hook, { p1: 2, p2: 19 }, scriptedRng([]));
+  assert.deepEqual(r.sheets.map((h) => h.sheet.conditions), [[{ condition: 'poisoned', until: { kind: 'time', left: 3600 } }], undefined]);
+  const scared = groupRoll([{ playerId: 'p1', sheet: SAMPLE }], { ...hook, condition: 'frightened', minutes: null }, { p1: 2 }, scriptedRng([]));
+  assert.deepEqual(scared.sheets[0].sheet.conditions, [{ condition: 'frightened', until: { kind: 'long-rest' } }]);
+  const dwarf = { ...SAMPLE, traits: ['dwarven-resilience'] };
+  assert.equal(groupRoll([{ playerId: 'p1', sheet: dwarf }], hook, { p1: 2 }, scriptedRng([17])).rolls[0].mode, 'advantage');
+  assert.equal(groupRoll([{ playerId: 'p1', sheet: dwarf }], { ...hook, condition: 'frightened' }, { p1: 2 }, scriptedRng([17])).rolls[0].mode, 'normal');
+  const down = groupRoll([{ playerId: 'p1', sheet: { ...SAMPLE, hp: 0 } }], hook, {}, scriptedRng([]));
+  assert.equal(down.sheets[0].sheet.conditions, undefined, 'a hero who is down makes no save and gains nothing from it');
+});

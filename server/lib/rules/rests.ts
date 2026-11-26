@@ -4,6 +4,7 @@
  * features that act at the end of a Short Rest: Arcane Recovery and Magical Cunning. See docs/rules-design.md.
  */
 import { abilityModifier } from './abilities.ts';
+import { endOnLongRest } from './conditions.ts';
 import { rechargeResources, useResource } from './resources.ts';
 import { maxSpellLevel } from './spells.ts';
 import type { Rng } from './rng.ts';
@@ -47,7 +48,7 @@ export function shortRest(sheet: CharacterSheet, rng: Rng, { hitDice = 0 } = {},
 export function longRest(sheet: CharacterSheet, data: Srd = bundledSrd()): CharacterSheet {
   requireConscious(sheet);
   const rested = rechargeResources({
-    ...sheet,
+    ...endOnLongRest(sheet),
     hp: sheet.maxHp,
     hitDiceSpent: 0,
     exhaustion: Math.max(0, sheet.exhaustion - 1),

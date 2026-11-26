@@ -7,6 +7,7 @@
  */
 import { abilityCheck, checkBonus, dcAgainst, hasTool } from '../rules/checks.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
+import { hasCondition, withCondition } from '../rules/conditions.ts';
 import { resisted } from '../rules/defenses.ts';
 import { damageHero } from '../rules/dying.ts';
 import { monster } from '../rules/monsters.ts';
@@ -45,7 +46,8 @@ const peering = (hero: Hero, hook: Extract<RollHook, { kind: 'check' }>) => hero
 function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: boolean): D20 & { bonus: number; mode: Mode } {
   if (hook.kind === 'check') return abilityCheck(rng, hero.sheet, hook, { natural, advantage: helped || !!hook.advantage, disadvantage: !!hook.disadvantage || peering(hero, hook) });
   const bonus = hero.sheet.saveBonuses[hook.ability] + d20Modifier(hero.sheet);
-  const mode = modeOf(!!hook.advantage, !!hook.disadvantage);
+  const resilient = hook.condition === 'poisoned' && hero.sheet.traits.includes('dwarven-resilience'); // 5.2 Dwarven Resilience
+  const mode = modeOf(!!hook.advantage || resilient, !!hook.disadvantage || (hook.ability === 'dex' && hasCondition(hero.sheet, 'restrained')));
   return { ...rollD20(rng, bonus, mode, natural), bonus, mode };
 }
 
@@ -84,6 +86,13 @@ function applyDamage(heroes: Hero[], rolls: Roll[], hook: RollHook, rng: Rng): {
 
 const voteOf = (votes: Readonly<Record<string, number>>, hero: Hero, rng: Rng) => (Object.hasOwn(votes, hero.playerId) ? votes[hero.playerId] : rng.die(20));
 
+/** A failed save brings the hook's condition: for its minutes, or until a long rest. */
+function afflict(heroes: Hero[], rolls: Roll[], hook: RollHook): Hero[] {
+  if (hook.kind !== 'save' || !hook.condition) return heroes;
+  const until = hook.minutes ? { kind: 'time' as const, left: hook.minutes * 60 } : { kind: 'long-rest' as const };
+  return heroes.map((h, i) => (rolls[i].natural === null || rolls[i].success ? h : { ...h, sheet: withCondition(h.sheet, { condition: hook.condition!, until }) }));
+}
+
 /** Help (5.2): a hero proficient in the skill or tool gives the one who rolls Advantage. */
 const canHelp = (hero: Hero, hook: Extract<RollHook, { kind: 'check' }>) =>
   (!!hook.skill && hero.sheet.skills.includes(hook.skill)) || (!!hook.tool && hasTool(hero.sheet, hook.tool));
@@ -103,7 +112,8 @@ function bestRoll(heroes: Hero[], hook: Extract<RollHook, { kind: 'check' }>, vo
 export function groupRoll(heroes: Hero[], hook: RollHook, votes: Readonly<Record<string, number>>, rng: Rng): GroupRoll {
   if (hook.kind === 'check' && hook.mode === 'best') return bestRoll(heroes, hook, votes, rng);
   const rolls = heroes.map((h): Roll => (standing(h) ? rollFor(h, hook, voteOf(votes, h, rng), rng) : downRoll(h)));
-  const { sheets, line } = applyDamage(heroes, rolls, hook, rng);
+  const damaged = applyDamage(heroes, rolls, hook, rng);
+  const { sheets, line } = { ...damaged, sheets: afflict(damaged.sheets, rolls, hook) };
   const successes = rolls.filter((r) => r.success).length;
   return { rolls, success: successes * 2 >= heroes.length, sheets, lines: [...rolls.map((r) => lineOf(r, hook)), ...(line ? [line] : [])] };
 }

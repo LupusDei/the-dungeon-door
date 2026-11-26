@@ -21,7 +21,7 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
     exhaustion: 0, hitDiceLeft: 0, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0],
     resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true, dead: false,
     passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight,
-    gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0, resistances: [],
+    gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0, resistances: [], conditions: [],
   });
   assert.deepEqual([view.party[1].sight, view.party[1].darkvision], ['dim', 60], 'an elf sees the dark room dimly');
   assert.deepEqual(rulesView({ party: { ...party, sheets: { p1: { ...fighter, traits: ['dwarven-resilience'] } } }, combat: null, dungeon: null }, []).party[0].resistances, ['poison']);
@@ -49,7 +49,7 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual(ctx.party[1], {
     name: 'Cleo', level: 1, hp: wizard.hp, maxHp: wizard.maxHp, armorClass: wizard.armorClass, exhaustion: 0, slotsLeft: [1, 0, 0, 0, 0, 0, 0, 0, 0],
     passivePerception: 10 + wizard.skillBonuses.perception, passiveInsight: 10 + wizard.skillBonuses.insight, gp: wizard.gp,
-    items: wizard.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', '), dragging: false, dead: false, sees: 'clear',
+    items: wizard.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', '), dragging: false, dead: false, sees: 'clear', conditions: '',
   });
   assert.deepEqual([ctx.party[0].sees, ctx.time, ctx.light], ['dim', 'Day 1, 08:00', 'dim; no light carried']);
   const lit = rulesContext({ party: { ...party, lit: { source: 'lamp', holder: 'p2', left: 600 } }, combat: null, dungeon: d });
@@ -88,4 +88,17 @@ test('monsters to suggest: those a moderate fight for this party could afford, t
   assert.equal(xps[0], Math.max(...[...monsters().values()].map((m) => m.xp).filter((x) => x <= budget)));
   assert.equal(encounterBudget([3, 3], 'moderate'), 450);
   assert.equal(monsters().get(suitableMonsters([3, 3])[0])!.xp, 450, 'a monster worth the whole budget is in');
+});
+
+test('conditions show with how they end, in the API and to the DM', () => {
+  const carried = { ...fighter, conditions: [
+    { condition: 'poisoned' as const, until: { kind: 'time' as const, left: 2390 } },
+    { condition: 'poisoned' as const, until: { kind: 'time' as const, left: 5400 } },
+    { condition: 'frightened' as const, until: { kind: 'long-rest' as const } },
+    { condition: 'paralyzed' as const, until: { kind: 'save' as const, ability: 'con' as const, dc: 12 } },
+    { condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'sleight-of-hand', dc: 10 } },
+  ] };
+  const s = { party: { ...party, sheets: { p1: carried } }, combat: null, dungeon: null };
+  assert.deepEqual(rulesView(s, []).party[0].conditions.map((c) => c.ends), ['40 minutes', '1.5 hours', 'until a long rest', 'DC 12 CON save to end', 'DC 10 Sleight Of Hand to break free']);
+  assert.equal(rulesContext(s).party[0].conditions, 'poisoned (40 minutes), poisoned (1.5 hours), frightened (until a long rest), paralyzed (DC 12 CON save to end), restrained (DC 10 Sleight Of Hand to break free)');
 });

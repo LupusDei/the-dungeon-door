@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { ABILITIES } from './abilities.ts';
+import { TimedConditionSchema } from './conditions.ts';
 import { RuleViolation } from './violation.ts';
 
 const int = z.number().int();
@@ -51,6 +52,8 @@ export const CharacterSheetSchema = z.object({
   dead: z.boolean().optional(),
   /** Raised from the dead (Raise Dead): this much off every D20 Test, one less after each Long Rest (5.2). */
   revivalPenalty: int.min(0).max(4).optional(),
+  /** Conditions the hero carries outside a fight, each with how it ends (conditions.ts). */
+  conditions: z.array(TimedConditionSchema).optional(),
   /** Every skill's check bonus, proficient or not. */
   skillBonuses: z.record(z.string(), int),
   passivePerception: int,

@@ -9,6 +9,7 @@ import type { Monster } from './monsters.ts';
 import { d20Modifier } from './rests.ts';
 import { type D20, type Mode, modeOf, rollD20 } from './resolve.ts';
 import type { Rng } from './rng.ts';
+import { hasCondition } from './conditions.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { srd } from './srd.ts';
 
@@ -28,9 +29,12 @@ export function checkBonus(sheet: CharacterSheet, spec: CheckSpec): { bonus: num
   return { bonus: base + toolBonus + d20Modifier(sheet), advantage: tool && proficientSkill };
 }
 
+/** 5.2: a Poisoned or Frightened creature has Disadvantage on ability checks. */
+const hindered = (sheet: CharacterSheet) => hasCondition(sheet, 'poisoned') || hasCondition(sheet, 'frightened');
+
 export function abilityCheck(rng: Rng, sheet: CharacterSheet, spec: CheckSpec, options: CheckOptions = {}): Check {
   const { bonus, advantage } = checkBonus(sheet, spec);
-  const mode = modeOf(advantage || !!options.advantage, !!options.disadvantage);
+  const mode = modeOf(advantage || !!options.advantage, !!options.disadvantage || hindered(sheet));
   return { ...rollD20(rng, bonus, mode, options.natural), bonus, mode };
 }
 

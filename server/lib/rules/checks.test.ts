@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { heroSheet } from '../characters.ts';
 import { abilityModifier } from './abilities.ts';
 import { abilityCheck, checkBonus, dcAgainst, passiveScore } from './checks.ts';
+import { SAMPLE } from './sheet.fixture.ts';
 import { monster } from './monsters.ts';
 import { scriptedRng } from './rng.ts';
 
@@ -64,4 +65,12 @@ test('Influence (5.2): DC 15 or the monster\'s Intelligence, whichever is higher
   assert.equal(dcAgainst(monster('goblin-warrior'), { ability: 'cha', skill: 'persuasion' }), 15);
   for (const skill of ['deception', 'intimidation', 'performance', 'persuasion']) assert.equal(dcAgainst(monster('aboleth'), { ability: 'cha', skill }), 18);
   assert.equal(dcAgainst(monster('aboleth'), { ability: 'wis', skill: 'animal-handling' }), 18);
+});
+
+test('5.2: Poisoned or Frightened, a hero has Disadvantage on ability checks', () => {
+  const sick = { ...SAMPLE, conditions: [{ condition: 'poisoned' as const, until: { kind: 'long-rest' as const } }] };
+  const scared = { ...SAMPLE, conditions: [{ condition: 'frightened' as const, until: { kind: 'long-rest' as const } }] };
+  assert.equal(abilityCheck(scriptedRng([5, 15]), sick, { ability: 'str' }).mode, 'disadvantage');
+  assert.equal(abilityCheck(scriptedRng([5, 15]), scared, { ability: 'str' }).mode, 'disadvantage');
+  assert.equal(abilityCheck(scriptedRng([5]), SAMPLE, { ability: 'str' }).mode, 'normal');
 });

@@ -7,6 +7,7 @@
 import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
 import { type Combatant, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
+import { conditionsOf } from '../rules/conditions.ts';
 import { type LightLevel, monsterSight, sightOf } from '../rules/light.ts';
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
 import { monster } from '../rules/monsters.ts';
@@ -48,8 +49,12 @@ function foes(ids: readonly string[], light: LightLevel): Combatant[] {
   });
 }
 
-const heroOf = (playerId: string, sheet: CharacterSheet, light: LightLevel): Combatant =>
-  blindedIf({ ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' : 'up' }, sightOf(sheet, light) === 'none');
+/** The hero as a combatant, with the conditions it carries (rules/conditions.ts). */
+function heroOf(playerId: string, sheet: CharacterSheet, light: LightLevel): Combatant {
+  const carried = conditionsOf(sheet).map((c) => c.condition);
+  const c = { ...heroCombatant(playerId, sheet), status: sheet.hp === 0 ? 'stable' as const : 'up' as const, conditions: carried };
+  return blindedIf(c, !carried.includes('blinded') && sightOf(sheet, light) === 'none');
+}
 
 const blindLine = (all: Combatant[]) => {
   const blind = all.filter((c) => c.conditions.includes('blinded')).map((c) => c.name);

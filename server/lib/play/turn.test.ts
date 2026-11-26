@@ -302,3 +302,12 @@ test('foes waiting in the room keep wanderers off', () => {
   const turns = seeds.map((rng) => playTurn({ ...t, combat: null, party: { ...t.party, rng }, dungeon: { ...t.dungeon!, wander: 1700 } }, null, []));
   assert.ok(turns.every((x) => !x.lines.some((l) => l.startsWith('Wandering'))));
 });
+
+test('every turn outside a fight a netted hero tries to break free, and timed conditions wear off', () => {
+  const netted = { ...fighter, conditions: [{ condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'athletics', dc: 10 } }, { condition: 'poisoned' as const, until: { kind: 'time' as const, left: 600 } }] };
+  const t = playTurn(state({ party: party({ p1: netted, p2: rogue }) }), null, []);
+  assert.ok(t.lines.some((l) => /^Bryn (breaks free|is still Restrained) \(Athletics \d+ vs DC 10\)\.$/.test(l)));
+  assert.ok(t.lines.includes('Bryn is no longer Poisoned.'));
+  const rested = playTurn(state({ party: party({ p1: netted, p2: rogue }) }), { kind: 'rest', rest: 'short' }, []);
+  assert.ok(!rested.lines.some((l) => l.includes('Athletics')), 'no tries during a rest');
+});

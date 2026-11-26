@@ -8,6 +8,7 @@ import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
 import { groupRoll } from './checks.ts';
 import { arrival, claimTreasure, clearRoom, enter, partyLevel, waitingFoes, withAttitude } from './delve.ts';
+import { shakeOff } from './conditions.ts';
 import { afterHarm } from './dying.ts';
 import { fightRound, startFight, type FightEnd } from './fight.ts';
 import { foesNamed, type RollHook, type RulesHook } from './hooks.ts';
@@ -223,7 +224,8 @@ const ROUND_SECONDS = 6;
 /** The turn's time passes: the light burns (put out to rest, and the time it has left kept), and is lit where needed. */
 function elapse(t: RulesTurn, seconds: number, resting = false): RulesTurn {
   const ambient = ambientLight(t);
-  const timed = resting ? { party: { ...t.party, clock: clockOf(t.party) + seconds }, lines: [] } : passTime(t.party, seconds, ambient);
+  const shaken = t.combat || resting ? { party: t.party, lines: [] } : shakeOff(t.party);
+  const timed = resting ? { party: { ...shaken.party, clock: clockOf(t.party) + seconds }, lines: [] } : passTime(shaken.party, seconds, ambient);
   const lit = lightUp(timed.party, ambient);
-  return { ...t, party: lit.party, lines: [...t.lines, ...timed.lines, ...lit.lines] };
+  return { ...t, party: lit.party, lines: [...t.lines, ...shaken.lines, ...timed.lines, ...lit.lines] };
 }

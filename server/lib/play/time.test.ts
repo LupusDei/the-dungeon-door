@@ -74,3 +74,11 @@ test('how long a turn takes (original convention): ten minutes for most, an hour
   assert.equal(secondsFor({ kind: 'hazard', hazard: 'dehydration' }), 86400, 'a day without water');
   assert.equal(secondsFor({ kind: 'hazard', hazard: 'malnutrition', days: 2 }), 2 * 86400);
 });
+
+test('time wears conditions off, and says so', () => {
+  const sick = { ...fighter, conditions: [{ condition: 'poisoned' as const, until: { kind: 'time' as const, left: 900 } }] };
+  const half = passTime(party(sick), 600, 'bright');
+  assert.deepEqual([half.party.sheets.p1.conditions, half.lines], [[{ condition: 'poisoned', until: { kind: 'time', left: 300 } }], []]);
+  const well = passTime(party(sick), 900, 'bright');
+  assert.deepEqual([well.party.sheets.p1.conditions, well.lines], [undefined, ['Bryn is no longer Poisoned.']]);
+});

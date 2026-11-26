@@ -4,6 +4,7 @@
  * has no grid. When the place is not bright and nothing burns, the standing hero with the best light
  * lights it; when it burns out the next is lit, until the party has none left.
  */
+import { letTimePass } from '../rules/conditions.ts';
 import { areaLight, bestLight, kindle, type LightLevel, LIGHTS, type LightSource, outdoorLight } from '../rules/light.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { RulesHook } from './hooks.ts';
@@ -26,6 +27,19 @@ export const ambientLight = (s: RulesState): LightLevel =>
 /** What the party has to see by: bright where its light burns, otherwise the place's own light. */
 export const lightLevel = (s: RulesState): LightLevel => (s.party.lit ? 'bright' : ambientLight(s));
 
+const title = (c: string) => c[0].toUpperCase() + c.slice(1);
+
+/** Timed conditions wear down; each that runs out is told. */
+function wearOff(party: PartyState, seconds: number): Timed {
+  const lines: string[] = [];
+  const sheets = Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => {
+    const worn = letTimePass(s, seconds);
+    lines.push(...worn.ended.map((c) => `${s.name} is no longer ${title(c)}.`));
+    return [id, worn.sheet];
+  }));
+  return { party: { ...party, sheets }, lines };
+}
+
 const hours = (seconds: number) => `${seconds / HOUR} hour${seconds === HOUR ? '' : 's'}`;
 const verb = (source: LightSource) => (source === 'light-spell' ? 'casts' : 'lights a');
 
@@ -43,8 +57,9 @@ export function lightUp(party: PartyState, ambient: LightLevel): Timed {
 
 /** Time passes: the clock moves on and the light burns down, the next one lit as each goes out. */
 export function passTime(party: PartyState, seconds: number, ambient: LightLevel): Timed {
-  let now: PartyState = { ...party, clock: clockOf(party) + seconds };
-  const lines: string[] = [];
+  const worn = wearOff(party, seconds);
+  let now: PartyState = { ...worn.party, clock: clockOf(party) + seconds };
+  const lines: string[] = [...worn.lines];
   let remaining = seconds;
   while (now.lit && remaining > 0) {
     const burn = Math.min(now.lit.left, remaining);

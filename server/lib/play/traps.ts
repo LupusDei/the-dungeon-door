@@ -7,6 +7,7 @@
  * shows up there is original (CC0): DUNGEON_HAZARDS below.
  */
 import { passiveScore } from '../rules/checks.ts';
+import { type TimedCondition, withCondition } from '../rules/conditions.ts';
 import { resisted } from '../rules/defenses.ts';
 import { type LightLevel, sightOf } from '../rules/light.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
@@ -72,6 +73,23 @@ function damageAll(rng: Rng, trap: Trap, taking: readonly Taking[]): { heroes: H
   };
 }
 
+const HOUR = 3600;
+/**
+ * What a trap's condition becomes on the hero outside a fight: the net's Restrained lasts until they break
+ * free (its escape check, tried each turn); the needle's Poisoned lasts an hour (5.2). Prone is gone as soon
+ * as they stand, so it is not kept.
+ */
+function lastingCondition(trap: Trap): TimedCondition | null {
+  if (trap.condition === 'Restrained' && trap.escape) return { condition: 'restrained', until: { kind: 'escape', ...trap.escape } };
+  return trap.condition === 'Poisoned' ? { condition: 'poisoned', until: { kind: 'time', left: HOUR } } : null;
+}
+
+/** Those who failed the save keep the trap's lasting condition. */
+function afflicted(heroes: Hero[], saved: (i: number) => boolean, trap: Trap): Hero[] {
+  const lasting = lastingCondition(trap);
+  return lasting ? heroes.map((h, i) => (saved(i) ? h : { ...h, sheet: withCondition(h.sheet, lasting) })) : heroes;
+}
+
 /** The trap goes off on these heroes: their saves, the damage, and any condition on a failure. */
 function trigger(party: PartyState, trap: Trap, targets: readonly Hero[], votes: Votes, rng: Rng): { party: PartyState; lines: string[] } {
   const saves = trap.save ? groupRoll([...targets], { kind: 'save', ability: trap.save.ability, dc: trap.save.dc }, votes, rng) : null;
@@ -80,6 +98,7 @@ function trigger(party: PartyState, trap: Trap, targets: readonly Hero[], votes:
   const hurtHeroes = damageAll(rng, trap, targets.map((hero, i) => ({ hero, share: saved(i) ? onSave : 1 })));
   const failed = targets.filter((_, i) => !saved(i)).map((h) => h.sheet.name);
   const condition = trap.condition && failed.length ? [conditionLine(trap, failed)] : [];
+  hurtHeroes.heroes = afflicted(hurtHeroes.heroes, saved, trap);
   return { party: withSheets(party, hurtHeroes.heroes, rng), lines: [...(saves ? saves.lines : []), ...hurtHeroes.lines, ...condition] };
 }
 

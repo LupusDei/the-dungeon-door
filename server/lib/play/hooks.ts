@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { ABILITIES, type Ability } from '../rules/abilities.ts';
+import { type Condition, CONDITIONS } from '../rules/conditions.ts';
 import { HEALING_POTIONS, items } from '../rules/items.ts';
 import { monsters } from '../rules/monsters.ts';
 import type { HazardKind } from '../rules/hazards.ts';
@@ -19,7 +20,8 @@ export type RulesHook =
     /** group: every hero rolls, half must succeed; best: the best hero rolls, the others Help. */
     mode?: 'group' | 'best' | null;
   } & Edge
-  | { kind: 'save'; ability: Ability; dc: number; damage?: string | null; damageType?: string | null } & Edge
+  /** condition: what a failed save brings, for `minutes` (none: until a long rest). */
+  | { kind: 'save'; ability: Ability; dc: number; damage?: string | null; damageType?: string | null; condition?: SaveCondition | null; minutes?: number | null } & Edge
   | { kind: 'fight'; monsters: string[] }
   | { kind: 'rest'; rest: 'short' | 'long' }
   | { kind: 'move'; exit: string }
@@ -63,13 +65,21 @@ const hazardSchema = z.discriminatedUnion('hazard', [
   z.object({ kind: z.literal('hazard'), hazard: z.literal('malnutrition'), days: amount(60) }),
 ]);
 
+/** Conditions a DM's save can bring (Exhaustion has its own levels). */
+export const SAVE_CONDITIONS = CONDITIONS.filter((c) => c !== 'exhaustion') as Exclude<Condition, 'exhaustion'>[];
+export type SaveCondition = Exclude<Condition, 'exhaustion'>;
+const MINUTES_IN_A_DAY = 1440;
+
 const HookSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('check'), ability, skill: z.string().refine((s) => srd().skills.has(s)).nullish(),
     tool: z.string().refine((t) => items().get(t)?.kind === 'tool').nullish(),
     dc: dc.nullish(), against: z.string().refine(isMonster).nullish(), mode: z.enum(['group', 'best']).nullish(), ...edge,
   }).refine((h) => typeof h.dc === 'number' || typeof h.against === 'string'),
-  z.object({ kind: z.literal('save'), ability, dc, damage: z.string().regex(DICE).nullish(), damageType: z.string().nullish(), ...edge }),
+  z.object({
+    kind: z.literal('save'), ability, dc, damage: z.string().regex(DICE).nullish(), damageType: z.string().nullish(),
+    condition: z.enum(SAVE_CONDITIONS).nullish(), minutes: amount(MINUTES_IN_A_DAY).nullish(), ...edge,
+  }),
   z.object({ kind: z.literal('fight'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).refine((ids) => ids.length > 0) }),
   z.object({ kind: z.literal('rest'), rest: z.enum(['short', 'long']) }),
   z.object({ kind: z.literal('move'), exit: z.string().min(1) }),

@@ -3,6 +3,7 @@
  * (docs/dungeon-master.md). Plain projections of the stored state.
  */
 import { passiveScore } from '../rules/checks.ts';
+import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
 import { load } from '../rules/inventory.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
@@ -39,7 +40,20 @@ export interface HeroView {
   sight: Sight; darkvision: number;
   /** Damage types the hero resists (species traits). */
   resistances: string[];
+  /** Conditions carried outside a fight, each with how it ends: "1 hour", "until a long rest", "DC 10 Athletics to break free". */
+  conditions: { condition: string; ends: string }[];
 }
+
+const WHEN: { [K in TimedCondition['until']['kind']]: (u: Extract<TimedCondition['until'], { kind: K }>) => string } = {
+  time: (u) => (u.left >= 3600 ? `${Math.ceil(u.left / 360) / 10} hours` : `${Math.ceil(u.left / 60)} minutes`),
+  'long-rest': () => 'until a long rest',
+  save: (u) => `DC ${u.dc} ${u.ability.toUpperCase()} save to end`,
+  escape: (u) => `DC ${u.dc} ${u.skill.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')} to break free`,
+};
+const ends = (c: TimedCondition) => (WHEN[c.until.kind] as (u: TimedCondition['until']) => string)(c.until);
+const conditionViews = (s: CharacterSheet) => conditionsOf(s).map((c) => ({ condition: c.condition, ends: ends(c) }));
+/** "poisoned (1 hours), restrained (DC 10 Athletics to break free)". */
+const conditionsLine = (s: CharacterSheet) => conditionViews(s).map((c) => `${c.condition} (${c.ends})`).join(', ');
 
 /** The party's light: what it is, who carries it, minutes left; null when nothing burns. */
 export interface LitView { name: string; holder: string; minutesLeft: number }
@@ -72,7 +86,7 @@ const heroView = (playerId: string, s: CharacterSheet, light: LightLevel): HeroV
   exhaustion: s.exhaustion, hitDiceLeft: s.level - s.hitDiceSpent, slotsLeft: slotsLeft(s),
   resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
   ...passives(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
-  ...load(s), sight: sightOf(s, light), darkvision: darkvision(s), resistances: heroResistances(s),
+  ...load(s), sight: sightOf(s, light), darkvision: darkvision(s), resistances: heroResistances(s), conditions: conditionViews(s),
 });
 
 const passives = (s: CharacterSheet) => ({
@@ -111,6 +125,8 @@ export interface RulesContext {
     name: string; level: number; hp: number; maxHp: number; armorClass: number; exhaustion: number; slotsLeft: number[];
     passivePerception: number; passiveInsight: number; gp: number; items: string; dragging: boolean; dead: boolean;
     sees: Sight;
+    /** "poisoned (40 minutes)"; "" for none. */
+    conditions: string;
   }[];
   /** The clock: "Day 1, 08:40". */
   time: string;
@@ -154,7 +170,7 @@ export function rulesContext(state: RulesState): RulesContext {
   return {
     party: sheets.map((s) => ({
       name: s.name, level: s.level, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass, exhaustion: s.exhaustion, slotsLeft: slotsLeft(s),
-      ...passives(s), gp: s.gp, items: itemsLine(s), dragging: load(s).dragging, dead: s.dead === true, sees: sightOf(s, light),
+      ...passives(s), gp: s.gp, items: itemsLine(s), dragging: load(s).dragging, dead: s.dead === true, sees: sightOf(s, light), conditions: conditionsLine(s),
     })),
     time: clockLabel(clockOf(party)),
     light: lightLine(state),

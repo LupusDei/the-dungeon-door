@@ -4,6 +4,7 @@
  * area the party is in or it doesn't; the radii are kept for the narration. The adventure's clock counts
  * seconds from 8 in the morning of day 1 (an original convention, CC0).
  */
+import { hasCondition } from './conditions.ts';
 import type { Dungeon } from './dungeon.ts';
 import type { Monster } from './monsters.ts';
 import { held, removeItem } from './inventory.ts';
@@ -65,7 +66,8 @@ const PLAIN_SIGHT: Readonly<Record<LightLevel, Sight>> = { bright: 'clear', dim:
 /** 5.2: darkvision sees dim light as bright and darkness as dim light. */
 export const seeingIn = (level: LightLevel, darkvisionFeet: number): Sight => (darkvisionFeet > 0 ? DARKVISION_SIGHT : PLAIN_SIGHT)[level];
 
-export const sightOf = (sheet: CharacterSheet, level: LightLevel): Sight => seeingIn(level, darkvision(sheet));
+/** What the hero sees in this light; a Blinded hero sees nothing. */
+export const sightOf = (sheet: CharacterSheet, level: LightLevel): Sight => (hasCondition(sheet, 'blinded') ? 'none' : seeingIn(level, darkvision(sheet)));
 
 /** A monster sees by blindsight or truesight in any light, otherwise by darkvision or plain sight. */
 export const monsterSight = (m: Pick<Monster, 'senses'>, level: LightLevel): Sight =>

@@ -13,6 +13,9 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   dungeon). Leave "rules" null for a pure story choice. DCs: 5 very easy, 10 easy, 15 medium, 20 hard, 25 very
   hard, 30 nearly impossible. A hook has every field: fill the ones its kind uses (as in these examples) and
   leave the others empty ("", 0, false, [] or "none").
+- A save may bring a condition on a failure: "condition":"poisoned" (any SRD 5.2 condition but exhaustion) with
+  "minutes" for how long (0: until a long rest). The engine tracks it: Poisoned or Frightened heroes have
+  Disadvantage on checks, a Blinded one sees nothing, a Restrained one tries to break free each turn.
 - Checks: pick the skill (an SRD 5.2 skill id) and, where a tool does the work, "tool" ("thieves-tools"). Use
   "mode":"best" when one hero acts and the others can only help (picking a lock), "group" when everyone must
   (sneaking past together). Set "advantage" or "disadvantage" for circumstances. Against a creature, give
@@ -61,7 +64,7 @@ function heroLine(h: RulesContext['party'][number]): string {
   const hp = h.dead ? 'DEAD (only Revivify, Raise Dead or the like brings them back)' : h.hp === 0 ? `DOWN (0/${h.maxHp} HP)` : `${h.hp}/${h.maxHp} HP`;
   const passive = `, passive Perception ${h.passivePerception}, passive Insight ${h.passiveInsight}`;
   const goods = `, ${h.gp} gp${h.dragging ? ', overloaded (Speed 5 ft)' : ''}; carries ${h.items || 'nothing'}`;
-  return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}${SEES[h.sees]}`;
+  return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}${h.conditions ? `; ${h.conditions}` : ''}${SEES[h.sees]}`;
 }
 
 function combatLine(c: NonNullable<RulesContext['combat']>): string {

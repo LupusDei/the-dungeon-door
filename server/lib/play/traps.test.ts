@@ -116,3 +116,14 @@ test('resistance halves the damage of a trap of that type, part by part (a dwarf
   const both = /^Damage (\d+) bludgeoning \+ (\d+) piercing: Bryn takes (\d+)$/.exec(pit.lines[1])!;
   assert.equal(Number(both[3]), Number(both[1]) + Number(both[2]), 'nothing resisted');
 });
+
+test('the condition of a trap stays on the hero: the net until they break free, the poison of the needle for an hour; Prone is not kept', () => {
+  const net = springTrap(party(bryn), 'falling-net', 1, { p1: 2 });
+  assert.deepEqual(net.party.sheets.p1.conditions, [{ condition: 'restrained', until: { kind: 'escape', ability: 'str', skill: 'athletics', dc: 10 } }]);
+  const needle = springTrap(party(bryn), 'poisoned-needle', 1, { p1: 1 });
+  assert.deepEqual(needle.party.sheets.p1.conditions, [{ condition: 'poisoned', until: { kind: 'time', left: 3600 } }]);
+  const dodged = springTrap(party(bryn), 'falling-net', 1, { p1: 20 });
+  assert.equal(dodged.party.sheets.p1.conditions, undefined, 'a save avoids it');
+  const stone = springTrap({ ...party({ ...bryn, hp: 200, maxHp: 200 }) }, 'rolling-stone', 1, { p1: 1 });
+  assert.equal(stone.party.sheets.p1.conditions, undefined);
+});

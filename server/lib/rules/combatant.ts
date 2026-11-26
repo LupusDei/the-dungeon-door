@@ -6,11 +6,9 @@ import { d20Modifier } from './rests.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { type Srd, type SrdWeapon, srd as bundledSrd } from './srd.ts';
 
-export const CONDITIONS = [
-  'blinded', 'charmed', 'deafened', 'exhaustion', 'frightened', 'grappled', 'incapacitated', 'invisible',
-  'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'unconscious',
-] as const;
-export type Condition = (typeof CONDITIONS)[number];
+import type { Condition } from './conditions.ts';
+
+export { CONDITIONS, type Condition } from './conditions.ts';
 
 export interface Attack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[] }
 

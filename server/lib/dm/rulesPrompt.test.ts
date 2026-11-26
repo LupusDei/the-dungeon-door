@@ -4,8 +4,8 @@ import type { RulesContext, RulesResults } from './types.ts';
 import { RULES_INSTRUCTIONS, rulesBlock, resultsBlock } from './rulesPrompt.ts';
 
 const ctx: RulesContext = {
-  party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false, dead: false, sees: 'clear' },
-    { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true, dead: false, sees: 'clear' }],
+  party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false, dead: false, sees: 'clear', conditions: '' },
+    { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true, dead: false, sees: 'clear', conditions: '' }],
   combat: { round: 3, combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up' }, { name: 'Ogre', side: 'foes', hp: 0, maxHp: 68, status: 'dead' }] },
   dungeon: { kind: 'Lair', area: 'Grand chamber', purpose: 'Throne room', exits: [{ id: 'r2', connection: 'locked-door', leadsTo: 'Vault' }, { id: 'x1', connection: 'open-passage', leadsTo: null }], waiting: null },
   monsters: ['ogre', 'goblin-warrior'],
@@ -62,4 +62,10 @@ test('a hero who sees dimly or not at all is marked, so the story shows only wha
   assert.match(sees('none'), /; CANNOT SEE \(darkness\)$/);
   assert.match(RULES_INSTRUCTIONS, /Describe\s+only what the heroes can see/);
   assert.match(RULES_INSTRUCTIONS, /wandering monsters every half\s+hour/);
+  assert.match(RULES_INSTRUCTIONS, /"condition":"poisoned"/);
+});
+
+test('conditions a hero carries are told with how they end', () => {
+  const line = rulesBlock({ ...ctx, party: [{ ...ctx.party[0], conditions: 'poisoned (40 minutes)' }], combat: null, dungeon: null }).split('\n')[1];
+  assert.match(line, /; poisoned \(40 minutes\)$/);
 });

@@ -5,6 +5,7 @@
  * hookFromFlat turns that back into the hook the engine checks (play/hooks.ts parseHook).
  */
 import { z } from 'zod';
+import { SAVE_CONDITIONS } from '../play/hooks.ts';
 
 const NONE = 'none';
 
@@ -28,7 +29,8 @@ export const FlatHook = z.object({
   trap: z.string().describe('trap: an SRD 5.2 trap id, e.g. "poisoned-needle"; "" otherwise'),
   hazard: z.enum([NONE, 'falling', 'burning', 'suffocation', 'extreme-cold', 'extreme-heat', 'dehydration', 'malnutrition']).describe('hazard: which one; "none" otherwise'),
   feet: z.number().describe('hazard falling: how far; 0 otherwise'),
-  minutes: z.number().describe('hazard suffocation: how long without air; 0 otherwise'),
+  condition: z.enum([NONE, ...SAVE_CONDITIONS]).describe('save: a condition a failure brings, e.g. "poisoned"; "none" otherwise'),
+  minutes: z.number().describe('hazard suffocation: how long without air; save with a condition: how many minutes it lasts (0: until a long rest); 0 otherwise'),
   hours: z.number().describe('hazard extreme-cold or extreme-heat: hours exposed; 0 otherwise'),
   days: z.number().describe('hazard malnutrition: days without food; 0 otherwise'),
 });

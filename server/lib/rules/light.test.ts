@@ -82,3 +82,7 @@ test('a monster sees in the dark by blindsight or truesight, or as dim light by 
   assert.equal(monsterSight(senses(0, 0, 120), 'dark'), 'clear');
   assert.equal(monsterSight(senses(0, 0, 0), 'dim'), 'dim');
 });
+
+test('a Blinded hero sees nothing, even in bright light', () => {
+  assert.equal(sightOf({ ...human, conditions: [{ condition: 'blinded', until: { kind: 'time', left: 60 } }] }, 'bright'), 'none');
+});

@@ -230,6 +230,11 @@ test('a hero at half HP or less drinks its least healing potion as a Bonus Actio
   assert.ok(!fine.lines.some((l) => l.includes('drinks')), 'above half: no potion');
   const exact = fightRound(p, patch(combat, { p1: { hp: 6, maxHp: 12 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
   assert.ok(exact.lines.some((l) => l.startsWith('Bryn drinks')), 'exactly half: a potion');
+  const one = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-healing', name: 'Potion of Healing', count: 1 }] };
+  const single = startFight(party({ p1: one, p2: wizard }), ['goblin-warrior']);
+  const last = fightRound(single.party, patch(single.combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
+  assert.ok(last.lines.some((l) => l.startsWith('Bryn drinks')), 'the last potion too');
+  assert.equal(last.party.sheets.p1.equipment.some((e) => e.id === 'potion-of-healing'), false);
   const dry = fightRound(party(), patch(startFight(party(), ['goblin-warrior']).combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), {});
   assert.ok(!dry.lines.some((l) => l.includes('drinks')), 'no potion, none drunk');
   const unvoted = fightRound(p, calm, {});
@@ -262,4 +267,12 @@ test('in the dark whoever cannot see fights Blinded: darkvision, blindsight or t
     assert.equal(Object.values(lit.combat.combatants).some((c) => c.conditions.length > 0), false, light);
     assert.equal(lit.lines.length, 1);
   }
+});
+
+test('a hero brings its conditions into a fight (a Poisoned hero attacks with Disadvantage)', () => {
+  const sick = { ...heroSheet({ id: 'h', name: 'Ann', race: 'human', characterClass: 'fighter' }), conditions: [{ condition: 'poisoned' as const, until: { kind: 'time' as const, left: 600 } }] };
+  const { combat } = startFight({ version: 1, rng: 3, sheets: { p1: sick } }, ['bandit'], 'dark');
+  assert.deepEqual(combat.combatants.p1.conditions, ['poisoned', 'blinded']);
+  const blind = { ...sick, conditions: [{ condition: 'blinded' as const, until: { kind: 'long-rest' as const } }] };
+  assert.deepEqual(startFight({ version: 1, rng: 3, sheets: { p1: blind } }, ['bandit'], 'dark').combat.combatants.p1.conditions, ['blinded'], 'not twice');
 });
