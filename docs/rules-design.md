@@ -18,7 +18,7 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   character.ts               character generation: choices -> CharacterSheet
   sheet.ts                   the CharacterSheet type and its stored (JSON) shape
   violation.ts               RuleViolation: a choice the rules forbid
-  combat/…  (PR B)           initiative, attacks, damage, saves, conditions, scenes
+  dice, monsters, combatant, resolve, encounter, scene (PR B): combat
   dungeon/… (PR C)           fixed room graph or explore-as-you-go, stocking, encounters, loot
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
 ```
@@ -134,8 +134,14 @@ choices nested inside equipment options (kept as `pendingChoices`).
 - Monsters load from `monsters.json` into the same combatant shape as heroes.
 - Encounters use the SRD 5.2 XP budget per character level (low, moderate, high) and the CR-to-XP
   table.
-- A scene state machine: `setup → round(turn…) → ended(victory | defeat | fled)`, where each player
-  vote resolves as a roll as above.
+- A scene state machine: `startCombat → round(turn…) → victory | defeat`, where each player vote
+  resolves as a roll as above (`playRound(state, votes)`).
+
+As built (PR B): `dice.ts`, `monsters.ts`, `combatant.ts`, `resolve.ts`, `encounter.ts`, `scene.ts`.
+Simplifications, for later: one action per turn (bonus actions, reactions and movement are not
+modelled), conditions have no durations, monsters use attack-roll actions only (breath weapons and
+other save-based actions are left to the DM), Multiattack is one attack, fleeing is not an action
+yet, and spells are not yet castable in combat (the sheet has the DC and attack bonus they will use).
 
 ## Dungeons (PR C)
 
