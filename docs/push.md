@@ -45,31 +45,25 @@ content kept:
 
 ## Turning it on
 
-Nothing is sent until the server holds an APNs key; until then `GET /api/catalog` says `push: false` and
-the app never asks leave to notify. To turn it on:
+Nothing is sent unless the server holds an APNs key. `GET /api/catalog` says so (`push`), and the app asks
+leave to notify only when it is true. Three things make it work, and all three are in place:
 
-1. **A push key.** In the Apple Developer portal, Certificates, Identifiers & Profiles, Keys: create a key
-   with "Apple Push Notifications service (APNs)" ticked, and download the `.p8` (once only). One key
-   serves every app of the team, so a key made for another app works here too.
-2. **The app may take pushes.** The App ID `com.jmm.the-dungeon-door` needs the Push Notifications
-   capability, the provisioning profile regenerated to carry it (`fastlane match appstore --force`), and
-   this in `ios/project.yml` under the target (it writes `DungeonDoor.entitlements`):
-
-   ```yaml
-       entitlements:
-         path: DungeonDoor/DungeonDoor.entitlements
-         properties:
-           aps-environment: development
-   ```
-
-   It is left out until the profile carries the entitlement: with it and an old profile, the TestFlight
-   build does not sign.
+1. **A push key.** An APNs auth key (`.p8`) from the Apple Developer portal (Certificates, Identifiers &
+   Profiles, Keys, with "Apple Push Notifications service (APNs)" ticked). One key serves every app of the
+   team; this server uses the team's existing one.
+2. **The app may take pushes.** The App ID `com.jmm.the-dungeon-door` has the Push Notifications
+   capability, the App Store provisioning profile carries `aps-environment: production`, and
+   `ios/project.yml` gives the app the entitlement: `development` for a build run from Xcode,
+   `production` for a Release build (`APS_ENVIRONMENT`).
 3. **The server holds the key.** On Vercel: `APNS_KEY_ID` (the key's id), `APNS_TEAM_ID` (`2BRYAM5Q52`),
    `APNS_KEY` (the `.p8` file's text, or that text base64-encoded) and, only for another bundle id,
-   `APNS_TOPIC`. Deploy.
+   `APNS_TOPIC`. They take effect at the next deploy. Removing `APNS_KEY` and deploying turns pushes off.
 
 Builds run from Xcode register as `sandbox`, TestFlight and App Store builds as `production`; the server
 sends each to the right Apple host. The simulator on an Intel Mac gets no device token.
+
+A push to a made-up token tells whether Apple accepts the key for this app without needing a phone: Apple
+answers `BadDeviceToken` when the key, team and bundle id are right, and a 403 when they are not.
 
 ## Checking it
 
