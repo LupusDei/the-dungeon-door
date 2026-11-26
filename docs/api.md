@@ -27,6 +27,7 @@ DM team can add archetypes without an app release.
   "temperaments": [{ "id": "brave", "name": "Brave", "blurb": "…" }],
   "genders":      [{ "id": "female", "name": "Female" }],
   "alignments":   [{ "id": "chaotic-good", "name": "Chaotic Good" }],
+  "backgrounds":  [{ "id": "sage", "name": "Sage" }],
   "dungeonMasters": [{
     "id": "chronicler", "name": "The Chronicler", "tagline": "…", "description": "…",
     "symbol": "book.closed", "accent": "#C9A227"
@@ -34,6 +35,7 @@ DM team can add archetypes without an app release.
 }
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
+`races`, `classes` and `backgrounds` are exactly the SRD 5.2 (2024) species, classes and backgrounds.
 
 ## Characters
 
@@ -47,18 +49,52 @@ Character {
   description: string   // 0–600 chars, player-written look ("scar over left eye, red braid")
   appearance: string | null   // DM-embellished visual description, reused in scene art
   portraitUrl: string | null
+  sheet: CharacterSheet           // the rules engine's numbers; always set in responses (see below)
   createdAt: string; updatedAt: string
 }
+
+CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see server/lib/rules/sheet.ts
+  version: 1
+  name: string; level: number /* 1–20 */; xp: number
+  classId: string; speciesId: string; backgroundId: string; subclassId: string | null
+  size: string; speed: number     // feet
+  abilityScores: { str, dex, con, int, wis, cha: number }
+  proficiencyBonus: number
+  maxHp: number; hp: number; armorClass: number
+  hitDiceSpent: number            // of one per level; all come back on a Long Rest
+  exhaustion: number              // 0–6 (5.2: −2 per level to d20 tests, −5 ft speed per level; 6 = dead)
+  savingThrows: string[]; saveBonuses: { str, dex, …: number }
+  skills: string[]; skillBonuses: { [skillId]: number }; passivePerception: number
+  equipment: [{ id, name, count }]; gp: number
+  traits: string[]; feat: string; feats: string[]; features: string[]
+  resourcesUsed: { [resourceId]: number }     // Rage, Second Wind, … spent since their rest
+  spellcasting: null | {
+    ability: string; saveDc: number; attackBonus: number
+    slots: number[9]; expended: number[9]; cantrips: string[]; prepared: string[]
+    concentratingOn: string | null
+  }
+  … plus a few bookkeeping fields (abilityRolls, hpRolls, otherProficiencies, pendingChoices)
+}
 ```
+
+The app never sends the sheet: the server builds it with the rules engine and keeps it.
 
 - `POST /api/portrait` body `{ character: Character-ish (no ids needed), previousAppearance?: string, note?: string }`
   → `{ appearance: string, portraitUrl: string }`. Embellishes the player's description with the
   house art style and the character's race/class/etc., generates a portrait, stores it in Blob.
   `note` is an optional tweak ("make the armour darker") applied on top of `previousAppearance`
   for re-rolls. Slow (10–40 s); the app shows a forging animation.
-- `PUT /api/characters` body `Character` (ownerId is ignored, taken from `x-dd-player`) → `Character`.
-  Upsert by id; only the owner can update.
-- `GET /api/characters` → `{ characters: Character[] }` (mine, newest first).
+- `PUT /api/characters` body `Character` plus optional `backgroundId` (ownerId and `sheet` are ignored;
+  ownerId is taken from `x-dd-player`) → `Character`. Upsert by id; only the owner can update.
+  - A new hero gets a level-1 sheet from the engine: its species (`race`), class and background
+    (`backgroundId`, or one picked for it), standard array scores best-first to the class's saving
+    throws, the background's +2/+1, starting gear and spells. The same id always builds the same hero.
+  - Saving again keeps the sheet (level, XP, HP…). Renaming renames the sheet. Changing race, class or
+    background rebuilds it, but only at level 1: a levelled hero gets 400.
+  - Old ids still accepted and mapped: `half-orc` → `orc`, `half-elf` → `elf` (SRD 5.2 has neither).
+- `GET /api/characters` → `{ characters: Character[] }` (mine, newest first). Heroes saved before the
+  rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
+  the upgrade is stored the next time the hero is saved.
 - `DELETE /api/characters?id=…` → `{ ok: true }`.
 
 ## Games
