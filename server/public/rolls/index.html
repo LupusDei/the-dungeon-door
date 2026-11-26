@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What your roll means — The Dungeon Door</title>
+<meta name="description" content="Every vote in The Dungeon Door comes with the roll of a twenty-sided die. What the number means, when it matters, and how your hero's skill changes the odds.">
+<meta property="og:title" content="What your roll means — The Dungeon Door">
+<meta property="og:description" content="High is good, low is trouble. The rest, with a die you can roll.">
+<meta property="og:image" content="https://the-dungeon-door.vercel.app/media/og.jpg">
+<meta name="theme-color" content="#120e0a">
+<link rel="icon" href="/media/favicon.png">
+<link rel="apple-touch-icon" href="/media/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Spectral:ital,wght@0,400;0,500;1,400&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+/* One idea carries the page: a die, and a track of its twenty faces split where your hero's skill puts the line. */
+main { overflow-x: clip; }
+.opening { position: relative; }
+.opening::before { content: ""; position: absolute; inset: 0; background: radial-gradient(760px 460px at 78% 34%, rgba(88, 52, 24, .5), transparent 70%); pointer-events: none; }
+.opening .wrap { position: relative; display: grid; gap: 28px; padding-block: 52px 20px; align-items: center; }
+@media (min-width: 860px) { .opening .wrap { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: 48px; padding-block: 76px 28px; } }
+.opening h1 { font: 700 clamp(2.3rem, 6.4vw, 4rem)/1.04 var(--display); letter-spacing: .01em; }
+.opening .simple { display: grid; gap: 14px; margin-top: 22px; max-width: 34ch; }
+.opening .simple p { font: 400 clamp(1.2rem, 2.5vw, 1.5rem)/1.42 var(--prose); color: var(--fg); }
+
+/* The die */
+.die { justify-self: center; display: grid; gap: 12px; justify-items: center; }
+.die button { all: unset; cursor: pointer; display: block; width: min(56vw, 240px); aspect-ratio: 1; border-radius: 28px; -webkit-tap-highlight-color: transparent; }
+.die button:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
+.die svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 18px 34px rgba(0, 0, 0, .65)) drop-shadow(0 0 34px rgba(217, 120, 40, .18)); }
+.die .face { fill: #1d1610; stroke: var(--gold); stroke-width: 2.4; stroke-linejoin: round; }
+.die .facet { fill: none; stroke: var(--gold); stroke-opacity: .5; stroke-width: 1.4; stroke-linecap: round; }
+.die .lit { fill: #2a2018; }
+.die text { font: 700 46px/1 var(--body); fill: var(--fg); text-anchor: middle; dominant-baseline: central; font-variant-numeric: tabular-nums; }
+.die[data-face="20"] text { fill: var(--gold-bright); }
+.die[data-face="1"] text { fill: var(--ember); }
+.die .hint { color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: no-preference) {
+  .die.rolling svg { animation: tumble .62s cubic-bezier(.3, .7, .3, 1); }
+  @keyframes tumble { 0% { transform: rotate(0) scale(1); } 35% { transform: rotate(-22deg) scale(.93); } 70% { transform: rotate(14deg) scale(1.04); } 100% { transform: rotate(0) scale(1); } }
+}
+
+/* The bench: the sum, the track, the two dials */
+.bench { padding-block: 18px 0; }
+.bench .wrap { display: grid; gap: 22px; }
+.sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font: 600 clamp(1.5rem, 4.6vw, 2.5rem)/1.15 var(--body); font-variant-numeric: tabular-nums; }
+.sum .part { display: inline-grid; justify-items: center; gap: 4px; }
+.sum .part small { font: 500 12.5px/1.2 var(--body); color: var(--muted); white-space: nowrap; }
+.sum .op { color: var(--muted); font-weight: 400; }
+.sum .gap { flex-basis: 100%; height: 0; }
+@media (min-width: 700px) { .sum .gap { display: none; } }
+.verdict { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 10px; border-radius: 99px; border: 1.5px solid; font: 600 1rem/1.2 var(--body); align-self: center; }
+.verdict svg { width: 18px; height: 18px; flex: none; }
+.verdict.yes { color: #a9dccd; border-color: var(--verdigris); background: rgba(116, 179, 161, .12); }
+.verdict.no { color: #ffb59a; border-color: var(--ember); background: rgba(221, 110, 69, .12); }
+.verdict.crit { color: var(--gold-bright); border-color: var(--gold); background: rgba(217, 166, 73, .14); }
+
+.track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; }
+@media (min-width: 700px) { .track { grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 6px; } }
+.cell { position: relative; aspect-ratio: 1; display: grid; place-items: center; border-radius: 9px; font: 600 clamp(12px, 2.6vw, 15px)/1 var(--body); font-variant-numeric: tabular-nums; border: 1.5px solid var(--line); color: var(--muted); background: transparent; }
+/* Success is a filled face, falling short a hollow one: the split never rests on colour alone. */
+.cell.yes { background: rgba(116, 179, 161, .26); border-color: var(--verdigris); color: var(--fg); }
+.cell.no { border-style: dashed; border-color: rgba(221, 110, 69, .6); }
+.cell.crit { background: rgba(217, 166, 73, .3); border-color: var(--gold); color: var(--gold-bright); }
+.cell.rolled { outline: 3px solid var(--gold-bright); outline-offset: 2px; color: #fff; z-index: 1; }
+.key { display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--muted); font-size: 14.5px; align-items: center; }
+.key span { display: inline-flex; align-items: center; gap: 8px; }
+.key i { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid; flex: none; }
+.key .yes i { background: rgba(116, 179, 161, .26); border-color: var(--verdigris); }
+.key .no i { border-style: dashed; border-color: rgba(221, 110, 69, .7); }
+.key .crit i { background: rgba(217, 166, 73, .3); border-color: var(--gold); }
+.key .rolled i { border-color: var(--gold-bright); border-width: 2.5px; }
+.odds { font: 400 1.12rem/1.5 var(--prose); color: var(--fg); max-width: 62ch; }
+.odds strong { font-weight: 500; color: var(--gold-bright); }
+
+.dials { display: grid; gap: 16px 28px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+@media (min-width: 860px) { .dials { grid-template-columns: auto auto 1fr; align-items: end; } }
+.dial { display: grid; gap: 8px; min-width: 0; }
+.dial > span { font-size: 13.5px; color: var(--muted); }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: 600 14.5px/1 var(--body); padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; font-variant-numeric: tabular-nums; }
+.seg button:hover { border-color: var(--gold); }
+.seg button[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
+.seg button small { font-weight: 500; opacity: .8; margin-left: 5px; }
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper button { width: 40px; height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 600 18px/1 var(--body); cursor: pointer; }
+.stepper button:hover { border-color: var(--gold); }
+.stepper output { min-width: 3.2ch; text-align: center; font: 700 1.3rem/1 var(--body); font-variant-numeric: tabular-nums; }
+
+/* The long read */
+.read { padding-block: 64px 0; }
+.read .wrap { display: grid; gap: 28px; }
+@media (min-width: 900px) { .read .wrap { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 56px; align-items: start; } .read.flip .words { order: 2; } }
+.read h2 { font: 700 clamp(1.5rem, 3.6vw, 2.1rem)/1.15 var(--display); }
+.words { display: grid; gap: 14px; max-width: 60ch; }
+.words p, .words li { font: 400 1.1rem/1.58 var(--prose); color: var(--fg); }
+.words p.aside { color: var(--muted); font-size: 1rem; }
+.words ul { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; }
+.words strong { font-weight: 500; color: var(--gold-bright); }
+.fig { min-width: 0; }
+.cap { margin-top: 12px; color: var(--muted); font: italic 400 .98rem/1.45 var(--prose); }
+
+/* The screen in your hand */
+.phone { position: relative; max-width: 340px; margin-inline: auto; padding: 26px 22px 24px; border-radius: 22px; border: 1px solid var(--gold); background: #17110c; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); text-align: center; display: grid; gap: 16px; justify-items: center; }
+.phone h3 { font: 500 1.25rem/1.25 var(--prose); font-weight: 600; }
+.phone img { width: 74px; height: 74px; border-radius: 50%; border: 1.5px solid var(--gold); object-fit: cover; }
+.hex { width: 62px; height: 68px; display: grid; place-items: center; font: 700 1.25rem/1 var(--body); background: var(--fg); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); position: relative; }
+.hex::before { content: ""; position: absolute; inset: 2px; background: #241b13; clip-path: inherit; }
+.hex b { position: relative; }
+.phone .letter { font: 500 14px/1 var(--body); color: var(--muted); letter-spacing: .08em; }
+.tagged { position: relative; display: inline-grid; justify-items: center; }
+.pin { position: absolute; left: calc(100% + 12px); top: 50%; translate: 0 -50%; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--on-gold); font: 700 13px/1 var(--body); }
+.legend { list-style: none; margin: 18px auto 0; padding: 0; display: grid; gap: 10px; max-width: 340px; }
+.legend li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; align-items: start; font: 400 1rem/1.45 var(--prose); }
+.legend li b { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--on-gold); font: 700 13px/1 var(--body); }
+
+/* The four things a choice can ask for */
+.asks { display: grid; gap: 14px; }
+@media (min-width: 640px) { .asks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ask { display: grid; gap: 10px; align-content: start; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); min-width: 0; }
+.ask .label { justify-self: start; font: 600 13px/1.25 var(--body); padding: 5px 10px; border-radius: 99px; border: 1px solid var(--gold); color: var(--gold-bright); }
+.ask .label.none { border-style: dashed; border-color: var(--muted); color: var(--muted); }
+.ask h3 { font: 600 1.12rem/1.25 var(--display); }
+.ask p { font: 400 1rem/1.5 var(--prose); color: var(--fg); }
+.says { font: 400 13.5px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--muted); padding: 9px 11px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); overflow-wrap: anywhere; }
+
+/* Small tables */
+.grid-table { width: 100%; border-collapse: collapse; font: 400 1rem/1.4 var(--body); }
+.grid-table th, .grid-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.grid-table thead th { font: 600 13px/1.3 var(--body); color: var(--muted); }
+.grid-table tbody th { font-weight: 600; white-space: nowrap; }
+.grid-table td { font-family: var(--prose); font-size: 1.02rem; }
+.grid-table .num { font-family: var(--body); font-weight: 600; }
+/* On a phone a three-column table of sentences becomes a list of rows, each cell under its own heading. */
+@media (max-width: 640px) {
+  .grid-table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .grid-table.stack tr { display: grid; gap: 6px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .grid-table.stack th, .grid-table.stack td { display: block; padding: 0; border: 0; }
+  .grid-table.stack tbody th { font: 600 1.05rem/1.3 var(--display); }
+  .grid-table.stack td::before { content: attr(data-label) ": "; font: 600 13px/1.4 var(--body); color: var(--muted); }
+}
+.mods { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center; }
+.mods div { padding: 10px 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); display: grid; gap: 4px; }
+.mods small { color: var(--muted); font-size: 12.5px; }
+.mods b { font: 700 1.15rem/1 var(--body); font-variant-numeric: tabular-nums; }
+
+/* How hard is hard: one bar per difficulty, the chance at your hero's skill */
+.ladder { display: grid; gap: 10px; }
+.rung { display: grid; grid-template-columns: minmax(96px, 8.5em) minmax(0, 1fr) 6.4em; gap: 12px; align-items: center; }
+.rung .name { font: 500 14.5px/1.25 var(--body); }
+.rung .name small { display: block; color: var(--muted); font-weight: 400; }
+.rung .rail { height: 14px; border-radius: 4px; background: rgba(59, 47, 34, .55); position: relative; }
+.rung .fill { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--gold); min-width: 0; }
+@media (prefers-reduced-motion: no-preference) { .rung .fill { transition: width .35s ease; } }
+.rung .pct { font: 700 1rem/1 var(--body); font-variant-numeric: tabular-nums; text-align: right; }
+.rung .pct.never { color: var(--muted); font-weight: 500; font-size: .9rem; }
+.ladder-head { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 16px; }
+
+/* Two dice */
+.pair { display: grid; gap: 14px; }
+@media (min-width: 560px) { .pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.twodice { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); display: grid; gap: 12px; }
+.twodice h3 { font: 600 1.1rem/1.2 var(--display); }
+.twodice .dice { display: flex; align-items: center; gap: 12px; }
+.pip { width: 54px; height: 54px; border-radius: 12px; display: grid; place-items: center; font: 700 1.25rem/1 var(--body); border: 1.5px dashed var(--line); color: var(--muted); }
+.pip.kept { border: 2px solid var(--gold-bright); color: #fff; background: rgba(217, 166, 73, .16); }
+.twodice p { font: 400 1rem/1.45 var(--prose); }
+.twodice .dice span { color: var(--muted); font-size: 14px; }
+
+.credit { margin-top: 72px; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="wordmark" href="/"><img src="/media/icon.png" alt="" width="30" height="30">The Dungeon Door</a>
+    <nav class="topnav" aria-label="Site">
+      <a class="optional" href="/#play">How it plays</a>
+      <a href="/rolls" aria-current="page">The dice</a>
+      <a href="/quest-log">Quest log</a>
+      <a class="optional" href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="opening">
+    <div class="wrap">
+      <div>
+        <h1>What your roll means</h1>
+        <div class="simple">
+          <p>Every time you vote, the game rolls a twenty-sided die for your hero. High is good. Low is trouble.</p>
+          <p>When a choice is risky, your roll plus your hero's skill has to reach the choice's number. Reach it and it works.</p>
+        </div>
+      </div>
+      <div class="die" id="die" data-face="14">
+        <button type="button" id="roll" aria-label="Roll the twenty-sided die">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <polygon class="face" points="100,8 179.7,54 179.7,146 100,192 20.3,146 20.3,54"/>
+            <polygon class="face lit" points="100,44 148.5,128 51.5,128"/>
+            <path class="facet" d="M100 8V44M20.3 54 100 44M179.7 54 100 44M20.3 54 51.5 128M20.3 146 51.5 128M100 192 51.5 128M100 192 148.5 128M179.7 146 148.5 128M179.7 54 148.5 128"/>
+            <text x="100" y="104" id="face">14</text>
+          </svg>
+        </button>
+        <span class="hint">Tap the die to roll it</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="bench" aria-labelledby="h-bench">
+    <div class="wrap">
+      <h2 id="h-bench" hidden>Try it</h2>
+      <div class="sum" id="sum" aria-live="polite"></div>
+      <div class="track" id="track" role="img" aria-label=""></div>
+      <div class="key" id="key"></div>
+      <p class="odds" id="odds"></p>
+      <div class="dials">
+        <div class="dial">
+          <span id="l-kind">What is being rolled</span>
+          <div class="seg" role="group" aria-labelledby="l-kind" id="kind">
+            <button type="button" data-kind="check" aria-pressed="true">A check or save</button>
+            <button type="button" data-kind="attack" aria-pressed="false">An attack</button>
+          </div>
+        </div>
+        <div class="dial">
+          <span id="l-bonus">Your hero's skill</span>
+          <div class="stepper" role="group" aria-labelledby="l-bonus">
+            <button type="button" id="bonus-down" aria-label="Lower the skill by one">−</button>
+            <output id="bonus" aria-live="polite">+3</output>
+            <button type="button" id="bonus-up" aria-label="Raise the skill by one">+</button>
+          </div>
+        </div>
+        <div class="dial">
+          <span id="l-target">The number to reach</span>
+          <div class="seg" role="group" aria-labelledby="l-target" id="target"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="read" aria-labelledby="h-screen">
+    <div class="wrap">
+      <div class="words">
+        <h2 id="h-screen">The screen in your hand</h2>
+        <p>After everyone has voted, the game shows each hero's die while the dungeon master writes what happens. Three things are on it.</p>
+        <p>The die was rolled the moment you voted. Changing your vote keeps the same roll, so there is no fishing for a better one. A player who never votes still gets a roll, made for them when the scene resolves.</p>
+        <p class="aside">The number alone is not the whole result. It is the raw die, before your hero's skill is added, and what it is used for depends on the choice the party went with.</p>
+      </div>
+      <div class="fig">
+        <div class="phone" role="img" aria-label="The screen shown while a scene resolves: a hero's portrait, a die showing 14, and the letter C.">
+          <h3>The dungeon master weighs your fates…</h3>
+          <span class="tagged"><img src="/media/ilsa.jpg" alt="" width="74" height="74"><span class="pin" aria-hidden="true">1</span></span>
+          <span class="tagged"><span class="hex"><b>14</b></span><span class="pin" aria-hidden="true">2</span></span>
+          <span class="tagged"><span class="letter">C</span><span class="pin" aria-hidden="true">3</span></span>
+        </div>
+        <ol class="legend">
+          <li><b>1</b><span>Whose roll it is: one die for each hero at the table.</span></li>
+          <li><b>2</b><span>The die itself, from 1 to 20. Every face is equally likely.</span></li>
+          <li><b>3</b><span>The choice that player voted for: A, B or C.</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="read flip" aria-labelledby="h-vote">
+    <div class="wrap">
+      <div class="words">
+        <h2 id="h-vote">First the vote, then the dice</h2>
+        <p>The party goes with the choice that got the most votes. The dice only break a tie: when two choices have the same number of votes, the one whose voters rolled the highest die wins.</p>
+        <p>After that, each die belongs to its own hero. Yours says how your hero fares in what the party chose, even if you voted for something else.</p>
+      </div>
+      <div class="fig">
+        <table class="grid-table">
+          <thead><tr><th scope="col">Choice</th><th scope="col">Voted for by</th><th scope="col">Best die</th><th scope="col"></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">A</th><td>Bryn</td><td class="num">9</td><td></td></tr>
+            <tr><th scope="row">B</th><td>—</td><td class="num">—</td><td></td></tr>
+            <tr><th scope="row">C</th><td>Mirel</td><td class="num">17</td><td><strong style="color:var(--gold-bright);font-family:var(--body);font-weight:600">The party goes with C</strong></td></tr>
+          </tbody>
+        </table>
+        <p class="cap">One vote each is a tie. Mirel's 17 beats Bryn's 9, so her choice carries.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="read" aria-labelledby="h-asks">
+    <div class="wrap" style="grid-template-columns: minmax(0, 1fr)">
+      <div class="words">
+        <h2 id="h-asks">What the choice asks of the dice</h2>
+        <p>Under each choice the game prints what is at stake. That label decides what your die is for. There are four cases, and the game writes out every sum in the party chat so you can check it.</p>
+      </div>
+      <div class="asks">
+        <article class="ask">
+          <span class="label none">no label</span>
+          <h3>A story choice</h3>
+          <p>Nothing is tested and nothing can fail outright. The dungeon master reads each die as how well that hero's part went: 15 or more goes with a flourish, 5 or less brings trouble, and a 20 or a 1 always gets its moment in the telling.</p>
+        </article>
+        <article class="ask">
+          <span class="label">Athletics check, DC 12</span>
+          <h3>A check</h3>
+          <p>Each hero adds their skill to their own die and tries to reach the number. The party succeeds when at least half its heroes do. If the label says “one hero with help”, only the hero best at it rolls, and anyone trained in that skill helps them.</p>
+          <div class="says">Bryn: Athletics 14 + 5 = 19 vs DC 12, success</div>
+        </article>
+        <article class="ask">
+          <span class="label">Dexterity save, DC 13</span>
+          <h3>A saving throw</h3>
+          <p>Something is happening to you: a blast, a collapsing roof. Each hero adds their saving throw to their die. Fall short and you take all of the damage; reach the number and you take half.</p>
+          <div class="says">Mirel: Dexterity save 7 + 2 = 9 vs DC 13, failure<br>Damage 8 fire: Mirel takes 8, Bryn takes 4</div>
+        </article>
+        <article class="ask">
+          <span class="label">Fight: 2 Goblin Warriors</span>
+          <h3>A fight</h3>
+          <p>From here each round is a vote of its own, and your vote is your own hero's action. Attack or cast and your die plus your attack bonus must reach the foe's Armor Class. Dodge and you make no attack, but attacks against you are rolled twice and the worse die counts.</p>
+          <div class="says">Bryn attacks Goblin Warrior 1 with Greatsword: 14 (total 18) vs AC 15, hit for 7.</div>
+        </article>
+      </div>
+      <div class="words">
+        <p class="aside">Other labels need no roll from you: a rest, a door to go through, something to buy. A trap is spotted by your hero's passive Perception, which is 10 plus their Perception skill with no die at all. Spells that make the target save (Burning Hands, Sacred Flame) are rolled by the target, not by you.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="read flip" aria-labelledby="h-skill">
+    <div class="wrap">
+      <div class="words">
+        <h2 id="h-skill">Where your hero's skill comes from</h2>
+        <p>The number added to your die has two parts.</p>
+        <ul>
+          <li><strong>The ability behind it.</strong> Each of your hero's six ability scores gives a modifier: half the score above 10, rounded down. Athletics uses Strength, Stealth uses Dexterity, Arcana uses Intelligence, and so on.</li>
+          <li><strong>Training.</strong> If your hero is trained in the skill, the save or the weapon, they add their proficiency bonus: +2 at levels 1 to 4, rising to +6 by level 17. Expertise in a skill doubles it, and the right tool for the job adds it too.</li>
+        </ul>
+        <p>So a level 1 fighter with Strength 16, trained in Athletics, rolls Athletics at +5. Each level of exhaustion takes 2 off every check and save.</p>
+        <p class="aside">You never have to add this up. Your hero's sheet in the app lists every skill, save and attack with its total.</p>
+      </div>
+      <div class="fig">
+        <div class="mods" role="img" aria-label="Ability scores and their modifiers: 8 gives minus 1, 10 gives 0, 12 gives plus 1, 14 gives plus 2, 16 gives plus 3, 18 gives plus 4, 20 gives plus 5.">
+          <div><small>score 8</small><b>−1</b></div>
+          <div><small>10</small><b>+0</b></div>
+          <div><small>12</small><b>+1</b></div>
+          <div><small>14</small><b>+2</b></div>
+          <div><small>16</small><b>+3</b></div>
+          <div><small>18</small><b>+4</b></div>
+          <div><small>20</small><b>+5</b></div>
+        </div>
+        <p class="cap">An ability score and the modifier it gives. Odd scores round down: 15 gives +2, like 14.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="read" aria-labelledby="h-hard">
+    <div class="wrap">
+      <div class="words">
+        <h2 id="h-hard">How hard is hard</h2>
+        <p>The dungeon master picks the number from a short ladder, by how hard the thing would be for anyone. Your hero's skill then decides how much of the die is enough.</p>
+        <p>Every point of skill is one more face of the die that works, which is five more chances in a hundred. Past a certain point no die is enough: on a check or a save, a 20 is just a 20.</p>
+      </div>
+      <div class="fig">
+        <div class="ladder-head">
+          <span id="l-ladder" style="color:var(--muted);font-size:14.5px">Chance to succeed with a skill of</span>
+          <div class="stepper" role="group" aria-labelledby="l-ladder">
+            <button type="button" id="ladder-down" aria-label="Lower the skill by one">−</button>
+            <output id="ladder-bonus">+3</output>
+            <button type="button" id="ladder-up" aria-label="Raise the skill by one">+</button>
+          </div>
+        </div>
+        <div class="ladder" id="ladder"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="read flip" aria-labelledby="h-two">
+    <div class="wrap">
+      <div class="words">
+        <h2 id="h-two">Two dice instead of one</h2>
+        <p>Sometimes the odds lean. The game then rolls a second die next to the one from your vote and keeps one of the two.</p>
+        <ul>
+          <li><strong>Advantage:</strong> a friend trained in the skill is helping, or the dungeon master judged that things favour you.</li>
+          <li><strong>Disadvantage:</strong> things are against you. In a fight, a foe attacking a hero who dodged rolls this way.</li>
+        </ul>
+        <p>If you have both at once they cancel, and you roll one die as usual. The chat shows the die that was dropped.</p>
+      </div>
+      <div class="fig pair">
+        <div class="twodice">
+          <h3>Advantage</h3>
+          <div class="dice"><span class="pip kept">14</span><span class="pip">6</span><span>keep the higher</span></div>
+          <p>Worth about four or five points of skill on an even chance.</p>
+        </div>
+        <div class="twodice">
+          <h3>Disadvantage</h3>
+          <div class="dice"><span class="pip">14</span><span class="pip kept">6</span><span>keep the lower</span></div>
+          <p>The same die, and the same pair, can end very differently.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="read" aria-labelledby="h-ends">
+    <div class="wrap" style="grid-template-columns: minmax(0, 1fr)">
+      <div class="words">
+        <h2 id="h-ends">Twenties and ones</h2>
+        <p>The two ends of the die are special in some rolls and ordinary in others.</p>
+      </div>
+      <table class="grid-table stack">
+        <thead><tr><th scope="col">The roll</th><th scope="col">A 20 on the die</th><th scope="col">A 1 on the die</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">An attack</th><td data-label="A 20">Always hits, and it is a critical hit: the damage dice are rolled twice.</td><td data-label="A 1">Always misses, whatever your bonus.</td></tr>
+          <tr><th scope="row">A check or a save</th><td data-label="A 20">Counts as 20 plus your skill. Usually plenty, but not automatic.</td><td data-label="A 1">Counts as 1 plus your skill. A skilled hero can still pass an easy one.</td></tr>
+          <tr><th scope="row">A death save</th><td data-label="A 20">Your fallen hero is back on their feet with 1 hit point.</td><td data-label="A 1">Counts as two failures. Three and the hero dies.</td></tr>
+          <tr><th scope="row">A story choice</th><td data-label="A 20">A triumph the dungeon master always tells.</td><td data-label="A 1">A mishap the dungeon master always tells.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="read flip" aria-labelledby="h-rest">
+    <div class="wrap">
+      <div class="words">
+        <h2 id="h-rest">Dice the game rolls without you</h2>
+        <p>Your vote's die is the only one you bring. The rules engine rolls the rest, and shows its work in the chat.</p>
+        <ul>
+          <li><strong>Who goes first</strong> in a fight: a die plus each fighter's Dexterity modifier.</li>
+          <li><strong>Damage:</strong> the dice on your weapon or spell, such as 2d6+3 (two six-sided dice plus 3).</li>
+          <li><strong>The monsters' rolls:</strong> their attacks against your Armor Class, and their saves against your spells.</li>
+          <li><strong>Death saves</strong> for a hero at 0 hit points: 10 or more is a success, three successes and they are stable, three failures and they are gone.</li>
+          <li><strong>Rests and nerve:</strong> the hit dice you spend to heal on a short rest, and whether shaken foes stand, flee or surrender.</li>
+        </ul>
+      </div>
+      <div class="fig">
+        <div class="says" style="font-size:14px; line-height:1.6">A fight begins: Goblin Warrior 1, Goblin Warrior 2. Initiative: Goblin Warrior 2 9, Goblin Warrior 1 6, Bryn 6, Mirel 3.<br>Goblin Warrior 2 attacks Mirel with Scimitar: 10 (total 14) vs AC 11, hit for 3.<br>Goblin Warrior 1 attacks Mirel with Scimitar: 4 (total 8) vs AC 11, miss.<br>Bryn attacks Goblin Warrior 1 with Greatsword: 14 (total 18) vs AC 15, hit for 7.<br>Mirel casts Burning Hands: Goblin Warrior 1 fails the save, 6 damage.<br>Goblin Warrior 1 falls.<br>Morale (their first death, half their strength gone, Goblin Warrior 1 down): 16 - 1 = 15 vs DC 10: the foes stand firm.</div>
+        <p class="cap">A real round, as the game prints it. Only the 14 was a player's own die: Bryn's attack. Mirel's die went unused, because Burning Hands makes the goblin roll.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="read" aria-labelledby="h-where">
+    <div class="wrap" style="grid-template-columns: minmax(0, 1fr)">
+      <div class="words">
+        <h2 id="h-where">Where to look in the app</h2>
+        <ul>
+          <li><strong>Before you vote:</strong> the label under each choice says what it will ask of the dice.</li>
+          <li><strong>After the scene resolves:</strong> the party chat carries every roll the engine made, sum by sum.</li>
+          <li><strong>Any time:</strong> your hero's sheet shows the skill, save and attack numbers that get added to your die.</li>
+        </ul>
+        <p class="aside">Adventures begun before the rules engine arrived have no labels. In those, every choice is a story choice and the dice only colour the telling.</p>
+      </div>
+      <p class="credit">The rules behind these rolls come from the System Reference Document 5.2 by Wizards of the Coast LLC, used under the Creative Commons Attribution 4.0 International License. Monster morale is this game's own rule.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="sitefoot">
+  <div class="wrap">
+    <span class="grow">The Dungeon Door. An independent game, still being built.</span>
+    <a href="/">Home</a>
+    <a href="/quest-log">Quest log</a>
+    <a href="https://github.com/LupusDei/the-dungeon-door" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const signed = (n) => (n < 0 ? "−" + -n : "+" + n);
+  const TARGETS = {
+    check: { name: "the number", skill: "your hero's skill", dial: "Your hero's skill", options: [[5, "very easy"], [10, "easy"], [15, "medium"], [20, "hard"], [25, "very hard"], [30, "nearly impossible"]], start: 15 },
+    attack: { name: "Armor Class", skill: "your attack bonus", dial: "Your hero's attack bonus", options: [[11, "a robed mage"], [13, "light armour"], [15, "a goblin"], [17, "heavy armour"], [20, "plate and shield"]], start: 15 },
+  };
+  const state = { roll: 14, bonus: 3, kind: "check", target: 15 };
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /** Does this face succeed? On an attack a 20 always hits and a 1 always misses; on a check or save neither is special. */
+  const works = (face) => {
+    if (state.kind === "attack" && face === 20) return true;
+    if (state.kind === "attack" && face === 1) return false;
+    return face + state.bonus >= state.target;
+  };
+  const faces = () => Array.from({ length: 20 }, (_, i) => i + 1);
+  const isCrit = (face) => state.kind === "attack" && face === 20;
+
+  const ICON = {
+    yes: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5 8.2 15 16 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    no: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  };
+
+  function renderSum() {
+    const total = state.roll + state.bonus, ok = works(state.roll), crit = ok && isCrit(state.roll);
+    const word = state.kind === "attack"
+      ? (crit ? "Critical hit" : ok ? "Hit" : state.roll === 1 ? "Miss: a 1 always misses" : "Miss")
+      : (ok ? "Success" : "Falls short");
+    $("sum").innerHTML =
+      `<span class="part"><span>${state.roll}</span><small>your die</small></span><span class="op">+</span>` +
+      `<span class="part"><span>${state.bonus < 0 ? "(" + signed(state.bonus) + ")" : state.bonus}</span><small>${TARGETS[state.kind].skill}</small></span><span class="op">=</span>` +
+      `<span class="part"><span>${total}</span><small>your total</small></span><span class="gap"></span>` +
+      `<span class="op">against</span><span class="part"><span>${state.target}</span><small>${TARGETS[state.kind].name} to reach</small></span>` +
+      `<span class="verdict ${crit ? "crit" : ok ? "yes" : "no"}">${ok ? ICON.yes : ICON.no}${word}</span>`;
+  }
+
+  function renderTrack() {
+    const track = $("track");
+    track.replaceChildren(...faces().map((face) => {
+      const cell = document.createElement("span");
+      cell.className = "cell " + (isCrit(face) ? "crit" : works(face) ? "yes" : "no") + (face === state.roll ? " rolled" : "");
+      cell.textContent = face;
+      return cell;
+    }));
+    const good = faces().filter(works);
+    track.setAttribute("aria-label", good.length
+      ? `The twenty faces of the die. ${good.length} of them succeed, from ${good[0]} up. You rolled ${state.roll}.`
+      : `The twenty faces of the die. None of them is enough. You rolled ${state.roll}.`);
+    const attack = state.kind === "attack";
+    $("key").innerHTML =
+      `<span class="yes"><i></i>${attack ? "hits" : "succeeds"}</span><span class="no"><i></i>${attack ? "misses" : "falls short"}</span>` +
+      (attack ? '<span class="crit"><i></i>20: always hits, critical</span>' : "") + '<span class="rolled"><i></i>your roll</span>';
+  }
+
+  function renderOdds() {
+    const good = faces().filter(works), n = good.length, pct = n * 5;
+    const attack = state.kind === "attack";
+    const need = state.target - state.bonus;
+    let text;
+    if (n === 0) text = `With ${signed(state.bonus)} against ${state.target}, <strong>no roll is enough</strong>. On a check or a save even a 20 is only 20 plus your skill.`;
+    else if (n === 20) text = `With ${signed(state.bonus)} against ${state.target}, <strong>any roll does it</strong>.`;
+    else if (attack && need > 20) text = `With ${signed(state.bonus)} against Armor Class ${state.target}, only a <strong>20</strong> lands: a 1 in 20 chance, <strong>5%</strong>.`;
+    else if (attack && need <= 1) text = `With ${signed(state.bonus)} against Armor Class ${state.target}, everything but a <strong>1</strong> lands: <strong>95%</strong>.`;
+    else text = `With ${signed(state.bonus)} against ${attack ? "Armor Class " : ""}${state.target} you need <strong>${good[0]} or better</strong> on the die: ${n} of its 20 faces, a <strong>${pct}%</strong> chance.`;
+    $("odds").innerHTML = text;
+  }
+
+  function renderDials() {
+    for (const b of $("kind").children) b.setAttribute("aria-pressed", String(b.dataset.kind === state.kind));
+    $("target").replaceChildren(...TARGETS[state.kind].options.map(([value, label]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(value === state.target));
+      b.innerHTML = `${value}<small>${label}</small>`;
+      b.addEventListener("click", () => { state.target = value; render(); });
+      return b;
+    }));
+    $("l-bonus").textContent = TARGETS[state.kind].dial;
+    $("bonus").textContent = signed(state.bonus);
+    $("ladder-bonus").textContent = signed(state.bonus);
+  }
+
+  /** One bar per difficulty: the chance of a check with the skill on the dial. */
+  function renderLadder() {
+    $("ladder").replaceChildren(...TARGETS.check.options.map(([dc, label]) => {
+      const n = faces().filter((f) => f + state.bonus >= dc).length, pct = n * 5;
+      const need = dc - state.bonus;
+      const row = document.createElement("div");
+      row.className = "rung";
+      row.title = n === 0 ? `DC ${dc}: out of reach with ${signed(state.bonus)}` : n === 20 ? `DC ${dc}: any roll succeeds with ${signed(state.bonus)}` : `DC ${dc}: needs ${need} or better on the die`;
+      row.innerHTML = `<span class="name">DC ${dc}<small>${label}</small></span>` +
+        `<span class="rail"><span class="fill" style="width:${pct}%"></span></span>` +
+        `<span class="pct ${n === 0 ? "never" : ""}">${n === 0 ? "out of reach" : pct + "%"}</span>`;
+      return row;
+    }));
+  }
+
+  function render() { renderSum(); renderTrack(); renderOdds(); renderDials(); renderLadder(); }
+
+  function showFace(face) {
+    $("face").textContent = face;
+    $("die").dataset.face = String(face);
+  }
+
+  let rolling = false;
+  function roll() {
+    if (rolling) return;
+    const result = 1 + Math.floor(Math.random() * 20);
+    const land = () => { rolling = false; state.roll = result; showFace(result); $("die").classList.remove("rolling"); render(); };
+    if (reduced) return land();
+    rolling = true;
+    $("die").classList.add("rolling");
+    // By the clock, not by counting ticks: a browser slows timers in a tab that is not in front.
+    const end = performance.now() + 560;
+    const spin = () => {
+      if (performance.now() >= end) return land();
+      showFace(1 + Math.floor(Math.random() * 20));
+      setTimeout(spin, 62);
+    };
+    spin();
+  }
+
+  $("roll").addEventListener("click", roll);
+  for (const b of $("kind").children) b.addEventListener("click", () => {
+    state.kind = b.dataset.kind;
+    state.target = TARGETS[state.kind].start;
+    render();
+  });
+  const nudge = (by) => () => { state.bonus = Math.max(-2, Math.min(12, state.bonus + by)); render(); };
+  $("bonus-down").addEventListener("click", nudge(-1));
+  $("bonus-up").addEventListener("click", nudge(1));
+  $("ladder-down").addEventListener("click", nudge(-1));
+  $("ladder-up").addEventListener("click", nudge(1));
+  render();
+})();
+</script>
+</body>
+</html>
