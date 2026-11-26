@@ -26,7 +26,7 @@ export function load(sheet: CharacterSheet): Load {
   return { carried, capacity, dragLimit: capacity * 2, dragging: carried > capacity };
 }
 
-function held(sheet: CharacterSheet, id: string): number {
+export function held(sheet: CharacterSheet, id: string): number {
   const found = sheet.equipment.find((e) => e.id === id);
   return found ? found.count : 0;
 }

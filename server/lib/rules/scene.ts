@@ -3,7 +3,8 @@
  * their players' votes (the vote's d20 is the roll); monsters act by simple rules. See docs/rules-design.md.
  */
 import type { Combatant, Status } from './combatant.ts';
-import { type AttackResult, type Cover, attackRoll, deathSave, rollD20 } from './resolve.ts';
+import { parseDice, rollDice } from './dice.ts';
+import { type AttackResult, type Cover, attackRoll, deathSave, heal, rollD20 } from './resolve.ts';
 import { type Rng, seededRng } from './rng.ts';
 import { type Caster, resolveSpell, type SpellOutcome } from './spellEffects.ts';
 import type { Cast } from './spells.ts';
@@ -19,7 +20,9 @@ export type CombatEvent =
   | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
   | { kind: 'dodge'; round: number; actor: string }
   | { kind: 'deathSave'; round: number; actor: string; status: Status }
-  | { kind: 'skip'; round: number; actor: string };
+  | { kind: 'skip'; round: number; actor: string }
+  /** A healing potion drunk as a Bonus Action before the turn's action. */
+  | { kind: 'potion'; round: number; actor: string; item: string; healed: number };
 export interface Choice { label: string; action: Action }
 
 export interface CombatState {
@@ -143,6 +146,15 @@ export function reactionAttack(state: CombatState, actor: string, attack: string
   const done = resolveAttack(state, state.combatants[actor], { kind: 'attack', attack, target }, rng);
   const event = { ...done.log[done.log.length - 1], reaction: true as const };
   return { ...done, log: [...done.log.slice(0, -1), event], rng: rng.state() };
+}
+
+/** The current combatant drinks a healing potion (`dice`) as a Bonus Action; its action is still to come. */
+export function drinkPotion(state: CombatState, item: string, dice: string): CombatState {
+  const rng = seededRng(state.rng);
+  const me = state.combatants[currentActor(state)];
+  const healed = heal(me, rollDice(rng, parseDice(dice)).total);
+  const event: CombatEvent = { kind: 'potion', round: state.round, actor: me.id, item, healed: healed.hp - me.hp };
+  return { ...withEvent(state, event, healed), rng: rng.state() };
 }
 
 /** A monster's turn: its first melee attack (or first attack) on the up hero with the fewest HP. Null on a hero's turn. */

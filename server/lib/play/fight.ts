@@ -10,7 +10,9 @@ import { type Combatant, heroCombatant, monsterCombatant } from '../rules/combat
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
 import { monster } from '../rules/monsters.ts';
 import { scriptedRng, seededRng } from '../rules/rng.ts';
-import { type Action, act, type CombatEvent, type CombatState, currentActor, monsterAction, startCombat, xpEarned } from '../rules/scene.ts';
+import { HEALING_POTIONS, item } from '../rules/items.ts';
+import { held, removeItem } from '../rules/inventory.ts';
+import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { beamsAt, castSpell, slotsLeft, spellDamageDice } from '../rules/spells.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
@@ -117,6 +119,7 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
   dodge: ({ actor }, name) => `${name(actor)} dodges.`,
   deathSave: ({ actor, status }, name) => `${name(actor)} makes a death save: ${status}.`,
   skip: ({ actor }, name) => `${name(actor)} cannot act.`,
+  potion: ({ actor, item: id, healed }, name) => `${name(actor)} drinks a ${item(id).name} as a Bonus Action: ${healed} HP back.`,
 };
 
 function tell(before: CombatState, after: CombatState): string[] {
@@ -190,17 +193,26 @@ const synced = (party: PartyState, combat: CombatState): PartyState => ({
   sheets: Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, Object.hasOwn(combat.combatants, id) ? { ...s, hp: combat.combatants[id].hp } : s])),
 });
 
-interface Turn { action: Action; sheets: Record<string, CharacterSheet> }
+interface Turn { action: Action; state: CombatState; sheets: Record<string, CharacterSheet> }
 
-/** The current combatant's action: a monster's by rule, a hero's by its vote (Dodge without one). */
+/** A hero at half HP or less drinks the least of its healing potions first, as a Bonus Action (5.2). */
+function bonusAction(state: CombatState, sheets: Record<string, CharacterSheet>, id: string): { state: CombatState; sheets: Record<string, CharacterSheet> } {
+  const me = state.combatants[id];
+  const potion = Object.keys(HEALING_POTIONS).find((p) => held(sheets[id], p) > 0);
+  if (me.hp * 2 > me.maxHp || potion === undefined) return { state, sheets };
+  return { state: drinkPotion(state, potion, HEALING_POTIONS[potion]), sheets: { ...sheets, [id]: removeItem(sheets[id], potion) } };
+}
+
+/** The current combatant's turn: a monster's action by rule; a hero's potion if it needs one, then its vote (Dodge without one). */
 function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, votes: CombatVotes): Turn {
   const ruled = monsterAction(state);
-  if (ruled) return { action: ruled, sheets };
+  if (ruled) return { action: ruled, state, sheets };
   const id = currentActor(state);
+  const drunk = bonusAction(state, sheets, id);
   const vote = votes[id];
-  if (!vote) return { action: { kind: 'dodge' }, sheets };
-  const { action, sheet } = heroAction(state, sheets[id], id, vote.choiceId, vote.roll);
-  return { action, sheets: { ...sheets, [id]: sheet } };
+  if (!vote) return { action: { kind: 'dodge' }, ...drunk };
+  const { action, sheet } = heroAction(drunk.state, drunk.sheets[id], id, vote.choiceId, vote.roll);
+  return { action, state: drunk.state, sheets: { ...drunk.sheets, [id]: sheet } };
 }
 
 /** However it ends, the slain stay dead and the fallen are settled: stabilized by a friend, or left to their death saves. */
@@ -223,7 +235,7 @@ export function fightRound(party: PartyState, combat: CombatState, votes: Combat
   while (state.outcome === 'ongoing' && state.round === combat.round) {
     const turn = turnAction(state, sheets, votes);
     sheets = turn.sheets;
-    state = act(state, turn.action);
+    state = act(turn.state, turn.action);
   }
   const shaken = morale(combat, state);
   const lines = [...tell(combat, state), ...shaken.lines, ...tell(state, shaken.combat)];

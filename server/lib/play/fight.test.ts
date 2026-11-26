@@ -212,3 +212,24 @@ test('morale in the fight: the shaken foes stand, flee (XP for the slain, Opport
   assert.equal(yielded.ended, 'victory');
   assert.ok(yielded.lines.includes('Victory! 100 XP, 50 each.'), yielded.lines.join(' | '));
 });
+
+test('a hero at half HP or less drinks its least healing potion as a Bonus Action, then acts', () => {
+  const stocked = { ...fighter, equipment: [...fighter.equipment, { id: 'potion-of-greater-healing', name: 'Potion of Greater Healing', count: 1 }, { id: 'potion-of-healing', name: 'Potion of Healing', count: 2 }] };
+  const { combat, party: p } = startFight(party({ p1: stocked, p2: wizard }), ['goblin-warrior']);
+  const half = Math.floor(stocked.maxHp / 2);
+  const calm = patch(combat, { p1: { hp: half }, 'foe-1': { attacks: harmless } });
+  const result = fightRound(p, calm, { p1: { choiceId: 'c', roll: 10 } });
+  const drank = result.lines.find((l) => l.startsWith('Bryn drinks'))!;
+  assert.match(drank, /^Bryn drinks a Potion of Healing as a Bonus Action: (\d+) HP back\.$/);
+  const healed = Number(/: (\d+) HP/.exec(drank)![1]);
+  assert.ok(healed >= 4 && healed <= 10);
+  assert.ok(result.lines.indexOf(drank) < result.lines.indexOf('Bryn dodges.'), 'the potion, then the action');
+  assert.equal(result.party.sheets.p1.hp, half + healed);
+  assert.deepEqual(result.party.sheets.p1.equipment.filter((e) => e.id.startsWith('potion')).map((e) => [e.id, e.count]), [['potion-of-greater-healing', 1], ['potion-of-healing', 1]]);
+  const fine = fightRound(p, patch(combat, { p1: { hp: half + 1 }, 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
+  assert.ok(!fine.lines.some((l) => l.includes('drinks')), 'above half: no potion');
+  const dry = fightRound(party(), patch(startFight(party(), ['goblin-warrior']).combat, { p1: { hp: 1 }, 'foe-1': { attacks: harmless } }), {});
+  assert.ok(!dry.lines.some((l) => l.includes('drinks')), 'no potion, none drunk');
+  const unvoted = fightRound(p, calm, {});
+  assert.ok(unvoted.lines.some((l) => l.startsWith('Bryn drinks')), 'without a vote they still drink, then Dodge');
+});

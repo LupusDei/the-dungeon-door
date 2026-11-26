@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { type Combatant, heroCombatant, monsterCombatant } from './combatant.ts';
 import { monster } from './monsters.ts';
-import { act, choicesFor, currentActor, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
+import { act, choicesFor, currentActor, drinkPotion, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
 import { SAMPLE } from './sheet.fixture.ts';
 
 const hero = (id: string, o: Partial<Combatant> = {}): Combatant => ({ ...heroCombatant(id, { ...SAMPLE, name: id }), ...o });
@@ -159,4 +159,15 @@ test('a reaction attack (an Opportunity Attack) strikes outside the turn order a
   assert.equal(struck.outcome, 'victory');
   assert.deepEqual(struck.log.slice(s.log.length).map((e) => [e.kind, e.actor, e.kind === 'attack' && e.reaction]), [['attack', 'h1', true]]);
   assert.notEqual(struck.rng, s.rng, 'the dice move on');
+});
+
+test('a potion drunk as a Bonus Action heals the one whose turn it is, and the turn goes on', () => {
+  const s = startCombat(3, [hero('h1'), goblin('g1')]);
+  const me = currentActor(s);
+  const hurt = { ...s, combatants: { ...s.combatants, [me]: { ...s.combatants[me], hp: 1 } } };
+  const after = drinkPotion(hurt, 'potion-of-healing', '1d1+3');
+  assert.equal(after.combatants[me].hp, Math.min(5, s.combatants[me].maxHp));
+  assert.deepEqual(after.log.at(-1), { kind: 'potion', round: s.round, actor: me, item: 'potion-of-healing', healed: after.combatants[me].hp - 1 });
+  assert.deepEqual([currentActor(after), after.turn], [me, s.turn], 'still their turn');
+  assert.notEqual(drinkPotion(hurt, 'potion-of-healing', '2d4+2').rng, s.rng, 'the dice move on');
 });
