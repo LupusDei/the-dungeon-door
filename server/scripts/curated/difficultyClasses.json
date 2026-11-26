@@ -1,0 +1,26 @@
+[
+  {
+    "taskDifficulty": "Very easy",
+    "dc": 5
+  },
+  {
+    "taskDifficulty": "Easy",
+    "dc": 10
+  },
+  {
+    "taskDifficulty": "Medium",
+    "dc": 15
+  },
+  {
+    "taskDifficulty": "Hard",
+    "dc": 20
+  },
+  {
+    "taskDifficulty": "Very hard",
+    "dc": 25
+  },
+  {
+    "taskDifficulty": "Nearly impossible",
+    "dc": 30
+  }
+]
