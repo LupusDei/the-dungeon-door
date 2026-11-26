@@ -21,14 +21,21 @@ struct APIClient: Sendable {
         try await send("GET", "api/catalog")
     }
 
+    /// The SRD text behind a sheet's ids. Static, so the app fetches it once and keeps it.
+    func reference() async throws -> Reference {
+        try await send("GET", "api/reference")
+    }
+
     func myCharacters() async throws -> [Character] {
         struct Wrapper: Decodable { let characters: [Character] }
         let w: Wrapper = try await send("GET", "api/characters")
         return w.characters
     }
 
-    func save(_ character: Character) async throws -> Character {
-        try await send("PUT", "api/characters", body: character)
+    /// Upserts a hero. `backgroundId` builds (or, at level 1, rebuilds) the sheet on that background;
+    /// nil keeps the sheet the hero has, or lets the server pick a background for a new one.
+    func save(_ character: Character, backgroundId: String?) async throws -> Character {
+        try await send("PUT", "api/characters", body: CharacterDraft(character, backgroundId: backgroundId))
     }
 
     func delete(characterId: String) async throws {
@@ -36,10 +43,18 @@ struct APIClient: Sendable {
         let _: OK = try await send("DELETE", "api/characters", query: ["id": characterId])
     }
 
+    /// The level-1 sheet a save would build for this hero; nothing is stored. The id seeds the
+    /// build, so the preview is the hero that will be saved.
+    func sheet(id: String, name: String, race: String, characterClass: String, backgroundId: String?) async throws -> SheetPreview {
+        struct Body: Encodable { let id: String; let name: String; let race: String; let characterClass: String; let backgroundId: String? }
+        return try await send("POST", "api/sheet",
+                              body: Body(id: id, name: name, race: race, characterClass: characterClass, backgroundId: backgroundId))
+    }
+
     func forgePortrait(for character: Character, previousAppearance: String?, note: String?) async throws -> PortraitResult {
-        struct Body: Encodable { let character: Character; let previousAppearance: String?; let note: String? }
+        struct Body: Encodable { let character: CharacterDraft; let previousAppearance: String?; let note: String? }
         return try await send("POST", "api/portrait",
-                              body: Body(character: character, previousAppearance: previousAppearance, note: note),
+                              body: Body(character: CharacterDraft(character), previousAppearance: previousAppearance, note: note),
                               timeout: 150)
     }
 
@@ -74,9 +89,11 @@ struct APIClient: Sendable {
         return try await send("POST", "api/games/\(code)/dungeon-master", body: Body(dungeonMaster: id))
     }
 
-    func start(_ code: String, sceneCount: Int) async throws -> GameState {
-        struct Body: Encodable { let sceneCount: Int }
-        return try await send("POST", "api/games/\(code)/start", body: Body(sceneCount: sceneCount))
+    /// `dungeon` is a catalog dungeons id ("none", "fixed", "explore"); nil is left out of the body,
+    /// and the server tells a story.
+    func start(_ code: String, sceneCount: Int?, dungeon: String?) async throws -> GameState {
+        struct Body: Encodable { let sceneCount: Int?; let dungeon: String? }
+        return try await send("POST", "api/games/\(code)/start", body: Body(sceneCount: sceneCount, dungeon: dungeon))
     }
 
     func vote(_ code: String, sceneIndex: Int, choiceId: String) async throws -> GameState {

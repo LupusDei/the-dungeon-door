@@ -1,6 +1,17 @@
 import Foundation
 import Observation
 
+/// The moment the caller's hero gains a level, for the scene to make something of.
+struct LevelUp: Identifiable, Equatable {
+    let heroName: String
+    let level: Int
+    /// Hit points added to the maximum, when the app saw both sides of the change.
+    var hpGained: Int?
+    /// Class features the new level brought, by name.
+    var newFeatures: [String] = []
+    var id: Int { level }
+}
+
 /// One game the player is in. Polls the server every couple of seconds (the MVP has no sockets),
 /// keeps the full chat log, and wraps the game actions.
 @MainActor @Observable
@@ -16,6 +27,10 @@ final class GameSession {
     var error: String?
     var busy = false
     var connectionTrouble = false
+    /// Set when the caller's hero gains a level; the scene shows it until it is dismissed.
+    var levelUp: LevelUp?
+    /// Scenes seen as rounds of a fight, by index. The chronicle doesn't say which entries were.
+    private(set) var combatScenes: Set<Int> = []
 
     private var pollTask: Task<Void, Never>?
 
@@ -24,12 +39,16 @@ final class GameSession {
         self.playerId = playerId
         self.code = initial.code
         self.state = initial
+        noteLevel(before: nil, after: initial)
+        noteCombat(initial)
         absorb(initial, countUnread: false)
     }
 
     var me: GamePlayer? { state.player(playerId) }
     var isHost: Bool { state.hostId == playerId }
     var myVote: Vote? { state.scene?.votes.first { $0.playerId == playerId } }
+    /// How my own hero stands in the rules engine's party, once the adventure is under way.
+    var myStanding: HeroStanding? { state.standing(playerId) }
     var lastMessageId: Int? { messages.last?.id }
 
     func start() {
@@ -54,6 +73,10 @@ final class GameSession {
             connectionTrouble = false
         } catch {
             connectionTrouble = true
+            #if DEBUG
+            // A reply the app can't read looks the same as a lost signal; say which it was.
+            if !(error is CancellationError) { print("[DungeonDoor] poll failed: \(error.localizedDescription)") }
+            #endif
         }
     }
 
@@ -72,8 +95,9 @@ final class GameSession {
         await run { self.absorb(try await self.api.setDungeonMaster(self.code, id: id)) }
     }
 
-    func begin(sceneCount: Int) async {
-        await run { self.absorb(try await self.api.start(self.code, sceneCount: sceneCount)) }
+    /// Opens the door. `dungeon` is the kind of game (a catalog dungeons id); nil tells a story.
+    func begin(sceneCount: Int, dungeon: String?) async {
+        await run { self.absorb(try await self.api.start(self.code, sceneCount: sceneCount, dungeon: dungeon)) }
     }
 
     func vote(_ choice: Choice) async {
@@ -99,8 +123,47 @@ final class GameSession {
     // MARK: Merging
 
     private func absorb(_ fresh: GameState, countUnread: Bool = true) {
+        noteLevel(before: state, after: fresh)
+        noteCombat(fresh)
         state = fresh
         append(fresh.messages, countUnread: countUnread)
+    }
+
+    /// Remembers which scenes were rounds of a fight: the one on show, and the earlier rounds of
+    /// the same fight (round 3 means the two scenes before it were rounds 1 and 2).
+    private func noteCombat(_ fresh: GameState) {
+        guard let scene = fresh.scene, scene.combat, !scene.isFinale else { return }
+        let rounds = max(1, fresh.rules?.combat?.round ?? 1)
+        for index in max(0, scene.index - (rounds - 1))...scene.index { combatScenes.insert(index) }
+    }
+
+    // MARK: Leveling
+
+    private static func levelKey(_ characterId: String) -> String { "dd.level.\(characterId)" }
+
+    /// Notices when my hero gains a level: between two polls, or since the app last looked (the
+    /// level it last saw is kept on the device, so a level gained while it was closed still counts).
+    private func noteLevel(before: GameState?, after: GameState) {
+        guard after.rules != nil, let hero = after.player(playerId)?.character else { return }
+        let level = after.standing(playerId)?.level ?? hero.sheet?.level
+        guard let level else { return }
+        let defaults = UserDefaults.standard
+        let key = Self.levelKey(hero.id)
+        let old = before?.player(playerId)?.character.sheet
+        let seen = old?.level ?? (defaults.object(forKey: key) as? Int)
+        defaults.set(level, forKey: key)
+        guard let seen, level > seen else { return }
+        var notice = LevelUp(heroName: hero.name, level: level)
+        if let old, let new = hero.sheet {
+            notice.hpGained = new.maxHp - old.maxHp
+            var had = old.features
+            // A feature can be gained twice (Action Surge): only what the old list can't account for is new.
+            notice.newFeatures = new.features.filter { name in
+                if let index = had.firstIndex(of: name) { had.remove(at: index); return false }
+                return true
+            }
+        }
+        levelUp = notice
     }
 
     private func append(_ incoming: [Message], countUnread: Bool) {

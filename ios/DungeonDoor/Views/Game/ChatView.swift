@@ -110,23 +110,24 @@ struct MessageLine: View {
     }
 }
 
-/// The story so far, scene by scene.
+/// The story so far, scene by scene. A round of a fight has no party choice to report: each hero
+/// acted for themselves.
 struct ChronicleView: View {
     @Environment(\.dismiss) private var dismiss
-    let entries: [ChronicleEntry]
-    let title: String?
+    @Bindable var session: GameSession
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    ForEach(entries) { entry in
+                    ForEach(session.state.chronicle ?? []) { entry in
                         VStack(alignment: .leading, spacing: 10) {
                             SectionLabel("Scene \(entry.index + 1)")
                             Text(entry.title).font(.display(22, weight: .bold))
                             IllustrationView(url: entry.imageURL, paintingLabel: "No painting survived")
-                            Text("The party chose: \(entry.choiceLabel)")
-                                .font(.proseSmall.weight(.semibold)).foregroundStyle(Palette.gold)
+                            if let deed = session.deed(of: entry) {
+                                Text(deed).font(.proseSmall.weight(.semibold)).foregroundStyle(Palette.gold)
+                            }
                             Text(entry.outcome).font(.prose)
                         }
                     }
@@ -135,8 +136,9 @@ struct ChronicleView: View {
                 .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity)
             }
+            .defaultScrollAnchor(AppConfig.launchScrollAnchor)
             .screenChrome()
-            .navigationTitle(title ?? "The Chronicle")
+            .navigationTitle(session.state.title ?? "The Chronicle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }

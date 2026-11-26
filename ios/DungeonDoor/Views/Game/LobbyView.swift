@@ -1,13 +1,29 @@
 import SwiftUI
 
-/// Gathering the party: share the code, see who's here, pick the dungeon master, start.
+/// Gathering the party: share the code, see who's here, pick the dungeon master, the kind of game
+/// and its length, start.
 struct LobbyView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
     @State private var sceneCount = 4
     @State private var pickingDM = false
+    /// The host's pick. Empty until they tap, so the default can follow the catalog as it loads.
+    @State private var dungeon = ""
 
     private var state: GameState { session.state }
+    /// The kinds of game this server can start. None on a server that only tells stories.
+    private var dungeons: [CatalogOption] { model.catalog?.dungeons ?? [] }
+
+    /// The kind of game on show: the host's pick, else the `-lobbyAdventure` argument, else the
+    /// first the catalog lists (a tale told).
+    private var chosenDungeon: String? {
+        if dungeons.contains(where: { $0.id == dungeon }) { return dungeon }
+        if let asked = AppConfig.lobbyAdventureArgument, dungeons.contains(where: { $0.id == asked }) { return asked }
+        return dungeons.first?.id
+    }
+
+    /// A fixed dungeon's map follows the length: up to 4 scenes is 5 rooms, 5 or 6 is 7, 7 or 8 is 9.
+    private var rooms: Int { sceneCount <= 4 ? 5 : sceneCount <= 6 ? 7 : 9 }
 
     var body: some View {
         ScrollView {
@@ -23,6 +39,7 @@ struct LobbyView: View {
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
+        .defaultScrollAnchor(AppConfig.launchScrollAnchor)
         .sheet(isPresented: $pickingDM) { dmSheet }
     }
 
@@ -57,6 +74,12 @@ struct LobbyView: View {
                             }
                         }
                         Text(describe(player.character)).font(.caption).foregroundStyle(Palette.muted)
+                        if let vitals = player.character.vitalsLine {
+                            Text(vitals)
+                                .font(.caption2.weight(.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.verdigris)
+                        }
                     }
                     Spacer()
                 }
@@ -112,19 +135,32 @@ struct LobbyView: View {
     }
 
     private var hostControls: some View {
-        VStack(spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Length").font(.display(16))
-                    Text("\(sceneCount) scenes, finale included").font(.caption).foregroundStyle(Palette.muted)
+        // A server that only tells stories sends no kinds of game: the length stepper and nothing else.
+        let kind = chosenDungeon
+        return VStack(spacing: 14) {
+            if !dungeons.isEmpty { dungeonPicker }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Length").font(.display(16))
+                        Text("\(sceneCount) scenes, finale included").font(.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer()
+                    Stepper("Scenes", value: $sceneCount, in: 2...8).labelsHidden()
                 }
-                Spacer()
-                Stepper("Scenes", value: $sceneCount, in: 2...8).labelsHidden()
+                if let note = lengthNote(kind) {
+                    Label(note, systemImage: kind == "fixed" ? "map" : "info.circle")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.parchment.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.numericText())
+                        .animation(.snappy, value: rooms)
+                }
             }
             .padding(14)
             .card()
             Button {
-                Task { await session.begin(sceneCount: sceneCount) }
+                Task { await session.begin(sceneCount: sceneCount, dungeon: kind) }
             } label: {
                 if session.busy { ProgressView().tint(Palette.ink) } else { Label("Open the door", systemImage: "door.left.hand.open") }
             }
@@ -133,6 +169,57 @@ struct LobbyView: View {
             if state.players.count == 1 {
                 Text("You can go alone, or wait for friends to knock.")
                     .font(.footnote.italic()).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+
+    /// What the length means for the kind of game picked.
+    private func lengthNote(_ kind: String?) -> String? {
+        switch kind {
+        case "fixed":
+            "A dungeon of \(rooms) rooms. The map grows with the length: up to 4 scenes is 5 rooms, 5 or 6 is 7 rooms, 7 or 8 is 9 rooms."
+        case nil:
+            nil
+        default:
+            "Every round of a fight is a scene of its own, on top of these."
+        }
+    }
+
+    private var dungeonPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Kind of game")
+            ForEach(dungeons) { option in
+                let selected = option.id == chosenDungeon
+                Button {
+                    withAnimation(.snappy) { dungeon = option.id }
+                } label: {
+                    HStack(alignment: .top, spacing: 14) {
+                        ZStack {
+                            Circle().fill(Palette.gold.opacity(0.16))
+                            Image(systemName: option.symbol ?? "book.closed")
+                                .font(.system(size: 20))
+                                .foregroundStyle(Palette.gold)
+                        }
+                        .frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(option.name).font(.display(17)).multilineTextAlignment(.leading)
+                            if let blurb = option.blurb, !blurb.isEmpty {
+                                Text(blurb)
+                                    .font(.footnote)
+                                    .foregroundStyle(Palette.muted)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if selected { Image(systemName: "checkmark.seal.fill").foregroundStyle(Palette.gold) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .card(highlighted: selected)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
     }

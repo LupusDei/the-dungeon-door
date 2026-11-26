@@ -1,34 +1,77 @@
 import SwiftUI
 
-/// Pick which of your heroes walks through the door.
+/// Pick which of your heroes walks through the door. The fallen are not offered: the dead stay
+/// dead, and the server turns them away.
 struct HeroPicker: View {
     @Environment(AppModel.self) private var model
     @Binding var selection: String?
 
+    private var living: [Character] { model.characters.filter { !$0.isFallen } }
+    private var fallen: [Character] { model.characters.filter(\.isFallen) }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(model.characters) { hero in
-                    let selected = hero.id == selection
-                    Button {
-                        withAnimation(.snappy) { selection = hero.id }
-                    } label: {
-                        VStack(spacing: 6) {
-                            PortraitView(url: hero.portraitURL, size: 84)
-                            Text(hero.name).font(.display(14)).lineLimit(1)
+        VStack(alignment: .leading, spacing: 10) {
+            if living.isEmpty {
+                Label("None of your heroes can go: \(fallenNames) died on an adventure. Forge a new hero to open a door.",
+                      systemImage: "leaf.fill")
+                    .font(.proseSmall)
+                    .foregroundStyle(Palette.parchment.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        // Once any hero has a sheet, every card keeps a line for it, so the row stays level.
+                        let showVitals = living.contains { $0.sheet != nil }
+                        ForEach(living) { hero in
+                            let selected = hero.id == selection
+                            Button {
+                                withAnimation(.snappy) { selection = hero.id }
+                            } label: {
+                                VStack(spacing: 6) {
+                                    PortraitView(url: hero.portraitURL, size: 84)
+                                    Text(hero.name).font(.display(14)).lineLimit(1)
+                                    if showVitals {
+                                        Text(hero.shortVitalsLine ?? " ")
+                                            .font(.caption2.weight(.semibold))
+                                            .monospacedDigit()
+                                            .foregroundStyle(Palette.verdigris)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.8)
+                                    }
+                                }
+                                .frame(width: 92)
+                                .padding(8)
+                                .card(highlighted: selected)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
                         }
-                        .frame(width: 92)
-                        .padding(8)
-                        .card(highlighted: selected)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .padding(.vertical, 2)
+                }
+                .scrollClipDisabled()
+                if !fallen.isEmpty {
+                    Text("\(fallenNames) \(fallen.count == 1 ? "has" : "have") fallen and can't go on another adventure.")
+                        .font(.footnote.italic())
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.vertical, 2)
         }
-        .scrollClipDisabled()
-        .onAppear { if selection == nil { selection = model.characters.first?.id } }
+        .onAppear { pickLiving() }
+        .onChange(of: living.map(\.id)) { _, _ in pickLiving() }
+    }
+
+    private var fallenNames: String {
+        ListFormatter.localizedString(byJoining: fallen.map(\.name))
+    }
+
+    /// Keeps the selection on a hero who can go.
+    private func pickLiving() {
+        if !living.contains(where: { $0.id == selection }) { selection = living.first?.id }
     }
 }
 

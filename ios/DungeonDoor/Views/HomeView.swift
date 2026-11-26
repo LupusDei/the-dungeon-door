@@ -12,9 +12,20 @@ struct HomeView: View {
     @State private var director = DragonDirector()
     /// Where the controls begin, so taps down there aren't taken for pokes.
     @State private var panelTop: CGFloat = .infinity
+    /// The hero pages on show. A path, so `-openHeroNamed` can push one.
+    @State private var path: [Character] = []
+    /// The forge that `-forgeStep` asked for, if any.
+    @State private var launchForge: LaunchForge?
+    @State private var launchHandled = false
+
+    private struct LaunchForge: Identifiable {
+        let id = UUID()
+        let hero: Character?
+        let step: CharacterForgeView.Step
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 DragonBackdrop(director: director, playing: model.activeGame == nil)
                 scrims
@@ -47,6 +58,10 @@ struct HomeView: View {
             .navigationDestination(for: Character.self) { CharacterDetailView(character: $0) }
         }
         .sheet(isPresented: $forging) { CharacterForgeView() }
+        .sheet(item: $launchForge) {
+            CharacterForgeView(editing: $0.hero, draft: $0.hero == nil ? AppConfig.forgeNewArgument : nil, startingAt: $0.step)
+        }
+        .onChange(of: model.didRefresh, initial: true) { _, _ in handleLaunchArguments() }
         .sheet(isPresented: $newGame) { NewGameView() }
         .sheet(isPresented: $joining) { JoinGameView() }
         .fullScreenCover(isPresented: Binding(get: { model.activeGame != nil }, set: { if !$0 { model.closeGame() } })) {
@@ -57,6 +72,41 @@ struct HomeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.refresh() } }
+        }
+    }
+
+    /// The debug launch arguments (see `AppConfig`): straight to a hero's page, or into the forge
+    /// at a given step. Anything that names a hero waits for the roster to be fresh.
+    private func handleLaunchArguments() {
+        guard !launchHandled else { return }
+        func hero(named name: String) -> Character? {
+            model.characters.first { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+        }
+        if let name = AppConfig.openHeroArgument {
+            guard model.didRefresh else { return }
+            launchHandled = true
+            if let found = hero(named: name) { path = [found] }
+        } else if let step = AppConfig.forgeStepArgument.flatMap(CharacterForgeView.Step.init(argument:)) {
+            var editing: Character?
+            if let name = AppConfig.forgeHeroArgument {
+                guard model.didRefresh else { return }
+                editing = hero(named: name)
+            }
+            launchHandled = true
+            Task {
+                // A moment for the home screen to settle before a sheet goes over it.
+                try? await Task.sleep(for: .milliseconds(400))
+                launchForge = LaunchForge(hero: editing, step: step)
+            }
+        } else if AppConfig.newGameArgument {
+            guard model.didRefresh else { return }
+            launchHandled = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                newGame = true
+            }
+        } else {
+            launchHandled = true
         }
     }
 
@@ -206,8 +256,10 @@ struct HomeView: View {
                 .shadow(color: .black, radius: 6)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
+                    // Once any hero has a sheet, every tile keeps a line for it, so the row stays level.
+                    let showVitals = model.characters.contains { $0.sheet != nil }
                     ForEach(model.characters) { hero in
-                        NavigationLink(value: hero) { HeroTile(hero: hero) }
+                        NavigationLink(value: hero) { HeroTile(hero: hero, showVitals: showVitals) }
                             .buttonStyle(.plain)
                     }
                     Button { forging = true } label: { ForgeTile() }
@@ -223,22 +275,44 @@ struct HomeView: View {
 private struct HeroTile: View {
     @Environment(AppModel.self) private var model
     let hero: Character
+    var showVitals = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let fallen = hero.isFallen
+        return VStack(alignment: .leading, spacing: 6) {
             PortraitView(url: hero.portraitURL, symbol: classSymbol, size: 104)
+                .saturation(fallen ? 0 : 1)
+                .opacity(fallen ? 0.55 : 1)
+                .overlay(alignment: .bottomLeading) {
+                    if fallen {
+                        TagLabel("Fallen", tint: Palette.ember)
+                            .background(Palette.ink.opacity(0.85), in: Capsule(style: .circular))
+                            .padding(6)
+                    }
+                }
             Text(hero.name)
                 .font(.display(15))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+                .foregroundStyle(fallen ? Palette.muted : Palette.parchment)
             Text(subtitle)
                 .font(.caption2)
                 .foregroundStyle(Palette.muted)
                 .lineLimit(1)
+            if showVitals {
+                Text(fallen ? "Died at level \(hero.sheet?.level ?? 1)" : hero.shortVitalsLine ?? " ")
+                    .font(.caption2.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(fallen ? Palette.ember : Palette.verdigris)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
         }
         .frame(width: 104)
         .padding(9)
         .glassCard()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(fallen ? "\(hero.name), \(subtitle), fallen" : "\(hero.name), \(subtitle), \(hero.vitalsLine ?? "")")
     }
 
     private var classSymbol: String {

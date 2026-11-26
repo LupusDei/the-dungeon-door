@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Cards for races and classes: a name, a symbol, a line of lore.
+/// Cards for races, classes and backgrounds: a name, a symbol, a line of lore.
 struct OptionGrid: View {
     let options: [CatalogOption]
     @Binding var selection: String
@@ -24,12 +24,24 @@ struct OptionGrid: View {
                                 Image(systemName: "checkmark.seal.fill").foregroundStyle(Palette.gold)
                             }
                         }
-                        if let blurb = option.blurb {
+                        if let blurb = option.blurb, !blurb.isEmpty {
+                            // A single column has room for the whole line; two columns keep to three.
                             Text(blurb)
-                                .font(.caption)
+                                .font(columns == 1 ? .footnote : .caption)
                                 .foregroundStyle(Palette.muted)
-                                .lineLimit(3)
+                                .lineLimit(columns == 1 ? nil : 3)
                                 .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: columns == 1)
+                        }
+                        if let abilities = option.abilities, !abilities.isEmpty {
+                            // A background's abilities: the three scores it can raise.
+                            HStack(spacing: 5) {
+                                Text("Can raise").font(.caption2).foregroundStyle(Palette.muted)
+                                ForEach(abilities, id: \.self) { TagLabel(SRD.ability($0)) }
+                            }
+                            .padding(.top, 2)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Can raise " + abilities.map(SRD.abilityName).joined(separator: ", "))
                         }
                     }
                     .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)

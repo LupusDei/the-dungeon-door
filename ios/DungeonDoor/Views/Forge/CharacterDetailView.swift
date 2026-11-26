@@ -1,9 +1,12 @@
 import SwiftUI
 
+/// A hero's page, which is their character sheet: who they are, their vitals, and the sheet's tabs.
+/// The backstory and the dungeon master's description live in the Story tab.
 struct CharacterDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let character: Character
+    @State private var tab = HeroSheetTab.launchDefault
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var error: String?
@@ -13,27 +16,30 @@ struct CharacterDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                PortraitView(url: hero.portraitURL, size: 320)
-                    .frame(maxWidth: .infinity)
-                if let c = model.catalog {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(hero.name).font(.display(30, weight: .bold))
-                        Text("\(c.name(hero.race, in: \.races)) \(c.name(hero.characterClass, in: \.classes))")
-                            .font(.display(18, weight: .regular)).foregroundStyle(Palette.gold)
-                        Text([c.name(hero.gender, in: \.genders), c.name(hero.temperament, in: \.temperaments),
-                              c.name(hero.alignment, in: \.alignments)].joined(separator: " · "))
-                            .font(.proseSmall).foregroundStyle(Palette.muted)
+            // A lazy stack so the sheet's vitals and tabs can pin under the bar while the rest scrolls.
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                HeroIdentityHeader(character: hero)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
+                HeroSheetView(character: hero, tab: $tab)
+                if hero.sheet == nil {
+                    // No sheet to hold the Story tab yet: their words still belong on the page.
+                    VStack(alignment: .leading, spacing: 20) {
+                        if !hero.backstory.isEmpty { block("Backstory", hero.backstory) }
+                        if let appearance = hero.appearance { block("As the dungeon master sees them", appearance, italic: true) }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
                 }
-                if !hero.backstory.isEmpty { block("Backstory", hero.backstory) }
-                if let appearance = hero.appearance { block("Appearance", appearance, italic: true) }
                 ErrorLine(text: error)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
             }
-            .padding(20)
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
+        .defaultScrollAnchor(AppConfig.launchScrollAnchor)
         .screenChrome()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -57,12 +63,9 @@ struct CharacterDetailView: View {
     }
 
     private func block(_ title: String, _ text: String, italic: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             SectionLabel(title)
-            Text(text).font(italic ? .prose.italic() : .prose)
+            SheetProse(text: text, italic: italic)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .card()
     }
 }

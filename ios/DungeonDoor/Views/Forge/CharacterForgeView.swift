@@ -1,39 +1,98 @@
 import SwiftUI
 
-/// Create or edit a hero in four steps: who they are, their calling, their story, their portrait.
+/// Create or edit a hero in five steps: who they are, their calling, their background (with the
+/// character sheet it gives), their story, their portrait. The sheet step is skipped on a server
+/// that has no backgrounds to offer.
 struct CharacterForgeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
     enum Step: Int, CaseIterable {
-        case identity, calling, story, portrait
+        case identity, calling, sheet, story, portrait
         var title: String {
             switch self {
             case .identity: "Who"
             case .calling: "Calling"
+            case .sheet: "Sheet"
             case .story: "Story"
             case .portrait: "Portrait"
             }
         }
+
+        /// The step a `-forgeStep` launch argument names.
+        init?(argument: String) {
+            switch argument.lowercased() {
+            case "identity", "who": self = .identity
+            case "calling": self = .calling
+            case "sheet": self = .sheet
+            case "story": self = .story
+            case "portrait": self = .portrait
+            default: return nil
+            }
+        }
+    }
+
+    /// What a sheet was drawn up from. A sheet is only shown while this still matches the hero.
+    private struct SheetSubject: Equatable {
+        var race: String
+        var characterClass: String
+        /// The background asked for; nil left the pick to the server.
+        var background: String?
     }
 
     @State private var hero: Character
-    @State private var step: Step = .identity
+    @State private var step: Step
     @State private var forging = false
     @State private var saving = false
     @State private var error: String?
     @State private var tweak = ""
     private let isEditing: Bool
+    /// A hero above level 1 keeps the species, class and background it grew up with: the server
+    /// refuses to rebuild its sheet.
+    private let locked: Bool
 
-    init(editing existing: Character? = nil) {
-        _hero = State(initialValue: existing ?? Character.blank(ownerId: AppConfig.playerId))
+    // The sheet step. `hero.sheet` and `hero.attacks` hold the last sheet the server sent (the
+    // hero's own, or a preview); `sheetSubject` says what it was drawn up from.
+    /// The background the player picked. Nil until they do: the server picks one for a new hero.
+    @State private var background: String?
+    @State private var sheetSubject: SheetSubject?
+    @State private var askedSubject: SheetSubject?
+    @State private var sheetLoading = false
+    @State private var sheetError: String?
+    @State private var sheetRequests = 0
+    @State private var sheetTab = HeroSheetTab.launchDefault
+
+    /// `draft` is a new hero with some of the forge already filled in (the `-forgeNew` argument).
+    init(editing existing: Character? = nil, draft: Character? = nil, startingAt step: Step = .identity) {
+        _hero = State(initialValue: existing ?? draft ?? Character.blank(ownerId: AppConfig.playerId))
+        _step = State(initialValue: step)
+        // `-forgeBackground <id>` picks a background as the forge opens (screenshot checks).
+        let asked = (existing?.sheet?.level ?? 1) > 1 ? nil : AppConfig.forgeBackgroundArgument
+        _background = State(initialValue: asked ?? existing?.sheet?.backgroundId)
+        _sheetSubject = State(initialValue: existing.flatMap { hero in
+            hero.sheet.map { SheetSubject(race: hero.race, characterClass: hero.characterClass, background: $0.backgroundId) }
+        })
         isEditing = existing != nil
+        locked = (existing?.sheet?.level ?? 1) > 1
+    }
+
+    /// The steps this forge walks through: all five, or four when the server has no backgrounds.
+    private var steps: [Step] {
+        (model.catalog?.backgrounds.isEmpty ?? true) ? Step.allCases.filter { $0 != .sheet } : Step.allCases
+    }
+
+    private func neighbour(_ offset: Int) -> Step? {
+        let all = steps
+        guard let index = all.firstIndex(of: step) else {
+            return offset > 0 ? all.first { $0.rawValue > step.rawValue } : all.last { $0.rawValue < step.rawValue }
+        }
+        return all.indices.contains(index + offset) ? all[index + offset] : nil
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                StepTrack(current: step)
+                StepTrack(current: step, steps: steps)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                 ScrollView {
@@ -42,6 +101,7 @@ struct CharacterForgeView: View {
                             switch step {
                             case .identity: identity(catalog)
                             case .calling: calling(catalog)
+                            case .sheet: sheetStep(catalog)
                             case .story: story
                             case .portrait: portrait(catalog)
                             }
@@ -54,6 +114,7 @@ struct CharacterForgeView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .defaultScrollAnchor(AppConfig.launchScrollAnchor)
                 footer
             }
             .screenChrome()
@@ -85,9 +146,26 @@ struct CharacterForgeView: View {
                 ChipPicker(options: catalog.genders, selection: $hero.gender)
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Race")
-                OptionGrid(options: catalog.races, selection: $hero.race)
+                SectionLabel("Species")
+                if locked {
+                    lockedPick(catalog.races, hero.race, what: "species")
+                } else {
+                    OptionGrid(options: catalog.races, selection: $hero.race)
+                }
             }
+        }
+    }
+
+    /// The one option a levelled hero is held to, and a line saying why it can't be changed.
+    private func lockedPick(_ options: [CatalogOption], _ id: String, what: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            OptionGrid(options: options.filter { $0.id == id }, selection: .constant(id), columns: 1)
+                .disabled(true)
+            Label("\(hero.name) is level \(hero.sheet?.level ?? 2): their \(what) is part of who they have become, and can't be changed.",
+                  systemImage: "lock.fill")
+                .font(.footnote)
+                .foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -95,7 +173,11 @@ struct CharacterForgeView: View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Class")
-                OptionGrid(options: catalog.classes, selection: $hero.characterClass)
+                if locked {
+                    lockedPick(catalog.classes, hero.characterClass, what: "class")
+                } else {
+                    OptionGrid(options: catalog.classes, selection: $hero.characterClass)
+                }
             }
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Temperament")
@@ -105,6 +187,125 @@ struct CharacterForgeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Alignment")
                 ChipPicker(options: catalog.alignments, selection: $hero.alignment, minWidth: 104)
+            }
+        }
+    }
+
+    // MARK: The sheet step
+
+    private var subject: SheetSubject {
+        SheetSubject(race: hero.race, characterClass: hero.characterClass, background: background)
+    }
+
+    /// The sheet on show, as long as it was drawn up for the hero as they are now. A sheet drawn
+    /// up with the server's own pick of background still fits once the player picks that same one.
+    private var currentSheet: CharacterSheet? {
+        guard let sheet = hero.sheet, let drawn = sheetSubject,
+              drawn.race == hero.race, drawn.characterClass == hero.characterClass,
+              background == nil || background == sheet.backgroundId else { return nil }
+        return sheet
+    }
+
+    /// The background the picker marks: the tap in flight, the player's pick, or the server's.
+    private var shownBackground: String {
+        background ?? currentSheet?.backgroundId ?? ""
+    }
+
+    private func sheetStep(_ catalog: Catalog) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Background")
+                Text("What they were before the door. It raises three of their ability scores (+2 to one, +1 to another), and brings a feat, two skills and gear.")
+                    .font(.footnote).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if locked {
+                    lockedPick(catalog.backgrounds, shownBackground, what: "background")
+                } else {
+                    OptionGrid(options: catalog.backgrounds,
+                               selection: Binding(get: { shownBackground }, set: { chooseBackground($0) }),
+                               columns: 1)
+                }
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    SectionLabel(locked ? "Character sheet" : "Their sheet at level 1")
+                    if sheetLoading { ProgressView().controlSize(.small).tint(Palette.gold) }
+                    Spacer()
+                }
+                if let sheetError {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ErrorLine(text: sheetError)
+                        Button("Try again") { requestSheet() }
+                            .font(.proseSmall.weight(.semibold))
+                            .disabled(sheetLoading)
+                    }
+                }
+                if currentSheet != nil {
+                    // The same sheet the hero page shows; the forge already pads its steps.
+                    VStack(spacing: 0) {
+                        HeroSheetView(character: hero, tab: $sheetTab, inset: 0)
+                    }
+                    .opacity(sheetLoading ? 0.45 : 1)
+                    .animation(.easeInOut(duration: 0.2), value: sheetLoading)
+                } else if sheetError == nil {
+                    HStack(spacing: 10) {
+                        if !sheetLoading { Image(systemName: "scroll").foregroundStyle(Palette.gold) }
+                        Text(sheetLoading ? "Drawing up the sheet…" : "The sheet is drawn up once the forge knows their species and class.")
+                            .font(.proseSmall.italic())
+                            .foregroundStyle(Palette.muted)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 80)
+                    .padding(14)
+                    .card()
+                }
+            }
+        }
+        .onAppear { refreshSheetIfNeeded() }
+    }
+
+    /// Fetches the preview when the step opens, unless the sheet in hand already fits the hero.
+    private func refreshSheetIfNeeded() {
+        if locked || currentSheet != nil { return }
+        if sheetLoading, askedSubject == subject { return }
+        requestSheet()
+    }
+
+    private func chooseBackground(_ id: String) {
+        guard !locked, id != background else { return }
+        withAnimation(.snappy) { background = id }
+        if currentSheet == nil { requestSheet() }
+    }
+
+    /// Asks the server for the level-1 sheet this hero would get. Only the latest request may answer.
+    private func requestSheet() {
+        let asked = subject
+        let name = hero.name.trimmingCharacters(in: .whitespaces)
+        guard !asked.race.isEmpty, !asked.characterClass.isEmpty else { return }
+        sheetRequests += 1
+        let ticket = sheetRequests
+        askedSubject = asked
+        withAnimation(.snappy) {
+            sheetLoading = true
+            sheetError = nil
+        }
+        Task {
+            do {
+                // The id seeds the build, so this is the very hero a save would make.
+                let preview = try await model.api.sheet(id: hero.id, name: name.isEmpty ? "Hero" : name, race: asked.race,
+                                                        characterClass: asked.characterClass, backgroundId: asked.background)
+                guard ticket == sheetRequests else { return }
+                withAnimation(.snappy) {
+                    hero.sheet = preview.sheet
+                    hero.attacks = preview.attacks
+                    sheetSubject = asked
+                    sheetLoading = false
+                }
+            } catch {
+                guard ticket == sheetRequests else { return }
+                withAnimation(.snappy) {
+                    sheetError = "The sheet wouldn't come: \(error.localizedDescription)"
+                    sheetLoading = false
+                }
             }
         }
     }
@@ -187,8 +388,8 @@ struct CharacterForgeView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if step != .identity {
-                Button("Back") { withAnimation { step = Step(rawValue: step.rawValue - 1)! } }
+            if let previous = neighbour(-1) {
+                Button("Back") { withAnimation { step = previous } }
                     .buttonStyle(.gildedOutline)
                     .frame(maxWidth: 120)
             }
@@ -201,9 +402,11 @@ struct CharacterForgeView: View {
                 .buttonStyle(.gilded)
                 .disabled(forging || saving)
             } else {
-                Button("Next") { withAnimation { step = Step(rawValue: step.rawValue + 1)! } }
-                    .buttonStyle(.gilded)
-                    .disabled(!isComplete(step))
+                Button("Next") {
+                    if let next = neighbour(1) { withAnimation { step = next } }
+                }
+                .buttonStyle(.gilded)
+                .disabled(!isComplete(step))
             }
         }
         .padding(.horizontal, 20)
@@ -215,6 +418,9 @@ struct CharacterForgeView: View {
         switch step {
         case .identity: !hero.name.trimmingCharacters(in: .whitespaces).isEmpty && !hero.gender.isEmpty && !hero.race.isEmpty
         case .calling: !hero.characterClass.isEmpty && !hero.temperament.isEmpty && !hero.alignment.isEmpty
+        // Wait for the sheet in flight, so the hero that is sealed is the one on screen. A sheet
+        // that failed doesn't block the forge: the server makes one when the hero is saved.
+        case .sheet: !sheetLoading
         case .story, .portrait: true
         }
     }
@@ -247,7 +453,9 @@ struct CharacterForgeView: View {
         defer { saving = false }
         hero.name = hero.name.trimmingCharacters(in: .whitespaces)
         do {
-            _ = try await model.save(hero)
+            // The background on show is the one to build on. A levelled hero sends none: its sheet stays.
+            let picked = locked || shownBackground.isEmpty ? nil : shownBackground
+            _ = try await model.save(hero, backgroundId: picked)
             dismiss()
         } catch {
             self.error = "Couldn't save \(hero.name): \(error.localizedDescription)"
@@ -257,9 +465,10 @@ struct CharacterForgeView: View {
 
 private struct StepTrack: View {
     let current: CharacterForgeView.Step
+    let steps: [CharacterForgeView.Step]
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(CharacterForgeView.Step.allCases, id: \.self) { step in
+            ForEach(steps, id: \.self) { step in
                 VStack(spacing: 6) {
                     Capsule()
                         .fill(step.rawValue <= current.rawValue ? Palette.gold : Palette.raised)

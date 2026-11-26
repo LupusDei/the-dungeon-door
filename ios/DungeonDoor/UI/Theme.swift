@@ -17,6 +17,10 @@ extension Font {
     static func display(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight, design: .serif)
     }
+    /// A serif face in a text style, so it grows and shrinks with Dynamic Type.
+    static func serif(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
+        .system(style, design: .serif, weight: weight)
+    }
     static let prose = Font.system(.body, design: .serif)
     static let proseSmall = Font.system(.subheadline, design: .serif)
 }
@@ -59,7 +63,10 @@ extension View {
     func card(highlighted: Bool = false) -> some View { modifier(CardModifier(highlighted: highlighted)) }
 
     func screenChrome() -> some View {
-        self.background(Backdrop())
+        // Fill the screen first: a background is only as large as the view it sits behind, and a
+        // narrow screen (a title and a spinner) would leave bare black at its sides.
+        self.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Backdrop())
             .toolbarBackground(Palette.ink, for: .navigationBar)
             .foregroundStyle(Palette.parchment)
     }
@@ -224,46 +231,114 @@ struct Hexagon: Shape {
     }
 }
 
-/// The arched door that gives the game its name.
+/// The arched door that gives the game its name. Shut, or swung into the room on its left-hand hinge.
+///
+/// The leaf is drawn by its own geometry (`DoorSwing`) and clipped by the frame, the way a wall hides
+/// what is behind it, so an open door always fits its doorway. `open` animates.
 struct DoorMark: View {
     var open = false
+    private var amount: Double { open ? 1 : 0 }
 
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
             ZStack {
+                // The dark beyond, and torchlight spilling out across the threshold.
                 ArchShape().fill(Color.black)
-                    .overlay(alignment: .bottom) {
-                        // Torchlight spilling out from behind the door.
-                        RadialGradient(colors: [Palette.gold.opacity(open ? 0.85 : 0.0), .clear],
-                                       center: .bottom, startRadius: 2, endRadius: h * 0.9)
-                            .clipShape(ArchShape())
-                    }
-                ArchShape()
-                    .fill(LinearGradient(colors: [Color(hex: "#5A3A22"), Color(hex: "#3B2515")],
+                RadialGradient(colors: [Palette.gold.opacity(open ? 0.85 : 0), .clear],
+                               center: .bottom, startRadius: 2, endRadius: geo.size.height * 0.9)
+                DoorLeafShape(amount: amount)
+                    .fill(LinearGradient(colors: [Color(hex: "#5A3A22"), Color(hex: "#34200F")],
                                          startPoint: .leading, endPoint: .trailing))
-                    .overlay {
-                        HStack(spacing: w * 0.05) {
-                            ForEach(0..<4, id: \.self) { _ in
-                                Rectangle().fill(Color.black.opacity(0.35)).frame(width: 1.5)
-                                Spacer(minLength: 0)
-                            }
-                        }
-                        .padding(.horizontal, w * 0.12)
-                        .clipShape(ArchShape())
-                    }
-                    .overlay(alignment: .trailing) {
-                        Circle().stroke(Palette.gold, lineWidth: 2)
-                            .frame(width: w * 0.12, height: w * 0.12)
-                            .padding(.trailing, w * 0.14)
-                            .offset(y: h * 0.08)
-                    }
-                    .rotation3DEffect(.degrees(open ? -68 : 0), axis: (x: 0, y: 1, z: 0),
-                                      anchor: .leading, perspective: 0.5)
-                ArchShape().stroke(Palette.gold.opacity(0.8), lineWidth: 2)
+                DoorLeafDetail(amount: amount).stroke(Color.black.opacity(0.35), lineWidth: 1.5)
+                DoorLeafDetail(amount: amount, ring: true).stroke(Palette.gold, lineWidth: 2)
             }
+            .clipShape(ArchShape())
+            .overlay { ArchShape().stroke(Palette.gold.opacity(0.8), lineWidth: 2) }
         }
         .aspectRatio(0.66, contentMode: .fit)
+    }
+}
+
+/// Where each point of the door leaf is seen once it has swung into the room: hinged on the left jamb,
+/// turned by up to `widest`, and looked at by someone standing in front of the doorway.
+struct DoorSwing {
+    let size: CGSize
+    /// 0 shut … 1 as far open as it goes.
+    let amount: Double
+
+    static let widest = Angle.degrees(64)
+    /// How far away the eye is, in door widths, and where on the door it looks.
+    private static let distance = 2.4
+    private static let eye = UnitPoint(x: 0.5, y: 0.56)
+
+    /// The point (u, v) of the shut door (u across from the hinge, v down), as seen.
+    func point(_ u: CGFloat, _ v: CGFloat) -> CGPoint {
+        let angle = Self.widest.radians * amount
+        let across = u * cos(angle)
+        let depth = u * sin(angle) / size.width
+        let scale = Self.distance / (Self.distance + depth)
+        let cx = size.width * Self.eye.x, cy = size.height * Self.eye.y
+        return CGPoint(x: cx + (across - cx) * scale, y: cy + (v - cy) * scale)
+    }
+
+    /// The top of the arched leaf at u.
+    func top(_ u: CGFloat) -> CGFloat {
+        let r = size.width / 2
+        return r - sqrt(max(0, r * r - (r - u) * (r - u)))
+    }
+}
+
+/// The outline of the leaf.
+struct DoorLeafShape: Shape {
+    var amount: Double
+    var animatableData: Double {
+        get { amount }
+        set { amount = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let swing = DoorSwing(size: rect.size, amount: amount)
+        let steps = 40
+        return Path { p in
+            p.move(to: swing.point(0, rect.height))
+            for i in 0...steps {
+                let u = rect.width * CGFloat(i) / CGFloat(steps)
+                p.addLine(to: swing.point(u, swing.top(u)))
+            }
+            p.addLine(to: swing.point(rect.width, rect.height))
+            p.closeSubpath()
+        }
+    }
+}
+
+/// What the leaf carries: the joins between its planks, or the iron ring by its free edge.
+struct DoorLeafDetail: Shape {
+    var amount: Double
+    var ring = false
+    var animatableData: Double {
+        get { amount }
+        set { amount = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let swing = DoorSwing(size: rect.size, amount: amount)
+        let w = rect.width, h = rect.height
+        return Path { p in
+            if ring {
+                let centre = CGPoint(x: w * 0.80, y: h * 0.58), radius = w * 0.06
+                for i in 0...28 {
+                    let a = Double(i) / 28 * 2 * .pi
+                    let q = swing.point(centre.x + radius * cos(a), centre.y + radius * sin(a))
+                    if i == 0 { p.move(to: q) } else { p.addLine(to: q) }
+                }
+                p.closeSubpath()
+            } else {
+                for u in [0.2, 0.4, 0.6, 0.8].map({ w * $0 }) {
+                    p.move(to: swing.point(u, swing.top(u)))
+                    p.addLine(to: swing.point(u, h))
+                }
+            }
+        }
     }
 }
 

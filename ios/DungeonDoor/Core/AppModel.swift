@@ -9,14 +9,21 @@ final class AppModel {
     let playerId: String
 
     private(set) var catalog: Catalog?
+    /// The SRD text behind the sheets. Nil until it has been fetched once (and on a server without
+    /// one); everything falls back to ids turned into words.
+    private(set) var reference: Reference?
+    private var referenceIsFresh = false
     private(set) var characters: [Character] = []
     var catalogError: String?
     var activeGame: GameSession?
+    /// True once the first refresh has come back (or failed), so launch arguments know the roster is as fresh as it gets.
+    private(set) var didRefresh = false
 
     init() {
         playerId = AppConfig.playerId
         api = APIClient(base: AppConfig.apiBase, playerId: playerId, appKey: AppConfig.appKey)
         catalog = Self.load(Catalog.self, from: "catalog.json")
+        reference = Self.load(Reference.self, from: "reference.json")
         characters = Self.load([Character].self, from: "characters-\(playerId).json") ?? []
     }
 
@@ -35,13 +42,21 @@ final class AppModel {
             characters = mine + characters.filter { !serverIds.contains($0.id) }
             persistCharacters()
         }
+        // The reference is static: once per launch is plenty, and the copy on disk does until then.
+        if !referenceIsFresh, let fresh = try? await api.reference() {
+            reference = fresh
+            referenceIsFresh = true
+            Self.store(fresh, to: "reference.json")
+        }
+        didRefresh = true
     }
 
-    func save(_ character: Character) async throws -> Character {
+    /// Saves a hero. `backgroundId` is the forge's pick for a new or level-1 hero; nil keeps the
+    /// sheet as it is (or lets the server pick, for a new hero).
+    func save(_ character: Character, backgroundId: String? = nil) async throws -> Character {
         var c = character
         c.ownerId = playerId
-        c.updatedAt = ISO8601DateFormatter().string(from: .now)
-        let saved = try await api.save(c)
+        let saved = try await api.save(c, backgroundId: backgroundId)
         if let i = characters.firstIndex(where: { $0.id == saved.id }) {
             characters[i] = saved
         } else {
@@ -78,14 +93,18 @@ final class AppModel {
         activeGame?.stop()
         activeGame = nil
         UserDefaults.standard.removeObject(forKey: "dd.lastGame")
+        // An adventure sends each hero's sheet home (level, XP, or their death): fetch the roster again.
+        Task { await refresh() }
     }
 
     /// Reopens the game this device was last in, if it's still going.
     func resumeIfPossible() async {
         guard activeGame == nil else { return }
-        let code = AppConfig.openGameArgument ?? UserDefaults.standard.string(forKey: "dd.lastGame")
+        // A game named on the command line opens even when it has ended, to look at its finale.
+        let asked = AppConfig.openGameArgument
+        let code = asked ?? UserDefaults.standard.string(forKey: "dd.lastGame")
         guard let code, let state = try? await api.game(code, since: nil),
-              state.status != .ended, state.player(playerId) != nil else { return }
+              state.status != .ended || asked != nil, state.player(playerId) != nil else { return }
         enter(state)
     }
 
