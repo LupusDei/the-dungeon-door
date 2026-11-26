@@ -103,3 +103,13 @@ test('how many foes an unplaced area catches: 1 + radius/5 (sphere, cylinder, em
   assert.deepEqual([caught('Cone', 15), caught('Cone', 60), caught('Cube', 10), caught('Cube', 9)], [2, 7, 2, 1]);
   assert.deepEqual([caught('Line', 100), caught('Line', 29)], [4, 1]);
 });
+
+test('Magic Missile’s darts never miss and allow no save: each deals its own 1d4 + 1 force, split among targets as given', () => {
+  const missile = cast('magic-missile', { slotLevel: 1, damageDice: '1d4+1', beams: 3 });
+  const { outcomes, targets } = resolveSpell(scriptedRng([4, 1, 3]), caster, missile, [goblin('g1'), goblin('g1'), goblin('g2')]);
+  assert.deepEqual(outcomes.map((o) => [o.target, o.attack, o.save, o.damage]), [['g1', null, null, 5], ['g1', null, null, 2], ['g2', null, null, 4]]);
+  assert.deepEqual(targets.map((t) => [t.id, t.hp]), [['g1', 3], ['g2', 6]]);
+  assert.throws(() => resolveSpell(scriptedRng([]), caster, missile, [goblin()]), violation(/Magic Missile makes 3 darts: give 3 targets/));
+  const ghost = { ...goblin('g3'), immunities: ['force'] };
+  assert.deepEqual(resolveSpell(scriptedRng([4]), caster, cast('magic-missile', { slotLevel: 1, damageDice: '1d4+1', beams: 1 }), [ghost]).outcomes[0].damage, 0, 'defenses still apply');
+});

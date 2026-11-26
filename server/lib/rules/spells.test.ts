@@ -5,7 +5,7 @@ import { climb } from './leveling.fixture.ts';
 import { seededRng } from './rng.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { SAMPLE } from './sheet.fixture.ts';
-import { beamsAt, castSpell, concentrationDc, endConcentration, maxSpellLevel, prepareSpells, slotsLeft, spellDamageDice, spellHealingDice } from './spells.ts';
+import { beamsAt, castSpell, strikesAt, concentrationDc, endConcentration, maxSpellLevel, prepareSpells, slotsLeft, spellDamageDice, spellHealingDice } from './spells.ts';
 import { srd } from './srd.ts';
 import { RuleViolation } from './violation.ts';
 
@@ -118,4 +118,13 @@ test('concentrating on a new spell ends the old one', () => {
 
 test('the concentration save DC is half the damage, at least 10 and at most 30', () => {
   assert.deepEqual([1, 20, 21, 22, 23, 59, 60, 61, 200].map(concentrationDc), [10, 10, 10, 11, 11, 29, 30, 30, 30]);
+});
+
+test('Magic Missile makes three darts at level 1 and one more for each slot level above; other spells strike as their beams', () => {
+  assert.deepEqual([1, 2, 3, 9].map((slot) => strikesAt(spell('magic-missile'), slot, 1)), [3, 4, 5, 11]);
+  assert.deepEqual([strikesAt(spell('eldritch-blast'), 0, 11), strikesAt(spell('fire-bolt'), 0, 11), strikesAt(spell('fireball'), 5, 9)], [3, 1, 1]);
+  const wizard = { ...SAMPLE, spellcasting: { ability: 'int' as const, saveDc: 13, attackBonus: 5, slots: [2, 1, 0, 0, 0, 0, 0, 0, 0], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: [], prepared: ['magic-missile'], concentratingOn: null } };
+  const { cast } = castSpell(wizard, 'magic-missile');
+  assert.deepEqual([cast.slotLevel, cast.beams, cast.damageDice], [1, 3, '1d4+1']);
+  assert.deepEqual([castSpell(wizard, 'magic-missile', 2).cast.beams, castSpell(wizard, 'magic-missile', 2).cast.damageDice], [4, '1d4+1'], 'more darts, not more dice');
 });

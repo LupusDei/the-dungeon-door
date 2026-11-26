@@ -63,6 +63,19 @@ function spellSaves(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targe
   return { outcomes: results.map((r) => r.outcome), targets: results.map((r) => r.target) };
 }
 
+/** Darts that never miss: each rolls its own damage against its target (several may share one, in turn). */
+function spellDarts(rng: Rng, spell: SrdSpell, cast: Cast, targets: readonly Combatant[]): Resolved {
+  require(targets.length === cast.beams, `${spell.name} makes ${cast.beams} darts: give ${cast.beams} targets`);
+  const byId = new Map(targets.map((t) => [t.id, t]));
+  const outcomes = targets.map((t) => {
+    const target = byId.get(t.id)!;
+    const damage = damageAfterDefenses(target, rollDice(rng, parseDice(cast.damageDice!)).total, spell.damage!.type);
+    byId.set(t.id, takeDamage(target, damage, false));
+    return { ...nothing(t.id), damage };
+  });
+  return { outcomes, targets: settle(targets, byId) };
+}
+
 function spellHealing(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[]): Resolved {
   const amount = rollDice(rng, parseDice(cast.healingDice!)).total + caster.modifier;
   const healed = targets.map((t) => heal(t, amount));
@@ -70,12 +83,13 @@ function spellHealing(rng: Rng, caster: Caster, cast: Cast, targets: readonly Co
 }
 
 /**
- * Resolves a cast (from castSpell) against its targets: a spell attack per beam, a saving throw per
- * target against damage rolled once, or healing rolled once. A spell with none of these is the DM's.
+ * Resolves a cast (from castSpell) against its targets: a spell attack per beam, a sure hit per dart, a
+ * saving throw per target against damage rolled once, or healing rolled once. A spell with none of these is the DM's.
  */
 export function resolveSpell(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[], { attack = {}, save = {} }: SpellRolls = {}, data: Srd = bundledSrd()): Resolved {
   const spell = data.spells.get(cast.spellId)!;
   if (spell.attack && cast.damageDice) return spellAttacks(rng, caster, spell, cast, targets, attack);
+  if (spell.darts) return spellDarts(rng, spell, cast, targets);
   if (spell.save) return spellSaves(rng, caster, spell, cast, targets, save);
   if (cast.healingDice) return spellHealing(rng, caster, cast, targets);
   return { outcomes: targets.map((t) => nothing(t.id)), targets: [...targets] };

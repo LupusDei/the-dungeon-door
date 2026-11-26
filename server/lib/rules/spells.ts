@@ -67,6 +67,11 @@ export function beamsAt(spell: SrdSpell, characterLevel: number, data: Srd = bun
   return steps.length > 0 ? steps[steps.length - 1].beams! : 1;
 }
 
+/** Separate strikes of a cast at a slot level: Magic Missile's darts (more for a higher slot), else its beams. */
+export function strikesAt(spell: SrdSpell, slotLevel: number, characterLevel: number, data: Srd = bundledSrd()): number {
+  return spell.darts ? spell.darts.count + spell.darts.perSlot * (slotLevel - spell.level) : beamsAt(spell, characterLevel, data);
+}
+
 const addDice = (base: string, extra: string, times: number) => {
   const [count, sides] = base.split('d').map(Number);
   return `${count + Number(extra.split('d')[0]) * times}d${sides}`;
@@ -124,7 +129,7 @@ export function castSpell(sheet: CharacterSheet, spellId: string, slotLevel?: nu
   const expended = casting.expended.map((n, i) => (i === slot - 1 ? n + 1 : n));
   const concentratingOn = spell.concentration ? spell.id : casting.concentratingOn;
   const cast: Cast = {
-    spellId, slotLevel: slot, damageDice: spellDamageDice(spell, slot, sheet.level, data), beams: beamsAt(spell, sheet.level, data),
+    spellId, slotLevel: slot, damageDice: spellDamageDice(spell, slot, sheet.level, data), beams: strikesAt(spell, slot, sheet.level, data),
     healingDice: spellHealingDice(spell, slot), endedConcentration: spell.concentration ? casting.concentratingOn : null,
   };
   return { sheet: { ...sheet, spellcasting: { ...casting, expended, concentratingOn } }, cast };

@@ -78,6 +78,8 @@ export interface SrdSpell {
   /** Hit points regained (plus the caster's spellcasting modifier), and the extra per slot level above. */
   healing: { dice: string; upcastDice: string | null } | null;
   area: { shape: AreaShape; feet: number } | null;
+  /** Darts that always hit, each dealing `damage` (Magic Missile): how many at the spell's level, and how many more per slot level above. */
+  darts: { count: number; perSlot: number } | null;
 }
 /** A cantrip's damage from a character level on: more dice, or more beams (separate attacks). */
 export interface CantripStep { level: number; dice: string | null; beams: number | null }
@@ -255,6 +257,10 @@ const HALF_ON_SAVE = /half as much damage|half damage/i;
 const DAMAGE_UPCAST = /damage(?: \([^)]*\))? increases? by (\d+d\d+) for each (?:spell )?slot level above/;
 const HEALING = /Hit Points equal to (\d+d\d+) plus your spellcasting ability modifier/;
 const HEALING_UPCAST = /healing(?: and damage)? increases? by (\d+d\d+) for each (?:spell )?slot level above/;
+const NUMBERS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4 };
+/** "You create three glowing darts … A dart deals 1d4 + 1 Force damage"; "one more dart for each spell slot level above". */
+const DARTS = /create (one|two|three|four) glowing darts[^]*?A dart deals (\d+d\d+)(?: \+ (\d+))? (\w+) damage/;
+const MORE_DARTS = /(one|two) more darts? for each spell slot level above/;
 const AREA = /(\d+)-foot(?:-radius|-long|-wide|-tall|-high)?,? ?(?:\d+-foot[- ](?:wide|tall|high|radius),? ?)?(Sphere|Cone|Cube|Line|Cylinder|Emanation)/;
 
 const spellSchema = z.object({
@@ -266,7 +272,9 @@ const spellSchema = z.object({
   const save = SAVE.exec(s.description)?.[1];
   const healing = HEALING.exec(s.description)?.[1];
   const area = AREA.exec(s.description);
-  const damage = s.damage ? { dice: Object.values(s.damage.damageAtSlotLevel)[0], type: s.damage.damageType.index } : null;
+  const darts = DARTS.exec(s.description);
+  const dartDamage = darts && { dice: `${darts[2]}${darts[3] ? `+${darts[3]}` : ''}`, type: darts[4].toLowerCase() };
+  const damage = s.damage ? { dice: Object.values(s.damage.damageAtSlotLevel)[0], type: s.damage.damageType.index } : dartDamage;
   const upcast = DAMAGE_UPCAST.exec(text)?.[1] ?? null;
   return {
     id: s.index, name: s.name, level: s.level, classes: s.classes, concentration: s.concentration, attack: s.attackType,
@@ -276,6 +284,7 @@ const spellSchema = z.object({
     upcastDice: upcast && damage && sameDie(upcast, damage.dice) ? upcast : null,
     healing: healing ? { dice: healing, upcastDice: HEALING_UPCAST.exec(text)?.[1] ?? null } : null,
     area: area ? { shape: area[2] as AreaShape, feet: Number(area[1]) } : null,
+    darts: darts && { count: NUMBERS[darts[1]], perSlot: NUMBERS[MORE_DARTS.exec(s.higherLevel ?? '')?.[1] ?? ''] ?? 0 },
   };
 });
 

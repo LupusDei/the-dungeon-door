@@ -78,6 +78,12 @@ test('spells know their level and which classes have them', () => {
   assert.ok([...data.spells.values()].some((s) => s.level === 0 && s.classes.includes('cleric')));
 });
 
+test('Magic Missile is read as darts: three of 1d4 + 1 force, one more per slot level above 1, no attack roll and no save', () => {
+  const missile = data.spells.get('magic-missile')!;
+  assert.deepEqual([missile.damage, missile.darts, missile.attack, missile.save, missile.upcastDice], [{ dice: '1d4+1', type: 'force' }, { count: 3, perSlot: 1 }, null, null, null]);
+  assert.deepEqual([...data.spells.values()].filter((s) => s.darts).map((s) => s.id), ['magic-missile'], 'the only dart spell in the SRD');
+});
+
 test('a casting class has cantrips, prepared spells and slots by level; others have none', () => {
   assert.deepEqual(data.spellcasting.get('cleric')!.byLevel[0], { cantrips: 3, prepared: 4, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0] });
   assert.equal(data.spellcasting.get('fighter'), undefined);
@@ -150,7 +156,7 @@ test('spells carry their mechanics: attack or save, damage, upcasting, healing, 
   assert.deepEqual(spells.get('fireball'), {
     id: 'fireball', name: 'Fireball', level: 3, classes: ['sorcerer', 'wizard'], concentration: false,
     attack: null, save: 'dex', halfOnSave: true, damage: { dice: '8d6', type: 'fire' }, upcastDice: '1d6',
-    healing: null, area: { shape: 'Sphere', feet: 20 },
+    healing: null, area: { shape: 'Sphere', feet: 20 }, darts: null,
   });
   const bolt = spells.get('fire-bolt')!;
   assert.deepEqual([bolt.attack, bolt.save, bolt.damage, bolt.upcastDice, bolt.area], ['ranged', null, { dice: '1d10', type: 'fire' }, null, null]);
