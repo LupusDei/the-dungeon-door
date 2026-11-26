@@ -83,6 +83,8 @@ CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see ser
   traits: string[]; feat: string; feats: string[]; features: string[]
   resourcesUsed: { [resourceId]: number }     // Rage, Second Wind, … spent since their rest
   dead?: boolean                  // the hero died and stays dead: it cannot create or join a game (409)
+                                  // until revived (POST /api/characters/revive)
+  revivalPenalty?: number         // 0–4: raised from the dead, this much off every D20 Test; −1 per Long Rest
   spellcasting: null | {
     ability: string; saveDc: number; attackBonus: number
     slots: number[9]; expended: number[9]; cantrips: string[]; prepared: string[]
@@ -118,6 +120,11 @@ are explained by `GET /api/reference`.
   rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
   the upgrade is stored the next time the hero is saved.
 - `DELETE /api/characters?id=…` → `{ ok: true }`.
+- `POST /api/characters/revive` body `{ characterId, payerId? }` → `Character`. A temple's Raise Dead
+  between adventures (SRD 5.2: a level-5 spellcasting service, 2,000 gp, plus the 500 gp diamond: 2,500
+  gp). The dead hero's own purse pays, or another living hero of the same player (`payerId`). The hero
+  comes back with 1 HP and `revivalPenalty: 4`. 409 if the hero is not dead, the payer is dead, or the
+  payer has less than 2,500 gp (`error` says how much it has); 404 for someone else's hero or purse.
 
 ## Rules reference
 
@@ -213,6 +220,8 @@ RulesView {                          // SRD 5.2 (2024 rules)
     at: string                        // area id the party is in
     areas: [{ id: string; name: string; purpose: string | null; cleared: boolean;
               exits: [{ id: string; connection: string; to: string | null }] }]   // visited areas only
+    waiting: null | { foes: string; attitude: "indifferent" | "friendly" }   // "Boar ×3": foes in this
+                                      // area who did not attack; a Parley choice talks to them
   }
   results: string[]                   // the engine's dice lines for the last resolved scene
 }
@@ -259,14 +268,38 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   to the choice whose voters rolled highest. Every hero makes the check or save with their vote's d20
   (or a fresh one if they didn't vote) plus their own bonus. In 5.2 a natural 20 or 1 is not automatic on
   a check or save. The party succeeds if at least half the heroes do (5.2 group check). A failed save
-  can deal damage.
+  can deal damage. A check against a creature (sneaking past it, persuading it) takes its DC from the
+  monster: its passive score, or the Influence DC (15 or its INT, whichever is higher). In "one hero with
+  help" checks the best hero rolls and the others give Advantage (5.2 Help).
+- **More choices.** Buying, selling and drinking a potion ("Buy Potion of Healing ×2", "Sell Gemstone",
+  "Drink a Potion of Healing"; SRD prices, gear sells at half, gems and jewellery at full value); a trap
+  ("Risk a trap": an SRD 5.2 example trap, found with passive scores, disarmed with thieves' tools, or
+  sprung); a hazard ("Hazard: Falling (30 feet)"); "Parley" or "Parley with Goblin Warrior" (the best
+  talker tries to sway them); "Raise the dead" (a temple: every dead hero is raised while the party's gold
+  lasts).
+- **Meeting monsters.** Foes in a dungeon room roll an attitude (2d6): 2–5 Hostile, and the fight starts;
+  6–9 Indifferent or 10–12 Friendly, and they wait (`rules.dungeon.waiting`). Undead, constructs and oozes
+  are always Hostile. A parley that works leaves the room to the party (their treasure stays theirs); one
+  that fails sours them a step, and Hostile foes attack.
 - **Combat rounds** (`scene.combat`). The choices are always: (a) Attack: your best weapon against the
   most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none); (c) Dodge.
   Each player's vote is their own hero's action, and the vote's d20 is their attack roll. Monsters act
   by simple rules. Each round is a scene, so `sceneCount` grows by one for each round. When the foes all
   fall, the living heroes split the XP and level up on the spot (average hit points; 5.2 thresholds). If
   every hero is down, the next scene is the epilogue. A fight still going after 10 rounds ends with the
-  foes fleeing (no XP).
+  foes fleeing.
+  - **Area spells** catch several foes, the most wounded first: 1 + radius/5 for a sphere, cylinder or
+    emanation, 1 + size/10 for a cone or cube, 1 + length/30 for a line. Each makes its own save.
+  - **Potions.** A hero at half HP or less who carries a healing potion drinks the least of them first,
+    as a Bonus Action, then takes their voted action.
+  - **Morale.** Foes are shaken by their first death, by losing half their total HP, or by their leader
+    falling; they roll d20 + their best WIS save vs DC 10. Below 10 they flee and every standing hero with
+    a melee weapon gets an Opportunity Attack; 5 or less and they surrender. Fleeing foes leave the XP of
+    the slain only; a surrender is a victory worth them all.
+  - **Death.** When the fight ends, a hero at 0 HP is stabilized by a friend (Spare the Dying, a Healer's
+    Kit, or a DC 10 Medicine check) or rolls death saves. A slain hero is dead (`dead: true`) unless a
+    standing party caster can cast Revivify and someone has 300 gp for the diamond. The same happens
+    when a save, trap or hazard drops a hero outside a fight.
   - **Written for you.** In a combat round each caller gets their own `choices`: the same three ids, with
     `label` and `detail` saying what their hero will do ("Attack with Greatsword" / "+5 to hit, 2d6+3
     slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them.
@@ -280,8 +313,9 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   removed. A hero at 0 HP regains 1 HP first.
 - **Dice in chat.** The engine posts its results as `system` messages ("Bryn: Athletics 14 + 5 = 19 vs DC
   12, success"), so the current app shows them without an update. The same lines are in `rules.results`.
-- **When it ends.** The heroes' sheets (level, XP, features; HP and slots restored) are saved back to
-  each player's character, so the next adventure starts where this one left off.
+- **When it ends.** The heroes' sheets (level, XP, features, gold and gear; HP and slots restored) are
+  saved back to each player's character, so the next adventure starts where this one left off. A dead
+  hero goes home dead.
 
 - **Older games and apps.** A game started before the engine has `rules: null`, choices with `rules:
   null` and `combat: false`, and plays as it always did (the DM breaks ties). The current app decodes

@@ -59,9 +59,10 @@ The engine owns the numbers; you propose and narrate. For a game from before the
 `resolution.rules` are null and nothing below applies.
 
 - **`ctx.rules`** (`RulesContext`):
-  - `party`: each hero's level, HP, AC, exhaustion and slots left.
+  - `party`: each hero's level, HP, AC, exhaustion and slots left, and whether they are dead.
   - `combat`: the round and every combatant's HP and status, or null.
-  - `dungeon`: the area the party is in (its purpose, what is there, its exits by id), or null.
+  - `dungeon`: the area the party is in (its purpose, what is there, its exits by id, any foes waiting
+    there and their attitude), or null.
   - `monsters`: SRD 5.2 monster ids that suit the party's level, for fights you propose.
 - **Choices may carry `rules`** (a `RulesHook`):
   - `{ kind: 'check', ability, skill?, dc }` or `{ kind: 'save', ability, dc, damage?, damageType? }`.
@@ -69,6 +70,10 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `{ kind: 'fight', monsters: [ids] }`, using ids from `ctx.rules.monsters` (unknown ids are dropped).
   - `{ kind: 'rest', rest: 'short' | 'long' }`.
   - `{ kind: 'move', exit }`, with an exit id from `ctx.rules.dungeon` (in a dungeon).
+  - `{ kind: 'buy', items }`, `{ kind: 'sell', items }`, `{ kind: 'use', item }` (SRD item ids; `use`
+    drinks a potion), `{ kind: 'trap', trap }` (an SRD 5.2 example trap), `{ kind: 'hazard', hazard, … }`.
+  - `{ kind: 'parley', monsters? }`: talk to the foes waiting in the room (`ctx.rules.dungeon` shows them
+    and their attitude). `{ kind: 'revive' }`: a temple raises the dead for 2,500 gp each.
   - A choice without `rules` is pure story, as before. So is one whose hook doesn't hold up (unknown
     skill, DC outside 1–30, no known monster): the engine checks every hook where it enters.
   - The LLM DM's schema takes a flat hook with no nullable fields (`lib/dm/hookSchema.ts`): the model
@@ -76,7 +81,8 @@ The engine owns the numbers; you propose and narrate. For a game from before the
     schema with many nullable fields (Anthropic: more than 16 is a 400 and no game can start). A test
     counts them; `npm run dm:check` asks the real model (text only, about five cents) and is the only
     thing that proves a schema or prompt change works. The fake DM offers an Athletics check
-    (or the first exit), a Perception check and a Persuasion check, and never starts a fight itself.
+    (or the first exit), a Perception check and a Persuasion check (a parley when foes wait in the
+    room), and never starts a fight itself.
 - **`resolution.rules`** (`RulesResults`):
   - `chosen`: the choice the engine picked. Ties go to the higher-rolling voters. `leaders` is just
     `[chosen]`, so return it as `chosenChoiceId`.
