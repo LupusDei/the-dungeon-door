@@ -10,6 +10,7 @@ delete process.env.DD_APP_KEY;
 delete process.env.DD_FAKE_DELAY_MS;
 
 import * as advanceApi from '../../api/game-advance.ts';
+import * as reviveApi from '../../api/character-revive.ts';
 import * as charactersApi from '../../api/characters.ts';
 import * as joinApi from '../../api/game-join.ts';
 import * as startApi from '../../api/game-start.ts';
@@ -54,16 +55,19 @@ async function voteAll(code: string, players: string[], sceneIndex: number, choi
   await settle();
 }
 
-/** A DM that offers a fight (choice a) with the given monsters, and records what it was told. */
-function fightingDM(monsters: string[], seen: { ctx: DMContext; resolution?: Resolution }[] = []): DungeonMaster {
-  const withFight = <T extends { choices: { label: string; detail: string; rules?: unknown }[] }>(scene: T): T =>
-    ({ ...scene, choices: [{ label: 'Fight', detail: 'Draw steel.', rules: { kind: 'fight', monsters } }, ...scene.choices.slice(1)] });
+/** A DM whose first choice carries this hook, and that records what it was told. */
+function hookDM(hook: unknown, label: string, seen: { ctx: DMContext; resolution?: Resolution }[] = []): DungeonMaster {
+  const withHook = <T extends { choices: { label: string; detail: string; rules?: unknown }[] }>(scene: T): T =>
+    ({ ...scene, choices: [{ label, detail: 'Try it.', rules: hook }, ...scene.choices.slice(1)] });
   return {
-    openingScene: async (ctx) => { seen.push({ ctx }); return withFight(await fakeDungeonMaster.openingScene(ctx)); },
-    nextScene: async (ctx, resolution) => { seen.push({ ctx, resolution }); return withFight(await fakeDungeonMaster.nextScene(ctx, resolution)); },
+    openingScene: async (ctx) => { seen.push({ ctx }); return withHook(await fakeDungeonMaster.openingScene(ctx)); },
+    nextScene: async (ctx, resolution) => { seen.push({ ctx, resolution }); return withHook(await fakeDungeonMaster.nextScene(ctx, resolution)); },
     finale: async (ctx, resolution) => { seen.push({ ctx, resolution }); return fakeDungeonMaster.finale(ctx, resolution); },
   };
 }
+
+/** A DM that offers a fight (choice a) with the given monsters. */
+const fightingDM = (monsters: string[], seen: { ctx: DMContext; resolution?: Resolution }[] = []) => hookDM({ kind: 'fight', monsters }, 'Fight', seen);
 
 test('a new game carries the rules: the heroes’ numbers, choices with their dice, and the dice in chat', async () => {
   const { code, players, host } = await table(2);
@@ -229,4 +233,41 @@ test('a dead hero stays dead: it cannot start or join an adventure until revived
   assert.deepEqual([created.status, created.body.error], [409, 'Fallen is dead']);
   assert.equal((await call(joinApi.POST, gamePath(code, 'join'), { player: lost, body: { characterId: fallen.id } })).status, 409);
   assert.equal((await call(joinApi.POST, gamePath(code, 'join'), { player, body: { characterId: characters[0].id } })).status, 404, 'still only your own heroes');
+});
+
+test('a parley the DM offers: a good word and the goblin lets the party be; a bad one and it attacks', async () => {
+  registerDungeonMaster('chronicler', hookDM({ kind: 'parley', monsters: ['goblin-warrior'] }, 'Talk'));
+  const calm = await table(1);
+  await start(calm.code, calm.host, { sceneCount: 4 });
+  await settle();
+  assert.equal((await view(calm.code, calm.host)).scene!.choices[0].rules, 'Parley with Goblin Warrior');
+  d20(20);
+  await voteAll(calm.code, calm.players, 0, 'a');
+  let state = await view(calm.code, calm.host);
+  assert.ok(state.rules!.results.includes('The Goblin Warrior let the party be.'), state.rules!.results.join(' | '));
+  assert.equal(state.rules!.combat, null);
+  const sour = await table(1);
+  await start(sour.code, sour.host, { sceneCount: 4 });
+  await settle();
+  d20(1);
+  await voteAll(sour.code, sour.players, 0, 'a');
+  state = await view(sour.code, sour.host);
+  assert.ok(state.rules!.results.includes('The talk goes badly: the Goblin Warrior turn hostile.'));
+  assert.equal(state.scene!.combat, true, 'the goblin attacks');
+});
+
+test('a dead hero goes to the temple between adventures, comes back with 1 HP and plays again', async () => {
+  const player = randomUUID();
+  const hero = await makeCharacter(player, 'Lazarus', { race: 'human', characterClass: 'fighter' });
+  const stored = (await getStore().getCharacter(hero.id))!;
+  await getStore().saveCharacter({ ...stored, sheet: { ...hero.sheet!, hp: 0, dead: true, gp: 2500 } });
+  assert.equal((await call(gamesApi.POST, '/api/games', { player, body: { characterId: hero.id } })).status, 409);
+  const back = await call<Character>(reviveApi.POST, '/api/characters/revive', { player, body: { characterId: hero.id } });
+  assert.deepEqual([back.status, back.body.sheet.hp, back.body.sheet.gp], [200, 1, 0]);
+  const game = await call<GameState>(gamesApi.POST, '/api/games', { player, body: { characterId: hero.id } });
+  assert.equal(game.status, 200);
+  await start(game.body.code, player);
+  await settle();
+  const [lazarus] = (await view(game.body.code, player)).rules!.party;
+  assert.deepEqual([lazarus.dead, lazarus.hp], [false, 1], 'back from the dead, still weak');
 });
