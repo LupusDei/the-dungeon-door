@@ -54,7 +54,14 @@ export function storedChoice(choice: Choice, hook: unknown, dungeon: DungeonStat
   return { ...choice, hook: parsed, rules: parsed && hookLabel(parsed, dungeon) };
 }
 
-export const choiceView = ({ hook, rules, ...choice }: StoredChoice): ChoiceView => ({ ...choice, rules: rules ?? (hook ? hookLabel(hook) : null) });
+/**
+ * The choice as the app shows it. A way on keeps the name stored when it was offered. A fight or an
+ * engage is rated against the party now (`levels`). Anything else uses the stored label, or the hook.
+ */
+export function choiceView({ hook, rules, ...choice }: StoredChoice, levels?: readonly number[]): ChoiceView {
+  const rated = hook && (hook.kind === 'fight' || hook.kind === 'engage') ? hookLabel(hook, levels) : null;
+  return { ...choice, rules: rated ?? rules ?? (hook ? hookLabel(hook) : null) };
+}
 
 export interface EngineStep {
   state: RulesState;

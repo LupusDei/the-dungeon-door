@@ -7,7 +7,7 @@ import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
 import { load } from '../rules/inventory.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
-import { candidates, temperedBudget } from '../rules/encounter.ts';
+import { candidates, fightBand, rateEncounter, temperedBudget, toughnessFor, type FightBand, type Toughness } from '../rules/encounter.ts';
 import { resourcesOf } from '../rules/resources.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
@@ -18,10 +18,32 @@ import type { DungeonState } from './state.ts';
 import { clockOf, lightLevel } from './time.ts';
 import type { RulesState } from './turn.ts';
 
-export interface Waiting { foes: string; attitude: Attitude }
-function waiting(dungeon: DungeonState): Waiting | null {
+export interface RatedFoe { name: string; count: number; toughness: Toughness }
+export interface Waiting { foes: string; attitude: Attitude; band: FightBand; monsters: RatedFoe[] }
+
+function grouped(monsters: readonly { name: string; toughness: Toughness }[]): RatedFoe[] {
+  const groups: RatedFoe[] = [];
+  for (const m of monsters) {
+    const last = groups.at(-1);
+    if (last && last.name === m.name) last.count += 1;
+    else groups.push({ name: m.name, count: 1, toughness: m.toughness });
+  }
+  return groups;
+}
+
+function waiting(dungeon: DungeonState, levels: readonly number[]): Waiting | null {
   const here = waitingFoes(dungeon);
-  return here && { foes: foesNamed(here.monsters), attitude: here.attitude };
+  if (!here) return null;
+  const rated = rateEncounter(levels, here.monsters);
+  return { foes: foesNamed(here.monsters), attitude: here.attitude, band: rated.band, monsters: grouped(rated.monsters) };
+}
+
+function ratedCombat(state: RulesState, combat: NonNullable<RulesState['combat']>) {
+  const levels = foeLevels(state.party, state.dungeon);
+  const ordered = combat.order.map((id) => combat.combatants[id]);
+  const xp = ordered.filter((c) => c.side === 'foes').reduce((n, c) => n + c.xp, 0);
+  const toughness = (c: (typeof ordered)[number]) => (c.side === 'foes' ? toughnessFor(levels, c.xp) : null);
+  return { ordered, band: fightBand(levels, xp), toughness };
 }
 
 const NO_SLOTS = [0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -69,14 +91,16 @@ export interface RulesView {
   party: HeroView[];
   combat: null | {
     round: number; outcome: 'ongoing' | 'victory' | 'defeat';
-    combatants: { id: string; name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; conditions: string[] }[];
+    /** The fight against the current party: low, moderate, high, or deadly above high. */
+    band: FightBand;
+    combatants: { id: string; name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; conditions: string[]; toughness: Toughness | null }[];
   };
   dungeon: null | {
     mode: 'fixed' | 'explore'; kind: string; at: string;
     /** The dungeon level the party has reached (Phase 5), and where it went deeper, oldest first. */
     level: number; deepened: { at: string; level: number }[];
     areas: { id: string; name: string; purpose: string | null; cleared: boolean; exits: { id: string; connection: string; to: string | null }[] }[];
-    /** Foes in this area who did not attack: "Boar ×3" and their attitude. */
+    /** Foes the party is facing here, rated against it. Hostile ones are barring the way. */
     waiting: Waiting | null;
   };
   results: string[];
@@ -113,12 +137,18 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
   const light = lightLevel(state);
   return {
     party: Object.entries(party.sheets).map(([id, s]) => heroView(id, s, light)),
-    combat: combat && {
-      round: combat.round,
-      outcome: combat.outcome,
-      combatants: combat.order.map((id) => combat.combatants[id]).map(({ id, name, side, hp, maxHp, status, conditions }) =>
-        ({ id, name, side, hp, maxHp, status, conditions: [...conditions] })),
-    },
+    combat: combat && (() => {
+      const rated = ratedCombat(state, combat);
+      return {
+        round: combat.round,
+        outcome: combat.outcome,
+        band: rated.band,
+        combatants: rated.ordered.map((c) => ({
+          id: c.id, name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status,
+          conditions: [...c.conditions], toughness: rated.toughness(c),
+        })),
+      };
+    })(),
     dungeon: dungeon && {
       mode: dungeon.map.mode,
       kind: dungeon.map.kind,
@@ -127,7 +157,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
       deepened: dungeon.deepened ?? [],
       areas: dungeon.visited.map((id) => dungeon.map.nodes[id]).map(({ id, name, purpose, exits }) =>
         ({ id, name, purpose, cleared: dungeon.cleared.includes(id), exits: exits.map(({ id: x, connection, to }) => ({ id: x, connection, to })) })),
-      waiting: waiting(dungeon),
+      waiting: combat ? null : waiting(dungeon, foeLevels(party, dungeon)),
     },
     results,
     levelUps: (party.levelUps ?? []).map((u) => ({ ...u, name: party.sheets[u.playerId].name })),
@@ -148,7 +178,10 @@ export interface RulesContext {
   time: string;
   /** "dark; the party's light: Bryn's Torch (40 minutes left)", or "dim; no light carried". */
   light: string;
-  combat: null | { round: number; combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string }[] };
+  combat: null | {
+    round: number; band: FightBand;
+    combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; toughness: Toughness | null }[];
+  };
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
   monsters: string[];
@@ -190,17 +223,21 @@ export function rulesContext(state: RulesState): RulesContext {
     })),
     time: clockLabel(clockOf(party)),
     light: lightLine(state),
-    combat: combat && {
-      round: combat.round,
-      combatants: combat.order.map((id) => combat.combatants[id]).map(({ name, side, hp, maxHp, status }) => ({ name, side, hp, maxHp, status })),
-    },
+    combat: combat && (() => {
+      const rated = ratedCombat(state, combat);
+      return {
+        round: combat.round,
+        band: rated.band,
+        combatants: rated.ordered.map((c) => ({ name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status, toughness: rated.toughness(c) })),
+      };
+    })(),
     dungeon: dungeon && here && {
       kind: dungeon.map.kind,
       level: dungeonLevel(dungeon),
       area: here.name,
       purpose: here.purpose,
       exits: here.exits.map((x) => ({ id: x.id, connection: x.connection, leadsTo: x.to === null ? null : leadsTo(dungeon, x.id, x.to) })),
-      waiting: waiting(dungeon),
+      waiting: combat ? null : waiting(dungeon, foeLevels(party, dungeon)),
     },
     monsters: suitableMonsters(foeLevels(party, dungeon), habitatOf(dungeon)),
   };

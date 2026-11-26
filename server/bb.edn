@@ -1,0 +1,6 @@
+{:paths ["."]
+ :deps {io.github.slagyr/gherclj {:git/tag "v1.5.0" :git/sha "c1df8cc27565d6edb17638d4fda7985fdcc5cf03"}}
+ :tasks
+ {features {:doc "Generate the Gherkin specs and run them (node:test via tsx)"
+            :requires ([gherclj.main :as main])
+            :task (main/-main)}}}

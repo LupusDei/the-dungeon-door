@@ -1,9 +1,10 @@
 /**
  * Meeting monsters: an original attitude rule (CC0; SRD 5.2 leaves it to the DM). Foes met in a room roll
- * 2d6: 2–5 Hostile (they attack), 6–9 Indifferent, 10–12 Friendly (they wait). Undead, constructs and
- * oozes are always Hostile. A parley is an Influence check (5.2: Persuasion, DC max(15, the monster's INT))
- * by the best talker with the others helping; Advantage if Friendly, Disadvantage if Hostile. Success: the
- * foes let the party be. Failure: their attitude worsens a step, and Hostile foes attack.
+ * 2d6: 2–5 Hostile, 6–9 Indifferent, 10–12 Friendly. Undead, constructs and oozes are always Hostile.
+ * Hostile foes bar the way; they do not attack until the party engages (play/turn.ts). A parley is an
+ * Influence check (5.2: Persuasion, DC max(15, the monster's INT)) by the best talker with the others
+ * helping; Advantage if Friendly, Disadvantage if Hostile. Success: the foes let the party be. Failure:
+ * their attitude worsens a step. Outside a dungeon, a failure that turns them Hostile starts the fight.
  */
 import { dcAgainst } from '../rules/checks.ts';
 import { monster } from '../rules/monsters.ts';

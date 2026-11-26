@@ -310,11 +310,16 @@ All SRD 5.2 unless marked **original** (our own rules, CC0, for what 5.2 leaves 
   or sprung. Hazards: falling, burning, suffocation, extreme cold and heat, dehydration, malnutrition.
   Old 5.1 trap ids in stored dungeons map to their 5.2 counterparts. **Original**: the dungeon's hazard
   placements (a 10–120 ft drop by tier, a jet of burning oil, a flooded passage, a parched crawl).
-- **Attitude and parley** (`play/parley.ts`, **original**). Foes met in a room roll 2d6: 2–5 Hostile
-  (they attack), 6–9 Indifferent, 10–12 Friendly (they wait). Undead, constructs and oozes are always
-  Hostile. A parley is a Persuasion check (the Influence DC of the foe hardest to sway, the best talker
-  with Help; Advantage if Friendly, Disadvantage if Hostile). Success clears the room without its
-  treasure; failure worsens the attitude a step, and Hostile foes attack.
+- **Attitude, parley, and running** (`play/parley.ts`, `play/turn.ts`, **original**). Foes met in a room
+  roll 2d6: 2–5 Hostile, 6–9 Indifferent, 10–12 Friendly. Undead, constructs and oozes are always Hostile.
+  **They do not attack at once.** Hostile foes bar the way, and the party votes Engage, Run or Parley.
+  Run, before initiative, backs out the way the party came; the room stays uncleared, with no loot and no
+  XP. Wanderers who are Hostile wait for the same choice, and Run slips past them. A parley is a
+  Persuasion check (the Influence DC of the foe hardest to sway, the best talker with Help; Advantage if
+  Friendly, Disadvantage if Hostile). Success clears the room without its treasure (wanderers simply let
+  the party be). Failure worsens the attitude a step. A band that turns Hostile bars the way for the same
+  vote. Outside a dungeon, a parley the DM names starts Indifferent, and a failure that turns them Hostile
+  does start the fight: there is nowhere to back out to.
 - **Morale** (`play/morale.ts`, **original**). A band is shaken by its first death, by falling to half its
   total HP, or by its leader (most XP) going down, each only as it happens; it rolls d20 + its best WIS
   save vs DC 10. Below: it flees, and each standing hero with a melee weapon makes an Opportunity Attack
@@ -449,6 +454,16 @@ were at that level (`foeLevels`: n living heroes × the dungeon level).
   mounts, livestock, sea creatures or townsfolk.
 - *DM fights.* A fight the DM proposes is held to a **high** encounter for the party (`capFight`). Its
   monsters are kept in order while they fit the budget and the cap. If none fits, the weakest one is kept.
+- *Toughness* (`rateEncounter`, **original** names on the 5.2 budgets). Any list of monsters is rated
+  against the party's tempered budget. The fight is low, moderate, high, or **deadly** when its XP is
+  above high. One monster is **puny**, **weak**, **even**, **strong** or **deadly**. Puny is strictly
+  under half the low budget (`xp * 2 < low`): less than half an easy fight, a nuisance. At half that
+  line through the low line the monster is weak, so a foe worth exactly half an easy fight is not
+  puny (four level-1 heroes, low budget 100: a goblin at 50 XP is weak, a rat at 10 XP is puny). Even,
+  strong and deadly are a moderate fight, a high fight, and anything above high. The fight's band has
+  no puny step. The engine shows the words on a fight choice, on a meeting, and on every foe in a
+  round. They are always visible. The DM may say them and may not change them. A fight the DM proposes
+  is rated after `capFight`; foes the party has already met are rated as they stand.
 - *DM suggestions.* The monsters suggested to the DM (`ctx.rules.monsters`) come from the dungeon's
   habitat and fit a moderate fight at its level.
 - *Hero builds.* New heroes put their best scores into their class's primary abilities, then
@@ -499,8 +514,10 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
 - **The hour and the light** (app): a scene shows the clock, the light the party carries and how long it
   has left, and what the caller's own hero can see (`rules.time`, `rules.light`, `party[].sight`); a
   hero's sheet in a game says when they cannot see.
-- **Waiting foes and the dead** (app): a room whose foes did not attack shows who they are and what a
-  parley would do (`rules.dungeon.waiting`); a dead hero's page has the temple (`POST
+- **Waiting foes and the dead** (app): a room whose foes did not attack, and a room whose foes bar the
+  way, shows who they are, how hard they are, and what a parley would do (`rules.dungeon.waiting`, with
+  each foe's toughness and the fight's band). A fight choice and each foe in a round show the same
+  ratings. A dead hero's page has the temple (`POST
   /api/characters/revive`), listing which of the player's purses can pay; a raised hero's page and sheet
   show the revival penalty.
 - **Conditions and the held spell** (app): a scene tells the caller what their own hero carries and how

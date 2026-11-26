@@ -187,7 +187,8 @@ Scene {
   voiceUrl: string | null            // the default narrator's reading: `voices[catalog.defaultNarrator]`, for
                                      // apps from before the voice picker
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
-              rules: string | null }]  // e.g. "Athletics check, DC 12"; exactly 3; empty for the epilogue
+              rules: string | null }]  // e.g. "Athletics check, DC 12", "Fight: Goblin Warrior (weak) — low";
+                                     // exactly 3; empty for the epilogue
   combat: boolean                    // true for a combat round: each vote is that player's own hero's action,
                                      // and `choices` are written for the caller's hero (see below)
   canAct: boolean                    // false when the caller's hero cannot act this round (down or dead):
@@ -236,9 +237,13 @@ RulesView {                          // SRD 5.2 (2024 rules)
   combat: null | {
     round: number
     outcome: "ongoing"                // a settled fight is gone (combat: null); its end is in results
+    band: "low" | "moderate" | "high" | "deadly"   // the fight against this party; deadly is above high.
+                                      // The engine's word. Absent from servers older than toughness ratings.
     combatants: [{ id: string; name: string; side: "party" | "foes"; hp: number; maxHp: number;
-                   status: "up" | "dying" | "stable" | "dead"; conditions: string[] }]   // initiative order;
-                                      // a hero's id is its playerId
+                   status: "up" | "dying" | "stable" | "dead"; conditions: string[];
+                   toughness: null | "puny" | "weak" | "even" | "strong" | "deadly" }]   // initiative order;
+                                      // a hero's id is its playerId; toughness is null for a hero, and the
+                                      // foe's own rating against this party (absent from older servers)
   }
   dungeon: null | {
     mode: "fixed" | "explore"; kind: string
@@ -248,8 +253,12 @@ RulesView {                          // SRD 5.2 (2024 rules)
     deepened: [{ at: string; level: number }]   // where it went deeper, oldest first
     areas: [{ id: string; name: string; purpose: string | null; cleared: boolean;
               exits: [{ id: string; connection: string; to: string | null }] }]   // visited areas only
-    waiting: null | { foes: string; attitude: "indifferent" | "friendly" }   // "Boar ×3": foes in this
-                                      // area who did not attack; a Parley choice talks to them
+    waiting: null | { foes: string; attitude: "hostile" | "indifferent" | "friendly";
+                   band: "low" | "moderate" | "high" | "deadly";
+                   monsters: [{ name: string; count: number; toughness: "puny" | "weak" | "even" | "strong" | "deadly" }] }
+                                      // "Boar ×3": foes the party is facing here. Hostile ones bar the way
+                                      // (the scene's choices are Engage, Run and Parley). band and monsters
+                                      // rate them against this party; absent from servers older than that
   }
   results: string[]                   // the engine's dice lines for the last resolved scene
   levelUps: [{ playerId: string; name: string; from: number; to: number }]   // who levelled up at the
@@ -318,7 +327,8 @@ Games started after the engine shipped carry `rules`. The DM proposes and narrat
 numbers (see docs/rules-design.md and docs/dungeon-master.md).
 
 - **Choices with `rules`.** A choice may be a check ("Athletics check, DC 12"), a saving throw ("Dexterity
-  save, DC 13"), a fight ("Fight: 2 Goblin Warriors"), a rest ("Short rest", "Long rest") or, in a
+  save, DC 13"), a fight ("Fight: Goblin Warrior (weak) — low" or "Fight: Rat (puny) — low": each kind's
+  toughness, then the fight's band, low / moderate / high / deadly), a rest ("Short rest", "Long rest") or, in a
   dungeon, a way on, named by how it is closed and, once the party has been there, where it leads ("Go on
   (locked door)", "Back to Narthex (open passage)"; ways alike are told apart: "Go on (second open
   passage)"). It never shows an exit id, and it is fixed when the choice is offered. The party still goes with the most-voted choice. Ties go
@@ -343,7 +353,7 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   `rules.dungeon.areas` like any other (its `purpose` is null), passed in the same move, and it can be
   trapped. In a dungeon the engine rolls for wandering monsters every half hour of the clock (d6, a 1), and
   at once after noise (a fight that ended, a trap that went off: 1 or 2). Wanderers roll an attitude like
-  any foes: the Hostile attack, the others go their way.
+  any foes: the Hostile bar the way, the others go their way.
 - **Dungeon levels.** A dungeon starts at the living heroes' average level (rounded down, at least 1), so
   new heroes start at 1. Each door into an area not yet seen has a 25% chance of leading a level deeper
   (seeded), and stairs in explore mode add one too. It never goes down and stops at 20. A line says "The
@@ -355,10 +365,26 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
 - **Levelling up at the quest's end.** When the next scene is the epilogue, each living hero levels up
   as far as its XP reaches (2024 thresholds, average hit points). The lines are in `rules.results` and
   the chat, `rules.levelUps` lists who levelled up, and the hero goes home at its new level.
-- **Meeting monsters.** Foes in a dungeon room roll an attitude (2d6): 2–5 Hostile, and the fight starts;
-  6–9 Indifferent or 10–12 Friendly, and they wait (`rules.dungeon.waiting`). Undead, constructs and oozes
-  are always Hostile. A parley that works leaves the room to the party (their treasure stays theirs); one
-  that fails sours them a step, and Hostile foes attack.
+- **Meeting monsters.** Foes in a dungeon room roll an attitude (2d6): 2–5 Hostile, 6–9 Indifferent,
+  10–12 Friendly. They do not attack at once. Hostile ones bar the way (`rules.dungeon.waiting`, attitude
+  `hostile`): the scene's three choices are Engage, Run and Parley, whatever the DM wrote. Run, before
+  initiative, backs the party out the way it came; the room stays uncleared, with no loot and no XP.
+  Indifferent or Friendly foes wait. Undead, constructs and oozes are always Hostile. A parley that works
+  leaves the room to the party (their treasure stays theirs); one that fails sours them a step, and if they
+  turn Hostile the party chooses again. Wanderers who are Hostile wait for the same choice; Run slips past
+  them. Outside a dungeon, a parley the DM names starts Indifferent, and a failure that turns them Hostile
+  does start the fight.
+- **Toughness.** Wherever a foe is shown, the engine rates it against the current party, and rates the
+  fight those foes make together. One monster is puny, weak, even, strong or deadly. Puny is strictly
+  under half the party's low budget (`xp * 2 < low`): a nuisance that would not fill half an easy fight.
+  At half that line through low it is weak, through moderate even, through high strong, and above high
+  deadly. A goblin at exactly half the low line stays weak; a rat under it is puny. The fight itself is
+  low, moderate, high or deadly, with no puny step, so several puny foes can still be a real fight. A
+  fight choice reads "Fight: Goblin Warrior (weak) — low" or "Fight: Rat (puny) — low". A meeting lists each kind on
+  `waiting.monsters` with `waiting.band`. A combat round puts `toughness` on each foe and `band` on the
+  fight. The words are the engine's; they are always shown, with no check to uncover them. A fight the DM
+  proposes is rated after it is held to a high encounter, which is the fight that will be fought. Engage
+  rates the foes already standing.
 - **Combat rounds** (`scene.combat`). The choices are always: (a) Attack: your best weapon against the
   most wounded foe; (b) Cast: your best attack cantrip or spell (Attack if you have none), or, while a friend is dying, a healer's healing spell on them ("Cast Cure Wounds", "Heals Corin, who is dying: 2d8+3 hit points."); (c) the third
   choice, which depends on the moment: **Break Free** (a hero Restrained or Grappled spends the action on

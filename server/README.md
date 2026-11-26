@@ -51,6 +51,7 @@ curl -s -X POST localhost:3000/api/games -H "x-dd-player: $P" -H 'content-type: 
 ```bash
 npm run typecheck
 npm test            # node --test: full games on the in-memory store with fake AI
+npm run features    # Gherkin acceptance specs (needs Babashka; see the root README)
 npm run playtest    # bots play whole games through the API handlers: scenes, fights, deaths, anything that broke
 npm run fights      # the fights a mapped dungeon rolls, for typical parties: won, fled, lost, heroes dead
 npm run dm:check    # REAL model, text only (~5 cents): the DM accepts the schema and writes hooks the engine takes

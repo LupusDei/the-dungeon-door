@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildEncounter, candidates, capFight, composeEncounter, foeCap, temperedBudget, worthwhile } from './encounter.ts';
+import { buildEncounter, candidates, capFight, composeEncounter, fightBand, foeCap, rateEncounter, temperedBudget, toughnessFor, worthwhile } from './encounter.ts';
 import type { Monster } from './monsters.ts';
 import { scriptedRng } from './rng.ts';
 import { encounterBudget, monster } from './monsters.ts';
@@ -105,6 +105,20 @@ test('a fight the DM proposes always keeps one foe: the least of them, when none
   assert.deepEqual(capFight(['adult-red-dragon', 'ogre'], [1]), ['ogre']);
   assert.deepEqual(capFight(['ogre'], [1, 1]), ['ogre']);
   assert.deepEqual(capFight(['adult-red-dragon', 'ghast', 'ogre'], [1]), ['ghast'], 'the first, among equals');
+});
+
+test('a list of monsters is rated on the tempered budget: the fight low, moderate, high or deadly, each monster puny, weak, even, strong or deadly', () => {
+  const levels = [1, 1, 1, 1];
+  assert.deepEqual([0, 100, 101, 150, 151, 200, 201].map((xp) => fightBand(levels, xp)), ['low', 'low', 'moderate', 'moderate', 'high', 'high', 'deadly']);
+  assert.deepEqual([100, 101, 151, 201].map((xp) => toughnessFor(levels, xp)), ['weak', 'even', 'strong', 'deadly']);
+  assert.deepEqual([49, 50].map((xp) => toughnessFor(levels, xp)), ['puny', 'weak'], 'under half the low line is puny; half of it is still weak');
+  assert.equal(fightBand(levels, 49), 'low', 'puny does not add a fight band');
+  assert.equal(fightBand([3], temperedBudget([3], 'high')), 'high', 'from level 3 the line is the 5.2 table’s');
+  assert.equal(fightBand([3], temperedBudget([3], 'high') + 1), 'deadly');
+  const rated = rateEncounter(levels, ['goblin-warrior', 'ogre']);
+  assert.equal(rated.xp, 500);
+  assert.equal(rated.band, 'deadly');
+  assert.deepEqual(rated.monsters.map((m) => [m.id, m.name, m.toughness]), [['goblin-warrior', 'Goblin Warrior', 'weak'], ['ogre', 'Ogre', 'deadly']]);
 });
 
 test('rooms and wanderers are never stocked with a monster that cannot attack (a Shrieker is the DM’s to place)', () => {

@@ -30,10 +30,19 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   example traps; the engine checks the party's passive scores, disarms or springs it, and scales it to their
   level), or {"kind":"hazard","hazard":"falling","feet":30} (also burning; suffocation with "minutes";
   extreme-cold or extreme-heat with "hours"; dehydration; malnutrition with "days").
-- Foes the party meets in a room roll an attitude: Hostile ones attack at once; Indifferent or Friendly ones
-  wait (the dungeon block says so). Offer {"kind":"parley"} (the best talker tries to sway them: success and
-  they let the party be, failure sours them and Hostile foes attack), a fight with them, or a way past. Outside
-  a dungeon, {"kind":"parley","monsters":["goblin-warrior"]} talks with creatures you name.
+- The engine rates every foe against this party: puny, weak, even, strong or deadly, and the whole fight
+  low, moderate, high or deadly (deadly is worse than high; a fight is never puny). Puny is under half an
+  easy fight. Those words are in the dungeon and combat blocks.
+  When you mention how hard a foe is, repeat them as given. Never invent or change a rating, and still use
+  no numbers in the story.
+- Foes the party meets roll an attitude. They do not attack at once. Hostile ones bar the way, and the
+  engine replaces your three choices with Engage, Run and Parley: still write the scene. Run backs out the
+  way the party came (or slips past wanderers); the room stays uncleared, with no loot and no experience.
+  Indifferent or Friendly ones wait (the dungeon block says so). Offer a parley, a fight with them, or a way
+  past when they are not Hostile. {"kind":"parley"} is the best talker trying to sway them: success and they
+  let the party be, failure sours them a step. If they turn Hostile, the party chooses again; they do not
+  attack on their own. Outside a dungeon, {"kind":"parley","monsters":["goblin-warrior"]} talks with
+  creatures you name, and a failure that turns them Hostile does start the fight.
 - In a fight the foes check morale when shaken (first death, half their strength gone, leader down): they may
   stand, flee (the heroes get Opportunity Attacks) or surrender. Slain heroes stay dead unless a party caster
   Revivifies them on the spot (the engine does that). Where there is a temple or shrine, {"kind":"revive"}
@@ -71,12 +80,23 @@ function heroLine(h: RulesContext['party'][number]): string {
 }
 
 function combatLine(c: NonNullable<RulesContext['combat']>): string {
-  return `COMBAT, round ${c.round}: ${c.combatants.map((x) => `${x.name} ${x.status === 'up' ? `${x.hp}/${x.maxHp} HP` : x.status}`).join('; ')}`;
+  const who = c.combatants.map((x) => {
+    const state = x.status === 'up' ? `${x.hp}/${x.maxHp} HP` : x.status;
+    return x.toughness ? `${x.name} ${state} (${x.toughness})` : `${x.name} ${state}`;
+  }).join('; ');
+  return `COMBAT, round ${c.round} (${c.band}): ${who}`;
+}
+
+function waitingLine(w: NonNullable<NonNullable<RulesContext['dungeon']>['waiting']>): string {
+  const stance = w.attitude === 'hostile' ? 'barring the way' : 'not attacking';
+  const each = w.monsters.map((m) => `each ${m.name} is ${m.toughness}`).join(', ');
+  const rated = each ? `. ${each[0].toUpperCase()}${each.slice(1)}. The fight is ${w.band}` : '';
+  return `. Waiting here, ${stance}: ${w.foes} (${w.attitude})${rated}.`;
 }
 
 function dungeonLine(d: NonNullable<RulesContext['dungeon']>): string {
   const exits = d.exits.map((x) => `${x.id} ${x.connection} to ${x.leadsTo === null ? 'unexplored' : x.leadsTo}`).join('; ') || 'none';
-  const foes = d.waiting ? `. Waiting here, not attacking: ${d.waiting.foes} (${d.waiting.attitude})` : '';
+  const foes = d.waiting ? waitingLine(d.waiting) : '';
   return `DUNGEON (${d.kind}, level ${d.level}): the party is in ${d.area}${d.purpose ? ` (${d.purpose})` : ''}. Exits: ${exits}${foes}`;
 }
 

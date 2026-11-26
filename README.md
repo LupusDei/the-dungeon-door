@@ -30,6 +30,18 @@ Server (local, no AI spend; see `server/README.md` for details):
 cd server && npm install && DD_FAKE_AI=1 npm run dev
 ```
 
+Acceptance specs are Gherkin, transpiled by [gherclj](https://github.com/slagyr/gherclj) (v1.5.0) into
+Node's test runner. From `server/`:
+
+```bash
+npm run features    # bb features: needs Babashka on PATH
+```
+
+`gherclj.edn` points at `server/features`. Generated specs land in `server/target/gherclj` and are not
+committed (`server/target` is gitignored). gherclj runs them with `tsx`, not `node --experimental-strip-types`:
+the generated imports leave off the `.ts` extension, which this repo's type-stripping loader will not
+resolve. `npm test` stays on that loader. `npm run features` is the acceptance run beside it.
+
 App on the simulator, pointed at the local server:
 
 ```bash

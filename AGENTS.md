@@ -87,6 +87,7 @@ Server (Node 22+), from `server/`:
 ```bash
 npm install
 npm run typecheck && npm test     # must pass before any server change is done
+npm run features                  # Gherkin acceptance specs; needs Babashka. See the root README.
 npm run dev                       # http://localhost:3000, fake AI, in-memory store, costs nothing
 npm run bot -- --base http://localhost:3000 --code ABCDEF   # a second player for a game in the lobby
 npm run playtest                  # bots play whole games through the real flow: deaths, fights, anything that broke

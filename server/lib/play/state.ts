@@ -41,6 +41,10 @@ export interface DungeonState {
   cleared: string[];
   /** The attitude of the foes met in each room (play/parley.ts); absent in games from before it. */
   attitudes?: Record<string, Attitude>;
+  /** The area the party came from on the last move, so a Run can back out. Absent before that move. */
+  cameFrom?: string;
+  /** Wanderers barring the way, awaiting Engage, Run or Parley. Absent when none are. */
+  facing?: { monsters: string[]; attitude: Attitude };
   /** Seconds toward the next wandering-monster check (play/wandering.ts); absent: 0. */
   wander?: number;
   /** Something loud just happened (a fight ended, a trap went off): a check comes at once, 2 in 6. */

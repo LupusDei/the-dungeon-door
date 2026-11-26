@@ -56,7 +56,7 @@ export function enter(dungeon: DungeonState, exitId: string): { dungeon: Dungeon
   const node = dungeon.visited.includes(to) ? grown.nodes[to] : restock(grown, grown.nodes[to], reached);
   const map = { ...grown, nodes: { ...grown.nodes, [to]: node } };
   const visited = dungeon.visited.includes(to) ? dungeon.visited : [...dungeon.visited, to];
-  return { dungeon: { ...deepenedTo(dungeon, to, Math.max(reached, node.depth)), map, at: to, visited }, node };
+  return { dungeon: { ...deepenedTo(dungeon, to, Math.max(reached, node.depth)), map, at: to, visited, cameFrom: dungeon.at }, node };
 }
 
 /** The dungeon at this level from here on, the change recorded; no deeper, unchanged. */
@@ -87,12 +87,18 @@ export function arrival(dungeon: DungeonState, node: DungeonNode): Arrival {
   };
 }
 
-/** The foes met in the room the party is in who did not attack and are still there; null if none. */
-export function waitingFoes(dungeon: DungeonState): { monsters: string[]; attitude: Attitude } | null {
+export interface MetFoes { monsters: string[]; attitude: Attitude; source: 'room' | 'wanderers' }
+
+/**
+ * Foes the party is facing here and has not dealt with. Wanderers, if a band just arrived; otherwise the
+ * room's own, hostile included (they bar the way; they do not attack until the party engages).
+ */
+export function waitingFoes(dungeon: DungeonState): MetFoes | null {
+  if (dungeon.facing) return { monsters: dungeon.facing.monsters, attitude: dungeon.facing.attitude, source: 'wanderers' };
   const attitude = dungeon.attitudes?.[dungeon.at];
   const encounter = dungeon.map.nodes[dungeon.at].contents?.encounter;
   if (!attitude || !encounter || dungeon.cleared.includes(dungeon.at)) return null;
-  return { monsters: encounter.monsters, attitude };
+  return { monsters: encounter.monsters, attitude, source: 'room' };
 }
 
 /** The foes' attitude in the room the party is in. */

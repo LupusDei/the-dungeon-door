@@ -518,25 +518,30 @@ private struct NarratorBar: View {
     }
 }
 
-/// Foes in the room who did not attack: who they are, how they take to the party, and what a
-/// parley with them would do.
+/// Foes the party is facing: who they are, how hard they are, how they take to the party.
 private struct WaitingFoesNotice: View {
     let waiting: WaitingFoes
 
+    private var tint: Color { waiting.isHostile ? Palette.ember : Palette.verdigris }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: waiting.isFriendly ? "hand.wave.fill" : "eye.fill")
+            Image(systemName: waiting.isHostile ? "flame.fill" : waiting.isFriendly ? "hand.wave.fill" : "eye.fill")
                 .font(.system(size: 17))
-                .foregroundStyle(Palette.verdigris)
+                .foregroundStyle(tint)
                 .frame(width: 26)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Here: \(waiting.foes)")
                     .font(.display(16))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(waiting.isFriendly
-                     ? "Friendly. They will not attack. A parley with them is rolled twice and the better die counts; one that fails leaves them indifferent."
-                     : "Indifferent. They watch and wait. A parley can win the room; one that fails turns them hostile, and they attack.")
+                if let rating = waiting.rating {
+                    Text(rating)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.ember)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(waiting.note)
                     .font(.footnote)
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -545,8 +550,8 @@ private struct WaitingFoesNotice: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.verdigris.opacity(0.10), in: .rect(cornerRadius: 12))
-        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.verdigris.opacity(0.45), lineWidth: 1) }
+        .background(tint.opacity(0.10), in: .rect(cornerRadius: 12))
+        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(tint.opacity(0.45), lineWidth: 1) }
         .accessibilityElement(children: .combine)
     }
 }
@@ -569,6 +574,8 @@ struct RuleTag: Equatable {
             tint = Palette.gold
         } else if lower.hasPrefix("fight") {
             (text, symbol, tint) = (label, "flame.fill", Palette.ember)
+        } else if lower == "run" {
+            (text, symbol, tint) = (label, "arrow.uturn.backward", Palette.gold)
         } else if lower.hasSuffix("rest") {
             (text, symbol, tint) = (label, "moon.zzz.fill", Palette.verdigris)
         } else if lower.hasPrefix("buy") || lower.hasPrefix("sell") {

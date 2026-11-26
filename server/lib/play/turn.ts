@@ -7,7 +7,7 @@ import type { HazardSpec } from '../rules/hazards.ts';
 import { capFight } from '../rules/encounter.ts';
 import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
-import type { ChoiceId } from '../types.ts';
+import type { ChoiceId, StoredChoice } from '../types.ts';
 import { groupRoll } from './checks.ts';
 import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
@@ -93,7 +93,7 @@ function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: str
   return done(sprung.success ? after : loud(after), [...before, ...settled.lines], sprung.success);
 }
 
-/** Foes met in a room: Hostile ones attack; the others watch and wait (their attitude is kept for the room). */
+/** Foes met in a room: Hostile ones bar the way; the others watch and wait (their attitude is kept for the room). */
 function meet(s: RulesState, monsters: string[], before: string[]): RulesTurn {
   const dungeon = s.dungeon!;
   const known = dungeon.attitudes?.[dungeon.at];
@@ -101,8 +101,51 @@ function meet(s: RulesState, monsters: string[], before: string[]): RulesTurn {
   const met = known ? { attitude: known, roll: null } : rollAttitude(rng, monsters);
   const here = { ...s, party: { ...s.party, rng: rng.state() }, dungeon: withAttitude(dungeon, met.attitude) };
   const told = `${foesNamed(monsters)}: ${met.attitude}${met.roll === null ? '' : ` (2d6: ${met.roll})`}.`;
-  if (met.attitude === 'hostile') return fight(here, monsters, [...before, told]);
-  return done(here, [...before, `${told} They watch and wait.`]);
+  const stance = met.attitude === 'hostile' ? 'They bar the way.' : 'They watch and wait.';
+  return done(here, [...before, `${told} ${stance}`]);
+}
+
+const withoutFacing = (dungeon: DungeonState): DungeonState => {
+  const { facing: _, ...rest } = dungeon;
+  return rest;
+};
+
+/**
+ * Hostile foes are waiting on the party's vote: Engage, Run or Parley. Null when nobody is barring the way
+ * (a fight already on, or the foes are not Hostile). The next scene's choices (lib/game.ts).
+ */
+export function confrontationChoices(s: RulesState): StoredChoice[] | null {
+  if (s.combat || !s.dungeon) return null;
+  const waiting = waitingFoes(s.dungeon);
+  if (!waiting || waiting.attitude !== 'hostile') return null;
+  const run = waiting.source === 'wanderers'
+    ? 'Slip past them. Nothing is fought and nothing is gained.'
+    : 'Back out the way you came. The room stays as you found it, and nothing is gained.';
+  return [
+    { id: 'a', label: 'Engage', detail: 'Stand and fight them.', hook: { kind: 'engage', monsters: [...waiting.monsters] } },
+    { id: 'b', label: 'Run', detail: run, hook: { kind: 'run' } },
+    { id: 'c', label: 'Parley', detail: 'The best talker tries to sway them.', hook: { kind: 'parley' } },
+  ];
+}
+
+/** Fight the foes already met, as they stand. */
+function engage(s: RulesState, monsters: readonly string[]): RulesTurn {
+  const dungeon = s.dungeon?.facing ? withoutFacing(s.dungeon) : s.dungeon;
+  return fight({ ...s, dungeon }, monsters);
+}
+
+/** Leave before initiative. A room is left the way the party came; wanderers are slipped past. No loot, no XP. */
+function run(s: RulesState): RulesTurn {
+  const dungeon = s.dungeon;
+  if (!dungeon) return done(s, ['There is nowhere to run.']);
+  const waiting = waitingFoes(dungeon);
+  if (!waiting || waiting.attitude !== 'hostile') return done(s, ['There is no one to run from.']);
+  if (waiting.source === 'wanderers') return done({ ...s, dungeon: withoutFacing(dungeon) }, ['The party slips past. The wanderers do not pursue.']);
+  const back = dungeon.cameFrom;
+  const exit = dungeon.map.nodes[dungeon.at].exits.find((e) => e.to === back || e.id === back);
+  const moved = back && exit ? enter(dungeon, exit.id) : null;
+  if (!moved) return done(s, ['There is no way back.']);
+  return done({ ...s, dungeon: moved.dungeon }, [`The party backs out into ${moved.node.name}.`]);
 }
 
 /** The party parleys with the foes waiting here, or with those the DM names (Indifferent). */
@@ -111,10 +154,15 @@ function talk(s: RulesState, offered: readonly string[] | null | undefined, ball
   const monsters = waiting ? waiting.monsters : offered;
   if (!monsters || monsters.length === 0) return done(s, ['There is no one here to talk to.']);
   const talked = parley(s.party, monsters, waiting ? waiting.attitude : 'indifferent', votesOf(ballots));
-  const dungeon = waiting ? (talked.success ? clearRoom(s.dungeon!, s.dungeon!.at) : withAttitude(s.dungeon!, talked.attitude)) : s.dungeon;
-  const after = { ...s, party: talked.party, dungeon };
-  if (talked.attitude === 'hostile') return fight(after, monsters, talked.lines);
-  return done(after, talked.lines, talked.success);
+  if (!waiting || !s.dungeon) {
+    const after = { ...s, party: talked.party };
+    if (talked.attitude === 'hostile') return fight(after, monsters, talked.lines);
+    return done(after, talked.lines, talked.success);
+  }
+  const dungeon = waiting.source === 'wanderers'
+    ? (talked.success ? withoutFacing(s.dungeon) : { ...s.dungeon, facing: { monsters: [...waiting.monsters], attitude: talked.attitude } })
+    : (talked.success ? clearRoom(s.dungeon, s.dungeon.at) : withAttitude(s.dungeon, talked.attitude));
+  return done({ ...s, party: talked.party, dungeon }, talked.lines, talked.success);
 }
 
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
@@ -168,14 +216,15 @@ function onTheWay(s: RulesState, spoor: boolean): { state: RulesState; came: Wan
   return { state: { ...s, party: { ...s.party, rng: rng.state() } }, came };
 }
 
-/** Wanderers arrive: Hostile ones attack; the others go their way. */
+/** Wanderers arrive: Hostile ones bar the way; the others go their way. */
 function meetWanderers(t: RulesTurn, came: Wanderers): RulesTurn {
   const rng = seededRng(t.party.rng);
   const met = rollAttitude(rng, came.monsters);
   const here = { ...t, party: { ...t.party, rng: rng.state() } };
   const told = `${came.line} They are ${met.attitude}${met.roll === null ? '' : ` (2d6: ${met.roll})`}.`;
-  if (met.attitude === 'hostile') return { ...fight(here, came.monsters, [...t.lines, told]), success: t.success };
-  return { ...here, lines: [...t.lines, `${told} They go their way.`] };
+  if (met.attitude !== 'hostile') return { ...here, lines: [...t.lines, `${told} They go their way.`] };
+  const dungeon = { ...here.dungeon!, facing: { monsters: [...came.monsters], attitude: 'hostile' as const } };
+  return { ...here, dungeon, lines: [...t.lines, `${told} They bar the way.`], success: t.success };
 }
 
 /** After the turn's time, the checks due (noise first, 2 in 6); a fight on, or foes waiting here, keeps others off. */
@@ -209,6 +258,8 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   check: (s, hook, ballots) => roll(s, hook, ballots),
   save: (s, hook, ballots) => roll(s, hook, ballots),
   fight: (s, hook) => fight(s, capFight(hook.monsters, foesFor(s))),
+  engage: (s, hook) => engage(s, hook.monsters),
+  run: (s) => run(s),
   rest: (s, hook) => rest(s, hook.rest),
   move: (s, hook, ballots) => move(s, hook.exit, ballots),
   buy: (s, hook) => traded(s, buyItems(s.party, hook.items)),
@@ -231,7 +282,7 @@ function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Bal
   const ready = { ...s, party: lit.party };
   const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(ready, hook, ballots) : done(ready);
   const played = { ...hooked, lines: [...lit.lines, ...hooked.lines] };
-  if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' ? 0 : secondsFor(hook), true);
+  if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' || played.dungeon?.facing ? 0 : secondsFor(hook), true);
   return wander(elapse(played, secondsFor(hook)), secondsFor(hook));
 }
 

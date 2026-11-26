@@ -6,7 +6,7 @@ import { RULES_INSTRUCTIONS, rulesBlock, resultsBlock } from './rulesPrompt.ts';
 const ctx: RulesContext = {
   party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false, dead: false, sees: 'clear', conditions: '' },
     { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true, dead: false, sees: 'clear', conditions: '' }],
-  combat: { round: 3, combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up' }, { name: 'Ogre', side: 'foes', hp: 0, maxHp: 68, status: 'dead' }] },
+  combat: { round: 3, band: 'deadly', combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up', toughness: null }, { name: 'Ogre', side: 'foes', hp: 0, maxHp: 68, status: 'dead', toughness: 'deadly' }] },
   dungeon: { kind: 'Lair', level: 1, area: 'Grand chamber', purpose: 'Throne room', exits: [{ id: 'r2', connection: 'locked-door', leadsTo: 'Vault' }, { id: 'x1', connection: 'open-passage', leadsTo: null }], waiting: null },
   monsters: ['ogre', 'goblin-warrior'],
   time: 'Day 1, 09:10',
@@ -21,14 +21,14 @@ test('the rules block tells the DM the party’s numbers, the fight, the area an
     '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, passive Perception 13, passive Insight 10, 4 gp; carries Chain Mail, Potion of Healing ×2',
     '- Cleo: level 2, DOWN (0/12 HP), AC 12, spell slots left 2/1, passive Perception 11, passive Insight 12, 0.5 gp, overloaded (Speed 5 ft); carries nothing',
     "NOW: Day 1, 09:10. Light: dark; the party's light: Bryn's Torch (40 minutes left)",
-    'COMBAT, round 3: Bryn 7/20 HP; Ogre dead',
+    'COMBAT, round 3 (deadly): Bryn 7/20 HP; Ogre dead (deadly)',
     'DUNGEON (Lair, level 1): the party is in Grand chamber (Throne room). Exits: r2 locked-door to Vault; x1 open-passage to unexplored',
     'Monsters for fights: ogre, goblin-warrior',
   ].join('\n'));
   assert.equal(rulesBlock({ ...ctx, combat: null, dungeon: { ...ctx.dungeon!, purpose: null, exits: [] } }).split('\n')[4],
     'DUNGEON (Lair, level 1): the party is in Grand chamber. Exits: none');
-  assert.equal(rulesBlock({ ...ctx, combat: null, dungeon: { ...ctx.dungeon!, exits: [], waiting: { foes: 'Boar ×3', attitude: 'indifferent' } } }).split('\n')[4],
-    'DUNGEON (Lair, level 1): the party is in Grand chamber (Throne room). Exits: none. Waiting here, not attacking: Boar ×3 (indifferent)');
+  assert.equal(rulesBlock({ ...ctx, combat: null, dungeon: { ...ctx.dungeon!, exits: [], waiting: { foes: 'Boar ×3', attitude: 'indifferent', band: 'low', monsters: [{ name: 'Boar', count: 3, toughness: 'weak' }] } } }).split('\n')[4],
+    'DUNGEON (Lair, level 1): the party is in Grand chamber (Throne room). Exits: none. Waiting here, not attacking: Boar ×3 (indifferent). Each Boar is weak. The fight is low.');
   assert.equal(heroOnly([3, 0, 0, 0, 0, 0, 0, 0, 0]), '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, spell slots left 3, passive Perception 13, passive Insight 10, 4 gp; carries Chain Mail, Potion of Healing ×2');
   assert.equal(rulesBlock(null), '');
 });
@@ -62,6 +62,8 @@ test('a hero who sees dimly or not at all is marked, so the story shows only wha
   assert.match(sees('none'), /; CANNOT SEE \(darkness\)$/);
   assert.match(RULES_INSTRUCTIONS, /Describe\s+only what the heroes can see/);
   assert.match(RULES_INSTRUCTIONS, /wandering monsters every half\s+hour/);
+  assert.match(RULES_INSTRUCTIONS, /do not attack at once/);
+  assert.match(RULES_INSTRUCTIONS, /Never invent or change a rating/);
   assert.match(RULES_INSTRUCTIONS, /"condition":"poisoned"/);
 });
 

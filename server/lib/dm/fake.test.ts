@@ -26,7 +26,7 @@ test('in a dungeon its first choice takes the first exit; before the engine its 
   const { choices: none } = await fakeDungeonMaster.openingScene(ctx({ ...rules, dungeon: { ...dungeon, exits: [] } }));
   assert.deepEqual(none[0].rules, { kind: 'check', ability: 'str', skill: 'athletics', dc: 10 });
   assert.deepEqual(choices[2].rules, { kind: 'check', ability: 'cha', skill: 'persuasion', dc: 15 });
-  const { choices: met } = await fakeDungeonMaster.openingScene(ctx({ ...rules, dungeon: { ...dungeon, waiting: { foes: 'Boar ×3', attitude: 'friendly' } } }));
+  const { choices: met } = await fakeDungeonMaster.openingScene(ctx({ ...rules, dungeon: { ...dungeon, waiting: { foes: 'Boar ×3', attitude: 'friendly', band: 'low', monsters: [{ name: 'Boar', count: 3, toughness: 'weak' }] } } }));
   assert.deepEqual(met[2].rules, { kind: 'parley' }, 'foes waiting: talk to them');
   const { choices: legacy } = await fakeDungeonMaster.openingScene(ctx(null));
   assert.ok(legacy.every((c) => c.rules === undefined));
