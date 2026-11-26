@@ -178,10 +178,14 @@ function load(): Srd {
   };
 }
 
-let cached: Srd | null = null;
+/** `load`, run on the first call only; later calls share its result. */
+export function once<T>(load: () => T): () => T {
+  let cached: { value: T } | null = null;
+  return () => {
+    cached ??= { value: load() };
+    return cached.value;
+  };
+}
 
 /** The SRD 5.2 tables, parsed on first use. */
-export function srd(): Srd {
-  cached ??= load();
-  return cached;
-}
+export const srd: () => Srd = once(load);

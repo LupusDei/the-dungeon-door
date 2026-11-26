@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { z } from 'zod';
-import { parseTable, srd } from './srd.ts';
+import { once, parseTable, srd } from './srd.ts';
 
 const data = srd();
 
@@ -97,4 +97,10 @@ test('a malformed table fails when it is loaded, naming the table', () => {
 
 test('the tables are parsed once and shared', () => {
   assert.equal(srd(), data);
+});
+
+test('once runs its loader on the first call only', () => {
+  let calls = 0;
+  const value = once(() => ++calls);
+  assert.deepEqual([value(), value(), calls], [1, 1, 1]);
 });
