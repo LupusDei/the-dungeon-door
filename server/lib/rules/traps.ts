@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import trapsJson from '../../data/srd/5.2/traps.json' with { type: 'json' };
 import { ABILITIES } from './abilities.ts';
+import type { Dungeon } from './dungeon.ts';
 import { once, parseTable } from './srd.ts';
 import { require } from './violation.ts';
 
@@ -42,6 +43,14 @@ const LEGACY: Readonly<Record<string, string>> = {
   'poison-needle': 'poisoned-needle', 'rolling-sphere': 'rolling-stone', 'sphere-of-annihilation': 'spiked-pit',
 };
 const canonical = (id: string) => (Object.hasOwn(LEGACY, id) ? LEGACY[id] : id);
+
+/** The map with every stored 5.1 trap id put as its 5.2 counterpart; the same map when it has none. */
+export function currentTraps(map: Dungeon): Dungeon {
+  const old = Object.values(map.nodes).filter((n) => n.contents?.trap && Object.hasOwn(LEGACY, n.contents.trap));
+  if (old.length === 0) return map;
+  const fixed = old.map((n) => [n.id, { ...n, contents: { ...n.contents!, trap: canonical(n.contents!.trap!) } }]);
+  return { ...map, nodes: { ...map.nodes, ...Object.fromEntries(fixed) } };
+}
 
 export const isTrap = (id: string) => entries().has(canonical(id));
 

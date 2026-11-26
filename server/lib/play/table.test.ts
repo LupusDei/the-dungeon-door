@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { heroSheet } from '../characters.ts';
 import type { Resolution } from '../dm/types.ts';
+import { generateDungeon } from '../rules/dungeon.ts';
 import type { Game, GamePlayer, StoredScene } from '../types.ts';
 import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
@@ -31,6 +32,11 @@ test('a game from before the engine has no rules state', () => {
   const party: PartyState = { version: 1, rng: 1, sheets: {} };
   assert.equal(rulesStateOf({ party: null, combat: null, dungeon: null } as unknown as Game), null);
   assert.deepEqual(rulesStateOf({ party, combat: null, dungeon: null } as unknown as Game), { party, combat: null, dungeon: null });
+  const map = generateDungeon(7, 'delve', [3]);
+  const room = Object.values(map.nodes).find((n) => n.contents !== null)!;
+  const old = { ...map, nodes: { ...map.nodes, [room.id]: { ...room, contents: { ...room.contents!, trap: 'pits' } } } };
+  const dungeon = { version: 1, map: old, at: map.entrance, visited: [], cleared: [] };
+  assert.equal(rulesStateOf({ party, combat: null, dungeon } as unknown as Game)!.dungeon!.map.nodes[room.id].contents!.trap, 'hidden-pit', 'a 5.1 trap id read as its 5.2 one');
 });
 
 test('a choice keeps a hook that holds up and shows it as a label; a bad hook or none is pure story', () => {

@@ -16,7 +16,7 @@ export interface Treasure { sp: number; gp: number; gems: number; jewellery: num
 export interface RoomContents {
   kind: StockKind;
   encounter: Encounter | null;
-  /** An SRD 5.2 trap or hazard id (5.2 traps.json, 5.2 hazards.json); maps from before Phase 3 may hold 5.1 trap ids. */
+  /** An SRD 5.2 trap or hazard id (5.2 traps.json, 5.2 hazards.json); a map stored before Phase 3 may hold 5.1 trap ids until it is next loaded (rules/traps.ts currentTraps). */
   trap: string | null;
   special: string | null;
   treasure: Treasure | null;

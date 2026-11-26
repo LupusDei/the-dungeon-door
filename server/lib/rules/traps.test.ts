@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isTrap, trapAt } from './traps.ts';
+import { generateDungeon } from './dungeon.ts';
+import { currentTraps, isTrap, trapAt } from './traps.ts';
 
 test('an SRD 5.2 example trap at its own levels', () => {
   assert.deepEqual(trapAt('collapsing-roof', 1), {
@@ -38,4 +39,18 @@ test('the Rolling Stone is a trap for levels 11 and up; below that the party mee
 test('traps and hazards are told apart; an unknown trap is refused', () => {
   assert.deepEqual(['hidden-pit', 'pits', 'falling', 'burning'].map(isTrap), [true, true, false, false]);
   assert.throws(() => trapAt('falling', 1), /unknown trap: falling/);
+});
+
+test('a stored map with 5.1 trap ids gets their 5.2 ids; a map without any is the same map', () => {
+  const map = generateDungeon(7, 'delve', [3]);
+  const room = Object.values(map.nodes).find((n) => n.contents !== null)!;
+  const bare = { ...room, id: 'bare', contents: null };
+  const old = { ...map, nodes: { ...map.nodes, bare, [room.id]: { ...room, contents: { ...room.contents!, trap: 'poison-needle' } } } };
+  const fixed = currentTraps(old);
+  assert.equal(fixed.nodes[room.id].contents!.trap, 'poisoned-needle');
+  assert.equal(fixed.nodes.bare, bare, 'an area with no contents is left alone');
+  assert.deepEqual({ ...fixed.nodes[room.id], contents: { ...fixed.nodes[room.id].contents!, trap: 'poison-needle' } }, old.nodes[room.id]);
+  const current = { ...map, nodes: { ...map.nodes, [room.id]: { ...room, contents: { ...room.contents!, trap: 'hidden-pit' } } } };
+  assert.equal(currentTraps(current), current);
+  assert.equal(currentTraps(map), map);
 });

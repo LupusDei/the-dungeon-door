@@ -8,6 +8,7 @@ import type { Resolution } from '../dm/types.ts';
 import { badRequest } from '../http.ts';
 import { longRest } from '../rules/rests.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
+import { currentTraps } from '../rules/traps.ts';
 import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } from '../types.ts';
 import { startDungeon } from './delve.ts';
 import { hookLabel, parseHook } from './hooks.ts';
@@ -35,7 +36,9 @@ export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed
   };
 }
 
-export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | null => party && { party, combat, dungeon };
+/** The game's rules state; a map from before Phase 3 gets its traps' 5.2 ids (stored back on the next write). */
+export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | null =>
+  party && { party, combat, dungeon: dungeon && { ...dungeon, map: currentTraps(dungeon.map) } };
 
 export const storedChoice = (choice: Choice, hook: unknown): StoredChoice => ({ ...choice, hook: parseHook(hook) });
 
