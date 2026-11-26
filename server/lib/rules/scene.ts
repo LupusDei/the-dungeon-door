@@ -2,7 +2,8 @@
  * A combat scene: initiative, turns and rounds over plain-JSON state, resumable from storage. Heroes act by
  * their players' votes (the vote's d20 is the roll); monsters act by simple rules. See docs/rules-design.md.
  */
-import { type Band, type Move, engagedWith, meleeCluster, neededApproach, openingPlaces, placesAfter, powerHits, provokedBy, rangedShot, spellHits, stepToward, validateMove } from './bands.ts';
+import { type Band, type Move, type Opening, engagedWith, isSquareMove, meleeCluster, neededApproach, placesAfter, powerHits, provokedBy, rangedShot, spellHits, stepToward, validateMove } from './bands.ts';
+import { type Battlefield, checkSquare, closestApproach, derivePlace, feetBetween, leavesReach, occupancy, openingSquares, reachableSquares, squareForBand, squaresMatchingPlaces, syncPlaces } from './grid.ts';
 import type { Combatant, Condition, Status } from './combatant.ts';
 import type { Power, Rider } from './powers.ts';
 import { parseDice, rollDice } from './dice.ts';
@@ -65,6 +66,8 @@ export interface CombatState {
   /** Who has used their move this turn. Absent on a fight stored before range bands. */
   moved?: string[];
   outcome: 'ongoing' | 'victory' | 'defeat';
+  /** The map. Absent on a fight stored before grids: ensureGrid lays one out. */
+  battlefield?: Battlefield;
   /** What happened, oldest first, for the DM to narrate. */
   log: CombatEvent[];
 }
@@ -128,17 +131,21 @@ function afterDeathSave(state: CombatState, id: string, rng: Rng): CombatState {
   return withEvent(state, { kind: 'deathSave', round: state.round, actor: id, status: c.status }, c);
 }
 
-export function startCombat(seed: number, combatants: readonly Combatant[], opening?: Parameters<typeof openingPlaces>[1]): CombatState {
+export function startCombat(seed: number, combatants: readonly Combatant[], opening?: Opening | 'party' | 'foes'): CombatState {
   const rng = seededRng(seed);
   const rolls = combatants.map((c) => ({ id: c.id, roll: rollD20(rng, c.initiative, 'normal').total, bonus: c.initiative }));
   const order = orderByInitiative(rolls);
-  const places = openingPlaces(combatants, opening);
+  const start = opening === 'party' || opening === 'foes' ? { surprise: opening } : opening;
+  const laid = openingSquares(combatants.map((c) => ({ id: c.id, side: c.side, status: c.status })), {
+    far: start?.band === 'far', surprise: !!start?.surprise,
+  });
+  const stood = syncPlaces(Object.fromEntries(combatants.map((c) => [c.id, { ...c, square: laid.squares[c.id], speed: c.speed ?? 30 }])));
   const state: CombatState = {
     // Round 0, last turn: advancing once opens round 1 with the highest roll.
     version: 1, round: 0, turn: order.length - 1, order,
     initiative: Object.fromEntries(rolls.map((r) => [r.id, r.roll])),
-    combatants: Object.fromEntries(combatants.map((c) => [c.id, { ...c, place: c.place ?? places[c.id] }])),
-    dodging: [], reacted: [], moved: [], rng: rng.state(), outcome: outcomeOf(Object.fromEntries(combatants.map((c) => [c.id, c]))), log: [],
+    combatants: stood, battlefield: laid.battlefield,
+    dodging: [], reacted: [], moved: [], rng: rng.state(), outcome: outcomeOf(stood), log: [],
   };
   const begun = advance(state, rng);
   return { ...begun, rng: rng.state() };
@@ -176,7 +183,11 @@ const fewestHp = (cs: Combatant[]) => cs.reduce((low, c) => (c.hp < low.hp ? c :
 /** One more attack this turn, at the most wounded foe still in reach; none left, no attack. */
 function followUp(state: CombatState, actorId: string, attack: string, rng: Rng): CombatState {
   const me = state.combatants[actorId];
-  const targets = upAgainst(state, me.side).filter((c) => !me.place || me.place.with.includes(c.id));
+  const weapon = me.attacks.find((a) => a.name === attack);
+  const targets = upAgainst(state, me.side).filter((c) => {
+    if (me.square && c.square && weapon && !weapon.ranged) return feetBetween(me.square, c.square) <= (weapon.reach ?? 5);
+    return !me.place || me.place.with.includes(c.id);
+  });
   return targets.length ? strike(state, me, fewestHp(targets), { kind: 'attack', attack, target: '' }, rng) : state;
 }
 
@@ -185,12 +196,14 @@ const outOfReach = (state: CombatState, actor: Combatant, text: string) =>
 
 /** The move, then any opportunity attacks it provoked. A mover who falls does not leave. Does not spend the turn. */
 function applyMove(state: CombatState, actor: Combatant, move: Move, rng: Rng): CombatState {
+  if (state.battlefield && actor.square) return applyGridMove(state, actor, move, rng);
   try {
     validateMove(state, actor.id, move);
   } catch (e) {
     if (e instanceof RuleViolation) return outOfReach(state, actor, e.message);
     throw e;
   }
+  if (isSquareMove(move)) return outOfReach(state, actor, `${actor.name} has nowhere to move.`);
   let s = state;
   for (const fid of provokedBy(s, actor.id, move)) {
     if (s.combatants[actor.id].status !== 'up') break;
@@ -210,6 +223,53 @@ function applyMove(state: CombatState, actor: Combatant, move: Move, rng: Rng): 
     ...(move.dash ? { dash: true as const } : {}),
     ...(left && (move.disengage || actor.disengages) ? { disengage: true as const } : {}),
   };
+  return withEvent({ ...s, moved: [...new Set([...(s.moved ?? []), actor.id])] }, event, ...changed);
+}
+
+/** A grid move: the square changes, then every band is read again. Opportunity attacks are rolled first. */
+function applyGridMove(state: CombatState, actor: Combatant, move: Move, rng: Rng): CombatState {
+  const squareOf = (): { x: number; y: number; dash: boolean } => {
+    const { blocked, through } = occupancy(actor, state.combatants);
+    if (isSquareMove(move)) {
+      const goes = leavesReach(actor, state.combatants, move).length > 0;
+      return checkSquare(actor.name, state.battlefield!, actor.square!, move, actor.speed ?? 30, blocked, through, move.dash, move.disengage, goes);
+    }
+    if (move.x !== undefined && move.y !== undefined) {
+      const at = { x: move.x, y: move.y };
+      const goes = leavesReach(actor, state.combatants, at).length > 0;
+      return checkSquare(actor.name, state.battlefield!, actor.square!, at, actor.speed ?? 30, blocked, through, move.dash, move.disengage, goes);
+    }
+    return squareForBand(actor.name, state.battlefield!, actor, state.combatants, move);
+  };
+  let dest: { x: number; y: number; dash: boolean };
+  try {
+    dest = squareOf();
+  } catch (e) {
+    if (e instanceof RuleViolation) return outOfReach(state, actor, e.message);
+    throw e;
+  }
+  const provoked = (move.disengage || actor.disengages) ? [] : leavesReach(actor, state.combatants, dest).filter((fid) => !(state.reacted ?? []).includes(fid));
+  let s = state;
+  for (const fid of provoked) {
+    if (s.combatants[actor.id].status !== 'up') break;
+    const foe = s.combatants[fid];
+    const weapon = foe.attacks.filter((a) => !a.ranged).reduce((best, a) => (a.bonus > best.bonus ? a : best));
+    const swung = strike(s, foe, s.combatants[actor.id], { kind: 'attack', attack: weapon.name, target: actor.id }, rng);
+    const event = { ...swung.log[swung.log.length - 1], reaction: true as const };
+    s = { ...swung, reacted: [...(swung.reacted ?? []), fid], log: [...swung.log.slice(0, -1), event] };
+  }
+  if (s.combatants[actor.id].status !== 'up') return s;
+  const moved: Combatant = { ...s.combatants[actor.id], square: { x: dest.x, y: dest.y } };
+  const combatants = syncPlaces({ ...s.combatants, [actor.id]: moved });
+  const place = combatants[actor.id].place ?? { band: 'near' as const, with: [] };
+  const left = provoked.length > 0 || (actor.place?.with ?? []).some((id) => !place.with.includes(id));
+  const event: CombatEvent = {
+    kind: 'move', round: s.round, actor: actor.id, to: place.band,
+    ...(place.band === 'engaged' && place.with.length > 0 ? { engage: [...place.with] } : {}),
+    ...(dest.dash ? { dash: true as const } : {}),
+    ...(left && (move.disengage || actor.disengages) ? { disengage: true as const } : {}),
+  };
+  const changed = Object.values(combatants).filter((c) => c !== s.combatants[c.id]);
   return withEvent({ ...s, moved: [...new Set([...(s.moved ?? []), actor.id])] }, event, ...changed);
 }
 
@@ -234,7 +294,11 @@ function resolveAttack(state: CombatState, actor: Combatant, action: Extract<Act
       if (me.status !== 'up' || s.outcome !== 'ongoing') return s;
     }
     const now = s.combatants[target.id];
-    if (!attack.ranged && !engagedWith(me, target.id)) return outOfReach(s, me, `${me.name} cannot reach ${now.name} from ${me.place?.band ?? 'here'}.`);
+    if (!attack.ranged) {
+      const feet = me.square && now.square ? feetBetween(me.square, now.square) : null;
+      const inReach = feet !== null ? feet <= (attack.reach ?? 5) : engagedWith(me, target.id);
+      if (!inReach) return outOfReach(s, me, `${me.name} cannot reach ${now.name} from ${me.place?.band ?? 'here'}.`);
+    }
     if (attack.ranged) {
       const shot = rangedShot(me, now, attack);
       if (!shot.ok) return outOfReach(s, me, `${me.name} cannot reach ${now.name} with ${attack.name}.`);
@@ -372,6 +436,17 @@ function chosenPower(me: Combatant): Power | undefined {
  */
 function caughtBy(state: CombatState, me: Combatant, p: Power): string[] {
   const foes = upAgainst(state, me.side).sort((a, b) => a.hp - b.hp);
+  if (state.battlefield && me.square) {
+    const { blocked, through } = occupancy(me, state.combatants);
+    const squares = [me.square, ...reachableSquares({ battlefield: state.battlefield, from: me.square, speedFeet: me.speed ?? 30, blocked, through })];
+    let best: Combatant[] = [];
+    for (const sq of squares) {
+      const hits = foes.filter((f) => powerHits({ ...me, square: sq }, f, p));
+      if (hits.length > best.length) best = hits;
+    }
+    const pick = (list: Combatant[]) => (p.area ? list : list.slice(0, 1)).map((c) => c.id);
+    return pick(best);
+  }
   if (!me.place) return foes.slice(0, p.area ? areaCatch(p.area) : 1).map((c) => c.id);
   const pick = (list: Combatant[]) => (p.area ? list : list.slice(0, 1)).map((c) => c.id);
   const now = foes.filter((f) => powerHits(me, f, p));
@@ -395,12 +470,31 @@ export function monsterAction(state: CombatState): Action | null {
     const targets = caughtBy(state, me, power);
     if (targets.length) return { kind: 'power', power: power.name, targets };
   }
-  if (me.attacks.length === 0) return { kind: 'dodge', ...(me.idle ? { as: me.idle } : {}) }; // nothing to harm anyone with (SRD: Shriek, Bubble Dash)
+  if (me.attacks.length === 0) {
+    // A melee power that is out of reach: close in. With nothing that can harm anyone, Dodge.
+    if (state.battlefield && me.square && power) {
+      const foe = upAgainst(state, me.side).sort((a, b) => a.hp - b.hp)[0];
+      const sq = foe?.square && closestApproach(state.battlefield, me, state.combatants, foe.square, me.speed ?? 30);
+      if (sq) return { kind: 'move', to: 'near', x: sq.x, y: sq.y };
+    }
+    return { kind: 'dodge', ...(me.idle ? { as: me.idle } : {}) };
+  }
   const up = upAgainst(state, me.side);
   const open = up.filter((c) => !state.dodging.includes(c.id));
   const target = fewestHp(open.length ? open : up);
   const [first, ...then] = me.multiattack ?? [(me.attacks.find((a) => !a.ranged) ?? me.attacks[0]).name];
   const chosen = me.attacks.find((a) => a.name === first) ?? me.attacks[0];
+  if (state.battlefield && me.square && target.square) {
+    const approach = neededApproach(state, me, 'attack', { attack: chosen, target });
+    const inRange = chosen.ranged ? rangedShot(me, target, chosen).ok : feetBetween(me.square, target.square) <= (chosen.reach ?? 5);
+    if (approach || inRange || (state.moved ?? []).includes(me.id)) return { kind: 'attack', attack: first, target: target.id, ...(then.length ? { then } : {}) };
+    const sq = closestApproach(state.battlefield, me, state.combatants, target.square, me.speed ?? 30);
+    if (!sq) return { kind: 'dodge' };
+    const place = derivePlace({ ...me, square: sq }, { ...state.combatants, [me.id]: { ...me, square: sq } });
+    return place.band === 'engaged'
+      ? { kind: 'move', to: 'engaged', engage: place.with, x: sq.x, y: sq.y }
+      : { kind: 'move', to: place.band, x: sq.x, y: sq.y };
+  }
   if (me.place && target.place && !neededApproach(state, me, 'attack', { attack: chosen, target })) {
     const melee = !chosen.ranged && !engagedWith(me, target.id);
     const tooFar = chosen.ranged && !rangedShot(me, target, chosen).ok;
@@ -435,6 +529,24 @@ export function aimAgain(state: CombatState, actorId: string, action: Action): A
   if (action.kind === 'attack') return { ...action, target: to };
   const aimed = action.targets.map((id) => (fallenFoe(state, side, id) ? to : id));
   return { ...action, targets: action.cast.beams > 1 ? aimed : [...new Set(aimed)] };
+}
+
+/**
+ * A fight stored before the grid gets one. Squares are chosen so the bands already stored still read true,
+ * and a creature with no speed moves at 30 feet (a hero's is the pace passed in, from its sheet).
+ */
+export function ensureGrid(state: CombatState, speeds: Readonly<Record<string, number>> = {}): CombatState {
+  const list = Object.values(state.combatants);
+  const missing = !state.battlefield || list.some((c) => !c.square);
+  let battlefield = state.battlefield;
+  let combatants = state.combatants;
+  if (missing) {
+    const laid = squaresMatchingPlaces(list.map((c) => ({ id: c.id, side: c.side, status: c.status, band: c.place?.band })));
+    battlefield = state.battlefield ?? laid.battlefield;
+    combatants = syncPlaces(Object.fromEntries(list.map((c) => [c.id, { ...c, square: c.square ?? laid.squares[c.id] }])));
+  }
+  const paced = Object.fromEntries(Object.entries(combatants).map(([id, c]) => [id, { ...c, speed: speeds[id] ?? c.speed ?? 30 }]));
+  return { ...state, battlefield, combatants: paced };
 }
 
 /** XP for the foes defeated so far. */

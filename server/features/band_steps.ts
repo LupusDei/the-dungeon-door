@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { heroSheet } from '../lib/characters.ts';
 import { type Move, validateMove } from '../lib/rules/bands.ts';
+import { feetBetween, syncPlaces } from '../lib/rules/grid.ts';
 import type { Combatant } from '../lib/rules/combatant.ts';
 import { RuleViolation } from '../lib/rules/violation.ts';
 import { heroAction, startFight } from '../lib/play/fight.ts';
@@ -27,10 +28,9 @@ export class BandSteps {
     return this.combat.combatants['foe-1'];
   }
 
-  private place(id: string, band: 'engaged' | 'near' | 'far', withIds: string[]) {
-    const combatants = { ...this.combat.combatants };
-    combatants[id] = { ...combatants[id], place: { band, with: withIds } };
-    this.combat = { ...this.combat, combatants };
+  private place(id: string, square: { x: number; y: number }) {
+    const combatants = { ...this.combat.combatants, [id]: { ...this.combat.combatants[id], square } };
+    this.combat = { ...this.combat, combatants: syncPlaces(combatants) };
   }
 
   /** Given a fight between Bryn and a goblin. */
@@ -50,14 +50,15 @@ export class BandSteps {
     this.combat = started.combat;
   }
 
+  /** Opposite corners of the room: 45 feet, so engaging takes a Dash. */
   goblinFar(): void {
-    this.place('p1', 'near', []);
-    this.place('foe-1', 'far', []);
+    this.place('p1', { x: 0, y: 0 });
+    this.place('foe-1', { x: 9, y: 7 });
   }
 
   bothEngaged(): void {
-    this.place('p1', 'engaged', ['foe-1']);
-    this.place('foe-1', 'engaged', ['p1']);
+    this.place('p1', { x: 4, y: 3 });
+    this.place('foe-1', { x: 5, y: 3 });
   }
 
   /** A poke that hits and deals 1, so the opportunity attack is visible and Bryn stays up. */
@@ -140,5 +141,50 @@ export class BandSteps {
 
   caught(count: number): void {
     assert.equal(this.caughtCount, count);
+  }
+
+  /** Given a fight on the road between Bryn and a goblin. */
+  road(): void {
+    const started = startFight({ version: 1, rng: 1, sheets: { p1: fighter() } }, ['goblin-warrior'], 'bright', { band: 'far' });
+    this.party = started.party;
+    this.combat = started.combat;
+    this.refusal = null;
+  }
+
+  battlefieldSize(width: number, height: number): void {
+    assert.deepEqual([this.combat.battlefield?.width, this.combat.battlefield?.height], [width, height]);
+  }
+
+  feetApart(feet: number): void {
+    const a = this.hero().square;
+    const b = this.foe().square;
+    assert.ok(a && b);
+    assert.equal(feetBetween(a, b), feet);
+  }
+
+  westernEdge(): void {
+    assert.equal(this.hero().square?.x, 0);
+  }
+
+  /** Onto the square just west of the goblin, which a move can reach. */
+  stepBeside(): void {
+    const foe = this.foe().square!;
+    this.combat = relocate(this.combat, 'p1', { x: foe.x - 1, y: foe.y });
+  }
+
+  /** One square further from the goblin, out of a 5-foot reach. */
+  stepOut(): void {
+    const me = this.hero().square!;
+    const foe = this.foe().square!;
+    const dir = Math.sign(me.x - foe.x) || -1;
+    this.combat = relocate(this.combat, 'p1', { x: me.x + dir, y: me.y });
+  }
+
+  cannotEngage(): void {
+    assert.throws(() => validateMove(this.combat, 'p1', { to: 'engaged', engage: ['foe-1'] }), (e: unknown) => e instanceof RuleViolation);
+  }
+
+  canDash(): void {
+    validateMove(this.combat, 'p1', { to: 'engaged', engage: ['foe-1'], dash: true });
   }
 }

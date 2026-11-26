@@ -5,9 +5,8 @@
 import { passiveScore } from '../rules/checks.ts';
 import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
-import { load } from '../rules/inventory.ts';
+import { load, paceOf } from '../rules/inventory.ts';
 import { items } from '../rules/items.ts';
-import { speedNow } from '../rules/rests.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
 import { candidates, fightBand, rateEncounter, temperedBudget, toughnessFor, type FightBand, type Toughness } from '../rules/encounter.ts';
 import { resourcesOf } from '../rules/resources.ts';
@@ -136,10 +135,14 @@ export interface RulesView {
     band: FightBand;
     /** A hero has hp and maxHp; a foe has wound and vigor instead (its hit points are hidden). */
     combatants: ({ id: string; name: string; side: 'party' | 'foes'; status: string; conditions: string[]; toughness: Toughness | null;
-      /** Range band: engaged (melee, about 5 ft), near (about 30 ft) or far (about 60 ft). */
+      /** Range band, read off the squares: engaged within melee reach, near at 30 ft, far beyond. */
       position: 'engaged' | 'near' | 'far';
       /** Who they are in melee with, by id. Empty unless engaged. */
       engagedWith: string[];
+      /** Where they stand. Null when the fight has no grid. */
+      square: { x: number; y: number } | null;
+      /** A hero: feet they can move this turn. */
+      speedFeet?: number;
     } & Health)[];
   };
   /** The road from the tavern to the dungeon door, while the party is on it; then null. */
@@ -176,8 +179,7 @@ const held = (s: CharacterSheet) => {
   return id ? srd().spells.get(id)!.name : null;
 };
 
-const DRAGGING_SPEED = 5;
-const movingAt = (s: CharacterSheet) => (load(s).dragging ? Math.min(DRAGGING_SPEED, speedNow(s)) : speedNow(s));
+const movingAt = paceOf;
 
 const passives = (s: CharacterSheet) => ({
   passivePerception: passiveScore(s, { ability: 'wis', skill: 'perception' }), passiveInsight: passiveScore(s, { ability: 'wis', skill: 'insight' }),
@@ -214,6 +216,8 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
           id: c.id, name: c.name, side: c.side, ...health(c, true), status: c.status,
           conditions: [...c.conditions], toughness: rated.toughness(c),
           position: c.place?.band ?? 'near', engagedWith: [...(c.place?.with ?? [])],
+          square: c.square ?? null,
+          ...(c.side === 'party' ? { speedFeet: party.sheets[c.id] ? movingAt(party.sheets[c.id]) : (c.speed ?? 30) } : {}),
         })),
       };
     })(),
@@ -242,6 +246,7 @@ export interface RulesContext {
     round: number;     band: FightBand;
     combatants: ({ name: string; side: 'party' | 'foes'; status: string; toughness: Toughness | null;
       position: 'engaged' | 'near' | 'far'; engagedWith: string[];
+      square?: { x: number; y: number } | null;
     } & Omit<Health, 'vigor'>)[];
   };
   trek: TrekView | null;
@@ -294,6 +299,7 @@ export function rulesContext(state: RulesState): RulesContext {
         combatants: rated.ordered.map((c) => ({
           name: c.name, side: c.side, ...health(c, false), status: c.status, toughness: rated.toughness(c),
           position: c.place?.band ?? 'near', engagedWith: (c.place?.with ?? []).map((id) => combat.combatants[id]?.name ?? id),
+          square: c.square ?? null,
         })),
       };
     })(),

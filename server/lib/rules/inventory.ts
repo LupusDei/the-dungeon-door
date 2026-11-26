@@ -6,8 +6,13 @@
 import { parseDice, rollDice } from './dice.ts';
 import { HEALING_POTIONS, item, items } from './items.ts';
 import type { Rng } from './rng.ts';
+import { speedNow } from './rests.ts';
 import type { CharacterSheet } from './sheet.ts';
 import { require } from './violation.ts';
+
+/** Feet a hero can move: its speed, less exhaustion, and 5 ft at most while dragging. */
+export const DRAGGING_SPEED = 5;
+export const paceOf = (sheet: CharacterSheet): number => (load(sheet).dragging ? Math.min(DRAGGING_SPEED, speedNow(sheet)) : speedNow(sheet));
 
 export interface Load { carried: number; capacity: number; dragLimit: number; dragging: boolean }
 

@@ -81,7 +81,7 @@ test('an area spell catches by band: a cone the melee it steps into, a sphere th
   assert.deepEqual(action.kind === 'spell' && [action.cast.spellId, action.targets], ['burning-hands', ['foe-3', 'foe-1', 'foe-2']], 'a 15-foot cone, after stepping in, catches the near cluster; never the dead');
   const blast = { ...pyro, level: 5, spellcasting: { ...pyro.spellcasting!, prepared: ['fireball'], slots: [4, 3, 2, 0, 0, 0, 0, 0, 0], expended: [0, 0, 0, 0, 0, 0, 0, 0, 0] } };
   const { action: big } = heroAction(hurt, blast, 'p2', 'b', 12);
-  assert.deepEqual(big.kind === 'spell' && big.targets, ['foe-3'], 'a 20-foot sphere does not cover the near band: the one it is centred on');
+  assert.deepEqual(big.kind === 'spell' && big.targets, ['foe-3', 'foe-1', 'foe-2'], 'a 20-foot sphere catches whoever stands within 20 feet of its centre');
 });
 
 test('Cast: the caster’s best attack spell it can cast now; a leveled one spends its slot; no spell means Attack', () => {
@@ -447,20 +447,38 @@ test('Magic Missile is cast in a fight: it outscores Fire Bolt at level 1 (three
   assert.match(line, /^Cleo casts Magic Missile: Goblin Warrior 2 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage; Goblin Warrior 1 is struck, [2-5] damage\.$/);
 });
 
+test('a square move lands on that square, and one past speed is a Dash that spends the action', () => {
+  const { combat, party: p } = startFight(party({ p1: fighter }), ['goblin-warrior']);
+  const foe = combat.combatants['foe-1'].square!;
+  const stepped = fightRound(p, combat, { p1: { choiceId: 'c', roll: 10, move: { x: foe.x - 1, y: foe.y } } });
+  assert.equal(stepped.combat.combatants.p1.square && foe && stepped.combat.combatants.p1.place?.band, 'engaged');
+  assert.ok(stepped.lines.some((l) => l.startsWith('Bryn moves to engage ')), stepped.lines.join(' | '));
+  assert.ok(stepped.lines.some((l) => l.includes('dodges')), 'the move did not spend the action');
+  const road = startFight(p, ['goblin-warrior'], 'bright', { band: 'far' });
+  const far = road.combat.combatants['foe-1'].square!;
+  const goal = { x: far.x - 1, y: far.y };
+  const dashed = fightRound(road.party, road.combat, { p1: { choiceId: 'a', roll: 15, move: goal } });
+  assert.deepEqual(dashed.combat.combatants.p1.square, goal);
+  assert.ok(dashed.lines.some((l) => l.startsWith('Bryn Dashes')), dashed.lines.join(' | '));
+  assert.equal(dashed.lines.some((l) => l.startsWith('Bryn attacks')), false, 'Dash spends the action');
+});
+
 test('a vote carries a move: one band before the action, a Dash instead of it, and leaving melee draws an opportunity attack', () => {
   const { combat, party: p } = startFight(party({ p1: fighter }), ['shrieker-fungus']);
   const stepped = fightRound(p, combat, { p1: { choiceId: 'c', roll: 10, move: { to: 'far' } } });
   assert.equal(stepped.combat.combatants.p1.place?.band, 'far');
   assert.ok(stepped.lines.includes('Bryn moves to far.'));
-  const dashed = fightRound(stepped.party, stepped.combat, { p1: { choiceId: 'a', roll: 15, move: { to: 'engaged', engage: ['foe-1'], dash: true } } });
+  // A room's far corner is still one move back into melee. The road is 60 feet, so closing spends a Dash.
+  const road = startFight(p, ['shrieker-fungus'], 'bright', { band: 'far' });
+  const dashed = fightRound(road.party, road.combat, { p1: { choiceId: 'a', roll: 15, move: { to: 'engaged', engage: ['foe-1'], dash: true } } });
   assert.equal(dashed.combat.combatants.p1.place?.band, 'engaged');
   assert.ok(dashed.lines.some((l) => l.startsWith('Bryn Dashes to engage ')));
   assert.equal(dashed.lines.some((l) => l.startsWith('Bryn attacks')), false, 'Dash spends the action');
   const held = {
     ...combat,
     combatants: {
-      p1: { ...combat.combatants.p1, hp: 40, maxHp: 40, place: { band: 'engaged' as const, with: ['foe-1'] } },
-      'foe-1': { ...combat.combatants['foe-1'], place: { band: 'engaged' as const, with: ['p1'] }, attacks: [{ name: 'Poke', bonus: 30, ranged: false, damage: [{ dice: '1', type: 'piercing' }] }] },
+      p1: { ...combat.combatants.p1, hp: 40, maxHp: 40, square: { x: 4, y: 3 }, place: { band: 'engaged' as const, with: ['foe-1'] } },
+      'foe-1': { ...combat.combatants['foe-1'], square: { x: 5, y: 3 }, place: { band: 'engaged' as const, with: ['p1'] }, attacks: [{ name: 'Poke', bonus: 30, ranged: false, damage: [{ dice: '1', type: 'piercing' }] }] },
     },
   };
   const left = fightRound(p, held, { p1: { choiceId: 'c', roll: 10, move: { to: 'near' } } });
@@ -477,7 +495,7 @@ test('a fight with a monster that cannot attack goes on: the Shrieker shrieks, t
     'shrieker-fungus': /^Shrieker Fungus uses Shriek, and dodges\.$/,
     seahorse: /^Seahorse uses Bubble Dash, and dodges\.$/,
     'vampire-mist': /^Vampire, Mist Form dodges\.$/,
-    'vampire-bat': /^Vampire, Bat Form uses Bite \(DC 17 CON save\): /,
+    'vampire-bat': /^Vampire, Bat Form moves to near\.$/,
   };
   for (const [id, line] of Object.entries(expected)) {
     const { party: p, combat } = startFight(party({ p1: fighter }), [id]);

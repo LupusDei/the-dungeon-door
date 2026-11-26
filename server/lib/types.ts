@@ -4,6 +4,7 @@ import type { RulesHook } from './play/hooks.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { RulesView } from './play/view.ts';
 import type { Move } from './rules/bands.ts';
+import type { Battlefield } from './rules/grid.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
@@ -70,6 +71,12 @@ export interface LegalAction {
   picks: 'none' | 'one' | 'many';
   /** For picks "many": how many targets a vote may name. */
   limit?: number;
+  /** A move: squares this action can end on. Walls block; an occupied square is not an end. */
+  squares?: { x: number; y: number }[];
+  /** An attack or spell. Null for melee. `long` is null when there is no long range. */
+  rangeFeet?: { normal: number; long: number | null } | null;
+  /** A melee attack or touch spell, in feet. Null when the action is ranged. */
+  reachFeet?: number | null;
   available: boolean;
   /** Why it cannot be taken; null when available. */
   reason: string | null;
@@ -217,6 +224,8 @@ export interface SceneView {
   combat: boolean;
   /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
   canAct: boolean;
+  /** The fight's map of 5-foot squares, or null outside combat. */
+  battlefield: Battlefield | null;
   isFinale: boolean;
   /** Votes for a, b or c, or a named legal action. A written check is in `freeforms`, not here. */
   votes: VoteView[];

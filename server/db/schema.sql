@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS games (
 
 -- Rules engine state (lib/play/state.ts). Null for games from before the engine, which play as before.
 -- party: PartyState (the heroes' sheets in this game, dice state); combat: CombatState while a fight is
--- on; dungeon: DungeonState (the map, where the party is, what it has seen).
+-- on (a battlefield of 5-foot squares, and a square on each combatant — a fight stored without them is
+-- placed when it is read); dungeon: DungeonState (the map, where the party is, what it has seen).
 ALTER TABLE games ADD COLUMN IF NOT EXISTS party jsonb;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS combat jsonb;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS dungeon jsonb;
@@ -85,7 +86,7 @@ CREATE TABLE IF NOT EXISTS votes (
   action_id  text,                    -- a legal action named by the vote; null for a letter vote
   targets    jsonb,
   freeform   jsonb,                   -- a written check: { text, ruling }
-  move       jsonb,                   -- a combat move taken with the vote: {to, engage?, dash?, disengage?}
+  move       jsonb,                   -- a combat move with the vote: {x, y, dash?, disengage?} or {to, engage?, dash?, disengage?}
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (game_code, scene_idx, player_id)
 );

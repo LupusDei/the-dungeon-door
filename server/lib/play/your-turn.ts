@@ -39,7 +39,7 @@ function strike(combat: CombatState, me: Combatant) {
   if (!plan.target) return { label: 'Move closer', detail: `${foe.name} is too far to strike. Move to ${foe.place?.band === 'far' ? 'near' : 'engage them'}.` };
   const shot = weapon.ranged ? rangedShot(me, foe, weapon) : null;
   const penalty = me.place?.band === 'engaged' && weapon.ranged ? ' Disadvantage while engaged.' : shot?.longRange ? ' Disadvantage at long range.' : '';
-  const step = plan.approach?.to === 'engaged' ? ` You move to engage ${foe.name}.` : '';
+  const step = plan.approach && 'to' in plan.approach && plan.approach.to === 'engaged' ? ` You move to engage ${foe.name}.` : '';
   return { label: `Attack with ${weapon.name}`, detail: `${signed(weapon.bonus)} to hit, ${damage}, at ${foe.name}.${step}${penalty}` };
 }
 
@@ -61,8 +61,8 @@ function aim(spell: SrdSpell, combat: CombatState, me: Combatant, sheet: Charact
   const names = plan.targets.length
     ? listed([...new Set(plan.targets)].map((id) => combat.combatants[id].name))
     : mostWounded(combat, me.side, spell.damage?.type).name;
-  const engaged = plan.approach?.engage?.map((id) => combat.combatants[id].name) ?? [];
-  const step = plan.approach?.to === 'engaged' && engaged.length ? ` You move to engage ${listed(engaged)}.` : plan.targets.length ? '' : ' Too far: you move closer.';
+  const engaged = plan.approach && 'to' in plan.approach ? (plan.approach.engage ?? []).map((id) => combat.combatants[id].name) : [];
+  const step = plan.approach && 'to' in plan.approach && plan.approach.to === 'engaged' && engaged.length ? ` You move to engage ${listed(engaged)}.` : plan.targets.length ? '' : ' Too far: you move closer.';
   return { names, step };
 }
 

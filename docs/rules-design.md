@@ -540,10 +540,13 @@ Not yet: an XP award for finishing a quest, so leveling up still takes many figh
 
 ## Range bands
 
-**Original** (CC0). The fight has no grid. Each combatant is **engaged** with specific creatures, **near**
-(about 30 ft), or **far** (the next band, about 60 ft). Engagement is melee, about 5 ft, and it is
-symmetric: if you are engaged with a foe, that foe is engaged with you. A reach weapon still needs
-engaged. `rules/bands.ts` holds the rule; `play/moves.ts` lists the legal moves for a per-hero action list.
+**Original** (CC0), now read off the grid. A fight is a map of 5-foot squares (`rules/grid.ts`): a room
+is 10 by 8, a road 16 by 6. Distance in feet is 5 times the Chebyshev distance. Each combatant is
+**engaged** with the creatures inside the longer melee reach (5 ft, 10 with a Reach weapon, or a
+monster's listed reach), **near** (30 ft or less), or **far** (beyond that). Engagement is symmetric.
+`position` and `engagedWith` on the combat view are that reading, kept for older apps. `rules/bands.ts`
+still judges a fight that has no squares; `play/moves.ts` lists the legal moves, each with the squares
+that speed can reach.
 
 - **A move changes one band. Dash changes two and spends the action.** From near, one move engages a foe
   who is near, or steps out to far. From far, one move comes to near, or engages a foe who is also far;
