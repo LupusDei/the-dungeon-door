@@ -33,6 +33,8 @@ export interface Monster {
   senses: { darkvision: number; blindsight: number; truesight: number };
   /** Its attack-roll actions. */
   attacks: MonsterAttack[];
+  /** It can Disengage as a Bonus Action (a goblin's Nimble Escape): it flees without Opportunity Attacks. */
+  disengages: boolean;
   /** Its save abilities: breath weapons, webs (powers.ts). */
   powers: Power[];
   /** The attacks its Multiattack makes in a turn, by name (two or more); [] without one. */
@@ -110,6 +112,7 @@ const monsterSchema = z.object({
   senses: z.object({ passivePerception: z.number(), darkvision: z.string().optional(), blindsight: z.string().optional(), truesight: z.string().optional() }),
   proficiencies: z.array(z.object({ value: z.number(), proficiency: ref })),
   actions: z.array(action).default([]),
+  bonusActions: z.array(z.object({ desc: z.string() })).default([]),
 }).transform((m): Monster => {
   const abilities = { str: m.strength, dex: m.dexterity, con: m.constitution, int: m.intelligence, wis: m.wisdom, cha: m.charisma };
   const listed = new Map(m.proficiencies.map((p) => [p.proficiency.index, p.value]));
@@ -130,6 +133,7 @@ const monsterSchema = z.object({
     passivePerception: m.senses.passivePerception,
     senses: { darkvision: feet(m.senses.darkvision), blindsight: feet(m.senses.blindsight), truesight: feet(m.senses.truesight) },
     attacks, multiattack: multiattackOf(m.actions, attacks), powers: powersOf(m.actions),
+    disengages: m.bonusActions.some((b) => /Disengage/.test(b.desc)),
   };
 });
 

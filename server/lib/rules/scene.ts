@@ -253,14 +253,16 @@ function caughtBy(state: CombatState, me: Combatant, p: Power): string[] {
 
 /**
  * A monster's turn: a ready power that recharges or runs out; else its Multiattack, or its first melee attack (or
- * first attack), on the up hero with the fewest HP. Null on a hero's turn.
+ * first attack), on the up hero with the fewest HP, sparing one who Dodges if it can. Null on a hero's turn.
  */
 export function monsterAction(state: CombatState): Action | null {
   const me = state.combatants[currentActor(state)];
   if (me.side === 'party') return null;
   const power = chosenPower(me);
   if (power) return { kind: 'power', power: power.name, targets: caughtBy(state, me, power) };
-  const target = fewestHp(upAgainst(state, me.side));
+  const up = upAgainst(state, me.side);
+  const open = up.filter((c) => !state.dodging.includes(c.id));
+  const target = fewestHp(open.length ? open : up);
   const [first, ...then] = me.multiattack ?? [(me.attacks.find((a) => !a.ranged) ?? me.attacks[0]).name];
   return { kind: 'attack', attack: first, target: target.id, ...(then.length ? { then } : {}) };
 }

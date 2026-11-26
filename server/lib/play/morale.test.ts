@@ -7,7 +7,7 @@ import { type CombatState, startCombat } from '../rules/scene.ts';
 import { MORALE_DC, morale, shaken } from './morale.ts';
 
 const bryn = heroCombatant('p1', heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' }));
-const foe = (id: string, kind = 'goblin-warrior', o: Partial<Combatant> = {}): Combatant => ({ ...monsterCombatant(id, monster(kind)), name: id, ...o });
+const foe = (id: string, kind = 'goblin-warrior', o: Partial<Combatant> = {}): Combatant => ({ ...monsterCombatant(id, monster(kind)), name: id, disengages: undefined, ...o });
 const fight = (...foes: Combatant[]): CombatState => startCombat(1, [bryn, ...foes]);
 const hurt = (s: CombatState, changes: Record<string, Partial<Combatant>>, rng = s.rng): CombatState =>
   ({ ...s, rng, combatants: Object.fromEntries(Object.entries(s.combatants).map(([id, c]) => [id, { ...c, ...changes[id] }])) });
@@ -91,4 +91,10 @@ test('no check when nothing shook them, when the fight is over, or when any foe 
   assert.deepEqual(morale(dead, after), { combat: after, lines: [], broke: null });
   const zombiesGone = fight(foe('z1', 'zombie'), foe('g1'), foe('g2'));
   assert.equal(morale(zombiesGone, hurt(zombiesGone, { z1: slain })).lines.length, 1, 'only those still standing count');
+});
+
+test('two who Disengage are told together', () => {
+  const s = fight(foe('g1', 'goblin-warrior', { hp: 10, maxHp: 10, disengages: true }), foe('g2', 'goblin-warrior', { hp: 10, maxHp: 10, disengages: true }), foe('boss', 'bugbear-warrior', { hp: 20, maxHp: 20 }));
+  const fled = Array.from({ length: 80 }, (_, i) => morale(s, hurt(s, { boss: slain }, i + 1))).find((m) => m.broke === 'flee')!;
+  assert.ok(fled.lines.includes('g1, g2 Disengage as a Bonus Action: no Opportunity Attacks.'), fled.lines.join(' | '));
 });

@@ -189,10 +189,11 @@ test('the dead do not join a fight, and their sheets are left alone', () => {
 });
 
 /** Round 1 against two goblins: Bryn's bow drops one; Cleo can only poke. Then the survivor's morale. */
-function shakenRound(rng: number) {
+function shakenRound(rng: number, nimble = false) {
   const { combat, party: p } = startFight({ ...party(), rng }, ['goblin-warrior', 'goblin-warrior']);
   const bow = deadly.map((a) => ({ ...a, ranged: true }));
-  const rigged = patch(combat, { p1: { attacks: bow }, p2: { attacks: harmless }, 'foe-1': { attacks: harmless }, 'foe-2': { attacks: harmless } });
+  const foe = { attacks: harmless, ...(nimble ? {} : { disengages: undefined }) };
+  const rigged = patch(combat, { p1: { attacks: bow }, p2: { attacks: harmless }, 'foe-1': foe, 'foe-2': foe });
   return fightRound(p, rigged, { p1: { choiceId: 'a', roll: 10 }, p2: { choiceId: 'a', roll: 10 } });
 }
 
@@ -343,4 +344,10 @@ test('a hit rider is told, and its condition goes on the hero sheet', () => {
   assert.ok(tough.lines.some((l) => l.endsWith('Bryn makes the DC 10 CON save.')), tough.lines.join('\n'));
   const immune = fightRound(start.party, patch(weak, { p1: { conditionImmunities: ['paralyzed'], saveBonuses: { ...start.combat.combatants.p1.saveBonuses, con: -50 }, attacks: harmless, hp: 500, maxHp: 500 } }), {});
   assert.ok(immune.lines.some((l) => l.endsWith('Bryn fails the DC 10 CON save: unaffected.')), immune.lines.join('\n'));
+});
+
+test('foes who Disengage as a Bonus Action (Nimble Escape) flee without Opportunity Attacks', () => {
+  const fled = Array.from({ length: 60 }, (_, i) => shakenRound(i + 1, true)).find((r) => r.ended === 'fled')!;
+  assert.ok(fled.lines.includes('Goblin Warrior 2 Disengages as a Bonus Action: no Opportunity Attacks.'), fled.lines.join(' | '));
+  assert.equal(fled.lines.some((l) => l.startsWith('Opportunity Attack')), false);
 });

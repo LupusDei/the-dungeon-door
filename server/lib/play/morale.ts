@@ -35,13 +35,13 @@ export function shaken(before: CombatState, after: CombatState): string[] {
 
 const mostWounded = (foes: Combatant[]) => foes.reduce((low, c) => (c.hp < low.hp ? c : low));
 
-/** Each standing hero with a melee weapon strikes the most wounded fleeing foe with its best one. */
+/** Each standing hero with a melee weapon strikes the most wounded fleeing foe with its best one; a foe that Disengages draws none. */
 function opportunityAttacks(state: CombatState): CombatState {
   let s = state;
   for (const id of state.order) {
     const hero = s.combatants[id];
     const melee = hero.attacks.filter((a) => !a.ranged);
-    const fleeing = foesOf(s).filter((c) => !fallen(c));
+    const fleeing = foesOf(s).filter((c) => !fallen(c) && !c.disengages);
     if (hero.side === 'foes' || hero.status !== 'up' || melee.length === 0 || fleeing.length === 0) continue;
     const weapon = melee.reduce((best, a) => (a.bonus > best.bonus ? a : best));
     s = reactionAttack(s, id, weapon.name, mostWounded(fleeing).id);
@@ -61,5 +61,7 @@ export function morale(before: CombatState, after: CombatState): Morale {
   const told = `Morale (${reasons.join(', ')}): ${roll.natural} ${signed(bonus)} = ${roll.total} vs DC ${MORALE_DC}: the foes`;
   if (roll.total >= MORALE_DC) return { combat: rolled, lines: [`${told} stand firm.`], broke: null };
   if (roll.total <= MORALE_DC - SURRENDER) return { combat: rolled, lines: [`${told} throw down their arms and surrender.`], broke: 'surrender' };
-  return { combat: opportunityAttacks(rolled), lines: [`${told} break and flee.`], broke: 'flee' };
+  const slip = standing.filter((c) => c.disengages).map((c) => c.name);
+  const away = slip.length ? [`${slip.join(', ')} ${slip.length > 1 ? 'Disengage' : 'Disengages'} as a Bonus Action: no Opportunity Attacks.`] : [];
+  return { combat: opportunityAttacks(rolled), lines: [`${told} break and flee.`, ...away], broke: 'flee' };
 }

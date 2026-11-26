@@ -39,6 +39,8 @@ export interface Combatant {
   status: Status;
   /** What defeating it is worth (monsters); 0 for heroes. */
   xp: number;
+  /** A monster that Disengages as a Bonus Action: it flees without Opportunity Attacks. */
+  disengages?: true;
   /** A monster's save abilities (powers.ts), and the uses spent of those that recharge or run out. */
   powers?: Power[];
   spent?: Record<string, number>;
@@ -105,5 +107,6 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     ...fresh(), xp: m.xp, ...(FEARLESS.test(m.type) ? { fearless: true as const } : {}),
     ...(m.multiattack.length ? { multiattack: m.multiattack } : {}),
     ...(m.powers.length ? { powers: m.powers } : {}),
+    ...(m.disengages ? { disengages: true as const } : {}),
   };
 }

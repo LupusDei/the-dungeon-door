@@ -85,3 +85,8 @@ test('Multiattack: the attacks it makes on its turn, by name; options mean that 
   assert.deepEqual(monster('barbed-devil').multiattack, ['Claws', 'Claws'], 'one Claws and one Tail, or two Hurl Flame: two of its usual attack');
   assert.deepEqual(monster('dryad').multiattack, [], 'one attack and a spell is no Multiattack');
 });
+
+test('a monster that can Disengage as a Bonus Action', () => {
+  assert.equal(monster('goblin-warrior').disengages, true);
+  assert.equal(monster('bugbear-warrior').disengages, false);
+});

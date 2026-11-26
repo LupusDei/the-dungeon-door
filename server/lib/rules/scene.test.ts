@@ -283,3 +283,11 @@ test('a hit with a rider: the target saves or takes the condition; no save means
   const sl = slain.log.find((x) => x.kind === 'attack')!;
   assert.ok(sl.kind === 'attack' && sl.rider === undefined, 'the dead take no condition');
 });
+
+test('a monster spares a hero who Dodges when another is up, however wounded; with no other, it attacks anyway', () => {
+  const s = startCombat(3, [hero('bryn', { hp: 9 }), hero('ash', { hp: 4 }), goblin('g1')]);
+  assert.equal((monsterAction({ ...s, dodging: ['ash'], turn: s.order.indexOf('g1') }) as { target: string }).target, 'bryn');
+  assert.equal((monsterAction({ ...s, dodging: ['ash', 'bryn'], turn: s.order.indexOf('g1') }) as { target: string }).target, 'ash');
+  assert.equal(monsterCombatant('b', monster('bugbear-warrior')).disengages, undefined);
+  assert.equal(goblin('g').disengages, true);
+});
