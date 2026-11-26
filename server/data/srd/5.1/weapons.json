@@ -1,0 +1,1012 @@
+{
+  "meta": {
+    "title": "Weapons",
+    "version": "SRD 5.1",
+    "srd": "5.1",
+    "ruleset": "2014",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2014/en",
+    "sourcePdf": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 37
+  },
+  "records": [
+    {
+      "index": "club",
+      "name": "Club",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 1,
+        "unit": "sp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "light",
+        "monk"
+      ]
+    },
+    {
+      "index": "dagger",
+      "name": "Dagger",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 2,
+        "unit": "gp"
+      },
+      "weight": 1,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "finesse",
+        "light",
+        "thrown",
+        "monk"
+      ]
+    },
+    {
+      "index": "greatclub",
+      "name": "Greatclub",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 2,
+        "unit": "sp"
+      },
+      "weight": 10,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "two-handed"
+      ]
+    },
+    {
+      "index": "handaxe",
+      "name": "Handaxe",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "light",
+        "thrown",
+        "monk"
+      ]
+    },
+    {
+      "index": "javelin",
+      "name": "Javelin",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 5,
+        "unit": "sp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "thrown",
+        "monk"
+      ]
+    },
+    {
+      "index": "light-hammer",
+      "name": "Light hammer",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 2,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "light",
+        "thrown",
+        "monk"
+      ]
+    },
+    {
+      "index": "mace",
+      "name": "Mace",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "weight": 4,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "monk"
+      ]
+    },
+    {
+      "index": "quarterstaff",
+      "name": "Quarterstaff",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 2,
+        "unit": "sp"
+      },
+      "weight": 4,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "twoHandedDamage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "versatile",
+        "monk"
+      ]
+    },
+    {
+      "index": "sickle",
+      "name": "Sickle",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "light",
+        "monk"
+      ]
+    },
+    {
+      "index": "spear",
+      "name": "Spear",
+      "category": "simple",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "weight": 3,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "twoHandedDamage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "thrown",
+        "versatile",
+        "monk"
+      ]
+    },
+    {
+      "index": "crossbow-light",
+      "name": "Crossbow, light",
+      "category": "simple",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "weight": 5,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 80,
+        "long": 320
+      },
+      "properties": [
+        "ammunition",
+        "loading",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "dart",
+      "name": "Dart",
+      "category": "simple",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 5,
+        "unit": "cp"
+      },
+      "weight": 0.25,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 20,
+        "long": 60
+      },
+      "properties": [
+        "finesse",
+        "thrown"
+      ]
+    },
+    {
+      "index": "shortbow",
+      "name": "Shortbow",
+      "category": "simple",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 80,
+        "long": 320
+      },
+      "properties": [
+        "ammunition",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "sling",
+      "name": "Sling",
+      "category": "simple",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 1,
+        "unit": "sp"
+      },
+      "weight": 0,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 30,
+        "long": 120
+      },
+      "properties": [
+        "ammunition"
+      ]
+    },
+    {
+      "index": "battleaxe",
+      "name": "Battleaxe",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 4,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "twoHandedDamage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "versatile"
+      ]
+    },
+    {
+      "index": "flail",
+      "name": "Flail",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": []
+    },
+    {
+      "index": "glaive",
+      "name": "Glaive",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 20,
+        "unit": "gp"
+      },
+      "weight": 6,
+      "damage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "heavy",
+        "reach",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "greataxe",
+      "name": "Greataxe",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 30,
+        "unit": "gp"
+      },
+      "weight": 7,
+      "damage": {
+        "damageDice": "1d12",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "heavy",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "greatsword",
+      "name": "Greatsword",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "weight": 6,
+      "damage": {
+        "damageDice": "2d6",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "heavy",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "halberd",
+      "name": "Halberd",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 20,
+        "unit": "gp"
+      },
+      "weight": 6,
+      "damage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "heavy",
+        "reach",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "lance",
+      "name": "Lance",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 6,
+      "damage": {
+        "damageDice": "1d12",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "reach",
+        "special"
+      ]
+    },
+    {
+      "index": "longsword",
+      "name": "Longsword",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 15,
+        "unit": "gp"
+      },
+      "weight": 3,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "twoHandedDamage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "versatile"
+      ]
+    },
+    {
+      "index": "maul",
+      "name": "Maul",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 10,
+      "damage": {
+        "damageDice": "2d6",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "heavy",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "morningstar",
+      "name": "Morningstar",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 15,
+        "unit": "gp"
+      },
+      "weight": 4,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": []
+    },
+    {
+      "index": "pike",
+      "name": "Pike",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "weight": 18,
+      "damage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "heavy",
+        "reach",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "rapier",
+      "name": "Rapier",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "finesse"
+      ]
+    },
+    {
+      "index": "scimitar",
+      "name": "Scimitar",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 25,
+        "unit": "gp"
+      },
+      "weight": 3,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "finesse",
+        "light"
+      ]
+    },
+    {
+      "index": "shortsword",
+      "name": "Shortsword",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "finesse",
+        "light",
+        "monk"
+      ]
+    },
+    {
+      "index": "trident",
+      "name": "Trident",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "weight": 4,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "twoHandedDamage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "thrown",
+        "versatile"
+      ]
+    },
+    {
+      "index": "war-pick",
+      "name": "War pick",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 5,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": []
+    },
+    {
+      "index": "warhammer",
+      "name": "Warhammer",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 15,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "twoHandedDamage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "bludgeoning",
+          "name": "Bludgeoning"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "versatile"
+      ]
+    },
+    {
+      "index": "whip",
+      "name": "Whip",
+      "category": "martial",
+      "weaponRange": "melee",
+      "cost": {
+        "quantity": 2,
+        "unit": "gp"
+      },
+      "weight": 3,
+      "damage": {
+        "damageDice": "1d4",
+        "damageType": {
+          "index": "slashing",
+          "name": "Slashing"
+        }
+      },
+      "range": {
+        "normal": 5,
+        "long": null
+      },
+      "properties": [
+        "finesse",
+        "reach"
+      ]
+    },
+    {
+      "index": "blowgun",
+      "name": "Blowgun",
+      "category": "martial",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 10,
+        "unit": "gp"
+      },
+      "weight": 1,
+      "damage": {
+        "damageDice": "1",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 25,
+        "long": 100
+      },
+      "properties": [
+        "ammunition",
+        "loading"
+      ]
+    },
+    {
+      "index": "crossbow-hand",
+      "name": "Crossbow, hand",
+      "category": "martial",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 75,
+        "unit": "gp"
+      },
+      "weight": 3,
+      "damage": {
+        "damageDice": "1d6",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 30,
+        "long": 120
+      },
+      "properties": [
+        "ammunition",
+        "light",
+        "loading"
+      ]
+    },
+    {
+      "index": "crossbow-heavy",
+      "name": "Crossbow, heavy",
+      "category": "martial",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "weight": 18,
+      "damage": {
+        "damageDice": "1d10",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 100,
+        "long": 400
+      },
+      "properties": [
+        "ammunition",
+        "heavy",
+        "loading",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "longbow",
+      "name": "Longbow",
+      "category": "martial",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 50,
+        "unit": "gp"
+      },
+      "weight": 2,
+      "damage": {
+        "damageDice": "1d8",
+        "damageType": {
+          "index": "piercing",
+          "name": "Piercing"
+        }
+      },
+      "range": {
+        "normal": 150,
+        "long": 600
+      },
+      "properties": [
+        "ammunition",
+        "heavy",
+        "two-handed"
+      ]
+    },
+    {
+      "index": "net",
+      "name": "Net",
+      "category": "martial",
+      "weaponRange": "ranged",
+      "cost": {
+        "quantity": 1,
+        "unit": "gp"
+      },
+      "weight": 3,
+      "damage": null,
+      "range": {
+        "normal": 5,
+        "long": 15
+      },
+      "properties": [
+        "thrown",
+        "special"
+      ]
+    }
+  ]
+}

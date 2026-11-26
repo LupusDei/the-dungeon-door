@@ -1,0 +1,327 @@
+{
+  "meta": {
+    "title": "Backgrounds",
+    "version": "SRD 5.1",
+    "srd": "5.1",
+    "ruleset": "2014",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2014/en",
+    "sourcePdf": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "notes": "SRD 5.1 includes only the Acolyte background."
+  },
+  "records": [
+    {
+      "index": "acolyte",
+      "name": "Acolyte",
+      "startingProficiencies": [
+        {
+          "index": "skill-insight",
+          "name": "Skill: Insight"
+        },
+        {
+          "index": "skill-religion",
+          "name": "Skill: Religion"
+        }
+      ],
+      "languageOptions": {
+        "choose": 2,
+        "type": "languages",
+        "from": {
+          "optionSetType": "resource_list",
+          "resourceListUrl": "/api/2014/languages"
+        }
+      },
+      "startingEquipment": [
+        {
+          "equipment": {
+            "index": "clothes-common",
+            "name": "Clothes, common"
+          },
+          "quantity": 1
+        },
+        {
+          "equipment": {
+            "index": "pouch",
+            "name": "Pouch"
+          },
+          "quantity": 1
+        }
+      ],
+      "startingGold": {
+        "quantity": 15,
+        "unit": "gp"
+      },
+      "startingEquipmentOptions": [
+        {
+          "choose": 1,
+          "type": "equipment",
+          "from": {
+            "optionSetType": "equipment_category",
+            "equipmentCategory": {
+              "index": "holy-symbols",
+              "name": "Holy Symbols"
+            }
+          }
+        }
+      ],
+      "feature": {
+        "name": "Shelter of the Faithful",
+        "desc": [
+          "As an acolyte, you command the respect of those who share your faith, and you can perform the religious ceremonies of your deity. You and your adventuring companions can expect to receive free healing and care at a temple, shrine, or other established presence of your faith, though you must provide any material components needed for spells. Those who share your religion will support you (but only you) at a modest lifestyle.",
+          "You might also have ties to a specific temple dedicated to your chosen deity or pantheon, and you have a residence there. This could be the temple where you used to serve, if you remain on good terms with it, or a temple where you have found a new home. While near your temple, you can call upon the priests for assistance, provided the assistance you ask for is not hazardous and you remain in good standing with your temple."
+        ]
+      },
+      "personalityTraits": {
+        "choose": 2,
+        "type": "personality_traits",
+        "from": {
+          "optionSetType": "options_array",
+          "options": [
+            {
+              "optionType": "string",
+              "string": "I idolize a particular hero of my faith, and constantly refer to that person's deeds and example."
+            },
+            {
+              "optionType": "string",
+              "string": "I can find common ground between the fiercest enemies, empathizing with them and always working toward peace."
+            },
+            {
+              "optionType": "string",
+              "string": "I see omens in every event and action. The gods try to speak to us, we just need to listen."
+            },
+            {
+              "optionType": "string",
+              "string": "Nothing can shake my optimistic attitude."
+            },
+            {
+              "optionType": "string",
+              "string": "I quote (or misquote) sacred texts and proverbs in almost every situation."
+            },
+            {
+              "optionType": "string",
+              "string": "I am tolerant (or intolerant) of other faiths and respect (or condemn) the worship of other gods."
+            },
+            {
+              "optionType": "string",
+              "string": "I've enjoyed fine food, drink, and high society among my temple's elite. Rough living grates on me."
+            },
+            {
+              "optionType": "string",
+              "string": "I've spent so long in the temple that I have little practical experience dealing with people in the outside world."
+            }
+          ]
+        }
+      },
+      "ideals": {
+        "choose": 1,
+        "type": "ideals",
+        "from": {
+          "optionSetType": "options_array",
+          "options": [
+            {
+              "optionType": "ideal",
+              "desc": "Tradition. The ancient traditions of worship and sacrifice must be preserved and upheld.",
+              "alignments": [
+                {
+                  "index": "lawful-good",
+                  "name": "Lawful Good"
+                },
+                {
+                  "index": "lawful-neutral",
+                  "name": "Lawful Neutral"
+                },
+                {
+                  "index": "lawful-evil",
+                  "name": "Lawful Evil"
+                }
+              ]
+            },
+            {
+              "optionType": "ideal",
+              "desc": "Charity. I always try to help those in need, no matter what the personal cost.",
+              "alignments": [
+                {
+                  "index": "lawful-good",
+                  "name": "Lawful Good"
+                },
+                {
+                  "index": "neutral-good",
+                  "name": "Neutral Good"
+                },
+                {
+                  "index": "chaotic-good",
+                  "name": "Chaotic Good"
+                }
+              ]
+            },
+            {
+              "optionType": "ideal",
+              "desc": "Change. We must help bring about the changes the gods are constantly working in the world.",
+              "alignments": [
+                {
+                  "index": "chaotic-good",
+                  "name": "Chaotic Good"
+                },
+                {
+                  "index": "chaotic-neutral",
+                  "name": "Chaotic Neutral"
+                },
+                {
+                  "index": "chaotic-evil",
+                  "name": "Chaotic Evil"
+                }
+              ]
+            },
+            {
+              "optionType": "ideal",
+              "desc": "Power. I hope to one day rise to the top of my faith's religious hierarchy.",
+              "alignments": [
+                {
+                  "index": "lawful-good",
+                  "name": "Lawful Good"
+                },
+                {
+                  "index": "lawful-neutral",
+                  "name": "Lawful Neutral"
+                },
+                {
+                  "index": "lawful-evil",
+                  "name": "Lawful Evil"
+                }
+              ]
+            },
+            {
+              "optionType": "ideal",
+              "desc": "Faith. I trust that my deity will guide my actions. I have faith that if I work hard, things will go well.",
+              "alignments": [
+                {
+                  "index": "lawful-good",
+                  "name": "Lawful Good"
+                },
+                {
+                  "index": "lawful-neutral",
+                  "name": "Lawful Neutral"
+                },
+                {
+                  "index": "lawful-evil",
+                  "name": "Lawful Evil"
+                }
+              ]
+            },
+            {
+              "optionType": "ideal",
+              "desc": "Aspiration. I seek to prove myself worthy of my god's favor by matching my actions against his or her teachings.",
+              "alignments": [
+                {
+                  "index": "lawful-good",
+                  "name": "Lawful Good"
+                },
+                {
+                  "index": "neutral-good",
+                  "name": "Neutral Good"
+                },
+                {
+                  "index": "chaotic-good",
+                  "name": "Chaotic Good"
+                },
+                {
+                  "index": "lawful-neutral",
+                  "name": "Lawful Neutral"
+                },
+                {
+                  "index": "neutral",
+                  "name": "Neutral"
+                },
+                {
+                  "index": "chaotic-neutral",
+                  "name": "Chaotic Neutral"
+                },
+                {
+                  "index": "lawful-evil",
+                  "name": "Lawful Evil"
+                },
+                {
+                  "index": "neutral-evil",
+                  "name": "Neutral Evil"
+                },
+                {
+                  "index": "chaotic-evil",
+                  "name": "Chaotic Evil"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "bonds": {
+        "choose": 1,
+        "type": "bonds",
+        "from": {
+          "optionSetType": "options_array",
+          "options": [
+            {
+              "optionType": "string",
+              "string": "I would die to recover an ancient relic of my faith that was lost long ago."
+            },
+            {
+              "optionType": "string",
+              "string": "I will someday get revenge on the corrupt temple hierarchy who branded me a heretic."
+            },
+            {
+              "optionType": "string",
+              "string": "I owe my life to the priest who took me in when my parents died."
+            },
+            {
+              "optionType": "string",
+              "string": "Everything I do is for the common people."
+            },
+            {
+              "optionType": "string",
+              "string": "I will do anything to protect the temple where I served."
+            },
+            {
+              "optionType": "string",
+              "string": "I seek to preserve a sacred text that my enemies consider heretical and seek to destroy."
+            }
+          ]
+        }
+      },
+      "flaws": {
+        "choose": 1,
+        "type": "flaws",
+        "from": {
+          "optionSetType": "options_array",
+          "options": [
+            {
+              "optionType": "string",
+              "string": "I judge others harshly, and myself even more severely."
+            },
+            {
+              "optionType": "string",
+              "string": "I put too much trust in those who wield power within my temple's hierarchy."
+            },
+            {
+              "optionType": "string",
+              "string": "My piety sometimes leads me to blindly trust those that profess faith in my god."
+            },
+            {
+              "optionType": "string",
+              "string": "I am inflexible in my thinking."
+            },
+            {
+              "optionType": "string",
+              "string": "I am suspicious of strangers and expect the worst of them."
+            },
+            {
+              "optionType": "string",
+              "string": "Once I pick a goal, I become obsessed with it to the detriment of everything else in my life."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

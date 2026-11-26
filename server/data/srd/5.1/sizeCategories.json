@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "title": "Creature Size",
+    "version": "SRD 5.1",
+    "srd": "5.1",
+    "ruleset": "2014",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2014/en",
+    "sourcePdf": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 1
+  },
+  "records": [
+    {
+      "index": "creature-size",
+      "name": "Creature Size",
+      "description": "Each creature takes up a different amount of space. The Size Categories table shows how much space a creature of a particular size controls in combat. Objects sometimes use the same size categories.\n\n#### Size Categories\n\n| Size       | Space                  |\n|------------|------------------------|\n| Tiny       | 2.5 by 2.5 ft.           |\n| Small      | 5 by 5 ft.             |\n| Medium     | 5 by 5 ft.             |\n| Large      | 10 by 10 ft.           |\n| Huge       | 15 by 15 ft.           |\n| Gargantuan | 20 by 20 ft. or larger |\n\n#### Space\n\nA creature's space is the area in feet that it effectively controls in combat, not an expression of its physical dimensions. A typical Medium creature isn't 5 feet wide, for example, but it does control a space that wide. If a Medium hobgoblin stands in a 5-foot-wide doorway, other creatures can't get through unless the hobgoblin lets them.\n\nA creature's space also reflects the area it needs to fight effectively. For that reason, there's a limit to the number of creatures that can surround another creature in combat. Assuming Medium combatants, eight creatures can fit in a 5-foot radius around another one.\n\nBecause larger creatures take up more space, fewer of them can surround a creature. If five Large creatures crowd around a Medium or smaller one, there's little room for anyone else. In contrast, as many as twenty Medium creatures can surround a Gargantuan one.\n\n#### Squeezing into a Smaller Space\n\nA creature can squeeze through a space that is large enough for a creature one size smaller than it. Thus, a Large creature can squeeze through a passage that's only 5 feet wide. While squeezing through a space, a creature must spend 1 extra foot for every foot it moves there, and it has disadvantage on attack rolls and Dexterity saving throws. Attack rolls against the creature have advantage while it's in the smaller space."
+    }
+  ]
+}

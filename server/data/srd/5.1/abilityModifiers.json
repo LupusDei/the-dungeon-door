@@ -1,0 +1,170 @@
+{
+  "meta": {
+    "title": "Ability Scores and Modifiers",
+    "version": "SRD 5.1",
+    "srd": "5.1",
+    "ruleset": "2014",
+    "license": "CC-BY-4.0",
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "sourceDatabase": "https://github.com/5e-bits/5e-srd-api/tree/main/packages/5e-database/src/2014/en",
+    "sourcePdf": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+    "fetched": "2026-11-25",
+    "recordCount": 30,
+    "additionalSources": [
+      "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf"
+    ],
+    "primarySource": "official-pdf"
+  },
+  "records": [
+    {
+      "score": 1,
+      "modifier": -5,
+      "inPrintedTable": false
+    },
+    {
+      "score": 2,
+      "modifier": -4,
+      "inPrintedTable": false
+    },
+    {
+      "score": 3,
+      "modifier": -4,
+      "inPrintedTable": true
+    },
+    {
+      "score": 4,
+      "modifier": -3,
+      "inPrintedTable": true
+    },
+    {
+      "score": 5,
+      "modifier": -3,
+      "inPrintedTable": true
+    },
+    {
+      "score": 6,
+      "modifier": -2,
+      "inPrintedTable": true
+    },
+    {
+      "score": 7,
+      "modifier": -2,
+      "inPrintedTable": true
+    },
+    {
+      "score": 8,
+      "modifier": -1,
+      "inPrintedTable": true
+    },
+    {
+      "score": 9,
+      "modifier": -1,
+      "inPrintedTable": true
+    },
+    {
+      "score": 10,
+      "modifier": 0,
+      "inPrintedTable": true
+    },
+    {
+      "score": 11,
+      "modifier": 0,
+      "inPrintedTable": true
+    },
+    {
+      "score": 12,
+      "modifier": 1,
+      "inPrintedTable": true
+    },
+    {
+      "score": 13,
+      "modifier": 1,
+      "inPrintedTable": true
+    },
+    {
+      "score": 14,
+      "modifier": 2,
+      "inPrintedTable": true
+    },
+    {
+      "score": 15,
+      "modifier": 2,
+      "inPrintedTable": true
+    },
+    {
+      "score": 16,
+      "modifier": 3,
+      "inPrintedTable": true
+    },
+    {
+      "score": 17,
+      "modifier": 3,
+      "inPrintedTable": true
+    },
+    {
+      "score": 18,
+      "modifier": 4,
+      "inPrintedTable": true
+    },
+    {
+      "score": 19,
+      "modifier": 4,
+      "inPrintedTable": true
+    },
+    {
+      "score": 20,
+      "modifier": 5,
+      "inPrintedTable": true
+    },
+    {
+      "score": 21,
+      "modifier": 5,
+      "inPrintedTable": false
+    },
+    {
+      "score": 22,
+      "modifier": 6,
+      "inPrintedTable": false
+    },
+    {
+      "score": 23,
+      "modifier": 6,
+      "inPrintedTable": false
+    },
+    {
+      "score": 24,
+      "modifier": 7,
+      "inPrintedTable": false
+    },
+    {
+      "score": 25,
+      "modifier": 7,
+      "inPrintedTable": false
+    },
+    {
+      "score": 26,
+      "modifier": 8,
+      "inPrintedTable": false
+    },
+    {
+      "score": 27,
+      "modifier": 8,
+      "inPrintedTable": false
+    },
+    {
+      "score": 28,
+      "modifier": 9,
+      "inPrintedTable": false
+    },
+    {
+      "score": 29,
+      "modifier": 9,
+      "inPrintedTable": false
+    },
+    {
+      "score": 30,
+      "modifier": 10,
+      "inPrintedTable": false
+    }
+  ]
+}
