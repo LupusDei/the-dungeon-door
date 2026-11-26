@@ -91,15 +91,56 @@ test('in a fight the step is a combat round, whatever the choices say', () => {
   assert.equal(step.round, true);
 });
 
-test('scene count: each combat round adds a scene, a fight on is never followed by the epilogue, defeat ends it', () => {
+/**
+ * A whole game of `sceneCount` scenes, as lib/game.ts plays it (a scene is the epilogue once next >= count - 1):
+ * the party takes a fight in every story scene listed in `fightIn` (by story scene, from 0), each lasting
+ * `rounds` rounds and ending in `end`. What each scene was.
+ */
+function play(sceneCount: number, fightIn: number[], rounds: number, end: 'victory' | 'defeat' | 'fled' = 'victory'): string[] {
   const base = { party, combat: null, dungeon: null };
   const { combat } = startFight(party, ['goblin-warrior']);
-  assert.equal(sceneCountAfter({ state: base, fight: null, round: false }, 2, 4), 4);
-  assert.equal(sceneCountAfter({ state: { ...base, combat }, fight: 'started', round: false }, 1, 4), 4);
-  assert.equal(sceneCountAfter({ state: { ...base, combat }, fight: 'started', round: false }, 3, 4), 5, 'not the epilogue yet');
-  assert.equal(sceneCountAfter({ state: { ...base, combat }, fight: null, round: true }, 2, 4), 5);
-  assert.equal(sceneCountAfter({ state: base, fight: 'victory', round: true }, 2, 4), 5);
-  assert.equal(sceneCountAfter({ state: base, fight: 'defeat', round: true }, 1, 4), 2);
+  const scenes: string[] = [];
+  let [count, story, left] = [sceneCount, 0, 0];
+  for (let i = 0; i < 100; i++) {
+    if (i >= count - 1) return [...scenes, 'epilogue'];
+    let step: Parameters<typeof sceneCountAfter>[0];
+    if (left > 0) {
+      left--;
+      scenes.push('round');
+      step = left > 0 ? { state: { ...base, combat }, fight: null } : { state: base, fight: end };
+    } else {
+      scenes.push('story');
+      const fights = fightIn.includes(story++);
+      if (fights) left = rounds;
+      step = fights ? { state: { ...base, combat }, fight: 'started' } : { state: base, fight: null };
+    }
+    count = sceneCountAfter(step, i + 1, count);
+  }
+  return scenes;
+}
+
+test('a fight taken in the last story scene and won is followed by the epilogue, however many rounds it lasts', () => {
+  assert.deepEqual(play(4, [2], 1), ['story', 'story', 'story', 'round', 'epilogue']);
+  assert.deepEqual(play(4, [2], 3), ['story', 'story', 'story', 'round', 'round', 'round', 'epilogue']);
+  assert.deepEqual(play(4, [2], 2, 'fled'), ['story', 'story', 'story', 'round', 'round', 'epilogue'], 'the foes fled');
+});
+
+test('a fight lost is followed by the epilogue, wherever it was taken', () => {
+  assert.deepEqual(play(4, [2], 2, 'defeat'), ['story', 'story', 'story', 'round', 'round', 'epilogue']);
+  assert.deepEqual(play(6, [0], 1, 'defeat'), ['story', 'round', 'epilogue']);
+});
+
+test('rounds never use up the story: N - 1 story scenes, then the epilogue, with a fight taken in every one', () => {
+  assert.deepEqual(play(4, [0], 2), ['story', 'round', 'round', 'story', 'story', 'epilogue']);
+  const every = play(4, [0, 1, 2], 2);
+  assert.deepEqual([every.filter((s) => s === 'story').length, every.filter((s) => s === 'round').length, every.at(-1), every.length], [3, 6, 'epilogue', 4 + 6]);
+  assert.deepEqual(play(2, [0], 1), ['story', 'round', 'epilogue'], 'sceneCount 2: the opening, then the epilogue');
+});
+
+test('a fight still on is never followed by the epilogue, even in a game counted before this rule', () => {
+  const { combat } = startFight(party, ['goblin-warrior']);
+  assert.equal(sceneCountAfter({ state: { party, combat, dungeon: null }, fight: null }, 5, 4), 7, 'a count left too low: one more round, then the epilogue');
+  assert.equal(sceneCountAfter({ state: { party, combat, dungeon: null }, fight: null }, 2, 6), 7);
 });
 
 test('at the end the heroes go home: their sheets after a long rest (the fallen too), for the players still at the table', () => {

@@ -99,13 +99,15 @@ export function endQuest(step: EngineStep): EngineStep {
 }
 
 /**
- * Combat rounds don't use up the story's scenes: each one adds a scene, and a fight still on is never
- * followed by the epilogue. A lost fight makes the next scene the epilogue.
+ * Combat rounds don't use up the story's scenes: a scene is added for each round, as the round's scene is
+ * made (the next scene is a round while a fight is on), and none when a fight ends, so a game of N scenes
+ * has N - 1 story scenes and then the epilogue, however many rounds are fought and wherever. A fight still
+ * on is never followed by the epilogue (nor in a game counted before this rule). A lost fight makes the next
+ * scene the epilogue.
  */
-export function sceneCountAfter(step: Pick<EngineStep, 'state' | 'fight' | 'round'>, next: number, sceneCount: number): number {
+export function sceneCountAfter(step: Pick<EngineStep, 'state' | 'fight'>, next: number, sceneCount: number): number {
   if (step.fight === 'defeat') return next + 1;
-  const count = step.round ? sceneCount + 1 : sceneCount;
-  return step.state.combat ? Math.max(count, next + 2) : count;
+  return step.state.combat ? Math.max(sceneCount + 1, next + 2) : sceneCount;
 }
 
 /** A hero goes home rested; the dead go home dead. */

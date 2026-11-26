@@ -124,7 +124,7 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   assert.equal(state.scene!.combat, true);
   assert.match(state.scene!.choices.map((c) => c.label).join(' | '), /^Attack with .+ \| (Attack with|Cast) .+ \| Dodge$/, 'written for the caller’s hero');
   assert.equal(state.rules!.combat!.round, 1);
-  assert.equal(state.sceneCount, 3, 'scene 1 is a round; the epilogue is still to come');
+  assert.equal(state.sceneCount, 4, 'scene 1 is a round, counted as it is made; the last story scene and the epilogue are still to come');
   assert.match(state.messages.filter((m) => m.kind === 'system').at(-1)!.text, /^A fight begins: Rat\. Initiative: /);
 
   let index = 1;
