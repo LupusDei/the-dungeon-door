@@ -10,7 +10,7 @@ import { type Rng, pick, sample } from './rng.ts';
 import { type CharacterSheet, parseCharacterSheet } from './sheet.ts';
 import type { EquipmentOption, Item, Size, Srd, SrdBackground, SrdClass, SrdSpecies } from './srd.ts';
 import { srd as bundledSrd } from './srd.ts';
-import { require } from './violation.ts';
+import { lookup, require } from './violation.ts';
 
 export interface CharacterChoices {
   name: string;
@@ -40,12 +40,6 @@ const UNARMORED_DEFENSE: Readonly<Record<string, { ability: Ability; shield: boo
   barbarian: { ability: 'con', shield: true },
   monk: { ability: 'wis', shield: false },
 };
-
-function lookup<T>(table: ReadonlyMap<string, T>, id: string, kind: string): T {
-  const found = table.get(id);
-  require(found !== undefined, `there is no ${kind} ${id}`);
-  return found;
-}
 
 function sizeFor(species: SrdSpecies, size: Size | undefined): Size {
   if (species.sizes.length > 1) {
