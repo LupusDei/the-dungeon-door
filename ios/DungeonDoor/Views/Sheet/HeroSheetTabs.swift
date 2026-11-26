@@ -234,10 +234,24 @@ struct CombatTab: View {
                                  tags: [SheetRow.Tag(text: standing.darkvision > 0 ? "Darkvision \(standing.darkvision) ft" : "Dim light", tint: Palette.muted)],
                                  subtitle: "Perception is rolled twice and the worse die counts."))
         }
-        rows += live.conditions.map { id in
+        // What the hero carries from scene to scene says how it ends; a fight adds its own
+        // short-lived ones, and repeats the carried ones by id.
+        let carried = standing.conditions
+        rows += carried.map { held in
+            SheetRow(id: "condition/\(held.condition)", title: rules.conditionName(held.condition),
+                     tags: [SheetRow.Tag(text: "Condition", tint: Palette.ember)],
+                     subtitle: held.ending.isEmpty ? nil : held.ending,
+                     detail: rules.condition(held.condition))
+        }
+        rows += live.conditions.filter { id in !carried.contains { $0.condition == id } }.map { id in
             SheetRow(id: "condition/\(id)", title: rules.conditionName(id),
                      tags: [SheetRow.Tag(text: "Condition", tint: Palette.ember)],
                      detail: rules.condition(id))
+        }
+        if standing.isUp, let spell = standing.concentratingOn, !spell.isEmpty {
+            rows.append(SheetRow(id: "holding", title: "Concentrating on \(spell)",
+                                 tags: [SheetRow.Tag(text: "Concentration", tint: Palette.gold)],
+                                 subtitle: "Each hit forces a Constitution save to keep it. It ends at 0 hit points, and with the fight."))
         }
         return rows
     }

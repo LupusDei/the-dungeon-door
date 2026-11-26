@@ -410,8 +410,10 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
 - **A round written for each player** (`lib/play/your-turn.ts`): the three combat choices say what the
   caller's own hero will do ("Attack with Greatsword", "+5 to hit, 2d6+3 slashing, at Goblin Warrior 2"),
   using the same picks as `play/fight.ts`: an area spell names every foe it will catch, and a hero the
-  engine will have drink a potion first is told so. A hero that is down or dead has no action
-  (`scene.canAct`), and a round waits only for the heroes that can act.
+  engine will have use Second Wind or drink a potion first is told so. A hero that is down or dead has no
+  action (`scene.canAct`), and a round waits only for the heroes that can act. The third choice differs
+  from hero to hero (Dodge, Break Free, Help), so in a round each vote carries the label of its own
+  hero's choice (`scene.votes[].label`, `lib/game.ts`), and the app shows that for the others.
 - **The hour and the light** (app): a scene shows the clock, the light the party carries and how long it
   has left, and what the caller's own hero can see (`rules.time`, `rules.light`, `party[].sight`); a
   hero's sheet in a game says when they cannot see.
@@ -419,6 +421,10 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
   parley would do (`rules.dungeon.waiting`); a dead hero's page has the temple (`POST
   /api/characters/revive`), listing which of the player's purses can pay; a raised hero's page and sheet
   show the revival penalty.
+- **Conditions and the held spell** (app): a scene tells the caller what their own hero carries and how
+  each condition ends, and that they are concentrating; a hero's sheet in a game lists the same
+  (`party[].conditions`, `party[].concentratingOn`). The dice log marks a monster's power, a recharge, a
+  hero breaking free or failing to, and a spell lost.
 - **One picture per fight**: the round that begins a fight is painted; later rounds carry the same
   picture. Paintings are most of what a game costs.
 - **A rules error never strands a table** (`lib/game.ts`, `withoutTheEngine`): if the engine throws, the

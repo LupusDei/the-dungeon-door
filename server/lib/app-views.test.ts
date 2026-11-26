@@ -29,6 +29,7 @@ import type { DungeonMaster } from './dm/types.ts';
 import { setDice } from './game.ts';
 import { DUNGEON_MODES } from './play/table.ts';
 import { autoLevelUp } from './play/fight.ts';
+import { withCondition } from './rules/conditions.ts';
 import { addItem } from './rules/inventory.ts';
 import { awardXp } from './rules/leveling.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
@@ -265,6 +266,24 @@ test('a hero at half its hit points or less is told it will drink its potion fir
   await settle();
   const after = await view(code, players[0]);
   assert.equal(after.rules!.results.filter((line) => /drinks a Potion of Healing as a Bonus Action/.test(line)).length, 1, after.rules!.results.join(' | '));
+});
+
+test('the third choice fits the hero, and each vote in a round says what its hero is doing', async () => {
+  const { code, players } = await intoFight(['fighter', 'fighter'], ['goblin-warrior']);
+  const game = (await getStore().getGame(code))!;
+  const held = withCondition(game.party!.sheets[players[0]], { condition: 'restrained', until: { kind: 'escape', ability: 'str', skill: 'athletics', dc: 12 } });
+  await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: { ...game.party!.sheets, [players[0]]: held } } });
+  const [mine, theirs] = await Promise.all(players.map((p) => view(code, p)));
+  assert.deepEqual([mine.scene!.choices[2].label, theirs.scene!.choices[2].label], ['Break Free', 'Dodge']);
+  assert.deepEqual(theirs.rules!.party.find((h) => h.playerId === players[0])!.conditions, [{ condition: 'restrained', ends: 'DC 12 Athletics to break free' }]);
+
+  await vote(code, players[0], mine.scene!.index, 'c');
+  const seen = (await view(code, players[1])).scene!;
+  assert.deepEqual(seen.votes.map((v) => [v.playerId, v.choiceId, v.label]), [[players[0], 'c', 'Break Free']], 'the other player reads Break Free, not their own Dodge');
+  await vote(code, players[1], seen.index, 'a');
+  await settle();
+  const after = await view(code, players[1]);
+  assert.match(after.rules!.results.join(' | '), /breaks free|cannot break free/);
 });
 
 test('a hero that is down has no action, and the round does not wait for its player', async () => {

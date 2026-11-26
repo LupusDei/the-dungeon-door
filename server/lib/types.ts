@@ -46,6 +46,11 @@ export interface Vote {
   roll: number;
 }
 
+/** A vote as the app sees it. In a combat round `label` is what that hero is doing, in their own choice's words: "Cast Fire Bolt", "Break Free", "Help Ilsa". */
+export interface VoteView extends Vote {
+  label?: string;
+}
+
 /** A scene as stored. `imagePrompt` and `chosenChoiceId` are server-only. */
 /** A choice as stored: with the rules hook the engine checked (rules-engine games). */
 export interface StoredChoice extends Choice {
@@ -122,7 +127,7 @@ export interface SceneView {
   /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
   canAct: boolean;
   isFinale: boolean;
-  votes: Vote[];
+  votes: VoteView[];
   myVote: ChoiceId | null;
   outcome: string | null;
 }

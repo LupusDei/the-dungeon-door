@@ -180,7 +180,9 @@ Scene {
   canAct: boolean                    // false when the caller's hero cannot act this round (down or dead):
                                      // nothing to choose, and the round does not wait for them
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
-  votes: [{ playerId, choiceId, roll: number /* d20 */ }]
+  votes: [{ playerId, choiceId, roll: number /* d20 */,
+            label?: string }]        // in a combat round: what that hero is doing, in their own choice's words
+                                     // ("Attack with Longsword", "Cast Fire Bolt", "Break Free", "Help Ilsa", "Dodge")
   myVote: string | null              // choiceId of the caller
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
 }
@@ -349,6 +351,9 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     every foe it will catch ("3d6 fire, Dexterity save DC 12 for half, at Goblin Warrior 2 and Goblin
     Warrior 1."), and a hero about to use Second Wind or drink a potion is told so on all three (the
     detail ends " First uses Second Wind." or " First drinks a Potion of Healing.").
+  - **What the others are doing.** The same id means different things for different heroes (one hero's `c`
+    is Dodge, a held hero's is Break Free), so in a combat round every vote carries `label`: the label of
+    that voter's own choice. Show it rather than the caller's label for the same id.
   - **Who must act.** A hero that is down or dead has no action: `scene.canAct` is false for its player,
     a vote from them is accepted and changes nothing, and the round resolves when every hero that can act has voted.
     If no hero can act the round resolves at once. The host can still `advance` with no votes in.

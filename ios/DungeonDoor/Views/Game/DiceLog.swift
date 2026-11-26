@@ -98,6 +98,17 @@ struct DiceLineStyle: Equatable {
             pick = byHero ? (.bad, "heart.slash") : (.good, "xmark.circle")
         } else if has("is stable", "back on their feet", "wakes with", "regains", "hp back") {
             pick = (.good, "heart.fill")
+        } else if has(" uses ") && has(" save):") {
+            // A monster's power (a breath, a web, a gaze): everyone caught saves.
+            pick = (has(" fails") ? .bad : .quiet, "tornado")
+        } else if has("is ready again") {
+            pick = (.quiet, "arrow.clockwise")
+        } else if has("cannot break free", " is still ", "tries to stabilize", "loses concentration", "can no longer concentrate") {
+            pick = (.bad, "xmark.circle.fill")
+        } else if has("stabilizes ", "breaks free", "shakes off", "is no longer ") {
+            pick = (.good, "checkmark.circle.fill")
+        } else if has("eats a day") {
+            pick = (.quiet, "fork.knife")
         } else if has("vs dc", "(passive") {
             pick = has(", failure") ? (.bad, "xmark.circle.fill") : (.good, "checkmark.circle.fill")
         } else if text.hasPrefix("damage") || has("goes off", "nobody notices", "the party meets") {

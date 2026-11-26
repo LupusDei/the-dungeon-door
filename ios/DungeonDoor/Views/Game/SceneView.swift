@@ -357,6 +357,21 @@ private struct TimeAndLight: View {
                     .foregroundStyle(mine.cannotSee ? Palette.ember : Palette.parchment.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let mine, mine.isUp {
+                // What the caller's hero carries from scene to scene, and how each ends.
+                ForEach(mine.conditions, id: \.self) { held in
+                    Label("\(mine.name) is \(held.line).", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.ember)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let spell = mine.concentratingOn, !spell.isEmpty {
+                    Label("\(mine.name) is concentrating on \(spell).", systemImage: "sparkles")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.gold)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -578,8 +593,9 @@ private struct ResolvingOverlay: View {
                          size: 52, circular: true)
             D20Badge(roll: vote.roll, size: 40)
             if scene.combat {
-                // In a fight the three choices are always Attack, Cast and Dodge.
-                Text(CombatAction(choiceId: vote.choiceId).verb).font(.caption.bold()).foregroundStyle(Palette.muted)
+                // In a fight each vote is that hero's own action: the third depends on their moment.
+                Text(vote.action.verb).font(.caption.bold()).foregroundStyle(Palette.muted)
+                    .lineLimit(1).minimumScaleFactor(0.7)
             } else if let index = scene.choices.firstIndex(where: { $0.id == vote.choiceId }) {
                 Text(ChoiceLetter.at(index)).font(.caption.bold()).foregroundStyle(Palette.muted)
             }

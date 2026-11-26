@@ -488,7 +488,7 @@ struct GamePlayer: Codable, Hashable, Identifiable {
 }
 
 struct Choice: Codable, Hashable, Identifiable {
-    /// "a", "b" or "c". In a fight: Attack, Cast, Dodge.
+    /// "a", "b" or "c". In a fight: Attack, Cast, and a third that fits the moment (Dodge, Break Free, Help).
     let id: String
     let label: String
     let detail: String
@@ -512,6 +512,9 @@ struct Vote: Codable, Hashable {
     let choiceId: String
     /// The d20 the server rolled with the vote. In a fight it is the hero's attack roll.
     let roll: Int
+    /// In a round of a fight: what that hero is doing, in their own choice's words ("Cast Fire
+    /// Bolt", "Break Free", "Help Ilsa"). The same id means different things for different heroes.
+    var label: String? = nil
 }
 
 struct GameScene: Codable, Hashable {
@@ -606,6 +609,10 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     let darkvision: Int
     /// Damage types the hero takes half of, from species traits: "poison", "fire".
     let resistances: [String]
+    /// Conditions the hero carries from scene to scene, each with how it ends.
+    let conditions: [CarriedCondition]
+    /// The spell the hero holds by concentration, by name ("Bless"); nil for none.
+    let concentratingOn: String?
 
     var id: String { playerId }
     var isUp: Bool { !down && !dead }
@@ -644,6 +651,52 @@ extension HeroStanding {
         sight = try c.value(.sight, or: "clear")
         darkvision = try c.whole(.darkvision)
         resistances = try c.value(.resistances, or: [])
+        conditions = try c.value(.conditions, or: [])
+        concentratingOn = try c.decodeIfPresent(String.self, forKey: .concentratingOn)
+    }
+}
+
+/// A condition a hero carries outside a fight (`rules.party[].conditions`), with how it ends as the
+/// server words it: "40 minutes", "until a long rest", "DC 13 Athletics to break free", "DC 12 CON
+/// save to end".
+struct CarriedCondition: Codable, Hashable {
+    /// A condition id: "poisoned", "restrained".
+    let condition: String
+    /// How it ends, read as written by the server but for one slip: a single hour or minute comes
+    /// as "1 hours" and "1 minutes".
+    let ends: String
+
+    init(condition: String, ends: String) {
+        self.condition = condition
+        self.ends = ends
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        condition = try c.value(.condition, or: "")
+        let written = try c.value(.ends, or: "")
+        ends = written == "1 hours" ? "1 hour" : written == "1 minutes" ? "1 minute" : written
+    }
+
+    /// The hero must spend effort to end it: a check to break free.
+    var needsEscape: Bool { ends.hasSuffix("to break free") }
+
+    /// "Poisoned for 40 minutes", "Poisoned until a long rest", "Restrained: DC 13 Athletics to break free".
+    var line: String {
+        let name = SRD.name(condition)
+        if ends.isEmpty { return name }
+        if ends.hasPrefix("until ") { return "\(name) \(ends)" }
+        if ends.hasPrefix("DC ") { return "\(name): \(ends)" }
+        return "\(name) for \(ends)"
+    }
+
+    /// How it ends, as a sentence for the sheet.
+    var ending: String {
+        if ends.isEmpty { return "" }
+        if ends.hasPrefix("until ") { return "Lasts \(ends)." }
+        if needsEscape { return "\(ends). The hero tries each turn; in a fight it takes their action." }
+        if ends.hasPrefix("DC ") { return "\(ends). The hero rolls it at the end of each of their turns." }
+        return "Wears off in \(ends)."
     }
 }
 

@@ -1,17 +1,38 @@
 import SwiftUI
 
 /// The three things a hero can do in a round. The server always sends them as choices a, b and c,
-/// with the label and detail written for the caller's own hero.
-enum CombatAction: String {
-    case attack = "a", cast = "b", dodge = "c"
+/// with the label and detail written for the caller's own hero. The third depends on the moment:
+/// Dodge, Break Free for a hero held fast, or Help for one beside a dying friend.
+enum CombatAction: Equatable {
+    case attack, cast, dodge, breakFree
+    /// Stabilize a dying friend, by name.
+    case help(String)
 
-    init(choiceId: String) { self = CombatAction(rawValue: choiceId) ?? .attack }
+    /// The action behind a choice id, read with the label its own hero was given for it. Without a
+    /// label (an older server, or a vote whose hero is no longer up) the third choice reads as Dodge.
+    init(choiceId: String, label: String? = nil) {
+        switch choiceId {
+        case "b": self = .cast
+        case "c":
+            let label = (label ?? "").trimmingCharacters(in: .whitespaces)
+            if label.caseInsensitiveCompare("Break Free") == .orderedSame {
+                self = .breakFree
+            } else if label.hasPrefix("Help "), label.count > 5 {
+                self = .help(String(label.dropFirst(5)))
+            } else {
+                self = .dodge
+            }
+        default: self = .attack
+        }
+    }
 
     var symbol: String {
         switch self {
         case .attack: "burst.fill"
         case .cast: "wand.and.stars"
         case .dodge: "shield.lefthalf.filled"
+        case .breakFree: "lock.open.fill"
+        case .help: "cross.case.fill"
         }
     }
 
@@ -21,8 +42,25 @@ enum CombatAction: String {
         case .attack: "Attacks"
         case .cast: "Casts"
         case .dodge: "Dodges"
+        case .breakFree: "Breaks free"
+        case .help(let name): "Helps \(name)"
         }
     }
+
+    /// Why the d20 that came with the vote isn't this action's roll; nil for an attack, where it is.
+    var rollNote: String? {
+        switch self {
+        case .attack, .cast: nil
+        case .dodge: "Rolled with your vote. Dodging needs no roll."
+        case .breakFree: "Rolled with your vote. Breaking free is its own check, rolled when the round resolves."
+        case .help: "Rolled with your vote. Stabilizing a friend is its own check, or none with a Healer\u{2019}s Kit."
+        }
+    }
+}
+
+extension Vote {
+    /// What the voter's hero is doing this round.
+    var action: CombatAction { CombatAction(choiceId: choiceId, label: label) }
 }
 
 /// A fight, one round at a time: everyone in initiative order with their hit points, the caller's
@@ -45,9 +83,9 @@ struct CombatView: View {
     /// The choices worth showing. A hero with no spell to cast is sent Attack twice (b is a's
     /// twin): one card is enough.
     private var actions: [Choice] {
-        guard let attack = scene.choices.first(where: { $0.id == CombatAction.attack.rawValue }) else { return scene.choices }
+        guard let attack = scene.choices.first(where: { $0.id == "a" }) else { return scene.choices }
         return scene.choices.filter { choice in
-            choice.id != CombatAction.cast.rawValue || choice.label != attack.label || choice.detail != attack.detail
+            choice.id != "b" || choice.label != attack.label || choice.detail != attack.detail
         }
     }
 
@@ -317,7 +355,7 @@ struct CombatView: View {
     }
 
     private func actionCard(_ choice: Choice) -> some View {
-        let kind = CombatAction(choiceId: choice.id)
+        let kind = CombatAction(choiceId: choice.id, label: choice.label)
         let mine = scene.myVote == choice.id
         return Button {
             Task { await session.vote(choice) }
@@ -353,12 +391,14 @@ struct CombatView: View {
 
     /// The d20 that came with the vote. In a fight it is the hero's roll to hit.
     private func roll(_ vote: Vote) -> some View {
-        let kind = CombatAction(choiceId: vote.choiceId)
+        // The caller's own choices say what their third action is; a vote's label says it too.
+        let chosen = scene.choices.first { $0.id == vote.choiceId }
+        let kind = CombatAction(choiceId: vote.choiceId, label: chosen?.label ?? vote.label)
         // A spell the target saves against says so in its detail ("Dexterity save DC 12 for half").
-        let saved = scene.choices.first { $0.id == vote.choiceId }?.detail.contains(" save DC") ?? false
-        let note = kind == .dodge ? "Rolled with your vote. Dodging needs no roll."
-            : saved ? "Rolled with your vote. The target saves against this spell, so there is no roll to hit."
-            : "Your roll to hit this round, before your bonus."
+        let saved = chosen?.detail.contains(" save DC") ?? false
+        let note = kind.rollNote
+            ?? (saved ? "Rolled with your vote. The target saves against this spell, so there is no roll to hit."
+                      : "Your roll to hit this round, before your bonus.")
         return HStack(spacing: 12) {
             D20Badge(roll: vote.roll, size: 44)
             VStack(alignment: .leading, spacing: 2) {
@@ -395,7 +435,7 @@ struct CombatView: View {
                         HStack(spacing: 10) {
                             PortraitView(url: hero?.portraitURL, size: 26, circular: true)
                             Text(hero?.name ?? "A hero").font(.caption.weight(.semibold))
-                            Text(CombatAction(choiceId: vote.choiceId).verb).font(.caption).foregroundStyle(Palette.muted)
+                            Text(vote.action.verb).font(.caption).foregroundStyle(Palette.muted).lineLimit(1)
                             Spacer(minLength: 0)
                             D20Badge(roll: vote.roll, size: 28)
                         }

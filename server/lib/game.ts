@@ -46,6 +46,17 @@ function choicesFor(game: Game, current: StoredScene, playerId: string): SceneVi
   return canAct(game.combat, playerId) ? yourChoices(game.combat, game.party.sheets[playerId], playerId) : anyonesChoices();
 }
 
+/** In a combat round each vote says what that hero is doing: the label of their own choice, which differs hero to hero. */
+function votesFor(game: Game, current: StoredScene): SceneView['votes'] {
+  const { combat, party } = game;
+  if (!combat || !party || current.outcome !== null || current.isFinale) return current.votes;
+  return current.votes.map((v) => {
+    if (!canAct(combat, v.playerId) || !Object.hasOwn(party.sheets, v.playerId)) return v;
+    const label = yourChoices(combat, party.sheets[v.playerId], v.playerId).find((c) => c.id === v.choiceId)?.label;
+    return label ? { ...v, label } : v;
+  });
+}
+
 function sceneView(game: Game, current: StoredScene, playerId: string): SceneView {
   return {
     index: current.index,
@@ -56,7 +67,7 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     combat: game.combat !== null,
     canAct: canAct(game.combat, playerId),
     isFinale: current.isFinale,
-    votes: current.votes,
+    votes: votesFor(game, current),
     myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
     outcome: current.outcome,
   };
