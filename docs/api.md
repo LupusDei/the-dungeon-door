@@ -200,6 +200,9 @@ GameState {
   scene: Scene | null                // the current scene (null in lobby)
   chronicle: ChronicleEntry[]        // resolved scenes, oldest first (the story so far)
   messages: Message[]                // newest last; only those after `since` when given
+  messageUpdates: Message[]          // lines already delivered (id ≤ `since`) whose reactions changed;
+                                     // empty when `since` is omitted, because those lines are in `messages`
+  typing: [{ playerId, name }]       // heroes whose players are composing a line, other than the caller
   rules: RulesView | null            // the rules engine's numbers; null for games started before it
   updatedAt: string
 }
@@ -359,12 +362,48 @@ RulesView {                          // SRD 5.2 (2024 rules)
 }
 
 Message {
-  id: number                         // monotonically increasing per game
+  id: number                         // monotonically increasing per game, and stable: a reaction edits this
+                                     // line in place and never mints a new id. A later change can hang a
+                                     // group-action proposal on a line; reactions already name who marked it,
+                                     // so agreement can be counted without renumbering the log
+  kind: "chat" | "system" | "dm"
+  playerId: string | null
+  characterName: string | null       // the hero's name when a player spoke; the speaker's name for a dm line
+  text: string                       // 1–500 chars
+  voice: "in" | "out" | null         // "in": the hero speaks (name and portrait). "out": the player, out of
+                                     // character. null for system and dm lines. A chat line from before this
+                                     // field reads as "in". Stored, and copied onto the DM's recentChat so
+                                     // in-character lines are visible in that data
+  replyTo: number | null             // the id of the line this one answers
+  reply: MessageQuote | null         // that line, quoted, so the preview survives even if it has scrolled
+                                     // out of the poll window
+  mentions: Mention[]                // heroes and players named in the text; empty when it names nobody
+  reactions: Reaction[]              // emoji on this line, in the order they were first used; empty when
+                                     // nobody has reacted. Tap the same emoji again to leave it
+  createdAt: string
+}
+
+MessageQuote {
+  id: number
   kind: "chat" | "system" | "dm"
   playerId: string | null
   characterName: string | null
-  text: string                       // 1–500 chars
-  createdAt: string
+  text: string
+  voice: "in" | "out" | null
+}
+
+Mention {
+  playerId: string
+  name: string                       // the hero's name, as the party knows it
+  target: "hero" | "player"          // "hero": @Name addresses the character. "player": @player:Name
+                                     // addresses the person who plays them
+}
+
+Reaction {
+  emoji: string                      // one emoji: 👍 👎 😂 😮 ❤️ 💀 are the quick set; any other single
+                                     // emoji is allowed, for the picker
+  count: number                      // how many players currently have it; equals playerIds.length
+  playerIds: string[]                // who reacted, in the order they first did
 }
 ```
 
@@ -374,14 +413,27 @@ Message {
 - `POST /api/games/{code}/join` body `{ characterId }` → `GameState`. Lobby only (409 after start).
   Re-joining with a different character swaps the character. Max 6 players.
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
-- `POST /api/games/{code}/messages` body `{ text }` → `Message`.
-  Table talk. It is not what a hero says in the story.
+- `POST /api/games/{code}/messages` body `{ text, voice?, replyTo? }` → `Message`. `voice` is `"in"`
+  (the default: the hero speaks) or `"out"` (the player, out of character). `"in"` is the same kind of
+  player-voice input as `POST …/speak`: those words are the hero's, and the narrator must answer them
+  and must not rewrite them. `"out"` is table talk. It is not what the hero said, and it is never an
+  instruction to the dungeon master. `replyTo` is a message id in this game; 400 when it isn't. Names in
+  the text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa` is the player of that hero. The longest
+  hero name that fits is used, and a name that isn't at the table is left as text. 400 when `text` isn't
+  1–500 characters or `voice` isn't `"in"` or `"out"`.
+- `POST /api/games/{code}/reactions` body `{ messageId, emoji }` → `Message`. Toggles the caller's reaction
+  on that line (any kind of line): the first tap adds it, the next removes it. The returned line has the
+  same `id`. `emoji` is a single emoji. 400 when it isn't; 404 when the line isn't in this game.
+- `POST /api/games/{code}/typing` body `{ typing? }` → `{ ok: true }`. `typing: true` (the default) says the
+  caller is composing; the next poll shows them in `typing` for about five seconds, to everyone else.
+  `typing: false` clears it at once.
 - `POST /api/games/{code}/speak` body `{ text }` → `GameState`.
   An in-character line or deed, 1–500 characters: what the hero says or does, with no roll and nothing for
   the rules engine to adjudicate. Voting only (409 otherwise). It is appended to the current scene's
   `roleplay`, which is the turn's log, and stays on that chronicle entry once the scene resolves. The
   dungeon master's next narration, and the NPCs in it, answer these words. A player may send several.
-  This is not a freeform action and it is not table chat.
+  This is not a freeform action. An in-character chat line (`voice: "in"`) is the same promise: the
+  narrator keeps those words. Out-of-character chat is not.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
   Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole

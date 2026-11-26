@@ -1,5 +1,5 @@
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, RoleplayLine, StoredScene, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
 import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
@@ -20,6 +20,9 @@ export class MemoryStore implements Store {
   private games = new Map<string, GameData>();
   /** When each reading was claimed, by "CODE#index#voice". */
   private voiceClaims = new Map<string, number>();
+  /** Message ids whose reactions have changed, by "CODE:id". The id itself never changes. */
+  private revised = new Set<string>();
+  private typing = new Map<string, { playerId: string; name: string; until: string }[]>();
   private invites: Invite[] = [];
 
   async getCharacter(id: string) {
@@ -232,16 +235,66 @@ export class MemoryStore implements Store {
     const data = this.games.get(code);
     if (!data) throw new Error(`no game ${code}`);
     const last = data.messages.at(-1)?.id ?? 0;
-    const stored: Message = { id: last + 1, ...message, createdAt: now() };
+    const stored: Message = {
+      id: last + 1,
+      kind: message.kind,
+      playerId: message.playerId,
+      characterName: message.characterName,
+      text: message.text,
+      createdAt: now(),
+      voice: message.voice ?? (message.kind === 'chat' ? 'in' : null),
+      replyTo: message.replyTo ?? null,
+      reply: message.reply ? structuredClone(message.reply) : null,
+      mentions: structuredClone(message.mentions ?? []),
+      reactions: [],
+    };
     data.messages.push(stored);
     data.game.updatedAt = stored.createdAt;
-    return { ...stored };
+    return structuredClone(stored);
+  }
+
+  async getMessage(code: string, id: number) {
+    await tick();
+    const message = this.games.get(code)?.messages.find((m) => m.id === id);
+    return message ? structuredClone(message) : null;
   }
 
   async listMessages(code: string, since?: number, limit = 200) {
     await tick();
     const messages = this.games.get(code)?.messages ?? [];
-    return messages.filter((m) => since === undefined || m.id > since).slice(-limit).map((m) => ({ ...m }));
+    return messages.filter((m) => since === undefined || m.id > since).slice(-limit).map((m) => structuredClone(m));
+  }
+
+  async listUpdatedMessages(code: string, since: number, limit = 50) {
+    await tick();
+    const messages = this.games.get(code)?.messages ?? [];
+    return messages
+      .filter((m) => m.id <= since && this.revised.has(`${code}:${m.id}`))
+      .slice(-limit)
+      .map((m) => structuredClone(m));
+  }
+
+  async toggleReaction(code: string, messageId: number, playerId: string, emoji: string) {
+    await tick();
+    const data = this.games.get(code);
+    const message = data?.messages.find((m) => m.id === messageId);
+    if (!data || !message) return null;
+    message.reactions = toggled(message.reactions, playerId, emoji);
+    this.revised.add(`${code}:${messageId}`);
+    data.game.updatedAt = now();
+    return structuredClone(message);
+  }
+
+  async setTyping(code: string, playerId: string, name: string, until: string) {
+    await tick();
+    const rows = (this.typing.get(code) ?? []).filter((t) => t.playerId !== playerId);
+    rows.push({ playerId, name, until });
+    this.typing.set(code, rows);
+  }
+
+  async listTyping(code: string, nowIso: string): Promise<TypingNotice[]> {
+    await tick();
+    return (this.typing.get(code) ?? []).filter((t) => t.until > nowIso).map(({ playerId, name }) => ({ playerId, name }));
   }
 
   async listCompanions(playerId: string, limit = 30) {
@@ -282,4 +335,21 @@ export class MemoryStore implements Store {
     await tick();
     this.invites = this.invites.filter((i) => !(i.code === code && i.toPlayerId === toPlayerId));
   }
+}
+
+/** The same emoji from the same player removes their mark; everyone else's stays, in the order they arrived. */
+function toggled(reactions: Reaction[], playerId: string, emoji: string): Reaction[] {
+  const next = reactions.map((r) => ({ ...r, playerIds: [...r.playerIds] }));
+  const existing = next.find((r) => r.emoji === emoji);
+  if (existing?.playerIds.includes(playerId)) {
+    existing.playerIds = existing.playerIds.filter((id) => id !== playerId);
+    existing.count = existing.playerIds.length;
+    return next.filter((r) => r.count > 0);
+  }
+  if (existing) {
+    existing.playerIds.push(playerId);
+    existing.count = existing.playerIds.length;
+    return next;
+  }
+  return [...next, { emoji, count: 1, playerIds: [playerId] }];
 }

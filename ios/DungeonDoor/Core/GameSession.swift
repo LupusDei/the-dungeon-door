@@ -23,7 +23,17 @@ final class GameSession {
     private(set) var state: GameState
     private(set) var messages: [Message] = []
     private(set) var unreadChat = 0
+    /// Who else is composing, from the last poll.
+    private(set) var typing: [TypingNotice] = []
+    /// The line in the composer. Shared by the bar on the table and the open chat.
+    var draft = ""
+    /// True when the hero speaks. False is the player, out of character.
+    var speakingInCharacter = true
+    /// The line the next message will quote.
+    var replyingTo: Message?
     var chatOpen = false { didSet { if chatOpen { unreadChat = 0 } } }
+    private var lastTypingPing: Date?
+    private var announcedTyping = false
     var error: String?
     var busy = false
     var connectionTrouble = false
@@ -82,12 +92,42 @@ final class GameSession {
 
     // MARK: Actions
 
-    func say(_ text: String) async {
+    func say(_ text: String, voice: String = "in", replyTo: Int? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        announcedTyping = false
+        lastTypingPing = nil
         await run {
-            let message = try await self.api.say(self.code, text: String(trimmed.prefix(500)))
+            let message = try await self.api.say(self.code, text: String(trimmed.prefix(500)), voice: voice, replyTo: replyTo)
+            try? await self.api.typing(self.code, typing: false)
             self.append([message], countUnread: false)
+        }
+    }
+
+    /// Toggles an emoji on a line. The id does not change, so the log is edited in place.
+    func react(to messageId: Int, with emoji: String) async {
+        do {
+            let message = try await api.react(code, messageId: messageId, emoji: emoji)
+            merge([message])
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Pings the table while a line is being written, and clears it when the composer is empty.
+    func noteDraft(_ text: String) {
+        let composing = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if composing {
+            let now = Date()
+            if let lastTypingPing, now.timeIntervalSince(lastTypingPing) < 2 { return }
+            lastTypingPing = now
+            announcedTyping = true
+            Task { try? await self.api.typing(self.code, typing: true) }
+        } else if announcedTyping {
+            announcedTyping = false
+            lastTypingPing = nil
+            Task { try? await self.api.typing(self.code, typing: false) }
         }
     }
 
@@ -134,6 +174,8 @@ final class GameSession {
         noteCombat(fresh)
         state = fresh
         append(fresh.messages, countUnread: countUnread)
+        merge(fresh.messageUpdates)
+        typing = fresh.typing
     }
 
     /// Remembers which scenes were rounds of a fight: the one on show, and the earlier rounds of
@@ -180,6 +222,16 @@ final class GameSession {
         messages = (messages + new).sorted { $0.id < $1.id }
         if countUnread && !chatOpen {
             unreadChat += new.filter { $0.kind == .chat && $0.playerId != playerId }.count
+        }
+    }
+
+    /// Reactions edit a line the log already has. The id stays, so this is not a new message.
+    private func merge(_ updates: [Message]) {
+        guard !updates.isEmpty else { return }
+        for update in updates {
+            if let index = messages.firstIndex(where: { $0.id == update.id }) {
+                messages[index] = update
+            }
         }
     }
 }

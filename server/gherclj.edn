@@ -4,5 +4,6 @@
                    gherclj.legal-steps
                    gherclj.freeform-steps
                    gherclj.player-voice-steps
-                   gherclj.band-steps]
+                   gherclj.band-steps
+                   gherclj.party-chat-steps]
  :framework :typescript/node-test}
