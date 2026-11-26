@@ -14,6 +14,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { beamsAt, castSpell, slotsLeft, spellDamageDice } from '../rules/spells.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
+import { afterFight } from './dying.ts';
 import type { PartyState } from './state.ts';
 
 export const MAX_ROUNDS = 10;
@@ -43,7 +44,7 @@ const heroOf = (playerId: string, sheet: CharacterSheet): Combatant =>
 export function startFight(party: PartyState, monsterIds: readonly string[]): { party: PartyState; combat: CombatState; lines: string[] } {
   const rng = seededRng(party.rng);
   const seed = rng.die(1_000_000_000);
-  const heroes = Object.entries(party.sheets).map(([id, sheet]) => heroOf(id, sheet));
+  const heroes = Object.entries(party.sheets).filter(([, sheet]) => !sheet.dead).map(([id, sheet]) => heroOf(id, sheet));
   const others = foes(monsterIds);
   const combat = startCombat(seed, [...heroes, ...others]);
   const order = combat.order.map((id) => `${combat.combatants[id].name} ${combat.initiative[id]}`).join(', ');
@@ -167,9 +168,10 @@ function endOf(combat: CombatState): FightEnd | null {
   return combat.round > MAX_ROUNDS ? 'fled' : null;
 }
 
+/** The fighters' HP back onto their sheets (the dead sat the fight out). */
 const synced = (party: PartyState, combat: CombatState): PartyState => ({
   ...party,
-  sheets: Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, { ...s, hp: combat.combatants[id].hp }])),
+  sheets: Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, Object.hasOwn(combat.combatants, id) ? { ...s, hp: combat.combatants[id].hp } : s])),
 });
 
 interface Turn { action: Action; sheets: Record<string, CharacterSheet> }
@@ -185,13 +187,13 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   return { action, sheets: { ...sheets, [id]: sheet } };
 }
 
+/** However it ends, the slain stay dead and the fallen are settled: stabilized by a friend, or left to their death saves. */
 function settleFight(party: PartyState, combat: CombatState, lines: string[]): Round {
   const ended = endOf(combat);
-  if (ended === 'victory') {
-    const won = victory(party, combat);
-    return { party: won.party, combat, lines: [...lines, ...won.lines], ended };
-  }
-  return { party, combat, lines: ended === 'fled' ? [...lines, 'The foes flee.'] : lines, ended };
+  if (ended === null) return { party, combat, lines, ended };
+  const won = { victory: () => victory(party, combat), fled: () => ({ party, lines: ['The foes flee.'] }), defeat: () => ({ party, lines: [] }) }[ended]();
+  const settled = afterFight(won.party, combat);
+  return { party: settled.party, combat, lines: [...lines, ...won.lines, ...settled.lines], ended };
 }
 
 /** Plays one round: each hero by their vote, monsters by rule; then settles the fight if it ended. */

@@ -37,7 +37,7 @@ const slots = (left: number[]) => {
 };
 
 function heroLine(h: RulesContext['party'][number]): string {
-  const hp = h.hp === 0 ? `DOWN (0/${h.maxHp} HP)` : `${h.hp}/${h.maxHp} HP`;
+  const hp = h.dead ? 'DEAD (only Revivify, Raise Dead or the like brings them back)' : h.hp === 0 ? `DOWN (0/${h.maxHp} HP)` : `${h.hp}/${h.maxHp} HP`;
   const passive = `, passive Perception ${h.passivePerception}, passive Insight ${h.passiveInsight}`;
   const goods = `, ${h.gp} gp${h.dragging ? ', overloaded (Speed 5 ft)' : ''}; carries ${h.items || 'nothing'}`;
   return `- ${h.name}: level ${h.level}, ${hp}, AC ${h.armorClass}${h.exhaustion ? `, exhaustion ${h.exhaustion}` : ''}${slots(h.slotsLeft)}${passive}${goods}`;

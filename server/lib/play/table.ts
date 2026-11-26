@@ -78,9 +78,12 @@ export function sceneCountAfter(step: Pick<EngineStep, 'state' | 'fight' | 'roun
   return step.state.combat ? Math.max(count, next + 2) : count;
 }
 
-/** The heroes' sheets to save back to their characters (players still at the table), rested. */
+/** A hero goes home rested; the dead go home dead. */
+const homeward = (s: CharacterSheet): CharacterSheet => (s.dead ? s : longRest({ ...s, hp: Math.max(1, s.hp) }));
+
+/** The heroes' sheets to save back to their characters (players still at the table). */
 export function writeBack(party: PartyState, players: readonly GamePlayer[]): { characterId: string; sheet: CharacterSheet }[] {
   return players
     .filter((p) => Object.hasOwn(party.sheets, p.playerId))
-    .map((p) => ({ characterId: p.character.id, sheet: longRest({ ...party.sheets[p.playerId], hp: Math.max(1, party.sheets[p.playerId].hp) }) }));
+    .map((p) => ({ characterId: p.character.id, sheet: homeward(party.sheets[p.playerId]) }));
 }

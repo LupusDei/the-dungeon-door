@@ -19,11 +19,13 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
   assert.deepEqual(view.party[0], {
     playerId: 'p1', name: 'Bryn', level: 1, xp: 0, hp: 0, maxHp: fighter.maxHp, armorClass: fighter.armorClass,
     exhaustion: 0, hitDiceLeft: 0, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true,
+    resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true, dead: false,
     passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight,
     gp: fighter.gp, inventory: fighter.equipment, ...load(fighter),
   });
   assert.equal(view.party[0].dragging, false);
+  const slain = { party: { ...party, sheets: { p1: { ...fighter, hp: 0, dead: true } } }, combat: null, dungeon: null };
+  assert.deepEqual([rulesView(slain, []).party[0].dead, rulesContext(slain).party[0].dead], [true, true]);
   assert.deepEqual([view.party[1].slotsLeft.slice(0, 2), view.party[1].down], [[1, 0], false]);
   assert.deepEqual(view.combat!.combatants.map((c) => c.id), combat.order);
   assert.deepEqual(Object.keys(view.combat!.combatants[0]), ['id', 'name', 'side', 'hp', 'maxHp', 'status', 'conditions']);
@@ -42,7 +44,7 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual(ctx.party[1], {
     name: 'Cleo', level: 1, hp: wizard.hp, maxHp: wizard.maxHp, armorClass: wizard.armorClass, exhaustion: 0, slotsLeft: [1, 0, 0, 0, 0, 0, 0, 0, 0],
     passivePerception: 10 + wizard.skillBonuses.perception, passiveInsight: 10 + wizard.skillBonuses.insight, gp: wizard.gp,
-    items: wizard.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', '), dragging: false,
+    items: wizard.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', '), dragging: false, dead: false,
   });
   assert.match(ctx.party[1].items, / ×\d/, 'stacks show their count');
   assert.equal(rulesContext({ party: { ...party, sheets: { p1: { ...wizard, equipment: [{ id: 'plate-armor', name: 'Plate Armor', count: 3 }] } } }, combat: null, dungeon: null }).party[0].dragging, true);

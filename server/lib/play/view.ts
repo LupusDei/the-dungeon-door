@@ -16,6 +16,8 @@ export interface HeroView {
   playerId: string; name: string; level: number; xp: number; hp: number; maxHp: number; armorClass: number;
   exhaustion: number; hitDiceLeft: number; slotsLeft: number[];
   resources: { id: string; name: string; left: number; max: number }[]; down: boolean;
+  /** Slain: stays dead until revived. */
+  dead: boolean;
   passivePerception: number; passiveInsight: number;
   gp: number; inventory: { id: string; name: string; count: number }[];
   /** Pounds carried and the 5.2 carrying capacity; over it the hero is dragging (Speed 5 ft), up to dragLimit. */
@@ -38,7 +40,7 @@ export interface RulesView {
 const heroView = (playerId: string, s: CharacterSheet): HeroView => ({
   playerId, name: s.name, level: s.level, xp: s.xp, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass,
   exhaustion: s.exhaustion, hitDiceLeft: s.level - s.hitDiceSpent, slotsLeft: slotsLeft(s),
-  resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0,
+  resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
   ...passives(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
   ...load(s),
 });
@@ -72,7 +74,7 @@ export function rulesView({ party, combat, dungeon }: RulesState, results: strin
 export interface RulesContext {
   party: {
     name: string; level: number; hp: number; maxHp: number; armorClass: number; exhaustion: number; slotsLeft: number[];
-    passivePerception: number; passiveInsight: number; gp: number; items: string; dragging: boolean;
+    passivePerception: number; passiveInsight: number; gp: number; items: string; dragging: boolean; dead: boolean;
   }[];
   combat: null | { round: number; combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string }[] };
   dungeon: null | { kind: string; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[] };
@@ -98,7 +100,7 @@ export function rulesContext({ party, combat, dungeon }: RulesState): RulesConte
   return {
     party: sheets.map((s) => ({
       name: s.name, level: s.level, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass, exhaustion: s.exhaustion, slotsLeft: slotsLeft(s),
-      ...passives(s), gp: s.gp, items: itemsLine(s), dragging: load(s).dragging,
+      ...passives(s), gp: s.gp, items: itemsLine(s), dragging: load(s).dragging, dead: s.dead === true,
     })),
     combat: combat && {
       round: combat.round,

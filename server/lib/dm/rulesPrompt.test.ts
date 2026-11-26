@@ -4,8 +4,8 @@ import type { RulesContext, RulesResults } from './types.ts';
 import { RULES_INSTRUCTIONS, rulesBlock, resultsBlock } from './rulesPrompt.ts';
 
 const ctx: RulesContext = {
-  party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false },
-    { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true }],
+  party: [{ name: 'Bryn', level: 2, hp: 7, maxHp: 20, armorClass: 16, exhaustion: 1, slotsLeft: [0, 0, 0, 0, 0, 0, 0, 0, 0], passivePerception: 13, passiveInsight: 10, gp: 4, items: 'Chain Mail, Potion of Healing ×2', dragging: false, dead: false },
+    { name: 'Cleo', level: 2, hp: 0, maxHp: 12, armorClass: 12, exhaustion: 0, slotsLeft: [2, 1, 0, 0, 0, 0, 0, 0, 0], passivePerception: 11, passiveInsight: 12, gp: 0.5, items: '', dragging: true, dead: false }],
   combat: { round: 3, combatants: [{ name: 'Bryn', side: 'party', hp: 7, maxHp: 20, status: 'up' }, { name: 'Ogre', side: 'foes', hp: 0, maxHp: 68, status: 'dead' }] },
   dungeon: { kind: 'Lair', area: 'Grand chamber', purpose: 'Throne room', exits: [{ id: 'r2', connection: 'locked-door', leadsTo: 'Vault' }, { id: 'x1', connection: 'open-passage', leadsTo: null }] },
   monsters: ['ogre', 'goblin-warrior'],
@@ -26,6 +26,11 @@ test('the rules block tells the DM the party’s numbers, the fight, the area an
     'DUNGEON (Lair): the party is in Grand chamber. Exits: none');
   assert.equal(heroOnly([3, 0, 0, 0, 0, 0, 0, 0, 0]), '- Bryn: level 2, 7/20 HP, AC 16, exhaustion 1, spell slots left 3, passive Perception 13, passive Insight 10, 4 gp; carries Chain Mail, Potion of Healing ×2');
   assert.equal(rulesBlock(null), '');
+});
+
+test('a slain hero is told to the DM as dead', () => {
+  const line = rulesBlock({ ...ctx, party: [{ ...ctx.party[1], dead: true }], combat: null, dungeon: null }).split('\n')[1];
+  assert.match(line, /^- Cleo: level 2, DEAD \(only Revivify, Raise Dead or the like brings them back\), AC 12/);
 });
 
 test('the results block gives the DM the dice to narrate', () => {

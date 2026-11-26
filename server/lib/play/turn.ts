@@ -7,6 +7,7 @@ import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId } from '../types.ts';
 import { groupRoll } from './checks.ts';
 import { arrival, claimTreasure, clearRoom, enter, partyLevel } from './delve.ts';
+import { afterHarm } from './dying.ts';
 import { fightRound, startFight, type FightEnd } from './fight.ts';
 import type { RollHook, RulesHook } from './hooks.ts';
 import { partyRest } from './rest.ts';
@@ -28,13 +29,16 @@ export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballo
 const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null): RulesTurn =>
   ({ ...s, lines, success, fight });
 
+const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
+const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.level);
+
 function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const rng = seededRng(s.party.rng);
-  const heroes = Object.entries(s.party.sheets).map(([playerId, sheet]) => ({ playerId, sheet }));
-  const votes = Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
-  const rolled = groupRoll(heroes, hook, votes, rng);
-  const sheets = Object.fromEntries(rolled.sheets.map((h) => [h.playerId, h.sheet]));
-  return done({ ...s, party: { ...s.party, rng: rng.state(), sheets } }, [...before, ...rolled.lines], rolled.success);
+  const heroes = Object.entries(s.party.sheets).filter(([, sheet]) => !sheet.dead).map(([playerId, sheet]) => ({ playerId, sheet }));
+  const rolled = groupRoll(heroes, hook, votesOf(ballots), rng);
+  const sheets = { ...s.party.sheets, ...Object.fromEntries(rolled.sheets.map((h) => [h.playerId, h.sheet])) };
+  const settled = afterHarm({ ...s.party, rng: rng.state(), sheets });
+  return done({ ...s, party: settled.party }, [...before, ...rolled.lines, ...settled.lines], rolled.success);
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
@@ -60,12 +64,10 @@ function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballo
   return done(cleared.state, cleared.lines, null, round.ended);
 }
 
-const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
-const levelsOf = (s: RulesState) => Object.values(s.party.sheets).map((h) => h.level);
-
 function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const sprung = springTrap(s.party, id, partyLevel(levelsOf(s)), votesOf(ballots));
-  return done({ ...s, party: sprung.party }, [...before, ...sprung.lines], sprung.success);
+  const settled = afterHarm(sprung.party);
+  return done({ ...s, party: settled.party }, [...before, ...sprung.lines, ...settled.lines], sprung.success);
 }
 
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
@@ -80,6 +82,12 @@ function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTur
   return { ...trapped, ...cleared.state, lines: cleared.lines };
 }
 
+/** Whoever the harm left at 0 HP is dying, and is settled. */
+function harmed(t: { party: PartyState; lines: string[] }): { party: PartyState; lines: string[] } {
+  const settled = afterHarm(t.party);
+  return { party: settled.party, lines: [...t.lines, ...settled.lines] };
+}
+
 const traded = (s: RulesState, t: Pick<Traded, 'party' | 'lines'>) => done({ ...s, party: t.party }, t.lines);
 
 const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook, { kind: K }>, ballots: readonly Ballot[]) => RulesTurn } = {
@@ -92,7 +100,7 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   sell: (s, hook) => traded(s, sellItems(s.party, hook.items)),
   use: (s, hook) => traded(s, usePotion(s.party, hook.item)),
   trap: (s, hook, ballots) => trap(s, hook.trap, ballots),
-  hazard: (s, { kind: _, hazard, ...amount }) => traded(s, partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec)),
+  hazard: (s, { kind: _, hazard, ...amount }) => traded(s, harmed(partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec))),
 };
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */

@@ -13,7 +13,7 @@ import { badRequest, conflict, forbidden, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
-import { CHOICE_IDS, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
+import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
 
 export const MAX_PLAYERS = 6;
 export const DEFAULT_SCENE_COUNT = 4;
@@ -124,12 +124,19 @@ export async function viewGame(code: string, playerId: string, since?: number): 
 // ---------------------------------------------------------------------------------------------------------
 // Lobby
 
+/** One of your heroes who is fit to go: the dead stay dead until revived. */
+async function livingCharacter(playerId: string, characterId: unknown): Promise<Character> {
+  const character = await ownCharacter(playerId, characterId);
+  if (character.sheet.dead) throw conflict(`${character.name} is dead`);
+  return character;
+}
+
 /** POST /api/games */
 export async function createGame(playerId: string, characterId: unknown, dungeonMaster: unknown): Promise<GameState> {
   if (dungeonMaster !== undefined && dungeonMaster !== null && !isValid('dungeonMaster', dungeonMaster)) {
     throw badRequest('unknown dungeonMaster');
   }
-  const character = await ownCharacter(playerId, characterId);
+  const character = await livingCharacter(playerId, characterId);
   const store = getStore();
   const host: GamePlayer = { playerId, character, joinedAt: new Date().toISOString() };
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -151,7 +158,7 @@ export async function createGame(playerId: string, characterId: unknown, dungeon
 
 /** POST /api/games/{code}/join */
 export async function joinGame(code: string, playerId: string, characterId: unknown): Promise<GameState> {
-  const character = await ownCharacter(playerId, characterId);
+  const character = await livingCharacter(playerId, characterId);
   const game = await loadGame(code);
   const existing = game.players.find((p) => p.playerId === playerId);
   if (game.status !== 'lobby') {

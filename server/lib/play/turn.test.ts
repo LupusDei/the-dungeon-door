@@ -95,6 +95,28 @@ test('a trapped room springs its SRD 5.2 trap (or the 5.2 counterpart of an old 
   assert.ok(sprung.dungeon!.cleared.includes('r4'));
 });
 
+const settledOrDead = (h: CharacterSheet) => h.dead === true || h.hp === 1;
+
+test('the dead roll nothing; a hero the harm leaves at 0 HP is settled at once: stable and up with 1 HP, or dead', () => {
+  const ghost = { ...rogue, hp: 0, dead: true };
+  const alone = playTurn(state({ party: party({ p1: fighter, p2: ghost }) }), { kind: 'check', ability: 'str', dc: 5 }, ballots(15, 15));
+  assert.equal(alone.lines.length, 1);
+  assert.deepEqual(alone.party.sheets.p2, ghost);
+  const frail = party({ p1: { ...fighter, hp: 1 }, p2: { ...rogue, hp: 1 } });
+  const save = playTurn(state({ party: frail }), { kind: 'save', ability: 'dex', dc: 30, damage: '1d1+4' }, ballots(2, 2));
+  assert.ok(Object.values(save.party.sheets).every(settledOrDead), save.lines.join(' | '));
+  assert.ok(save.lines.length > 2, 'the settling is told');
+  const fall = playTurn(state({ party: frail }), { kind: 'hazard', hazard: 'falling', feet: 10 }, ballots(1, 1));
+  assert.ok(Object.values(fall.party.sheets).every(settledOrDead), fall.lines.join(' | '));
+  assert.ok(fall.lines.length > 2);
+});
+
+test('a sprung trap that drops a hero settles them too', () => {
+  const frail = party({ p1: { ...fighter, hp: 1 }, p2: { ...rogue, hp: 1 } });
+  const blade = playTurn(state({ party: frail }), { kind: 'trap', trap: 'poisoned-needle' }, ballots(1, 1));
+  assert.ok(Object.values(blade.party.sheets).every((h) => h.hp >= 1 || h.dead === true), blade.lines.join(' | '));
+});
+
 test('trap and hazard hooks from the DM', () => {
   const needle = playTurn(state(), { kind: 'trap', trap: 'poisoned-needle' }, ballots(10, 10));
   assert.ok(needle.lines.length >= 2);

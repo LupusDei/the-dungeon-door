@@ -1,7 +1,7 @@
 /**
  * Rests chosen by the party (a choice with a rest hook). SRD 5.2: a Short Rest spends hit dice, a Long Rest
  * restores everything and removes one level of exhaustion. A hero at 0 HP is stable and regains 1 HP as
- * the hours pass, so it can rest too.
+ * the hours pass, so it can rest too. The dead do not rest.
  */
 import { seededRng, type Rng } from '../rules/rng.ts';
 import { longRest, shortRest } from '../rules/rests.ts';
@@ -32,6 +32,7 @@ function shortRests(party: PartyState): { party: PartyState; lines: string[] } {
   const rng = seededRng(party.rng);
   const lines: string[] = [];
   const sheets = Object.fromEntries(Object.entries(party.sheets).map(([id, before]) => {
+    if (before.dead) return [id, before];
     const { sheet, dice } = spendHitDice(awake(before), rng);
     lines.push(restLine(before, sheet, dice));
     return [id, sheet];
@@ -41,6 +42,6 @@ function shortRests(party: PartyState): { party: PartyState; lines: string[] } {
 
 export function partyRest(party: PartyState, kind: 'short' | 'long'): { party: PartyState; lines: string[] } {
   if (kind === 'short') return shortRests(party);
-  const sheets = Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, longRest(awake(s))]));
+  const sheets = Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, s.dead ? s : longRest(awake(s))]));
   return { party: { ...party, sheets }, lines: [LONG_REST_LINE] };
 }

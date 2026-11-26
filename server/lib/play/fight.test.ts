@@ -121,6 +121,8 @@ test('heroes who all fall lose the fight; their sheets keep the damage', () => {
   for (let i = 0; result.ended === null && i < 6; i++) result = fightRound(result.party, result.combat, {});
   assert.equal(result.ended, 'defeat');
   assert.deepEqual([result.party.sheets.p1.hp, result.party.sheets.p2.hp], [0, 0]);
+  assert.deepEqual([result.party.sheets.p1.dead, result.party.sheets.p2.dead], [true, true], '100 damage is massive damage: the slain stay dead');
+  assert.ok(result.lines.includes('Bryn is dead.'));
 });
 
 test('a fight still going after the last round ends with the foes fleeing', () => {
@@ -139,4 +141,38 @@ test('the round is told in lines: attacks, dodges', () => {
   assert.ok(result.lines.includes('Bryn dodges.'));
   assert.ok(result.lines.some((l) => /^Cleo attacks Goblin Warrior with .+: 1 \(total -?\d+\) vs AC \d+, miss\.$/.test(l)), result.lines.join(' | '));
   assert.ok(result.lines.some((l) => /^Goblin Warrior attacks (Bryn|Cleo) with Poke/.test(l)));
+});
+
+const winRound = (combat: CombatState, p: PartyState, changes: Record<string, Partial<Combatant>>) => {
+  const rigged = patch(combat, { p1: { attacks: deadly }, 'foe-1': { attacks: harmless }, ...changes });
+  let result = fightRound(p, rigged, { p1: { choiceId: 'a', roll: 10 } });
+  const lines = [...result.lines];
+  for (let i = 0; result.ended === null && i < 4; i++) { result = fightRound(result.party, result.combat, { p1: { choiceId: 'a', roll: 10 } }); lines.push(...result.lines); }
+  return { result, lines };
+};
+
+test('after a won fight a dying hero is settled: stabilized and awake with 1 HP, or dead', () => {
+  const { combat, party: p } = startFight(party(), ['goblin-warrior']);
+  const { result, lines } = winRound(combat, p, { p2: { hp: 0, status: 'dying', conditions: ['unconscious'] } });
+  assert.equal(result.ended, 'victory');
+  const cleo = result.party.sheets.p2;
+  assert.ok(cleo.dead ? lines.includes('Cleo dies.') : cleo.hp === 1, lines.join(' | '));
+});
+
+test('a hero slain in a won fight stays dead and gets no XP', () => {
+  const { combat, party: p } = startFight(party(), ['goblin-warrior']);
+  const { result, lines } = winRound(combat, p, { p2: { hp: 0, status: 'dead' } });
+  assert.deepEqual([result.party.sheets.p2.dead, result.party.sheets.p2.xp, result.party.sheets.p1.xp], [true, 0, 50]);
+  assert.ok(lines.includes('Cleo is dead.'));
+});
+
+test('the dead do not join a fight, and their sheets are left alone', () => {
+  const ghost = { ...wizard, hp: 0, dead: true };
+  const { combat, party: p } = startFight(party({ p1: fighter, p2: ghost }), ['ogre']);
+  assert.deepEqual(Object.keys(combat.combatants).sort(), ['foe-1', 'p1']);
+  const doomed = patch(combat, { p1: { attacks: harmless }, 'foe-1': { attacks: deadly } });
+  let result = fightRound(p, doomed, {});
+  for (let i = 0; result.ended === null && i < 6; i++) result = fightRound(result.party, result.combat, {});
+  assert.equal(result.ended, 'defeat');
+  assert.deepEqual(result.party.sheets.p2, ghost);
 });

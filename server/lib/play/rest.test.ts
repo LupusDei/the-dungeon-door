@@ -42,3 +42,8 @@ test('a long rest: full HP, every hit die and slot back, and one exhaustion leve
   assert.deepEqual([s.hp, s.hitDiceSpent, s.exhaustion, s.resourcesUsed], [fighter.maxHp, 0, 1, {}]);
   assert.deepEqual(lines, ['The party takes a long rest: hit points, hit dice, spell slots and features restored; one level of exhaustion removed.']);
 });
+
+test('the dead do not rest', () => {
+  const ghost = { ...fighter, hp: 0, dead: true, hitDiceSpent: 1 };
+  for (const kind of ['short', 'long'] as const) assert.deepEqual(partyRest(party({ p1: ghost }), kind).party.sheets.p1, ghost);
+});

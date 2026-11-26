@@ -163,9 +163,11 @@ test('every hero down: the fight is lost and the next scene is the epilogue', as
   assert.equal(state.status, 'ended');
   assert.equal(state.scene!.isFinale, true);
   assert.equal(state.sceneCount, index + 1);
-  assert.equal(state.rules!.party[0].down, true);
+  const [hero] = state.rules!.party;
+  assert.ok(hero.dead || hero.hp >= 1, 'the lost fight settles the fallen: dead, or pulled through');
   const { body } = await call<{ characters: Character[] }>(charactersApi.GET, '/api/characters', { player: host });
-  assert.equal(body.characters[0].sheet.hp, body.characters[0].sheet.maxHp, 'a fallen hero goes home rested (death is not kept yet)');
+  const sheet = body.characters[0].sheet;
+  assert.ok(sheet.dead === true ? sheet.hp === 0 : sheet.hp === sheet.maxHp, 'the slain go home dead; a hero who pulled through goes home rested');
 });
 
 test('a fixed dungeon chosen at start: the map, the party moving through it, what is in each room', async () => {
@@ -215,4 +217,16 @@ test('a game from before the engine still plays: no rules, no hooks, no combat',
   await settle();
   const ended = await view(code, host);
   assert.deepEqual([ended.status, ended.scene!.index, ended.scene!.isFinale, ended.sceneCount], ['ended', 3, true, 4]);
+});
+
+test('a dead hero stays dead: it cannot start or join an adventure until revived', async () => {
+  const { code, characters } = await table(1);
+  const [player, lost] = [randomUUID(), randomUUID()];
+  const fallen = await makeCharacter(lost, 'Fallen', { race: 'human', characterClass: 'fighter' });
+  const stored = await getStore().getCharacter(fallen.id);
+  await getStore().saveCharacter({ ...stored!, sheet: { ...fallen.sheet!, hp: 0, dead: true } });
+  const created = await call<{ error: string }>(gamesApi.POST, '/api/games', { player: lost, body: { characterId: fallen.id } });
+  assert.deepEqual([created.status, created.body.error], [409, 'Fallen is dead']);
+  assert.equal((await call(joinApi.POST, gamePath(code, 'join'), { player: lost, body: { characterId: fallen.id } })).status, 409);
+  assert.equal((await call(joinApi.POST, gamePath(code, 'join'), { player, body: { characterId: characters[0].id } })).status, 404, 'still only your own heroes');
 });

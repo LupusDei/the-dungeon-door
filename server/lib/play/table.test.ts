@@ -86,3 +86,8 @@ test('at the end the heroes go home: their sheets after a long rest (the fallen 
   const back = writeBack(hurt, [player('p1', 'Bryn')]);
   assert.deepEqual(back.map((b) => [b.characterId, b.sheet.hp, b.sheet.xp]), [['c-p1', fighter.maxHp, 300]]);
 });
+
+test('the dead go home dead: no rest, no HP', () => {
+  const ghost = { ...fighter, hp: 0, dead: true, hitDiceSpent: 1 };
+  assert.deepEqual(writeBack({ version: 1, rng: 1, sheets: { p1: ghost } }, [player('p1', 'Bryn')])[0].sheet, ghost);
+});
