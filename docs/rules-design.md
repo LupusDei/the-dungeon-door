@@ -18,7 +18,7 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   character.ts               character generation: choices -> CharacterSheet
   sheet.ts                   the CharacterSheet type and its stored (JSON) shape
   combat/…  (PR B)           initiative, attacks, damage, saves, conditions, scenes
-  dungeon/… (PR C)           seeded room graph, stocking, encounters, loot
+  dungeon/… (PR C)           fixed room graph or explore-as-you-go, stocking, encounters, loot
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
 ```
 
@@ -138,14 +138,34 @@ choices nested inside equipment options (kept as `pendingChoices`).
 
 ## Dungeons (PR C)
 
-- A seeded room graph of 5, 7 or 9 rooms following `extras/dungeonGenerator.json` (entrance, a goal
-  room, side branches, at least one loop on larger maps).
-- Stocking in the OSE style (`extras/oseDungeonStocking.json`): monster, trap, special or empty, each
-  with or without treasure.
-- Monster rooms get encounters from PR B's builder, sized to the party's levels.
-- Treasure from the SRD magic items and the starting-wealth tables.
-- Deterministic per seed and plain JSON, so the DM can narrate room by room and the game can store
-  which rooms are explored and cleared.
+Two modes share one room model, one stocking procedure and one encounter builder.
+
+**Fixed map.** A seeded room graph of 5, 7 or 9 rooms following `extras/dungeonGenerator.json`
+(entrance, a goal room, side branches, at least one loop on larger maps), generated all at once.
+Good for a short session with a known ending.
+
+**Explore as you go.** A dungeon of unlimited size that grows only where the party goes, in the
+spirit of the classic random-dungeon procedure (roll the passage ahead, then the room, then what is
+in it). The tables are original, in a new CC0 file `extras/exploreGenerator.json`; they borrow the
+procedure's mechanics only, not the wording or the numbers of any published table.
+
+- The dungeon starts as an entrance node with unexplored exits.
+- `expand(dungeon, nodeId, exitId)` rolls what lies beyond that exit: the passage continues, a door,
+  a side passage, a turn, a chamber or room, stairs, or a dead end. A room then gets its size and its
+  exits, and its contents.
+- Each node's dice come from an `Rng` derived from the dungeon seed and the node's id
+  (`seed + "/" + nodeId`, hashed). The same seed and the same exploration choices always give the
+  same dungeon, whatever order the party explores in, and expanding an exit twice changes nothing
+  (idempotent).
+- The whole dungeon is plain JSON: seed, nodes, edges, and which exits are still unexplored.
+
+**Stocking**, in both modes, follows the OSE style (`extras/oseDungeonStocking.json`): monster,
+trap, special or empty, each with or without treasure. Monster rooms get encounters from PR B's
+builder, sized to the party's levels and the dungeon depth. Treasure comes from the SRD magic items
+and the starting-wealth tables.
+
+Either way the DM gets a room at a time to narrate, and the game stores which rooms are explored and
+cleared.
 
 ## Integration (later, contract first)
 
