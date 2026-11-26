@@ -15,7 +15,7 @@ import { startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
 import type { DungeonState, LevelUp, PartyState } from './state.ts';
-import { pickChoice, playTurn, type FightNews, type RulesState } from './turn.ts';
+import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState } from './turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
 export type DungeonMode = (typeof DUNGEON_MODES)[number];
@@ -71,6 +71,11 @@ export interface EngineStep {
   round: boolean;
 }
 
+/** Written checks stored on the scene's votes. A corrupt one is dropped rather than thrown. */
+function freeformsOf(scene: StoredScene): FreeformBallot[] {
+  return scene.votes.flatMap((v) => (v.freeform?.ruling.kind === 'check' ? [{ playerId: v.playerId, roll: v.roll, text: v.freeform.text, ruling: v.freeform.ruling }] : []));
+}
+
 /** Resolves a scene through the engine: a combat round, or the chosen choice's hook (ties to the higher roll). */
 export function engineStep(state: RulesState, scene: StoredScene, resolution: Resolution): EngineStep {
   const ballots = resolution.votes.map(({ playerId, choiceId, roll }) => {
@@ -80,7 +85,7 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
   const chosen = pickChoice(resolution.leaders, ballots);
   const inFight = state.combat !== null;
   const choice = inFight ? undefined : scene.choices.find((c) => c.id === chosen);
-  const turn = playTurn(state, choice?.hook || null, ballots);
+  const turn = playTurn(state, choice?.hook || null, ballots, freeformsOf(scene));
   return {
     state: { party: { ...turn.party, results: turn.lines }, combat: turn.combat, dungeon: turn.dungeon },
     resolution: {

@@ -6,12 +6,14 @@ type Row = Record<string, any>;
 
 const iso = (value: unknown): string => new Date(value as string | Date).toISOString();
 
-/** A votes row. `action_id` is absent until the column exists, and null for a letter vote. */
+/** A votes row. The extra columns are absent until migrated, and null on a plain letter vote. */
 function voteOf(row: Row): Vote {
   const vote: Vote = { playerId: row.player_id, choiceId: row.choice_id as ChoiceId, roll: row.roll as number };
   if (typeof row.action_id === 'string') vote.actionId = row.action_id;
   const targets = typeof row.targets === 'string' ? JSON.parse(row.targets) as unknown : row.targets;
   if (Array.isArray(targets) && targets.length > 0 && targets.every((t) => typeof t === 'string')) vote.targets = targets as string[];
+  const freeform = typeof row.freeform === 'string' ? JSON.parse(row.freeform) as unknown : row.freeform;
+  if (freeform && typeof freeform === 'object') vote.freeform = freeform as Vote['freeform'];
   return vote;
 }
 
@@ -252,12 +254,26 @@ export class PostgresStore implements Store {
     // (It deliberately doesn't touch games.updated_at: two votes updating the row they share-lock would deadlock.)
     const rows = await this.q(
       `WITH ok AS (SELECT code FROM games WHERE code = $1 AND status = 'voting' AND scene_index = $2 FOR SHARE)
-       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets)
-       SELECT code, $2, $3, $4, $5, $6, $7::jsonb FROM ok
+       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform)
+       SELECT code, $2, $3, $4, $5, $6, $7::jsonb, NULL FROM ok
        ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
-         SET choice_id = EXCLUDED.choice_id, action_id = EXCLUDED.action_id, targets = EXCLUDED.targets
-       RETURNING player_id, choice_id, roll, action_id, targets`,
+         SET choice_id = EXCLUDED.choice_id, action_id = EXCLUDED.action_id, targets = EXCLUDED.targets, freeform = NULL
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform`,
       [code, index, playerId, choiceId, roll, named?.actionId ?? null, named ? JSON.stringify(named.targets) : null],
+    );
+    const [row] = rows;
+    return row ? voteOf(row) : null;
+  }
+
+  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>) {
+    const rows = await this.q(
+      `WITH ok AS (SELECT code FROM games WHERE code = $1 AND status = 'voting' AND scene_index = $2 FOR SHARE)
+       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform)
+       SELECT code, $2, $3, 'a', $4, NULL, NULL, $5::jsonb FROM ok
+       ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
+         SET freeform = EXCLUDED.freeform, action_id = NULL, targets = NULL
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform`,
+      [code, index, playerId, roll, JSON.stringify(freeform)],
     );
     const [row] = rows;
     return row ? voteOf(row) : null;

@@ -24,7 +24,7 @@ import { type Cast, castSpell, endConcentration, slotsLeft, spellDamageDice, str
 import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
-import { takeThird } from './actions.ts';
+import { adjudicateCheck, takeThird, type CheckRuling } from './actions.ts';
 import { resolveNamedAction, skipsBonusHeal } from './legal.ts';
 import { keepConcentration } from './concentration.ts';
 import { shakeOff } from './conditions.ts';
@@ -41,8 +41,8 @@ export const COMBAT_CHOICES = [
 ];
 
 export type FightEnd = 'victory' | 'defeat' | 'fled';
-/** A letter vote, or a vote that names a legal action (`actionId`) and its targets. The roll is the hero's d20. */
-export type CombatVote = { choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[] };
+/** A letter vote, a named legal action, or a written check (`freeform`) already classified. The roll is the hero's d20. */
+export type CombatVote = { choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[]; text?: string; freeform?: CheckRuling };
 export type CombatVotes = Readonly<Record<string, CombatVote>>;
 export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
 
@@ -315,6 +315,13 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   // A potion or Second Wind named as the action is that heal, so the automatic one does not also happen.
   const drunk = vote && skipsBonusHeal(vote.actionId, vote.targets) ? { state, sheets } : bonusAction(state, sheets, id);
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
+  if (vote.freeform && vote.text) {
+    const rng = seededRng(drunk.state.rng);
+    const foeId = caught(drunk.state, drunk.state.combatants[id].side, 1)[0];
+    const done = adjudicateCheck(rng, drunk.sheets[id], vote.text, vote.freeform, vote.roll, foeId ? drunk.state.combatants[foeId] : null);
+    const combatants = done.foe ? { ...drunk.state.combatants, [done.foe.id]: done.foe } : drunk.state.combatants;
+    return { action: { kind: 'other', text: done.text }, state: { ...drunk.state, rng: rng.state(), combatants }, sheets: drunk.sheets };
+  }
   if (vote.actionId) {
     const taken = resolveNamedAction(drunk.state, drunk.sheets[id], id, vote.actionId, vote.targets ?? [], vote.roll);
     return { action: aimAgain(taken.combat, id, taken.action), state: taken.combat, sheets: { ...drunk.sheets, [id]: taken.sheet } };

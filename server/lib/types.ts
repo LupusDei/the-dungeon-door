@@ -48,6 +48,11 @@ export interface Vote {
   actionId?: string;
   /** Ids from that action's targets. Absent when the action needs none. */
   targets?: string[];
+  /**
+   * Set when the player wrote a check instead of choosing. `choiceId` and `actionId` are then ignored:
+   * the row counts as having acted, and it does not add to the tally.
+   */
+  freeform?: { text: string; ruling: import('./play/actions.ts').CheckRuling };
 }
 
 /** One thing the caller's hero might do this turn. See docs/api.md, LegalAction. */
@@ -158,10 +163,15 @@ export interface SceneView {
   /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
   canAct: boolean;
   isFinale: boolean;
+  /** Votes for a, b or c, or a named legal action. A written check is in `freeforms`, not here. */
   votes: VoteView[];
   myVote: ChoiceId | null;
-  /** The caller's vote as an action id. A letter vote is "choice:a" and so on. Null until they vote. */
+  /** The caller's vote as an action id. A letter vote is "choice:a" and so on. Null until they vote, and null for a written check. */
   myAction: { id: string; targets: string[] } | null;
+  /** Written checks this scene: the player's words and the d20. Each of these players has acted. */
+  freeforms: { playerId: string; text: string; roll: number }[];
+  /** The caller's written check, or null. */
+  myFreeform: { text: string; roll: number } | null;
   outcome: string | null;
 }
 

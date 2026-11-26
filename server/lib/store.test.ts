@@ -34,6 +34,10 @@ test('memory store: votes keep their first roll; message ids increase', async ()
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'a', 7), { playerId: 'p1', choiceId: 'a', roll: 7 });
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'c', 19), { playerId: 'p1', choiceId: 'c', roll: 7 });
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'a', 3, { actionId: 'attack:greatsword', targets: ['foe-1'] }), { playerId: 'p1', choiceId: 'a', roll: 7, actionId: 'attack:greatsword', targets: ['foe-1'] });
+  const written = { text: 'I kick the brazier', ruling: { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', tier: 'medium' as const, effect: { category: 'damage' as const, severity: 'moderate' as const, damageType: 'bludgeoning' } } };
+  assert.equal((await store.setFreeform('ABCDEF', 0, 'p1', 19, written))!.roll, 7, 'a written action keeps the first d20');
+  assert.equal((await store.getGame('ABCDEF'))!.scenes[0].votes[0].actionId, undefined, 'a written check is not also a named action');
+  assert.deepEqual((await store.getGame('ABCDEF'))!.scenes[0].votes[0].freeform, written);
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'b', 3, null), { playerId: 'p1', choiceId: 'b', roll: 7 });
   assert.equal(await store.castVote('ABCDEF', 1, 'p1', 'c', 19), null, 'wrong scene');
 
