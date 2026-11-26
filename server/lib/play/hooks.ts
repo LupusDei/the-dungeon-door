@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { ABILITIES, type Ability } from '../rules/abilities.ts';
 import { type Condition, CONDITIONS } from '../rules/conditions.ts';
 import { HEALING_POTIONS, items } from '../rules/items.ts';
+import { capFight, rateEncounter } from '../rules/encounter.ts';
 import { monsters } from '../rules/monsters.ts';
 import type { HazardKind } from '../rules/hazards.ts';
 import { modeOf } from '../rules/resolve.ts';
@@ -23,6 +24,10 @@ export type RulesHook =
   /** condition: what a failed save brings, for `minutes` (none: until a long rest). */
   | { kind: 'save'; ability: Ability; dc: number; damage?: string | null; damageType?: string | null; condition?: SaveCondition | null; minutes?: number | null } & Edge
   | { kind: 'fight'; monsters: string[] }
+  /** The foes already met: fight them as they stand, with no further cap (play/turn.ts). */
+  | { kind: 'engage'; monsters: string[] }
+  /** Leave before initiative. In a room, back out the way the party came; wanderers are slipped past. */
+  | { kind: 'run' }
   | { kind: 'rest'; rest: 'short' | 'long' }
   | { kind: 'move'; exit: string }
   /** Each item is bought by the richest hero who can pay (a shop scene). */
@@ -81,6 +86,8 @@ const HookSchema = z.discriminatedUnion('kind', [
     condition: z.enum(SAVE_CONDITIONS).nullish(), minutes: amount(MINUTES_IN_A_DAY).nullish(), ...edge,
   }),
   z.object({ kind: z.literal('fight'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).refine((ids) => ids.length > 0) }),
+  z.object({ kind: z.literal('engage'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).refine((ids) => ids.length > 0) }),
+  z.object({ kind: z.literal('run') }),
   z.object({ kind: z.literal('rest'), rest: z.enum(['short', 'long']) }),
   z.object({ kind: z.literal('move'), exit: z.string().min(1) }),
   z.object({ kind: z.literal('buy'), items: itemList }),
@@ -133,10 +140,29 @@ function hazardAmount(h: Extract<RulesHook, { kind: 'hazard' }>): string {
   return unit ? ` (${h[unit]} ${unit})` : '';
 }
 
-const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>) => string } = {
+/**
+ * "Fight: 2 Goblin Warriors (weak) — low". With no party levels, the names only (a label with nothing to
+ * rate it against). A fight the DM proposes is rated after the cap, which is the fight the engine will run;
+ * an engage is the foes already standing, uncapped.
+ */
+function fightText(ids: readonly string[], levels: readonly number[] | undefined, cap: boolean): string {
+  const fought = levels && levels.length > 0 && cap ? capFight(ids, levels) : [...ids];
+  const rated = levels && levels.length > 0 ? rateEncounter(levels, fought) : null;
+  const parts = [...new Set(fought)].map((id) => {
+    const n = fought.filter((x) => x === id).length;
+    const name = monsterName(id);
+    const titled = n > 1 ? `${n} ${name}s` : name;
+    return rated ? `${titled} (${rated.monsters.find((m) => m.id === id)!.toughness})` : titled;
+  });
+  return `Fight: ${parts.join(', ')}${rated ? ` — ${rated.band}` : ''}`;
+}
+
+const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>, levels?: readonly number[]) => string } = {
   check: (h) => `${rollName(h)} check${target(h)}${h.mode === 'best' ? ', one hero with help' : ''}${edgeLabel(h)}`,
   save: (h) => `${rollName(h)}, DC ${h.dc}${edgeLabel(h)}`,
-  fight: (h) => `Fight: ${countedList(h.monsters, monsterName, (n, name) => `${n} ${name}s`)}`,
+  fight: (h, levels) => fightText(h.monsters, levels, true),
+  engage: (h, levels) => fightText(h.monsters, levels, false),
+  run: () => 'Run',
   rest: (h) => (h.rest === 'short' ? 'Short rest' : 'Long rest'),
   move: (h) => `Go on (${h.exit})`,
   buy: (h) => `Buy ${countedList(h.items, itemName, times)}`,
@@ -148,5 +174,6 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   revive: () => 'Raise the dead',
 };
 
-/** What the app shows under the choice. */
-export const hookLabel = (hook: RulesHook): string => (LABELS[hook.kind] as (h: RulesHook) => string)(hook);
+/** What the app shows under the choice. `levels` rates a fight against that party. */
+export const hookLabel = (hook: RulesHook, levels?: readonly number[]): string =>
+  (LABELS[hook.kind] as (h: RulesHook, levels?: readonly number[]) => string)(hook, levels);

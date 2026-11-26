@@ -115,7 +115,7 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   await settle();
   assert.equal(seen[0].ctx.rules!.party.length, 2, 'the DM sees the party');
   let state = await view(code, host);
-  assert.equal(state.scene!.choices[0].rules, 'Fight: Rat');
+  assert.equal(state.scene!.choices[0].rules, 'Fight: Rat (weak) — low');
 
   await voteAll(code, players, 0, 'a');
   state = await view(code, host);

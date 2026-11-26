@@ -1,13 +1,22 @@
 /**
  * Encounter building, SRD 5.2: spend the party's XP budget on monsters no tougher than the party. At
  * levels 1 and 2, where the 5.2 table is swingy, the budget is halved and the foes are few; an encounter
- * is at most two kinds of monster. See docs/rules-design.md (Phase 5).
+ * is at most two kinds of monster. The same budgets rate a list of monsters the party can already see
+ * (rateEncounter): the fight is low, moderate, high, or deadly above high, and each monster is weak,
+ * even, strong or deadly on those same lines. See docs/rules-design.md (Phase 5).
  */
 import { type Difficulty, encounterBudget, type Monster, monster, monsters } from './monsters.ts';
 import { type Rng, pick } from './rng.ts';
 import { require } from './violation.ts';
 
 export interface Encounter { difficulty: Difficulty; budget: number; xp: number; monsters: string[] }
+
+/** The 5.2 budgets, plus deadly: more XP than a high encounter for this party. */
+export type FightBand = Difficulty | 'deadly';
+/** One monster, on the same lines: weak is a low fight alone, even a moderate one, strong a high one. */
+export type Toughness = 'weak' | 'even' | 'strong' | 'deadly';
+
+const TOUGHNESS = { low: 'weak', moderate: 'even', high: 'strong', deadly: 'deadly' } as const satisfies Record<FightBand, Toughness>;
 
 const MAX_MONSTERS = 8;
 const MAX_KINDS = 2;
@@ -81,4 +90,28 @@ export function capFight(ids: readonly string[], levels: readonly number[]): str
     if (kept.length < cap && xp <= left) { kept.push(id); left -= xp; }
   }
   return kept.length > 0 ? kept : [ids.reduce((a, b) => (monster(b).xp < monster(a).xp ? b : a))];
+}
+
+/** Where `xp` sits on the party's tempered budget: low, moderate, high, or deadly above high. */
+export function fightBand(levels: readonly number[], xp: number): FightBand {
+  if (xp <= temperedBudget(levels, 'low')) return 'low';
+  if (xp <= temperedBudget(levels, 'moderate')) return 'moderate';
+  if (xp <= temperedBudget(levels, 'high')) return 'high';
+  return 'deadly';
+}
+
+/** How hard one monster is for this party: the band its own XP would be, by another name. */
+export const toughnessFor = (levels: readonly number[], xp: number): Toughness => TOUGHNESS[fightBand(levels, xp)];
+
+export interface RatedMonster { id: string; name: string; xp: number; toughness: Toughness }
+export interface RatedEncounter { band: FightBand; xp: number; monsters: RatedMonster[] }
+
+/** Rates these monsters, in order, against the party. The fight's band is their XP together. */
+export function rateEncounter(levels: readonly number[], ids: readonly string[]): RatedEncounter {
+  const monsters = ids.map((id) => {
+    const m = monster(id);
+    return { id, name: m.name, xp: m.xp, toughness: toughnessFor(levels, m.xp) };
+  });
+  const xp = monsters.reduce((sum, m) => sum + m.xp, 0);
+  return { band: fightBand(levels, xp), xp, monsters };
 }

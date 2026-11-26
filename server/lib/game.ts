@@ -4,8 +4,9 @@ import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
+import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
-import type { RulesState } from './play/turn.ts';
+import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
@@ -43,7 +44,8 @@ export function setDice(next: Dice = RANDOM_DICE): void {
 
 /** A combat round's choices are written for the caller's own hero (play/your-turn.ts); a resolved scene keeps what was stored. */
 function choicesFor(game: Game, current: StoredScene, playerId: string): SceneView['choices'] {
-  if (!game.combat || !game.party || current.outcome !== null || current.isFinale) return current.choices.map(choiceView);
+  const levels = game.party ? foeLevels(game.party, game.dungeon) : undefined;
+  if (!game.combat || !game.party || current.outcome !== null || current.isFinale) return current.choices.map((c) => choiceView(c, levels));
   return canAct(game.combat, playerId) ? yourChoices(game.combat, game.party.sheets[playerId], playerId) : anyonesChoices();
 }
 
@@ -569,9 +571,11 @@ function planOf(game: Game, scene: StoredScene): Plan {
   return { resolution: step.resolution, next, isFinale, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, sharesPicture };
 }
 
-/** The next scene's choices: a fight's Attack, Cast and Dodge, or the DM's. */
+/** The next scene's choices: a fight's Attack, Cast and Dodge, Engage/Run/Parley when foes bar the way, or the DM's. */
 function nextChoices(plan: Plan, draft: NextScene): StoredChoice[] {
   if (plan.rules?.combat) return COMBAT_CHOICES.map((c, i) => ({ id: CHOICE_IDS[i], ...c }));
+  const face = plan.rules && confrontationChoices(plan.rules);
+  if (face) return face;
   return choicesOf(draft.choices, plan.rules !== null);
 }
 

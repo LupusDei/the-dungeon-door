@@ -50,7 +50,8 @@ export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | nul
 
 export const storedChoice = (choice: Choice, hook: unknown): StoredChoice => ({ ...choice, hook: parseHook(hook) });
 
-export const choiceView = ({ hook, ...choice }: StoredChoice): ChoiceView => ({ ...choice, rules: hook ? hookLabel(hook) : null });
+export const choiceView = ({ hook, ...choice }: StoredChoice, levels?: readonly number[]): ChoiceView =>
+  ({ ...choice, rules: hook ? hookLabel(hook, levels) : null });
 
 export interface EngineStep {
   state: RulesState;

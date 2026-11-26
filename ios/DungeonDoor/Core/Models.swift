@@ -758,6 +758,9 @@ struct Combatant: Codable, Hashable, Identifiable {
     let status: String
     /// Condition ids: "unconscious", "prone"…
     let conditions: [String]
+    /// "weak", "even", "strong" or "deadly" for a foe, against this party. Nil for a hero, and from a
+    /// server older than toughness ratings.
+    var toughness: String? = nil
 
     var isFoe: Bool { side == "foes" }
     var isDead: Bool { status == "dead" }
@@ -777,6 +780,7 @@ extension Combatant {
         maxHp = try c.whole(.maxHp, or: max(points, 1))
         status = try c.value(.status, or: points > 0 ? "up" : "dead")
         conditions = try c.value(.conditions, or: [])
+        toughness = try c.decodeIfPresent(String.self, forKey: .toughness)
     }
 }
 
@@ -786,6 +790,8 @@ struct Combat: Codable, Hashable {
     let round: Int
     /// In initiative order.
     let combatants: [Combatant]
+    /// "low", "moderate", "high" or "deadly": the fight against this party. Nil from an older server.
+    var band: String? = nil
 
     func combatant(_ id: String?) -> Combatant? { combatants.first { $0.id == id } }
 }
@@ -795,6 +801,7 @@ extension Combat {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         round = try c.whole(.round, or: 1)
         combatants = try c.value(.combatants, or: [])
+        band = try c.decodeIfPresent(String.self, forKey: .band)
     }
 }
 
@@ -836,14 +843,44 @@ extension DungeonArea {
     }
 }
 
-/// Foes in the party's room who did not attack: a Parley choice talks to them.
+/// One kind of foe the party is facing, rated against them.
+struct RatedFoe: Codable, Hashable {
+    let name: String
+    let count: Int
+    /// "weak", "even", "strong" or "deadly".
+    let toughness: String
+}
+
+/// Foes the party is facing in this room. Hostile ones bar the way: the choices are Engage, Run, Parley.
 struct WaitingFoes: Codable, Hashable {
     /// "Boar ×3", "Goblin Warrior ×2, Bugbear Warrior".
     let foes: String
-    /// "indifferent" or "friendly".
+    /// "hostile", "indifferent" or "friendly".
     let attitude: String
+    /// "low", "moderate", "high" or "deadly". Nil from a server older than toughness ratings.
+    var band: String? = nil
+    var monsters: [RatedFoe] = []
 
     var isFriendly: Bool { attitude == "friendly" }
+    var isHostile: Bool { attitude == "hostile" }
+
+    /// "Each Skeleton is weak. A moderate fight."
+    var rating: String? {
+        guard let band else { return nil }
+        let each = monsters.map { "each \($0.name) is \($0.toughness)" }.joined(separator: ", ")
+        guard !each.isEmpty else { return "A \(band) fight." }
+        return "\(each.prefix(1).uppercased())\(each.dropFirst()). A \(band) fight."
+    }
+
+    var note: String {
+        if isHostile {
+            return "Hostile. They have not attacked. The party can engage, run, or parley. Running leaves the room as it stands, with nothing gained."
+        }
+        if isFriendly {
+            return "Friendly. They will not attack. A parley with them is rolled twice and the better die counts; one that fails leaves them indifferent."
+        }
+        return "Indifferent. They watch and wait. A parley can win the room; one that fails turns them hostile, and the party then chooses to engage, run, or parley."
+    }
 }
 
 extension WaitingFoes {
@@ -851,6 +888,8 @@ extension WaitingFoes {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         foes = try c.value(.foes, or: "")
         attitude = try c.value(.attitude, or: "indifferent")
+        band = try c.decodeIfPresent(String.self, forKey: .band)
+        monsters = (try? c.decodeIfPresent([RatedFoe].self, forKey: .monsters)) ?? []
     }
 }
 
@@ -865,7 +904,7 @@ struct DungeonMap: Codable, Hashable {
     let at: String
     /// Only areas the party has entered, in the order they were entered.
     let areas: [DungeonArea]
-    /// Foes in this area who are watching, not attacking. Nil when there are none.
+    /// Foes the party is facing here, with how hard they are. Nil when there are none.
     let waiting: WaitingFoes?
     /// The dungeon level the party has reached: it starts at the party's level, and a new door can
     /// lead a level deeper. Nil from a server older than dungeon levels.

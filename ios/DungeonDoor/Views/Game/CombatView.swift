@@ -106,6 +106,11 @@ struct CombatView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel("Initiative order")
+                if let band = combat.band {
+                    Text("a \(band) fight")
+                        .font(.caption)
+                        .foregroundStyle(Palette.ember)
+                }
                 Spacer()
                 HStack(spacing: 10) {
                     legend("Party", Palette.verdigris)
@@ -168,6 +173,11 @@ struct CombatView: View {
                         .foregroundStyle(out ? Palette.muted : mine ? Palette.gold : Palette.parchment)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
+                    if let toughness = combatant.toughness {
+                        Text(titled(toughness))
+                            .font(.system(size: 10, weight: .semibold, design: .serif))
+                            .foregroundStyle(Palette.ember)
+                    }
                     Spacer(minLength: 2)
                     if acted && !out {
                         Image(systemName: "checkmark.circle.fill")
@@ -259,6 +269,11 @@ struct CombatView: View {
                         .foregroundStyle(out ? Palette.muted : mine ? Palette.gold : Palette.parchment)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                    if let toughness = combatant.toughness {
+                        Text(titled(toughness))
+                            .font(.system(size: 12, weight: .semibold, design: .serif))
+                            .foregroundStyle(Palette.ember)
+                    }
                     if mine { Text("you").font(.caption2).foregroundStyle(Palette.muted) }
                     Spacer(minLength: 4)
                     Text(combatant.isDead ? "\u{2014}" : "\(combatant.hp)/\(combatant.maxHp)")
@@ -288,6 +303,10 @@ struct CombatView: View {
         .accessibilityLabel(summary(combatant, place: place, acted: acted))
     }
 
+    private func titled(_ word: String) -> String {
+        word.prefix(1).uppercased() + word.dropFirst()
+    }
+
     /// "Down" for a hero at 0 hit points, "Slain" for a foe, "Dead" for a hero who is gone.
     private func statusWord(_ combatant: Combatant) -> String {
         switch combatant.status {
@@ -300,6 +319,7 @@ struct CombatView: View {
 
     private func summary(_ combatant: Combatant, place: Int, acted: Bool) -> String {
         var parts = ["\(place): \(combatant.name), \(combatant.isFoe ? "foe" : "hero")"]
+        if let toughness = combatant.toughness { parts.append(titled(toughness)) }
         parts.append(combatant.isUp ? "\(combatant.hp) of \(combatant.maxHp) hit points" : statusWord(combatant))
         parts += combatant.conditions.map(SRD.name)
         if acted { parts.append("has chosen an action") }

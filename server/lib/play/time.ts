@@ -86,12 +86,13 @@ function hazardSeconds(h: Extract<RulesHook, { kind: 'hazard' }>): number {
 
 /**
  * How long a turn of play takes (original, CC0): ten minutes for a story choice, a check, a move to the next
- * area, a trap, a parley or a potion; an hour to buy, sell or have the dead raised (5.2: Raise Dead's casting
- * time); a rest its own length; a hazard as long as it lasts. A fight counts its 6-second rounds instead.
+ * area, a run back out, a trap, a parley or a potion; an hour to buy, sell or have the dead raised (5.2: Raise
+ * Dead's casting time); a rest its own length; a hazard as long as it lasts. A fight, and the choice to engage
+ * one, counts its 6-second rounds instead.
  */
 export function secondsFor(hook: RulesHook | null): number {
   if (hook?.kind === 'rest') return hook.rest === 'long' ? LONG_REST : HOUR;
   if (hook?.kind === 'hazard') return hazardSeconds(hook);
   return hook ? (FIXED_SECONDS[hook.kind] ?? TURN) : TURN;
 }
-const FIXED_SECONDS: Partial<Record<RulesHook['kind'], number>> = { fight: 0, buy: HOUR, sell: HOUR, revive: HOUR };
+const FIXED_SECONDS: Partial<Record<RulesHook['kind'], number>> = { fight: 0, engage: 0, buy: HOUR, sell: HOUR, revive: HOUR };

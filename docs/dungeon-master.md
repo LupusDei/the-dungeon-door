@@ -81,8 +81,11 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `{ kind: 'move', exit }`, with an exit id from `ctx.rules.dungeon` (in a dungeon).
   - `{ kind: 'buy', items }`, `{ kind: 'sell', items }`, `{ kind: 'use', item }` (SRD item ids; `use`
     drinks a potion), `{ kind: 'trap', trap }` (an SRD 5.2 example trap), `{ kind: 'hazard', hazard, … }`.
-  - `{ kind: 'parley', monsters? }`: talk to the foes waiting in the room (`ctx.rules.dungeon` shows them
-    and their attitude). `{ kind: 'revive' }`: a temple raises the dead for 2,500 gp each.
+  - `{ kind: 'parley', monsters? }`: talk to the foes waiting in the room (`ctx.rules.dungeon` shows them,
+    their attitude, and how hard they are: each foe weak, even, strong or deadly, the fight low, moderate,
+    high or deadly). Say those words as given; never invent or change a rating. Hostile foes do not attack
+    at once: the engine replaces your three choices with Engage, Run and Parley. `{ kind: 'revive' }`: a
+    temple raises the dead for 2,500 gp each.
   - A choice without `rules` is pure story, as before. So is one whose hook doesn't hold up (unknown
     skill, DC outside 1–30, no known monster): the engine checks every hook where it enters.
   - The LLM DM's schema takes a flat hook with no nullable fields (`lib/dm/hookSchema.ts`): the model

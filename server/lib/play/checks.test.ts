@@ -86,6 +86,9 @@ test('each hook has a short label for the app', () => {
   assert.equal(hookLabel({ kind: 'check', ability: 'int', dc: 10 }), 'Intelligence check, DC 10');
   assert.equal(hookLabel({ kind: 'save', ability: 'dex', dc: 13, damage: '2d10' }), 'Dexterity save, DC 13');
   assert.equal(hookLabel({ kind: 'fight', monsters: ['goblin-warrior', 'goblin-warrior', 'bugbear-warrior'] }), 'Fight: 2 Goblin Warriors, Bugbear Warrior');
+  assert.equal(hookLabel({ kind: 'fight', monsters: ['goblin-warrior', 'goblin-warrior', 'bugbear-warrior'] }, [1, 1, 1, 1]), 'Fight: 2 Goblin Warriors (weak) — low', 'rated after the cap: the bugbear does not fit a level-1 party');
+  assert.equal(hookLabel({ kind: 'engage', monsters: ['skeleton', 'skeleton', 'skeleton'] }, [1, 1, 1, 1]), 'Fight: 3 Skeletons (weak) — moderate', 'foes already met are not capped');
+  assert.equal(hookLabel({ kind: 'run' }), 'Run');
   assert.equal(hookLabel({ kind: 'rest', rest: 'short' }), 'Short rest');
   assert.equal(hookLabel({ kind: 'rest', rest: 'long' }), 'Long rest');
   assert.equal(hookLabel({ kind: 'move', exit: 'r2' }), 'Go on (r2)');

@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { heroSheet } from '../characters.ts';
 import { addItem } from '../rules/inventory.ts';
+import { monster } from '../rules/monsters.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { clearRoom, startDungeon } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { DungeonState, PartyState } from './state.ts';
-import { pickChoice, playTurn, type RulesState, type RulesTurn } from './turn.ts';
+import { confrontationChoices, pickChoice, playTurn, type RulesState, type RulesTurn } from './turn.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const rogue = heroSheet({ id: 'r', name: 'Cleo', race: 'halfling', characterClass: 'rogue' });
@@ -101,11 +102,21 @@ test('a way on: the party moves, and what is in the room springs: monsters fight
   const d = startDungeon('fixed', 3, [1, 1], 4);
   const boars = met('hostile');
   assert.equal(boars.dungeon!.at, 'r1');
-  assert.equal(boars.fight, 'started');
+  assert.equal(boars.fight, null, 'hostile foes bar the way; they do not attack yet');
+  assert.equal(boars.combat, null);
   assert.match(boars.lines[0], /^The party enters Cramped \(15 x 15 ft\.\): Failed experiment\.$/);
-  assert.match(boars.lines[1], /^Boar ×3: hostile \(2d6: [2-5]\)\.$/);
-  assert.match(boars.lines[2], /^A fight begins: /);
-  assert.ok(!boars.dungeon!.cleared.includes('r1'), 'cleared once the boars are beaten');
+  assert.match(boars.lines[1], /^Boar ×3: hostile \(2d6: [2-5]\)\. They bar the way\.$/);
+  assert.deepEqual(confrontationChoices(boars)?.map((c) => c.label), ['Engage', 'Run', 'Parley']);
+  assert.ok(!boars.dungeon!.cleared.includes('r1'), 'not cleared until the boars are beaten or swayed');
+  const ran = playTurn(boars, { kind: 'run' }, ballots(5, 5));
+  assert.equal(ran.dungeon!.at, 'r0', 'back the way they came');
+  assert.equal(ran.dungeon!.cleared.includes('r1'), false);
+  assert.equal(ran.party.sheets.p1.gp, fighter.gp);
+  assert.equal(ran.party.sheets.p1.xp, fighter.xp);
+  assert.equal(ran.combat, null);
+  const engaged = playTurn(boars, { kind: 'engage', monsters: ['boar', 'boar', 'boar'] }, ballots(5, 5));
+  assert.equal(engaged.fight, 'started');
+  assert.equal(Object.values(engaged.combat!.combatants).filter((c) => c.side === 'foes').length, 3, 'the boars that are there, not a capped subset');
   const r4 = d.map.nodes.r4;
   const looted = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r4: { ...r4, contents: { ...r4.contents!, kind: 'empty' as const, encounter: null, trap: null, treasure: { gp: 60, sp: 0, gems: 0, jewellery: 0, magicItem: null } } } } } };
   const loot = playTurn(state({ dungeon: looted }), { kind: 'move', exit: 'r4' }, ballots(5, 5));
@@ -129,12 +140,12 @@ test('foes who are not Hostile watch and wait: no fight, the room not cleared, i
   assert.deepEqual([again.lines[1], again.party.rng], ['Boar ×3: indifferent. They watch and wait.', away.party.rng], 'met before: their attitude is remembered');
 });
 
-test('undead, constructs and oozes always attack', () => {
+test('undead, constructs and oozes are always hostile, and they bar the way', () => {
   const d = boarRoom();
   const r1 = d.map.nodes.r1;
   const crypt = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r1: { ...r1, contents: { ...r1.contents!, encounter: { ...r1.contents!.encounter!, monsters: ['skeleton'] } } } } } };
   const t = playTurn(state({ dungeon: crypt }), { kind: 'move', exit: 'r1' }, ballots(5, 5));
-  assert.deepEqual([t.lines[1], t.fight], ['Skeleton: hostile.', 'started']);
+  assert.deepEqual([t.lines[1], t.fight], ['Skeleton: hostile. They bar the way.', null]);
 });
 
 test('a parley with the foes waiting here: success clears the room (their treasure stays theirs); failure sours them', () => {
@@ -146,8 +157,9 @@ test('a parley with the foes waiting here: success clears the room (their treasu
   assert.deepEqual([peace.dungeon!.cleared.includes('r1'), peace.party.sheets.p1.gp, peace.fight], [true, fighter.gp, null]);
   assert.equal(peace.lines.at(-1), 'The Boar ×3 let the party be.');
   const war = talks('indifferent').find((t) => t.success !== true)!;
-  assert.deepEqual([war.fight, war.dungeon!.attitudes!.r1], ['started', 'hostile']);
-  assert.ok(war.lines.some((l) => /^A fight begins: /.test(l)));
+  assert.deepEqual([war.fight, war.combat, war.dungeon!.attitudes!.r1], [null, null, 'hostile']);
+  assert.equal(war.lines.at(-1), 'The talk goes badly: the Boar ×3 turn hostile.');
+  assert.deepEqual(confrontationChoices(war)?.map((c) => c.label), ['Engage', 'Run', 'Parley']);
   const cooler = talks('friendly').find((t) => t.success === false)!;
   assert.deepEqual([cooler.fight, cooler.dungeon!.attitudes!.r1, cooler.dungeon!.cleared.includes('r1')], [null, 'indifferent', false]);
 });
@@ -269,7 +281,7 @@ test('a corridor is passed through on the way to the room: its trap springs, ten
 const inDungeon = (rng: number, over: Partial<DungeonState> = {}) => ({ ...state({ dungeon: { ...startDungeon('fixed', 3, [1, 1], 4), ...over } }), party: { ...party(), rng } });
 const seeds = Array.from({ length: 80 }, (_, i) => i + 1);
 
-test('wandering monsters: a check every half hour in a dungeon; on a 1 a band comes, and Hostile ones attack', () => {
+test('wandering monsters: a check every half hour in a dungeon; on a 1 a band comes, and Hostile ones bar the way', () => {
   const quiet = playTurn(inDungeon(1), null, []);
   assert.deepEqual([quiet.dungeon!.wander, quiet.party.rng], [600, 1], 'ten minutes toward the next check, no dice');
   const turns = seeds.map((rng) => playTurn(inDungeon(rng, { wander: 1200 }), null, []));
@@ -277,12 +289,17 @@ test('wandering monsters: a check every half hour in a dungeon; on a 1 a band co
   const came = turns.filter((t) => t.lines.some((l) => l.startsWith('Wandering monsters (d6: 1): ')));
   assert.ok(came.length > 3 && came.length < 30, String(came.length));
   const wandering = (t: RulesTurn) => t.lines.find((l) => l.startsWith('Wandering'))!;
-  const attacked = came.find((t) => t.fight === 'started' && wandering(t).includes('2d6'))!;
-  assert.match(wandering(attacked), /They are hostile \(2d6: [2-5]\)\.$/);
-  assert.ok(attacked.combat);
-  const passed = came.find((t) => t.fight === null)!;
+  const barred = came.find((t) => wandering(t).includes('hostile') && wandering(t).includes('2d6'))!;
+  assert.match(wandering(barred), /They are hostile \(2d6: [2-5]\)\. They bar the way\.$/);
+  assert.equal(barred.fight, null);
+  assert.ok(barred.dungeon!.facing);
+  const slipped = playTurn(barred, { kind: 'run' }, []);
+  assert.equal(slipped.dungeon!.facing, undefined);
+  assert.equal(slipped.dungeon!.at, barred.dungeon!.at, 'wanderers are slipped past; the party stays');
+  assert.equal(slipped.fight, null);
+  const passed = came.find((t) => !t.dungeon!.facing)!;
   assert.match(passed.lines.at(-1)!, /They are (indifferent|friendly) \(2d6: \d+\)\. They go their way\.$/);
-  assert.equal(playTurn({ ...state(), party: { ...party(), rng: attacked.party.rng } }, null, []).dungeon, null, 'none outside a dungeon');
+  assert.equal(playTurn({ ...state(), party: { ...party(), rng: barred.party.rng } }, null, []).dungeon, null, 'none outside a dungeon');
 });
 
 test('noise brings a check at once, 2 in 6: after a fight ends or a trap goes off', () => {
@@ -298,7 +315,7 @@ test('noise brings a check at once, 2 in 6: after a fight ends or a trap goes of
 
 test('a rest in a dungeon gets one check first; wanderers who come interrupt it, and no time passes', () => {
   const rests = seeds.map((rng) => playTurn(inDungeon(rng, { wander: 1500 }), { kind: 'rest', rest: 'long' }, []));
-  const broken = rests.find((t) => t.fight === 'started')!;
+  const broken = rests.find((t) => t.dungeon!.facing)!;
   assert.deepEqual([broken.lines[0], broken.party.clock, broken.lines.some((l) => l.startsWith('The party takes a long rest'))], ['Before the party can rest:', 0, false]);
   const slept = rests.find((t) => t.lines.some((l) => l.startsWith('The party takes a long rest')))!;
   assert.deepEqual([slept.party.clock, slept.dungeon!.wander], [8 * 3600, 0]);
@@ -309,7 +326,7 @@ test('spoor in a corridor makes a check on the way, 2 in 6; Hostile wanderers st
   const c = d.map.nodes['r0-r4'];
   const spoored = { ...d.map.nodes, 'r0-r4': { ...c, contents: { ...c.contents!, trap: null, kind: 'empty' as const, special: 'spoor' } } };
   const walks = seeds.map((rng) => playTurn({ ...inDungeon(rng), dungeon: { ...d, map: { ...d.map, nodes: spoored } } }, { kind: 'move', exit: 'r4' }, []));
-  const stopped = walks.find((t) => t.fight === 'started' && t.dungeon!.at === 'r0-r4')!;
+  const stopped = walks.find((t) => t.dungeon!.facing && t.dungeon!.at === 'r0-r4')!;
   assert.match(stopped.lines[1], /^Wandering monsters \(d6: [12]\)/);
   assert.ok(walks.some((t) => t.dungeon!.at === 'r4'));
 });
@@ -350,12 +367,12 @@ test('in a dungeon, a trap is scaled to the dungeon’s level, not the party’s
 });
 
 test('wanderers in a deeper dungeon are a band for its level', () => {
+  const foes = (t: RulesTurn) => t.dungeon?.facing?.monsters ?? [];
   const turns = seeds.map((rng) => playTurn({ ...inDungeon(rng, { wander: 1200, level: 6 }), party: { ...tough(), rng } }, null, []));
-  const bands = turns.flatMap((t) => (t.combat ? Object.values(t.combat.combatants).filter((c) => c.side === 'foes') : []));
+  const bands = turns.flatMap(foes);
   assert.ok(bands.length > 0);
-  const shallow = seeds.map((rng) => playTurn({ ...inDungeon(rng, { wander: 1200 }), party: { ...tough(), rng } }, null, []))
-    .flatMap((t) => (t.combat ? Object.values(t.combat.combatants).filter((c) => c.side === 'foes') : []));
-  const xp = (cs: { xp: number }[]) => cs.reduce((n, c) => n + c.xp, 0) / Math.max(1, cs.length);
+  const shallow = seeds.map((rng) => playTurn({ ...inDungeon(rng, { wander: 1200 }), party: { ...tough(), rng } }, null, [])).flatMap(foes);
+  const xp = (ids: string[]) => ids.reduce((n, id) => n + monster(id).xp, 0) / Math.max(1, ids.length);
   assert.ok(xp(bands) > xp(shallow), `${xp(bands)} vs ${xp(shallow)}`);
 });
 
