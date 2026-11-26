@@ -43,9 +43,11 @@ test('the fake DM classifies a written action without inventing a number', () =>
 });
 
 test('on the road it tells the road and never offers a way on; it buys from a vendor and talks to foes met', async () => {
-  const trek = { stretch: 1, of: 2, terrain: 'a forest road', event: 'quiet' as const, wares: [], waiting: null };
+  const trek = { stretch: 1, of: 2, terrain: 'a forest road', event: 'quiet' as const, leadsTo: 'door' as const, wares: [], waiting: null };
   const quiet = await fakeDungeonMaster.openingScene(ctx({ ...rules, trek }));
-  assert.match(quiet.narration, /^A road leaves the tavern along a forest road: a quiet stretch\./);
+  assert.match(quiet.narration, /^A road leaves the tavern along a forest road: a quiet stretch\.\n\nThe dungeon door lies somewhere ahead\./);
+  const tale = await fakeDungeonMaster.openingScene(ctx({ ...rules, trek: { ...trek, leadsTo: 'tale' } }));
+  assert.match(tale.narration, /^A road leaves the tavern along a forest road: a quiet stretch\.\n\nThe tale waits somewhere ahead\. What do you do\?/);
   assert.match(quiet.narration, /What do you do\?/);
   assert.ok(quiet.choices.every((c) => (c.rules as { kind: string }).kind !== 'move'));
   const vendor = await fakeDungeonMaster.nextScene({ ...ctx({ ...rules, trek: { ...trek, stretch: 2, event: 'vendor', wares: [{ id: 'rope', name: 'Rope', cost: 1 }] } }), sceneIndex: 1 }, { scene: { choices: [] }, leaders: ['a'], votes: [], abstained: [], tally: { a: 0, b: 0, c: 0 }, rules: null } as unknown as Resolution);

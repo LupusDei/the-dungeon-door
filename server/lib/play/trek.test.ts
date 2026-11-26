@@ -5,9 +5,8 @@ import { foeCap, temperedBudget } from '../rules/encounter.ts';
 import { items } from '../rules/items.ts';
 import { monster } from '../rules/monsters.ts';
 import { derivedRng, seededRng } from '../rules/rng.ts';
-import { startDungeon } from './delve.ts';
 import type { PartyState } from './state.ts';
-import { eventFor, legOf, meetOnTheRoad, planTrek, ROAD_MONSTERS, ROAD_POOLS, TREK_SCENES } from './trek.ts';
+import { eventFor, legOf, meetOnTheRoad, planTrek, ROAD_END, ROAD_MONSTERS, ROAD_POOLS, TREK_SCENES } from './trek.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const party: PartyState = { version: 1, rng: 5, sheets: { p1: fighter, p2: { ...fighter, name: 'Ash' } } };
@@ -16,11 +15,13 @@ test('the trek is two stretches of road, each a d12 on the road table: 1–3 ban
   assert.equal(TREK_SCENES, 2);
   assert.deepEqual(Array.from({ length: 12 }, (_, i) => eventFor(i + 1)),
     ['bandits', 'bandits', 'bandits', 'varmints', 'varmints', 'varmints', 'band', 'band', 'vendor', 'vendor', 'quiet', 'quiet']);
-  const trek = planTrek(7, [1, 1], 1);
+  const trek = planTrek(7, [1, 1], 1, 'door');
   assert.equal(trek.legs.length, 2);
-  assert.equal(trek.leg, 0);
+  assert.deepEqual([trek.leg, trek.leadsTo, trek.facing], [0, 'door', undefined]);
   assert.ok(trek.terrain.length > 0);
-  assert.deepEqual(planTrek(7, [1, 1], 1), trek, 'the same seed, the same road');
+  assert.deepEqual(planTrek(7, [1, 1], 1, 'door'), trek, 'the same seed, the same road');
+  assert.deepEqual(planTrek(7, [1, 1], 1, 'tale'), { ...trek, leadsTo: 'tale' }, 'to the dungeon door, or to where a tale told begins');
+  assert.deepEqual(ROAD_END, { door: 'the dungeon door', tale: 'where the tale begins' });
   for (const leg of trek.legs) assert.equal(leg.event, eventFor(leg.roll));
 });
 
@@ -47,17 +48,17 @@ test('a wandering vendor has a Potion of Healing and SRD gear, all at SRD prices
 });
 
 test('on a stretch, foes are met: their attitude is rolled, and Hostile ones bar the way; a vendor or a quiet road is told', () => {
-  const dungeon = startDungeon('fixed', 3, [1, 1], 4);
-  const onRoad = (leg: ReturnType<typeof legOf>) => ({ ...dungeon, trek: { terrain: 'a forest road', leg: 0, legs: [leg, leg] } });
+  const onRoad = (leg: ReturnType<typeof legOf>): PartyState => ({ ...party, trek: { terrain: 'a forest road', leg: 0, legs: [leg, leg], leadsTo: 'tale' } });
   const bandits = { event: 'bandits' as const, roll: 2, monsters: ['bandit', 'bandit'], treasure: null, wares: [] };
-  const met = meetOnTheRoad(party, onRoad(bandits));
+  const met = meetOnTheRoad(onRoad(bandits));
   assert.notEqual(met.party.rng, party.rng, 'the attitude is rolled');
-  assert.deepEqual(met.dungeon.facing!.monsters, ['bandit', 'bandit']);
+  assert.deepEqual(met.party.trek!.facing!.monsters, ['bandit', 'bandit']);
   assert.match(met.lines[0], /^On the road \(d12: 2\): bandits\. Bandit ×2: (hostile|indifferent|friendly) \(2d6: \d+\)\. They (bar the way|watch and wait)\.$/);
-  assert.equal(met.lines[0].endsWith('bar the way.'), met.dungeon.facing!.attitude === 'hostile');
-  const vendor = meetOnTheRoad(party, onRoad({ event: 'vendor', roll: 9, monsters: [], treasure: null, wares: ['potion-of-healing', 'rope'] }));
-  assert.deepEqual([vendor.lines, vendor.dungeon.facing, vendor.party], [['On the road (d12: 9): a wandering vendor, selling Potion of Healing (50 gp), Rope (1 gp).'], undefined, party]);
-  assert.deepEqual(meetOnTheRoad(party, onRoad({ event: 'quiet', roll: 11, monsters: [], treasure: null, wares: [] })).lines, ['On the road (d12: 11): a quiet stretch.']);
+  assert.equal(met.lines[0].endsWith('bar the way.'), met.party.trek!.facing!.attitude === 'hostile');
+  const selling = onRoad({ event: 'vendor', roll: 9, monsters: [], treasure: null, wares: ['potion-of-healing', 'rope'] });
+  const vendor = meetOnTheRoad(selling);
+  assert.deepEqual([vendor.lines, vendor.party], [['On the road (d12: 9): a wandering vendor, selling Potion of Healing (50 gp), Rope (1 gp).'], selling]);
+  assert.deepEqual(meetOnTheRoad(onRoad({ event: 'quiet', roll: 11, monsters: [], treasure: null, wares: [] })).lines, ['On the road (d12: 11): a quiet stretch.']);
 });
 
 test('with no living hero to meet them, a stretch holds no foes', () => {

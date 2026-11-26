@@ -58,10 +58,12 @@ function resolve(r: Resolution) {
   return { outcome: `The party chose to ${label.toLowerCase()}.${flair}`, chosenChoiceId };
 }
 
+const AHEAD = { door: 'The dungeon door lies somewhere ahead.', tale: 'The tale waits somewhere ahead.' } as const;
+
 /** A stretch of the road to the door, told as the world, not as something the heroes decided. Null off the road. */
 function road(ctx: DMContext, opening: string): string | null {
   const t = ctx.rules?.trek;
-  return t ? `${opening} ${t.terrain}: ${ROAD_EVENTS[t.event]}.\n\nThe dungeon door lies somewhere ahead. What do you do?` : null;
+  return t ? `${opening} ${t.terrain}: ${ROAD_EVENTS[t.event]}.\n\n${AHEAD[t.leadsTo]} What do you do?` : null;
 }
 
 const empty = { action: '', ability: 'none', skill: '', tier: 'none', effect: 'none', severity: 'none', damageType: '', condition: 'none', save: 'none', narration: '' };

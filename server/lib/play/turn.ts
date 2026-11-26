@@ -11,7 +11,7 @@ import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId, StoredChoice } from '../types.ts';
 import { adjudicateCheck, type CheckRuling } from './actions.ts';
 import { groupRoll } from './checks.ts';
-import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
+import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, foesMet, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
 import { provisions } from './provisions.ts';
 import { afterHarm } from './dying.ts';
@@ -25,7 +25,7 @@ import { buyItems, sellItems, type Traded, usePotion } from './trade.ts';
 import { checksDue, wanderingChecks, wanderingRoll, type Wanderers } from './wandering.ts';
 import { ambientLight, clockOf, lightLevel, lightUp, passTime, secondsFor } from './time.ts';
 import { partyHazard, springTrap } from './traps.ts';
-import { meetOnTheRoad, type Trek } from './trek.ts';
+import { meetOnTheRoad, type RoadEnd, type Trek } from './trek.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
 export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; move?: Move; actionId?: string; targets?: readonly string[] }
@@ -53,7 +53,7 @@ function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): 
 const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((b) => [b.playerId, b.roll]));
 /** The levels a band, a trap or a proposed fight is scaled to (play/delve.ts foeLevels). */
 const foesFor = (s: RulesState) => foeLevels(s.party, s.dungeon);
-const poolOf = (s: RulesState) => habitatOf(s.dungeon);
+const poolOf = (s: RulesState) => habitatOf(s.party, s.dungeon);
 
 function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
   const rng = seededRng(s.party.rng);
@@ -66,7 +66,7 @@ function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before:
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
-  const started = startFight(s.party, monsterIds, lightLevel(s), s.dungeon?.trek ? { band: 'far' } : undefined);
+  const started = startFight(s.party, monsterIds, lightLevel(s), s.party.trek ? { band: 'far' } : undefined);
   return done({ ...s, party: started.party, combat: started.combat }, [...before, ...started.lines], null, 'started');
 }
 
@@ -117,18 +117,28 @@ function meet(s: RulesState, monsters: string[], before: string[]): RulesTurn {
   return done(here, [...before, `${told} ${stance}`]);
 }
 
-const withoutFacing = (dungeon: DungeonState): DungeonState => {
-  const { facing: _, ...rest } = dungeon;
-  return rest;
-};
+type Facing = NonNullable<DungeonState['facing']>;
+
+const metHere = (s: RulesState) => foesMet(s.party, s.dungeon);
+
+/** Foes barring the way, set (or cleared, null) where the party is: on the road, or in the dungeon. */
+function withFacing(s: RulesState, facing: Facing | null): RulesState {
+  const road = s.party.trek;
+  if (road) {
+    const { facing: _, ...rest } = road;
+    return { ...s, party: { ...s.party, trek: facing ? { ...rest, facing } : rest } };
+  }
+  if (!s.dungeon) return s;
+  const { facing: _, ...rest } = s.dungeon;
+  return { ...s, dungeon: facing ? { ...rest, facing } : rest };
+}
 
 /**
  * Hostile foes are waiting on the party's vote: Engage, Run or Parley. Null when nobody is barring the way
  * (a fight already on, or the foes are not Hostile). The next scene's choices (lib/game.ts).
  */
 export function confrontationChoices(s: RulesState): StoredChoice[] | null {
-  if (s.combat || !s.dungeon) return null;
-  const waiting = waitingFoes(s.dungeon);
+  const waiting = s.combat ? null : metHere(s);
   if (!waiting || waiting.attitude !== 'hostile') return null;
   const run = waiting.source === 'wanderers'
     ? 'Slip past them. Nothing is fought and nothing is gained.'
@@ -142,17 +152,19 @@ export function confrontationChoices(s: RulesState): StoredChoice[] | null {
 
 /** Fight the foes already met, as they stand. */
 function engage(s: RulesState, monsters: readonly string[]): RulesTurn {
-  const dungeon = s.dungeon?.facing ? withoutFacing(s.dungeon) : s.dungeon;
-  return fight({ ...s, dungeon }, monsters);
+  return fight(withFacing(s, null), monsters);
 }
 
 /** Leave before initiative. A room is left the way the party came; wanderers are slipped past. No loot, no XP. */
 function run(s: RulesState): RulesTurn {
-  const dungeon = s.dungeon;
-  if (!dungeon) return done(s, ['There is nowhere to run.']);
-  const waiting = waitingFoes(dungeon);
+  const waiting = metHere(s);
   if (!waiting || waiting.attitude !== 'hostile') return done(s, ['There is no one to run from.']);
-  if (waiting.source === 'wanderers') return done({ ...s, dungeon: withoutFacing(dungeon) }, ['The party slips past. The wanderers do not pursue.']);
+  if (waiting.source === 'wanderers') return done(withFacing(s, null), ['The party slips past. The wanderers do not pursue.']);
+  return backOut(s, s.dungeon!); // foes in a room: only a dungeon has rooms
+}
+
+/** Out of the room the way the party came in, if there is one. */
+function backOut(s: RulesState, dungeon: DungeonState): RulesTurn {
   const back = dungeon.cameFrom;
   const exit = dungeon.map.nodes[dungeon.at].exits.find((e) => e.to === back || e.id === back);
   const moved = back && exit ? enter(dungeon, exit.id) : null;
@@ -162,23 +174,24 @@ function run(s: RulesState): RulesTurn {
 
 /** The party parleys with the foes waiting here, or with those the DM names (Indifferent). */
 function talk(s: RulesState, offered: readonly string[] | null | undefined, ballots: readonly Ballot[]): RulesTurn {
-  const waiting = s.dungeon && waitingFoes(s.dungeon);
+  const waiting = metHere(s);
   const monsters = waiting ? waiting.monsters : offered;
   if (!monsters || monsters.length === 0) return done(s, ['There is no one here to talk to.']);
   const talked = parley(s.party, monsters, waiting ? waiting.attitude : 'indifferent', votesOf(ballots));
-  if (!waiting || !s.dungeon) {
-    const after = { ...s, party: talked.party };
+  const after = { ...s, party: talked.party };
+  if (!waiting) {
     if (talked.attitude === 'hostile') return fight(after, monsters, talked.lines);
     return done(after, talked.lines, talked.success);
   }
-  const dungeon = waiting.source === 'wanderers'
-    ? (talked.success ? withoutFacing(s.dungeon) : { ...s.dungeon, facing: { monsters: [...waiting.monsters], attitude: talked.attitude } })
-    : (talked.success ? clearRoom(s.dungeon, s.dungeon.at) : withAttitude(s.dungeon, talked.attitude));
-  return done({ ...s, party: talked.party, dungeon }, talked.lines, talked.success);
+  if (waiting.source === 'wanderers') {
+    return done(withFacing(after, talked.success ? null : { monsters: [...waiting.monsters], attitude: talked.attitude }), talked.lines, talked.success);
+  }
+  const dungeon = talked.success ? clearRoom(s.dungeon!, s.dungeon!.at) : withAttitude(s.dungeon!, talked.attitude);
+  return done({ ...after, dungeon }, talked.lines, talked.success);
 }
 
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
-  if (s.dungeon?.trek) return done(s, ['The road leads on; the dungeon door is still ahead.']);
+  if (s.party.trek) return done(s, [s.party.trek.leadsTo === 'door' ? 'The road leads on; the dungeon door is still ahead.' : 'The road leads on.']);
   const moved = s.dungeon && enter(s.dungeon, exit);
   if (!moved) return done(s, ['That way is closed.']);
   if (moved.node.type === 'corridor') return through(s, moved, exit, ballots);
@@ -243,7 +256,7 @@ function meetWanderers(t: RulesTurn, came: Wanderers): RulesTurn {
 /** After the turn's time, the checks due (noise first, 2 in 6); a fight on, or foes waiting here, keeps others off. */
 function wander(t: RulesTurn, seconds: number): RulesTurn {
   const d = t.dungeon;
-  if (!d || d.trek || t.combat || waitingFoes(d)) return t; // the road has its own encounters (play/trek.ts)
+  if (!d || t.party.trek || t.combat || waitingFoes(d)) return t; // the road has its own encounters (play/trek.ts)
   const { noise, ...quiet } = d;
   const due = checksDue(d.wander ?? 0, seconds);
   const rng = seededRng(t.party.rng);
@@ -254,7 +267,7 @@ function wander(t: RulesTurn, seconds: number): RulesTurn {
 
 /** A rest in a dungeon: one check first (wandering.ts); wanderers who come interrupt it. */
 function rest(s: RulesState, kind: 'short' | 'long'): RulesTurn {
-  if (s.dungeon && !s.dungeon.trek && !waitingFoes(s.dungeon)) {
+  if (s.dungeon && !s.party.trek && !waitingFoes(s.dungeon)) {
     const rng = seededRng(s.party.rng);
     const came = wanderingRoll(rng, foesFor(s), 1, poolOf(s));
     const calm = { ...s, party: { ...s.party, rng: rng.state() }, dungeon: { ...s.dungeon, wander: 0 } };
@@ -303,24 +316,26 @@ const STRETCH_SECONDS = 2 * 3600;
  * the party goes on by itself, to the next stretch or to the dungeon door.
  */
 function alongTheRoad(t: RulesTurn): RulesTurn {
-  const d = t.dungeon;
-  if (!d?.trek || t.combat || t.fight === 'defeat') return t;
-  if (d.facing?.attitude !== 'hostile') return goOn(t, d, d.trek);
-  const attacked = fight({ ...t, dungeon: withoutFacing(d) }, d.facing.monsters, [...t.lines, 'They will not let the party pass: they attack.']);
+  const trek = t.party.trek;
+  if (!trek || t.combat || t.fight === 'defeat') return t;
+  if (trek.facing?.attitude !== 'hostile') return goOn(t, trek);
+  const attacked = fight({ ...t, ...withFacing(t, null) }, trek.facing.monsters, [...t.lines, 'They will not let the party pass: they attack.']);
   return { ...attacked, success: t.success };
 }
 
-/** Two hours on: the victors of a fight take the stretch's treasure; then the next stretch is met, or the door is reached. */
-function goOn(t: RulesTurn, d: DungeonState, trek: Trek): RulesTurn {
+const ARRIVED: Readonly<Record<RoadEnd, string>> = { door: 'The party reaches the dungeon door.', tale: 'The road ends where the tale begins.' };
+
+/** Two hours on: the victors of a fight take the stretch's treasure; then the next stretch is met, or the road ends. */
+function goOn(t: RulesTurn, trek: Trek): RulesTurn {
   const spoils = t.fight === 'victory' || t.fight === 'fled' ? trek.legs[trek.leg].treasure : null;
   const loot = spoils ? claimTreasure(t.party, spoils) : { party: t.party, lines: [] };
   const walked = passTime(loot.party, STRETCH_SECONDS, ambientLight(t));
   const lines = [...t.lines, ...loot.lines, ...walked.lines];
-  const next = { ...trek, leg: trek.leg + 1 };
-  const { trek: _, ...road } = withoutFacing(d);
-  if (next.leg >= trek.legs.length) return { ...t, party: walked.party, dungeon: road, lines: [...lines, 'The party reaches the dungeon door.'] };
-  const met = meetOnTheRoad(walked.party, { ...road, trek: next });
-  return { ...t, party: met.party, dungeon: met.dungeon, lines: [...lines, ...met.lines] };
+  const { facing: _, ...road } = trek;
+  const { trek: __, ...arrived } = walked.party;
+  if (trek.leg + 1 >= trek.legs.length) return { ...t, party: arrived, lines: [...lines, ARRIVED[trek.leadsTo]] };
+  const met = meetOnTheRoad({ ...arrived, trek: { ...road, leg: trek.leg + 1 } });
+  return { ...t, party: met.party, lines: [...lines, ...met.lines] };
 }
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */

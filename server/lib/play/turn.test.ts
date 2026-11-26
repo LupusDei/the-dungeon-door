@@ -7,7 +7,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { clearRoom, startDungeon } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { DungeonState, PartyState } from './state.ts';
-import type { TrekLeg } from './trek.ts';
+import type { Trek, TrekLeg } from './trek.ts';
 import { confrontationChoices, pickChoice, playTurn, type RulesState, type RulesTurn } from './turn.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
@@ -115,6 +115,10 @@ test('a way on: the party moves, and what is in the room springs: monsters fight
   assert.equal(ran.party.sheets.p1.gp, fighter.gp);
   assert.equal(ran.party.sheets.p1.xp, fighter.xp);
   assert.equal(ran.combat, null);
+  const said = (s: RulesState) => playTurn(s, { kind: 'run' }, []).lines;
+  assert.deepEqual([said(state({ dungeon: null })), said(state({ dungeon: d })), said(met('indifferent'))], [['There is no one to run from.'], ['There is no one to run from.'], ['There is no one to run from.']]);
+  const cornered = { ...boars, dungeon: { ...boars.dungeon!, cameFrom: undefined } };
+  assert.deepEqual([said(cornered), playTurn(cornered, { kind: 'run' }, []).dungeon!.at], [['There is no way back.'], 'r1']);
   const engaged = playTurn(boars, { kind: 'engage', monsters: ['boar', 'boar', 'boar'] }, ballots(5, 5));
   assert.equal(engaged.fight, 'started');
   assert.equal(Object.values(engaged.combat!.combatants).filter((c) => c.side === 'foes').length, 3, 'the boars that are there, not a capped subset');
@@ -396,59 +400,75 @@ test('a fight the DM proposes is held to a high encounter at the dungeon level (
   assert.equal(foes(playTurn(state({ dungeon: { ...d, level: 5 } }), goblins, ballots(5, 5))), 4, 'at dungeon level 5, twice the party');
 });
 
-// The road from the tavern to the door (play/trek.ts)
+// The road from the tavern (play/trek.ts): to the dungeon door, or in a tale told (no dungeon) to where the tale begins
 const leg = (event: TrekLeg['event'], monsters: string[] = [], treasure: TrekLeg['treasure'] = null): TrekLeg => ({ event, roll: 1, monsters, treasure, wares: [] });
-const onTheRoad = (legs: TrekLeg[], facing?: DungeonState['facing']): RulesState => {
-  const d = startDungeon('fixed', 3, [1, 1], 4);
-  return state({ dungeon: { ...d, trek: { terrain: 'a forest road', leg: 0, legs }, ...(facing ? { facing } : {}) } });
+const ENDS = ['door', 'tale'] as const;
+const onTheRoad = (legs: TrekLeg[], end: (typeof ENDS)[number], facing?: Trek['facing']): RulesState => {
+  const base = state({ dungeon: end === 'door' ? startDungeon('fixed', 3, [1, 1], 4) : null });
+  return { ...base, party: { ...base.party, trek: { terrain: 'a forest road', leg: 0, legs, leadsTo: end, ...(facing ? { facing } : {}) } } };
 };
 const look = { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 5 };
 const gold = { sp: 0, gp: 40, gems: 0, jewellery: 0, magicItem: null };
+const hostile = { monsters: ['bandit'], attitude: 'hostile' as const };
 
-test('on the road the party goes on by itself after each scene: the next stretch is met, then the dungeon door', () => {
-  const start = onTheRoad([leg('quiet'), leg('quiet')]);
-  const first = playTurn(start, look, ballots(10, 10));
-  assert.equal(first.dungeon!.trek!.leg, 1);
-  assert.ok(first.lines.includes('On the road (d12: 1): a quiet stretch.'));
-  assert.ok(first.party.clock! - (start.party.clock ?? 0) >= 2 * 3600, 'a stretch of road takes two hours');
-  const door = playTurn(first, null, []);
-  assert.equal(door.dungeon!.trek, undefined);
-  assert.equal(door.dungeon!.at, start.dungeon!.map.entrance);
-  assert.equal(door.lines.at(-1), 'The party reaches the dungeon door.');
-  assert.equal(playTurn(door, null, []).dungeon!.trek, undefined, 'and stays there');
+test('on the road the party goes on by itself after each scene: the next stretch is met, then the dungeon door or where the tale begins', () => {
+  for (const end of ENDS) {
+    const start = onTheRoad([leg('quiet'), leg('quiet')], end);
+    const first = playTurn(start, look, ballots(10, 10));
+    assert.equal(first.party.trek!.leg, 1, end);
+    assert.ok(first.lines.includes('On the road (d12: 1): a quiet stretch.'));
+    assert.ok(first.party.clock! - (start.party.clock ?? 0) >= 2 * 3600, 'a stretch of road takes two hours');
+    const there = playTurn(first, null, []);
+    assert.equal(there.party.trek, undefined);
+    assert.equal(there.lines.at(-1), end === 'door' ? 'The party reaches the dungeon door.' : 'The road ends where the tale begins.');
+    assert.equal(there.dungeon?.at ?? null, end === 'door' ? start.dungeon!.map.entrance : null);
+    assert.equal(playTurn(there, null, []).party.trek, undefined, 'and stays there');
+  }
 });
 
 test('on the road there are no exits to take, no dungeon wanderers, and daylight', () => {
-  const road = onTheRoad([leg('quiet'), leg('quiet')]);
+  const road = onTheRoad([leg('quiet'), leg('quiet')], 'door');
   const moved = playTurn(road, { kind: 'move', exit: road.dungeon!.map.nodes[road.dungeon!.map.entrance].exits[0].id }, []);
   assert.equal(moved.lines[0], 'The road leads on; the dungeon door is still ahead.');
   assert.equal(moved.dungeon!.at, road.dungeon!.at);
   const torch = { ...fighter, equipment: [...fighter.equipment, { id: 'torch', name: 'Torch', count: 1 }] };
-  const rested = playTurn({ ...road, party: party({ p1: torch }) }, { kind: 'rest', rest: 'short' }, []);
-  assert.ok(!rested.lines.some((l) => /Wandering|Before the party can rest|lights/.test(l)), rested.lines.join(' | '));
+  for (const end of ENDS) {
+    const r = onTheRoad([leg('quiet'), leg('quiet')], end);
+    const rested = playTurn({ ...r, party: { ...r.party, sheets: { p1: torch } } }, { kind: 'rest', rest: 'short' }, []);
+    assert.ok(!rested.lines.some((l) => /Wandering|Before the party can rest|lights/.test(l)), rested.lines.join(' | '));
+  }
 });
 
-test('foes barring the road: Run slips past and the party goes on; a failed Parley and they attack', () => {
-  const hostile = { monsters: ['bandit'], attitude: 'hostile' as const };
-  const ran = playTurn(onTheRoad([leg('bandits', ['bandit']), leg('quiet')], hostile), { kind: 'run' }, []);
-  assert.deepEqual([ran.dungeon!.trek!.leg, ran.dungeon!.facing, ran.fight], [1, undefined, null]);
-  const talked = playTurn(onTheRoad([leg('bandits', ['bandit']), leg('quiet')], hostile), { kind: 'parley' }, ballots(1, 1));
-  assert.equal(talked.fight, 'started');
-  assert.ok(talked.combat);
-  assert.equal(talked.dungeon!.trek!.leg, 0, 'the party goes on once the fight is over');
-  assert.ok(talked.lines.includes('They will not let the party pass: they attack.'));
-  assert.ok(talked.lines.includes('Both sides begin far, about 60 feet apart.'));
-  assert.ok(Object.values(talked.combat!.combatants).every((c) => c.place?.band === 'far'));
+test('foes barring the road, with or without a dungeon: Engage, Run or Parley; Run slips past and the party goes on; a failed Parley and they attack', () => {
+  for (const end of ENDS) {
+    const barred = onTheRoad([leg('bandits', ['bandit']), leg('quiet')], end, hostile);
+    assert.deepEqual(confrontationChoices(barred)!.map((c) => c.hook), [{ kind: 'engage', monsters: ['bandit'] }, { kind: 'run' }, { kind: 'parley' }], end);
+    assert.equal(confrontationChoices(onTheRoad([leg('bandits', ['bandit']), leg('quiet')], end, { ...hostile, attitude: 'indifferent' })), null);
+    const ran = playTurn(barred, { kind: 'run' }, []);
+    assert.deepEqual([ran.party.trek!.leg, ran.party.trek!.facing, ran.fight], [1, undefined, null]);
+    assert.ok(ran.lines.includes('The party slips past. The wanderers do not pursue.'));
+    const talked = playTurn(barred, { kind: 'parley' }, ballots(1, 1));
+    assert.equal(talked.fight, 'started');
+    assert.ok(talked.combat);
+    assert.deepEqual([talked.party.trek!.leg, talked.party.trek!.facing], [0, undefined], 'the party goes on once the fight is over');
+    assert.ok(talked.lines.includes('They will not let the party pass: they attack.'));
+    assert.ok(talked.lines.includes('Both sides begin far, about 60 feet apart.'));
+    assert.ok(Object.values(talked.combat!.combatants).every((c) => c.place?.band === 'far'));
+    const swayed = playTurn(barred, { kind: 'parley' }, ballots(20, 20));
+    assert.deepEqual([swayed.fight, swayed.party.trek!.leg, swayed.party.trek!.facing], [null, 1, undefined], 'swayed, they let the party by');
+  }
 });
 
 test('a fight on the road: XP as any fight, the stretch\u2019s treasure for the victors, then the road goes on', () => {
-  const road = onTheRoad([leg('band', ['goblin-minion'], gold), leg('quiet')], { monsters: ['goblin-minion'], attitude: 'hostile' });
-  let t: RulesTurn = playTurn(road, { kind: 'engage', monsters: ['goblin-minion'] }, ballots(15, 15));
-  assert.equal(t.fight, 'started');
-  for (let i = 0; i < 20 && t.combat; i++) t = playTurn(t, null, ballots(18, 18));
-  assert.equal(t.fight, 'victory');
-  assert.equal(t.dungeon!.trek!.leg, 1);
-  const before = Object.values(road.party.sheets).reduce((gp, s) => gp + s.gp, 0);
-  assert.equal(Object.values(t.party.sheets).reduce((gp, s) => gp + s.gp, 0), before + 40);
-  assert.ok(Object.values(t.party.sheets).every((s) => s.xp > 0));
+  for (const end of ENDS) {
+    const road = onTheRoad([leg('band', ['goblin-minion'], gold), leg('quiet')], end, { monsters: ['goblin-minion'], attitude: 'hostile' });
+    let t: RulesTurn = playTurn(road, { kind: 'engage', monsters: ['goblin-minion'] }, ballots(15, 15));
+    assert.deepEqual([t.fight, t.party.trek!.facing], ['started', undefined]);
+    for (let i = 0; i < 20 && t.combat; i++) t = playTurn(t, null, ballots(18, 18));
+    assert.equal(t.fight, 'victory');
+    assert.equal(t.party.trek!.leg, 1);
+    const before = Object.values(road.party.sheets).reduce((gp, s) => gp + s.gp, 0);
+    assert.equal(Object.values(t.party.sheets).reduce((gp, s) => gp + s.gp, 0), before + 40);
+    assert.ok(Object.values(t.party.sheets).every((s) => s.xp > 0));
+  }
 });

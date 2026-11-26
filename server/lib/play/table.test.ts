@@ -40,15 +40,33 @@ test('a new game’s dungeon starts at the living heroes’ average level, round
   assert.equal(dungeonLevel(newRules([player('p1', 'A'), player('p2', 'B')], 'fixed', 7, 4).dungeon!), 1);
 });
 
-test('a dungeon game starts on the road from the tavern: two seeded stretches, the first already met; a tale told has none', () => {
+test('every game starts on the road from the tavern, two seeded stretches with the first already met: to the dungeon door, or in a tale told to where the tale begins', () => {
   const players = [player('p1', 'A'), player('p2', 'B')];
-  for (const mode of ['fixed', 'explore'] as const) {
+  for (const [mode, end] of [['fixed', 'door'], ['explore', 'door'], ['none', 'tale']] as const) {
     const r = newRules(players, mode, 7, 4);
-    assert.deepEqual(r.dungeon!.trek, planTrek(7, [1, 1], 1), mode);
-    const met = meetOnTheRoad({ version: 1, rng: 7, sheets: r.party.sheets }, { ...r.dungeon!, facing: undefined });
-    assert.deepEqual([r.party.rng, r.dungeon!.facing], [met.party.rng, met.dungeon.facing], 'the first stretch is met as the game starts');
+    const { facing, ...trek } = r.party.trek!;
+    assert.deepEqual(trek, planTrek(7, [1, 1], 1, end), mode);
+    const met = meetOnTheRoad({ version: 1, rng: 7, sheets: r.party.sheets, trek });
+    assert.deepEqual([r.party.rng, facing], [met.party.rng, met.party.trek!.facing], 'the first stretch is met as the game starts');
+    assert.equal(r.dungeon === null, mode === 'none', 'the road is kept apart from any dungeon');
   }
-  assert.equal(newRules(players, 'none', 7, 4).dungeon, null);
+  assert.equal(newRules([player('p1', 'A')], 'none', 7, 4).party.trek!.legs.length, 2, 'a lone hero walks it too');
+});
+
+test('a game stored with the road in its dungeon (before a tale told had one) reads with the road, and its foes, kept by the party', () => {
+  const r = newRules([player('p1', 'A')], 'fixed', 7, 4);
+  const { trek, ...party } = r.party;
+  const { leadsTo: _, facing, ...road } = trek!;
+  const hostile = { monsters: ['bandit'], attitude: 'hostile' as const };
+  const old = { party, combat: null, dungeon: { ...r.dungeon!, trek: road, facing: hostile } } as unknown as Game;
+  const read = rulesStateOf(old)!;
+  assert.deepEqual(read.party.trek, { ...road, leadsTo: 'door', facing: hostile });
+  assert.deepEqual([Object.hasOwn(read.dungeon!, 'trek'), Object.hasOwn(read.dungeon!, 'facing')], [false, false]);
+  const quiet = rulesStateOf({ ...old, dungeon: { ...r.dungeon!, trek: road } } as unknown as Game)!;
+  assert.deepEqual(quiet.party.trek, { ...road, leadsTo: 'door' });
+  assert.equal(facing === undefined || facing.monsters.length > 0, true);
+  const inside = rulesStateOf({ party, combat: null, dungeon: { ...r.dungeon!, facing: hostile } } as unknown as Game)!;
+  assert.deepEqual([inside.party.trek, inside.dungeon!.facing], [undefined, hostile], 'wanderers met in the dungeon stay there');
 });
 
 test('a game from before the engine has no rules state', () => {

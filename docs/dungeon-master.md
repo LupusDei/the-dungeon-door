@@ -72,9 +72,10 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - `combat`: the round, how hard the fight is, each hero's HP and status, each foe's wound ("Bloodied",
     "Gasping") and status, and where everyone stands (engaged with whom, near or far), or null. A foe's
     hit points are hidden: show its wounds in the story, never numbers.
-  - `trek`: in a dungeon game, the road from the tavern to the door (two scenes): the stretch, its
-    terrain, what is on it (bandits, beasts, a monster band, a vendor and their wares, or nothing) and who
-    waits there; null at the door. Narrate overland travel; the party goes on by itself after each scene.
+  - `trek`: the road from the tavern (two scenes), to the dungeon door or, in a tale told, to where the
+    tale begins (`leadsTo`): the stretch, its terrain, what is on it (bandits, beasts, a monster band, a
+    vendor and their wares, or nothing) and who waits there; null once the road ends. Narrate overland
+    travel; the party goes on by itself after each scene.
   - `dungeon`: the dungeon's kind and **level** (null on the road), the area the party is in (its purpose, what is there,
     its exits by id, any foes waiting there and their attitude), or null. The level starts at the living
     heroes' average and can go deeper through a door: deeper means more dangerous, so narrate it (lower,

@@ -12,8 +12,8 @@ import { buildEncounter } from '../rules/encounter.ts';
 import { items } from '../rules/items.ts';
 import { derivedRng, pick, type Rng, sample, seededRng } from '../rules/rng.ts';
 import { foesNamed } from './hooks.ts';
-import { rollAttitude } from './parley.ts';
-import type { DungeonState, PartyState } from './state.ts';
+import { type Attitude, rollAttitude } from './parley.ts';
+import type { PartyState } from './state.ts';
 
 export const TREK_SCENES = 2;
 
@@ -21,7 +21,12 @@ export type TrekEvent = 'bandits' | 'varmints' | 'band' | 'vendor' | 'quiet';
 /** roll: the d12 on the road table; wares: SRD item ids a vendor sells. */
 export interface TrekLeg { event: TrekEvent; roll: number; monsters: string[]; treasure: Treasure | null; wares: string[] }
 /** leg: the stretch the party is on (0 first). */
-export interface Trek { terrain: string; leg: number; legs: TrekLeg[] }
+/** Where the road ends: a dungeon game's door, or wherever a tale told begins. */
+export type RoadEnd = 'door' | 'tale';
+export const ROAD_END: Readonly<Record<RoadEnd, string>> = { door: 'the dungeon door', tale: 'where the tale begins' };
+
+/** The road the party is on (PartyState.trek): its stretches, the one reached, and foes met there that wait on the party. */
+export interface Trek { terrain: string; leg: number; legs: TrekLeg[]; leadsTo: RoadEnd; facing?: { monsters: string[]; attitude: Attitude } }
 
 const ROAD_TABLE: readonly [number, TrekEvent][] = [[3, 'bandits'], [6, 'varmints'], [8, 'band'], [10, 'vendor'], [12, 'quiet']];
 export const eventFor = (d12: number): TrekEvent => ROAD_TABLE.find(([upTo]) => d12 <= upTo)![1];
@@ -50,14 +55,14 @@ export function legOf(rng: Rng, event: TrekEvent, roll: number, levels: readonly
 }
 
 /** The road from the tavern to the door, rolled when the game starts, for the party's levels and the dungeon's starting level. */
-export function planTrek(seed: number, levels: readonly number[], level: number): Trek {
+export function planTrek(seed: number, levels: readonly number[], level: number, leadsTo: RoadEnd): Trek {
   const rng = derivedRng(seed, 'trek');
   const terrain = pick(rng, TERRAINS);
   const legs = Array.from({ length: TREK_SCENES }, () => {
     const roll = rng.die(12);
     return legOf(rng, eventFor(roll), roll, levels, level);
   });
-  return { terrain, leg: 0, legs };
+  return { terrain, leg: 0, legs, leadsTo };
 }
 
 const price = (id: string) => `${items().get(id)!.name} (${items().get(id)!.cost} gp)`;
@@ -68,16 +73,16 @@ export const ROAD_EVENTS: Readonly<Record<TrekEvent, string>> = {
 const told = (leg: TrekLeg) => (leg.event === 'vendor' ? `${ROAD_EVENTS.vendor}, selling ${leg.wares.map(price).join(', ')}` : ROAD_EVENTS[leg.event]);
 
 /** The stretch the party has come to: its foes are met (they roll an attitude and wait, Hostile ones barring the way), or what else is there is told. */
-export function meetOnTheRoad(party: PartyState, dungeon: DungeonState): { party: PartyState; dungeon: DungeonState; lines: string[] } {
-  const leg = dungeon.trek!.legs[dungeon.trek!.leg];
+export function meetOnTheRoad(party: PartyState): { party: PartyState; lines: string[] } {
+  const trek = party.trek!;
+  const leg = trek.legs[trek.leg];
   const head = `On the road (d12: ${leg.roll}): ${told(leg)}.`;
-  if (!leg.monsters.length) return { party, dungeon, lines: [head] };
+  if (!leg.monsters.length) return { party, lines: [head] };
   const rng = seededRng(party.rng);
   const met = rollAttitude(rng, leg.monsters);
   const stance = met.attitude === 'hostile' ? 'They bar the way.' : 'They watch and wait.';
   return {
-    party: { ...party, rng: rng.state() },
-    dungeon: { ...dungeon, facing: { monsters: [...leg.monsters], attitude: met.attitude } },
+    party: { ...party, rng: rng.state(), trek: { ...trek, facing: { monsters: [...leg.monsters], attitude: met.attitude } } },
     lines: [`${head} ${foesNamed(leg.monsters)}: ${met.attitude}${met.roll === null ? '' : ` (2d6: ${met.roll})`}. ${stance}`],
   };
 }

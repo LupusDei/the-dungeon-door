@@ -34,8 +34,9 @@ export function foeLevels(party: PartyState, dungeon: DungeonState | null): numb
 }
 
 /** The monsters that live in the party's dungeon (none outside one: any may come). */
-/** The monsters met here: the dungeon kind's habitat, or on the road the road's (play/trek.ts). */
-export const habitatOf = (dungeon: DungeonState | null) => (dungeon?.trek ? ROAD_MONSTERS : dungeon ? habitat(kindIdOf(dungeon.map.kind)) : undefined);
+/** The monsters met here: on the road the road's (play/trek.ts), in a dungeon its kind's habitat; anywhere else, any. */
+export const habitatOf = (party: PartyState, dungeon: DungeonState | null) =>
+  (party.trek ? ROAD_MONSTERS : dungeon ? habitat(kindIdOf(dungeon.map.kind)) : undefined);
 
 /** The level beyond this exit: through a door into an area not yet seen (a fixed map's corridor aside), a seeded chance of a level deeper. */
 function levelBeyond(dungeon: DungeonState, via: Exit, to: string): number {
@@ -95,6 +96,13 @@ export interface MetFoes { monsters: string[]; attitude: Attitude; source: 'room
  * Foes the party is facing here and has not dealt with. Wanderers, if a band just arrived; otherwise the
  * room's own, hostile included (they bar the way; they do not attack until the party engages).
  */
+/** Foes met and not dealt with: on the road, those of its stretch (play/trek.ts); otherwise the dungeon's. */
+export function foesMet(party: PartyState, dungeon: DungeonState | null): MetFoes | null {
+  const road = party.trek;
+  if (road) return road.facing ? { ...road.facing, source: 'wanderers' } : null;
+  return dungeon && waitingFoes(dungeon);
+}
+
 export function waitingFoes(dungeon: DungeonState): MetFoes | null {
   if (dungeon.facing) return { monsters: dungeon.facing.monsters, attitude: dungeon.facing.attitude, source: 'wanderers' };
   const attitude = dungeon.attitudes?.[dungeon.at];

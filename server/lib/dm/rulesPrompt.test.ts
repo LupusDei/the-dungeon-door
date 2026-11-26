@@ -78,18 +78,21 @@ test('conditions a hero carries are told with how they end', () => {
 
 test('on the road the DM is told the stretch, its terrain, what is on it, and what comes after it; the instructions say how the road is told', () => {
   const road = (stretch: number, event: TrekView['event'], over: Partial<TrekView> = {}) =>
-    rulesBlock({ ...ctx, combat: null, dungeon: null, trek: { stretch, of: 2, terrain: 'a forest road', event, wares: [], waiting: null, ...over } }).split('\n')[4];
+    rulesBlock({ ...ctx, combat: null, dungeon: null, trek: { stretch, of: 2, terrain: 'a forest road', event, leadsTo: 'door', wares: [], waiting: null, ...over } }).split('\n')[4];
   const bandits = { foes: 'Bandit ×2', attitude: 'hostile' as const, band: 'low' as const, monsters: [{ name: 'Bandit', count: 2, toughness: 'weak' as const }] };
   assert.equal(road(1, 'bandits', { waiting: bandits }),
     'THE ROAD (stretch 1 of 2, a forest road): bandits. Waiting here, barring the way: Bandit ×2 (hostile). Each Bandit is weak. The fight is low. After it: more road.');
   assert.equal(road(2, 'vendor', { wares: [{ id: 'potion-of-healing', name: 'Potion of Healing', cost: 50 }, { id: 'rope', name: 'Rope', cost: 1 }] }),
     'THE ROAD (stretch 2 of 2, a forest road): a wandering vendor, selling Potion of Healing (potion-of-healing, 50 gp), Rope (rope, 1 gp). After it: the dungeon door.');
   assert.equal(road(1, 'quiet'), 'THE ROAD (stretch 1 of 2, a forest road): a quiet stretch. After it: more road.');
-  for (const words of ['THE ROAD', 'overland', 'no corridors', 'travels on by itself', 'only the wares listed']) assert.ok(RULES_INSTRUCTIONS.includes(words), words);
+  assert.equal(road(2, 'quiet', { leadsTo: 'tale' }), 'THE ROAD (stretch 2 of 2, a forest road): a quiet stretch. After it: where the tale begins.');
+  for (const words of ['THE ROAD', 'overland', 'where the tale begins', 'no corridors', 'travels on by itself', 'only the wares listed']) assert.ok(RULES_INSTRUCTIONS.includes(words), words);
 });
 
 test('the LLM DM opens a road game on the road from the tavern, not at the door', () => {
-  assert.match(openingNote({ ...ctx, trek: { stretch: 1, of: 2, terrain: 'a forest road', event: 'quiet', wares: [], waiting: null } }), /on the road from the tavern/);
+  const trek = { stretch: 1, of: 2, terrain: 'a forest road', event: 'quiet' as const, leadsTo: 'door' as const, wares: [], waiting: null };
+  assert.match(openingNote({ ...ctx, trek }), /^Open on the road from the tavern to the dungeon door \(THE ROAD\), not at the door\./);
+  assert.match(openingNote({ ...ctx, trek: { ...trek, leadsTo: 'tale' } }), /^Open on the road from the tavern \(THE ROAD\); the tale proper begins where it ends\./);
   assert.equal(openingNote({ ...ctx, trek: null }), '');
   assert.equal(openingNote(null), '');
 });

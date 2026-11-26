@@ -22,7 +22,7 @@ export const clockOf = (party: PartyState): number => party.clock ?? 0;
 
 /** The place's own light: the dungeon area's, or daylight by the clock outside one. */
 export const ambientLight = (s: RulesState): LightLevel =>
-  (s.dungeon && !s.dungeon.trek ? areaLight(s.dungeon.map, s.dungeon.at) : outdoorLight(clockOf(s.party))); // on the road: the open sky
+  (s.dungeon && !s.party.trek ? areaLight(s.dungeon.map, s.dungeon.at) : outdoorLight(clockOf(s.party))); // on the road: the open sky
 
 /** What the party has to see by: bright where its light burns, otherwise the place's own light. */
 export const lightLevel = (s: RulesState): LightLevel => (s.party.lit ? 'bright' : ambientLight(s));

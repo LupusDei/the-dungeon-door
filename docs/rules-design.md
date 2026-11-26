@@ -570,15 +570,22 @@ the choice says so. The same moves are on that hero's action list (`kind` `"move
 the action on the move. A vote may also carry a `move` (`docs/api.md`): one band before the action, or a Dash
 instead of it. An illegal move is refused.
 
-## The road from the tavern to the door
+## The road from the tavern
 
 Robert's design: *"From the tavern to the door there should be a trek through territory with risk of
 bandits, varmints, bands of level 1-2 surface monsters, and wandering vendors. Two scenes before the door
 to the dungeon begins."*
 
-`play/trek.ts`. A dungeon game (`fixed` or `explore`; a tale told has no door) opens on the road: **two
-scenes**, then the door scene as before. The game is two scenes longer than the `sceneCount` asked for (the
-map is still sized for the count asked for).
+`play/trek.ts`. Every game opens on the road: **two scenes**, then the tale as before. A dungeon game
+(`fixed` or `explore`) walks to the dungeon door; a tale told (`none`, no dungeon) walks to wherever its
+tale begins. The game is two scenes longer than the `sceneCount` asked for (a dungeon's map is still sized
+for the count asked for).
+
+- **The road is the party's, not the dungeon's.** It lives in `PartyState.trek` (with where it leads,
+  `leadsTo: 'door' | 'tale'`, and any foes met on the current stretch, `facing`), so a game with no dungeon
+  state walks it the same way, and the dungeon's own `facing` is only ever its wanderers. Games stored
+  while the road lived in `DungeonState` are mended as they are read (`rulesStateOf`): the road, and foes
+  met on it, move to the party, leading to the door.
 
 - **The road is rolled when the game starts**, from the game's seed (`derivedRng(seed, 'trek')`): a terrain
   (farm road, forest road, moorland track, hill trails, river valley) and, for each stretch, a d12:
@@ -592,9 +599,9 @@ map is still sized for the count asked for).
   | 11–12 | a quiet stretch | 17% |
 
   So two of three stretches hold foes. They are a **low** fight for the party (`buildEncounter`, the same
-  budget, tempering and party-size cap as a dungeon room), at the levels the dungeon starts at; the
-  tougher ones only appear for parties that can afford them. Bandits and monster bands carry treasure for
-  the dungeon's starting level; beasts carry none.
+  budget, tempering and party-size cap as a dungeon room), at the levels the dungeon starts at (in a tale
+  told, the party's level); the tougher ones only appear for parties that can afford them. Bandits and
+  monster bands carry treasure for that level; beasts carry none.
 - **Foes are met** as in a dungeon room: they roll an attitude (2d6: 2–5 Hostile, about 28%). Hostile ones
   bar the way: Engage, Run (slip past: no fight, no loot, no XP) or Parley. If a parley fails and they are
   still Hostile, they attack: there is no way back on the road. Others watch and wait while the party goes on.
@@ -602,10 +609,12 @@ map is still sized for the count asked for).
 - **A wandering vendor** sells a Potion of Healing (50 gp) and four other SRD adventuring gear items of
   25 gp or less, at SRD prices, through the `buy` hook.
 - **After each scene** the party goes on by itself (two hours, under the open sky's light) to the next
-  stretch, or, after the second, to the dungeon door ("The party reaches the dungeon door."). On the road
+  stretch, or, after the second, to the dungeon door ("The party reaches the dungeon door.") or where the
+  tale begins ("The road ends where the tale begins."). On the road
   there are no exits (`move` is refused), no dungeon wanderers, and no torches needed by day.
-- **The DM** sees `trek` (stretch, terrain, what is on it, wares, who waits) and no `dungeon` until the
-  door; its instructions say to narrate overland travel, with no corridors, rooms or doors.
+- **The DM** sees `trek` (stretch, terrain, what is on it, wares, who waits, and what comes after: more
+  road, the dungeon door, or where the tale begins) and no `dungeon` until the door; its instructions say
+  to narrate overland travel, with no corridors, rooms or doors, and to open the game on the road.
 
 ## Wounds, not hit points
 

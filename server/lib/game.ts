@@ -378,7 +378,7 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
   const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for
-  const scenes = count + (rules.dungeon?.trek ? TREK_SCENES : 0); // a dungeon game opens with the road to its door
+  const scenes = count + TREK_SCENES; // every game opens with the road from the tavern
   if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
     throw conflict('the game is already starting');
   }

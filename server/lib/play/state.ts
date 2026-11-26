@@ -25,6 +25,11 @@ export interface PartyState {
   lit?: Lit | null;
   /** Who levelled up at the quest's end (play/table.ts endQuest); absent before it ends. */
   levelUps?: LevelUp[];
+  /**
+   * On the road from the tavern (play/trek.ts), to the dungeon door or to where a tale told begins; absent once
+   * the road has ended, and in games from before it. Kept with the party, apart from any dungeon.
+   */
+  trek?: Trek;
 }
 
 /** A hero's level before and after the quest's end. */
@@ -54,6 +59,4 @@ export interface DungeonState {
   level?: number;
   /** Where the dungeon went deeper, and to what level, oldest first. */
   deepened?: { at: string; level: number }[];
-  /** On the road from the tavern to the door (play/trek.ts); absent once the party has reached the door, and in games from before. */
-  trek?: Trek;
 }

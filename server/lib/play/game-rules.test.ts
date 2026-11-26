@@ -57,8 +57,8 @@ async function voteAll(code: string, players: string[], sceneIndex: number, choi
 
 /** A DM whose first choice carries this hook, and that records what it was told. */
 /**
- * Walk the road to the dungeon door (play/trek.ts) with the fake DM: Run from foes barring the way, else look
- * around. `door` is the DM that writes the door scene (scene 2), if not the fake.
+ * Walk the road from the tavern (play/trek.ts) with the fake DM: Run from foes barring the way, else look
+ * around. `door` is the DM that writes the scene where the road ends (scene 2), if not the fake.
  */
 async function walkTheRoad(code: string, players: string[], door?: DungeonMaster) {
   await voteAll(code, players, 0, 'b');
@@ -87,12 +87,18 @@ test('a new game carries the rules: the heroes’ numbers, choices with their di
   await settle();
   let state = await view(code, host);
   assert.deepEqual(state.rules!.party.map((h) => [h.playerId, h.name, h.level, h.down]), [[host, 'Hero 1', 1, false], [players[1], 'Hero 2', 1, false]]);
-  assert.deepEqual([state.rules!.combat, state.rules!.dungeon, state.rules!.results], [null, null, []]);
+  assert.deepEqual([state.rules!.combat, state.rules!.dungeon], [null, null]);
+  assert.deepEqual([state.sceneCount, state.rules!.trek!.stretch, state.rules!.trek!.leadsTo], [6, 1, 'tale'], 'a tale told opens on the road from the tavern too');
+  assert.deepEqual(state.scene!.choices.slice(0, 2).map((c) => c.rules), ['Survival check, DC 10', 'Perception check, DC 10']);
+  await walkTheRoad(code, players);
+  state = await view(code, host);
+  assert.equal(state.rules!.trek, null);
+  assert.ok(state.rules!.results.includes('The road ends where the tale begins.'), state.rules!.results.join(' | '));
   assert.deepEqual(state.scene!.choices.map((c) => c.rules), ['Athletics check, DC 10', 'Perception check, DC 10', 'Persuasion check, DC 15']);
   assert.equal(state.scene!.combat, false);
 
   d20(15, 2);
-  await voteAll(code, players, 0, 'a');
+  await voteAll(code, players, 2, 'a');
   state = await view(code, host);
   assert.equal(state.rules!.results.length, 2);
   assert.match(state.rules!.results[0], /^Hero 1: Athletics 15 \+ \d+ = \d+ vs DC 10, success$/);
@@ -108,12 +114,13 @@ test('a tie goes to the choice whose voter rolled higher, whatever the DM says',
   const { code, players, host } = await table(2);
   await start(code, host);
   await settle();
+  await walkTheRoad(code, players);
   d20(4, 17);
-  await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, choiceId: 'b' } });
-  await call(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 0, choiceId: 'c' } });
+  await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 2, choiceId: 'b' } });
+  await call(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 2, choiceId: 'c' } });
   await settle();
   const state = await view(code, host);
-  assert.equal(state.chronicle[0].choiceLabel, 'Parley first');
+  assert.equal(state.chronicle[2].choiceLabel, 'Parley first');
   assert.deepEqual(seen.at(-1)!.resolution!.leaders, ['c']);
   assert.deepEqual(seen.at(-1)!.resolution!.rules!.chosen, 'c');
   assert.equal(seen.at(-1)!.resolution!.rules!.success, true, 'DC 15 Persuasion: the 17 succeeds, and half the party is enough (5.2)');
@@ -121,25 +128,25 @@ test('a tie goes to the choice whose voter rolled higher, whatever the DM says',
 
 test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives XP that goes home with the heroes', async () => {
   const seen: { ctx: DMContext; resolution?: Resolution }[] = [];
-  registerDungeonMaster('chronicler', fightingDM(['rat'], seen));
   const { code, players, host, characters } = await table(2);
   await start(code, host, { sceneCount: 3 });
   await settle();
+  await walkTheRoad(code, players, fightingDM(['rat'], seen));
   assert.equal(seen[0].ctx.rules!.party.length, 2, 'the DM sees the party');
   let state = await view(code, host);
   assert.equal(state.scene!.choices[0].rules, 'Fight: Rat (puny) — low');
 
-  await voteAll(code, players, 0, 'a');
+  await voteAll(code, players, 2, 'a');
   state = await view(code, host);
   assert.equal(seen.at(-1)!.resolution!.rules!.fight, 'started');
   assert.ok(seen.at(-1)!.ctx.rules!.combat, 'the DM sees the fight');
   assert.equal(state.scene!.combat, true);
   assert.match(state.scene!.choices.map((c) => c.label).join(' | '), /^Attack with .+ \| (Attack with|Cast) .+ \| Dodge$/, 'written for the caller’s hero');
   assert.equal(state.rules!.combat!.round, 1);
-  assert.equal(state.sceneCount, 4, 'scene 1 is a round, counted as it is made; the last story scene and the epilogue are still to come');
+  assert.equal(state.sceneCount, 6, 'after the road, scene 3 is a round, counted as it is made; the last story scene and the epilogue are still to come');
   assert.match(state.messages.filter((m) => m.kind === 'system').at(-1)!.text, /^A fight begins: Rat\. Initiative: /);
 
-  let index = 1;
+  let index = 3;
   while (state.scene!.combat) {
     d20(20, 20);
     await voteAll(code, players, index++, 'a');
@@ -254,7 +261,7 @@ test('explore mode rolls each area as the party opens it', async () => {
 
 test('a game from before the engine still plays: no rules, no hooks, no combat', async () => {
   const { code, players, host } = await table(2);
-  await start(code, host);
+  await start(code, host, { sceneCount: 2 }); // and two scenes of road
   await settle();
   await getStore().updateGame(code, {}, { party: null, combat: null, dungeon: null });
   await voteAll(code, players, 0, 'a');
@@ -285,21 +292,23 @@ test('a dead hero stays dead: it cannot start or join an adventure until revived
 });
 
 test('a parley the DM offers: a good word and the goblin lets the party be; a bad one and it attacks', async () => {
-  registerDungeonMaster('chronicler', hookDM({ kind: 'parley', monsters: ['goblin-warrior'] }, 'Talk'));
+  const talker = hookDM({ kind: 'parley', monsters: ['goblin-warrior'] }, 'Talk');
   const calm = await table(1);
   await start(calm.code, calm.host, { sceneCount: 4 });
   await settle();
+  await walkTheRoad(calm.code, calm.players, talker);
   assert.equal((await view(calm.code, calm.host)).scene!.choices[0].rules, 'Parley with Goblin Warrior');
   d20(20);
-  await voteAll(calm.code, calm.players, 0, 'a');
+  await voteAll(calm.code, calm.players, 2, 'a');
   let state = await view(calm.code, calm.host);
   assert.ok(state.rules!.results.includes('The Goblin Warrior let the party be.'), state.rules!.results.join(' | '));
   assert.equal(state.rules!.combat, null);
   const sour = await table(1);
   await start(sour.code, sour.host, { sceneCount: 4 });
   await settle();
+  await walkTheRoad(sour.code, sour.players);
   d20(1);
-  await voteAll(sour.code, sour.players, 0, 'a');
+  await voteAll(sour.code, sour.players, 2, 'a');
   state = await view(sour.code, sour.host);
   assert.ok(state.rules!.results.includes('The talk goes badly: the Goblin Warrior turn hostile.'));
   assert.equal(state.scene!.combat, true, 'the goblin attacks');
@@ -356,9 +365,10 @@ test('at the epilogue the heroes level up by their XP: the table, the DM and the
   const { code, players, host, characters } = await table(2);
   await start(code, host, { sceneCount: 2 });
   await settle();
+  await walkTheRoad(code, players);
   const game = (await getStore().getGame(code))!;
   await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: { ...game.party!.sheets, [host]: { ...game.party!.sheets[host], xp: 300 } } } });
-  await voteAll(code, players, 0, 'b');
+  await voteAll(code, players, 2, 'b');
   const state = await view(code, host);
   assert.equal(state.status, 'ended');
   assert.deepEqual(state.rules!.levelUps, [{ playerId: host, name: 'Hero 1', from: 1, to: 2 }]);

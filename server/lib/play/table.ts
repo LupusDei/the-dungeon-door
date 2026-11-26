@@ -11,11 +11,11 @@ import { longRest } from '../rules/rests.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
 import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } from '../types.ts';
-import { dungeonLevel, startDungeon } from './delve.ts';
+import { dungeonLevel, partyLevel, startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
 import type { DungeonState, LevelUp, PartyState } from './state.ts';
-import { meetOnTheRoad, planTrek } from './trek.ts';
+import { meetOnTheRoad, planTrek, type Trek } from './trek.ts';
 import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState } from './turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
@@ -32,22 +32,36 @@ const sheetOf = ({ character }: GamePlayer): CharacterSheet => upgradeCharacter(
 export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed: number, sceneCount: number): RulesState {
   const sheets = Object.fromEntries(players.map((p) => [p.playerId, unpacked(sheetOf(p))]));
   const levels = Object.values(sheets).filter((s) => !s.dead).map((s) => s.level); // the dungeon starts at the living heroes' level
-  const party: PartyState = { version: 1, rng: seed, sheets };
-  if (mode === 'none') return { party, combat: null, dungeon: null };
-  const dungeon = startDungeon(mode, seed, levels, sceneCount);
-  const met = meetOnTheRoad(party, { ...dungeon, trek: planTrek(seed, levels, dungeonLevel(dungeon)) }); // first, the road from the tavern
-  return { party: met.party, combat: null, dungeon: met.dungeon };
+  const dungeon = mode === 'none' ? null : startDungeon(mode, seed, levels, sceneCount);
+  const trek = dungeon ? planTrek(seed, levels, dungeonLevel(dungeon), 'door') : planTrek(seed, levels, partyLevel(levels), 'tale');
+  const met = meetOnTheRoad({ version: 1, rng: seed, sheets, trek }); // first, the road from the tavern
+  return { party: met.party, combat: null, dungeon };
 }
 
 const openPacks = (party: PartyState): PartyState =>
   (Object.values(party.sheets).some((s) => unpacked(s) !== s) ? { ...party, sheets: Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, unpacked(s)])) } : party);
 
+/** A dungeon as stored before the road moved to the party: the road, and foes met on it, kept in the dungeon. */
+type StoredDungeon = DungeonState & { trek?: Omit<Trek, 'leadsTo' | 'facing'> };
+
+/** The road taken out of a dungeon stored with it, and given to the party, with any foes met on it. */
+function roadToParty(party: PartyState, stored: StoredDungeon): { party: PartyState; dungeon: DungeonState } {
+  const { trek, facing, ...dungeon } = stored;
+  if (!trek) return { party, dungeon: stored };
+  return { party: { ...party, trek: { ...trek, leadsTo: 'door', ...(facing ? { facing } : {}) } }, dungeon };
+}
+
 /**
  * The game's rules state, mended as it is read (and stored back on the next write): the heroes' packs are opened
- * (their torches and rations to hand), and a map from before Phase 3 gets its traps' 5.2 ids.
+ * (their torches and rations to hand), a map from before Phase 3 gets its traps' 5.2 ids, and a road stored in
+ * the dungeon goes to the party.
  */
-export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | null =>
-  party && { party: openPacks(party), combat, dungeon: dungeon && { ...dungeon, map: currentTraps(dungeon.map) } };
+export function rulesStateOf({ party, combat, dungeon }: Game): RulesState | null {
+  if (!party) return null;
+  if (!dungeon) return { party: openPacks(party), combat, dungeon };
+  const moved = roadToParty(openPacks(party), dungeon);
+  return { party: moved.party, combat, dungeon: { ...moved.dungeon, map: currentTraps(moved.dungeon.map) } };
+}
 
 /** A choice with its hook, if it holds up, and the hook's label from where the party is now. */
 export function storedChoice(choice: Choice, hook: unknown, dungeon: DungeonState | null = null): StoredChoice {

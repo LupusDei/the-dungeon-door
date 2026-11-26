@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, test } from 'node:test';
 
 // Offline, in-memory, no app key — whatever the shell has set.
@@ -24,6 +24,8 @@ import * as imageApi from '../api/image.ts';
 import * as portraitApi from '../api/portrait.ts';
 import { call, gamePath, makeCharacter } from './api.fixture.ts';
 import { settle } from './background.ts';
+import { setDice } from './game.ts';
+import { TREK_SCENES } from './play/trek.ts';
 import { fakeDungeonMaster } from './dm/fake.ts';
 import { registerDungeonMaster, unregisterDungeonMaster } from './dm/registry.ts';
 import type { DungeonMaster } from './dm/types.ts';
@@ -47,9 +49,13 @@ async function table(n: number) {
 const view = async (code: string, player: string, since?: number) =>
   (await call<GameState>(gameApi.GET, gamePath(code, undefined, since === undefined ? '' : `&since=${since}`), { player })).body;
 
-beforeEach(() => setStore(new MemoryStore()));
+beforeEach(() => {
+  setStore(new MemoryStore());
+  setDice({ d20: () => randomInt(1, 21), seed: () => 5 }); // a road from the tavern with no one on it: a quiet stretch, then a vendor
+});
 afterEach(async () => {
   await settle();
+  setDice();
   for (const id of ['chronicler', 'trickster', 'grim-warden', 'bard']) unregisterDungeonMaster(id);
   delete process.env.DD_APP_KEY;
 });
@@ -170,7 +176,7 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   const started = await call<GameState>(startApi.POST, gamePath(code, 'start'), { player: host, body: { sceneCount: 3 } });
   assert.equal(started.status, 200);
   assert.equal(started.body.status, 'preparing');
-  assert.equal(started.body.sceneCount, 3);
+  assert.equal(started.body.sceneCount, 3 + TREK_SCENES, 'the road from the tavern, then the tale');
   assert.equal((await call(startApi.POST, gamePath(code, 'start'), { player: host, body: {} })).status, 409);
   assert.equal((await call(dmApi.POST, gamePath(code, 'dungeon-master'), { player: host, body: { dungeonMaster: 'bard' } })).status, 409);
   await settle();
@@ -238,16 +244,20 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.equal(state.status, 'resolving');
   await settle();
 
-  // sceneCount 3: scenes 0 and 1 had choices, scene 2 is the epilogue
+  // sceneCount 3 after the two stretches of road: scenes 0–3 have choices, scene 4 is the epilogue
+  for (const sceneIndex of [2, 3]) {
+    for (const player of players) await call(voteApi.POST, gamePath(code, 'vote'), { player, body: { sceneIndex, choiceId: 'a' } });
+    await settle();
+  }
   state = await view(code, p3);
   assert.equal(state.status, 'ended');
-  assert.equal(state.scene?.index, 2);
+  assert.equal(state.scene?.index, 4);
   assert.equal(state.scene?.isFinale, true);
   assert.deepEqual(state.scene?.choices, []);
   assert.ok(state.scene?.imageUrl);
-  assert.equal(state.chronicle.length, 2);
+  assert.equal(state.chronicle.length, 4);
   assert.equal(state.chronicle[1].choiceLabel, 'Parley first');
-  assert.equal((await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 2, choiceId: 'a' } })).status, 409);
+  assert.equal((await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 4, choiceId: 'a' } })).status, 409);
   assert.equal((await call(advanceApi.POST, gamePath(code, 'advance'), { player: host })).status, 409);
 });
 
@@ -283,7 +293,7 @@ test('leave: the earliest remaining player becomes host; leaving can complete a 
   await call(leaveApi.POST, gamePath(code, 'leave'), { player: players[2], body: {} });
   await settle();
   state = await view(code, players[1]);
-  assert.equal(state.status, 'ended', 'sceneCount 2: opening + finale');
+  assert.deepEqual([state.status, state.scene?.index, state.chronicle.length], ['voting', 1, 1], 'the vote completed: the scene resolved');
 });
 
 test('concurrent votes resolve the scene exactly once', async () => {

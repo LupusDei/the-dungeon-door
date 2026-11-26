@@ -297,7 +297,8 @@ test('with a friend dying, a healer is told Cast will heal them, and the engine 
 
   const now = (await getStore().getGame(code))!;
   const fallen = { ...now.combat!.combatants[players[1]], hp: 0, status: 'dying' as const };
-  await getStore().updateGame(code, {}, { combat: { ...now.combat!, combatants: { ...now.combat!.combatants, [players[1]]: fallen } } });
+  const order = [players[0], ...now.combat!.order.filter((id) => id !== players[0])]; // the healer acts first, before the dying friend's death save
+  await getStore().updateGame(code, {}, { combat: { ...now.combat!, order, turn: 0, combatants: { ...now.combat!.combatants, [players[1]]: fallen } } });
   const mine = (await view(code, players[0])).scene!;
   assert.equal(mine.choices[1].label, 'Cast Cure Wounds');
   assert.match(mine.choices[1].detail, /^Heals Hero 2, who is dying: 2d8[+-]\d+ hit points\. Uses a level 1 slot \(\d left\)\.$/);
