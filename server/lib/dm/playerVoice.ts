@@ -25,6 +25,30 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').replace(/^[\s"'
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * Lines the narrator must answer and must not rewrite: a scene's roleplay (from POST /speak and a
+ * written action) plus in-character chat. Out-of-character chat (`voice: "out"`) is table talk and
+ * is left out. A chat line with no voice yet counts as in character, the same as the stored default.
+ */
+export function keptWords(
+  roleplay: { characterName: string; text: string }[],
+  chat: { characterName: string | null; kind?: string; text: string; voice?: 'in' | 'out' | null }[],
+): { characterName: string; text: string }[] {
+  const fromChat = chat.flatMap((line) => {
+    if ((line.kind ?? 'chat') !== 'chat' || line.voice === 'out' || !line.characterName) return [];
+    return [{ characterName: line.characterName, text: line.text }];
+  });
+  const seen = new Set<string>();
+  const lines: { characterName: string; text: string }[] = [];
+  for (const line of [...roleplay, ...fromChat]) {
+    const key = `${line.characterName}\n${line.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(line);
+  }
+  return lines;
+}
+
 /** What the players said and did this turn, in their own words, for the narrator to answer. */
 export function roleplayBlock(lines: { characterName: string; text: string }[]): string {
   if (!lines.length) return '';

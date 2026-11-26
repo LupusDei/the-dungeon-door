@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { archetype } from '../catalog.ts';
 import { dmInstructions, storyPrompt } from './llm.ts';
-import { hasStolenHeroSpeech, PLAYER_VOICE, roleplayBlock, stripHeroSpeech, type HeroLine } from './playerVoice.ts';
+import { hasStolenHeroSpeech, keptWords, PLAYER_VOICE, roleplayBlock, stripHeroSpeech, type HeroLine } from './playerVoice.ts';
 import type { DMContext, Resolution } from './types.ts';
 
 const heroes = ['Bryn', 'Cleo'];
@@ -27,7 +27,9 @@ test('in-character lines are handed to the narrator to answer', () => {
   const ctx: DMContext = {
     archetype: archetype('chronicler'), adventureTitle: 'The Hiccuping Staff',
     party: [{ playerId: 'p', name: 'Bryn', race: 'Dwarf', characterClass: 'Fighter', gender: 'Female', temperament: 'Stoic', alignment: 'Neutral Good', backstory: '', description: '', appearance: 'a dwarf' }],
-    history: [], sceneIndex: 1, sceneCount: 4, recentChat: [{ characterName: 'Bryn', kind: 'chat', text: 'ooc: I hope there is pie' }], rules: null,
+    history: [], sceneIndex: 1, sceneCount: 4,
+    recentChat: [{ characterName: 'Bryn', kind: 'chat', text: 'ooc: I hope there is pie', voice: 'out' }],
+    rules: null,
   };
   const resolution: Resolution = {
     scene: {
@@ -40,7 +42,29 @@ test('in-character lines are handed to the narrator to answer', () => {
   assert.match(prompt, /IN CHARACTER/);
   assert.match(prompt, /Bryn: We come in peace\./);
   assert.match(prompt, /RECENT TABLE TALK/);
+  assert.match(prompt.split('RECENT TABLE TALK')[1] ?? '', /pie/);
   assert.equal(roleplayBlock([]), '');
+});
+
+test('in-character chat is player voice: the narrator must keep it, and out-of-character chat is not', () => {
+  const ctx: DMContext = {
+    archetype: archetype('chronicler'), adventureTitle: null, party: [], history: [], sceneIndex: 0, sceneCount: 4,
+    recentChat: [
+      { characterName: 'Bryn', kind: 'chat', text: 'We come in peace.', voice: 'in' },
+      { characterName: 'Bryn', kind: 'chat', text: 'ooc: I hope there is pie', voice: 'out' },
+      { characterName: 'Mara', kind: 'dm', text: 'The door hums.', voice: null },
+    ],
+    rules: null,
+  };
+  const prompt = storyPrompt(ctx);
+  const [beforeTalk, table] = prompt.split('RECENT TABLE TALK');
+  assert.match(beforeTalk, /IN CHARACTER/);
+  assert.match(beforeTalk, /Bryn: We come in peace\./);
+  assert.doesNotMatch(beforeTalk, /I hope there is pie/);
+  assert.match(table, /I hope there is pie/);
+  assert.match(table, /The door hums/);
+  assert.doesNotMatch(table, /We come in peace/);
+  assert.deepEqual(keptWords([], ctx.recentChat), [{ characterName: 'Bryn', text: 'We come in peace.' }]);
 });
 
 test('quoted speech a hero did not write is dropped, and the world stays', () => {

@@ -1112,12 +1112,84 @@ extension ChronicleEntry {
 
 struct Message: Codable, Hashable, Identifiable {
     enum Kind: String, Codable { case chat, system, dm }
+
+    /// The line this one answers, kept on the message so the quote survives a poll.
+    struct Quote: Codable, Hashable {
+        let id: Int
+        let kind: Message.Kind
+        let playerId: String?
+        let characterName: String?
+        let text: String
+        var voice: String? = nil
+    }
+
+    /// `@Name` is the hero. `@player:Name` is the person who plays them.
+    struct Mention: Codable, Hashable {
+        let playerId: String
+        let name: String
+        /// "hero" or "player".
+        let target: String
+    }
+
+    /// One emoji on a line. `count` matches `playerIds`. Tap again to leave it.
+    struct Reaction: Codable, Hashable, Identifiable {
+        let emoji: String
+        let count: Int
+        let playerIds: [String]
+        var id: String { emoji }
+    }
+
     let id: Int
     let kind: Kind
     let playerId: String?
     let characterName: String?
     let text: String
     let createdAt: String
+    /// "in" the hero speaks, "out" the player does. Nil on system and dm lines, and on a server
+    /// from before the flag: those chat lines were the hero.
+    var voice: String? = nil
+    var replyTo: Int? = nil
+    var reply: Quote? = nil
+    var mentions: [Mention] = []
+    var reactions: [Reaction] = []
+
+    var inCharacter: Bool { kind == .chat && voice != "out" }
+}
+
+extension Message {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        kind = try c.decode(Kind.self, forKey: .kind)
+        playerId = try c.decodeIfPresent(String.self, forKey: .playerId)
+        characterName = try c.decodeIfPresent(String.self, forKey: .characterName)
+        text = try c.value(.text, or: "")
+        createdAt = try c.value(.createdAt, or: "")
+        voice = try c.decodeIfPresent(String.self, forKey: .voice)
+        replyTo = try c.decodeIfPresent(Int.self, forKey: .replyTo)
+        reply = try c.decodeIfPresent(Quote.self, forKey: .reply)
+        mentions = try c.value(.mentions, or: [])
+        reactions = try c.value(.reactions, or: [])
+    }
+}
+
+extension Message.Quote {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        kind = try c.decode(Message.Kind.self, forKey: .kind)
+        playerId = try c.decodeIfPresent(String.self, forKey: .playerId)
+        characterName = try c.decodeIfPresent(String.self, forKey: .characterName)
+        text = try c.value(.text, or: "")
+        voice = try c.decodeIfPresent(String.self, forKey: .voice)
+    }
+}
+
+/// Someone composing a line. The name is their hero's, so the table knows who.
+struct TypingNotice: Codable, Hashable, Identifiable {
+    let playerId: String
+    let name: String
+    var id: String { playerId }
 }
 
 struct GameState: Codable, Hashable {
@@ -1132,6 +1204,10 @@ struct GameState: Codable, Hashable {
     let scene: GameScene?
     var chronicle: [ChronicleEntry]?
     let messages: [Message]
+    /// Lines already in the log whose reactions changed. Empty on a server from before reactions.
+    var messageUpdates: [Message] = []
+    /// Heroes whose players are writing, other than the caller.
+    var typing: [TypingNotice] = []
     /// The rules engine's numbers; nil for a game from before it, and on a server without one.
     let rules: RulesView?
     let updatedAt: String
@@ -1154,6 +1230,8 @@ extension GameState {
         scene = try c.decodeIfPresent(GameScene.self, forKey: .scene)
         chronicle = try c.decodeIfPresent([ChronicleEntry].self, forKey: .chronicle)
         messages = try c.value(.messages, or: [])
+        messageUpdates = try c.value(.messageUpdates, or: [])
+        typing = try c.value(.typing, or: [])
         rules = try c.decodeIfPresent(RulesView.self, forKey: .rules)
         updatedAt = try c.value(.updatedAt, or: "")
     }

@@ -3,5 +3,6 @@
  :step-namespaces [gherclj.toughness-steps
                    gherclj.legal-steps
                    gherclj.freeform-steps
-                   gherclj.player-voice-steps]
+                   gherclj.player-voice-steps
+                   gherclj.party-chat-steps]
  :framework :typescript/node-test}
