@@ -6,6 +6,7 @@
 import { upgradeCharacter } from '../characters.ts';
 import type { Resolution } from '../dm/types.ts';
 import { badRequest } from '../http.ts';
+import { unpacked } from '../rules/inventory.ts';
 import { longRest } from '../rules/rests.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
@@ -27,7 +28,7 @@ export function dungeonMode(value: unknown): DungeonMode {
 const sheetOf = ({ character }: GamePlayer): CharacterSheet => upgradeCharacter(character).sheet;
 
 export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed: number, sceneCount: number): RulesState {
-  const sheets = Object.fromEntries(players.map((p) => [p.playerId, sheetOf(p)]));
+  const sheets = Object.fromEntries(players.map((p) => [p.playerId, unpacked(sheetOf(p))]));
   const levels = Object.values(sheets).map((s) => s.level);
   return {
     party: { version: 1, rng: seed, sheets },
@@ -36,9 +37,15 @@ export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed
   };
 }
 
-/** The game's rules state; a map from before Phase 3 gets its traps' 5.2 ids (stored back on the next write). */
+const openPacks = (party: PartyState): PartyState =>
+  (Object.values(party.sheets).some((s) => unpacked(s) !== s) ? { ...party, sheets: Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, unpacked(s)])) } : party);
+
+/**
+ * The game's rules state, mended as it is read (and stored back on the next write): the heroes' packs are opened
+ * (their torches and rations to hand), and a map from before Phase 3 gets its traps' 5.2 ids.
+ */
 export const rulesStateOf = ({ party, combat, dungeon }: Game): RulesState | null =>
-  party && { party, combat, dungeon: dungeon && { ...dungeon, map: currentTraps(dungeon.map) } };
+  party && { party: openPacks(party), combat, dungeon: dungeon && { ...dungeon, map: currentTraps(dungeon.map) } };
 
 export const storedChoice = (choice: Choice, hook: unknown): StoredChoice => ({ ...choice, hook: parseHook(hook) });
 

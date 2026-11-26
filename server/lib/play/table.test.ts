@@ -37,6 +37,10 @@ test('a game from before the engine has no rules state', () => {
   const old = { ...map, nodes: { ...map.nodes, [room.id]: { ...room, contents: { ...room.contents!, trap: 'pits' } } } };
   const dungeon = { version: 1, map: old, at: map.entrance, visited: [], cleared: [] };
   assert.equal(rulesStateOf({ party, combat: null, dungeon } as unknown as Game)!.dungeon!.map.nodes[room.id].contents!.trap, 'hidden-pit', 'a 5.1 trap id read as its 5.2 one');
+  const packed = { ...party, sheets: { ...party.sheets, p9: { ...heroSheet({ id: 'x', name: 'Ann', race: 'human', characterClass: 'fighter' }), equipment: [{ id: 'dungeoneer-pack', name: 'Pack', count: 1 }] } } };
+  const read = rulesStateOf({ party: packed, combat: null, dungeon: null } as unknown as Game)!.party;
+  assert.equal(read.sheets.p9.equipment.some((e) => e.id === 'torch'), true, 'packs opened as the game is read');
+  assert.deepEqual(Object.keys(read.sheets), Object.keys(packed.sheets));
 });
 
 test('a choice keeps a hook that holds up and shows it as a label; a bad hook or none is pure story', () => {

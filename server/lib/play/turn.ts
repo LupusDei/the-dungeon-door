@@ -220,7 +220,10 @@ export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonl
 
 function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[]): RulesTurn {
   if (s.combat) return wander(elapse(combatRound(s, s.combat, ballots), ROUND_SECONDS), ROUND_SECONDS);
-  const played = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(s, hook, ballots) : done(s);
+  const lit = lightUp(s.party, ambientLight(s)); // a light is lit before anything is tried in the dark
+  const ready = { ...s, party: lit.party };
+  const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(ready, hook, ballots) : done(ready);
+  const played = { ...hooked, lines: [...lit.lines, ...hooked.lines] };
   if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' ? 0 : secondsFor(hook), true);
   return wander(elapse(played, secondsFor(hook)), secondsFor(hook));
 }

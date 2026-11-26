@@ -271,3 +271,30 @@ test('a dead hero goes to the temple between adventures, comes back with 1 HP an
   const [lazarus] = (await view(game.body.code, player)).rules!.party;
   assert.deepEqual([lazarus.dead, lazarus.hp], [false, 1], 'back from the dead, still weak');
 });
+
+test('phase 4 in play: the clock, the torch from the pack, a web that holds, Break Free, and what the DM is told', async () => {
+  const seen: { ctx: DMContext; resolution?: Resolution }[] = [];
+  registerDungeonMaster('chronicler', fightingDM(['giant-spider'], seen));
+  const { code, players, host } = await table(1);
+  await start(code, host, { sceneCount: 3, dungeon: 'fixed' });
+  await settle();
+  await voteAll(code, players, 0, 'a');
+  let state = await view(code, host);
+  assert.deepEqual(state.rules!.time, { seconds: 0, label: 'Day 1, 08:00' }, 'a fight takes no time to start');
+  assert.equal(state.rules!.results[0], 'Hero 1 lights a Torch (1 hour).', 'from the opened Dungeoneer\u2019s Pack, before the fight');
+  assert.deepEqual([state.rules!.light.level, state.rules!.light.source!.holder], ['bright', 'Hero 1']);
+  assert.equal(state.rules!.party[0].sight, 'clear');
+  assert.ok(state.rules!.party[0].inventory.some((i) => i.id === 'rations'), 'the pack is opened');
+  assert.equal(state.rules!.party[0].inventory.some((i) => i.id === 'dungeoneer-pack'), false);
+  await voteAll(code, players, 1, 'a');
+  state = await view(code, host);
+  assert.ok(state.rules!.results.includes('Giant Spider uses Web (DC 13 DEX save): Hero 1 fails, Restrained.'), state.rules!.results.join(' | '));
+  assert.deepEqual(state.rules!.party[0].conditions, [{ condition: 'restrained', ends: 'DC 13 Athletics to break free' }]);
+  assert.equal(state.scene!.choices[2].label, 'Break Free', 'the third choice, for the held hero');
+  assert.equal(seen.at(-1)!.ctx.rules!.party[0].conditions, 'restrained (DC 13 Athletics to break free)', 'the DM is told');
+  assert.equal(state.rules!.time.seconds, 6, 'a round is 6 seconds');
+  d20(20);
+  await voteAll(code, players, 2, 'c');
+  state = await view(code, host);
+  assert.ok(state.rules!.results.some((l) => /^Hero 1 (breaks free|strains against being Restrained)/.test(l)), state.rules!.results.join(' | '));
+});

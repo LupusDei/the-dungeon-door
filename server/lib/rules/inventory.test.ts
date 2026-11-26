@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { addItem, buy, load, removeItem, sell, useItem } from './inventory.ts';
+import { addItem, buy, held, load, removeItem, sell, unpacked, useItem } from './inventory.ts';
 import { scriptedRng } from './rng.ts';
 import { SAMPLE } from './sheet.fixture.ts';
 
@@ -62,4 +62,25 @@ test('the limits are inclusive: exactly at capacity is not dragging, exactly at 
 test('the price is the cost times the count, and exactly enough coin is enough', () => {
   assert.throws(() => buy(bryn, 'battleaxe', 11), /cannot afford Battleaxe \(110 GP\)/);
   assert.equal(buy(bryn, 'battleaxe', 10).gp, 0);
+});
+
+test('a pack is opened: its contents stacked in its place, with what the hero already had; no pack, the same sheet', () => {
+  const packed = { ...SAMPLE, equipment: [{ id: 'torch', name: 'Torch', count: 2 }, { id: 'dungeoneer-pack', name: 'Dungeoneer\u2019s Pack', count: 1 }] };
+  const opened = unpacked(packed);
+  assert.equal(held(opened, 'dungeoneer-pack'), 0);
+  assert.equal(held(opened, 'torch'), 12, 'two plus the pack\u2019s ten');
+  assert.deepEqual(['rations', 'waterskin', 'oil', 'crowbar'].map((id) => held(opened, id)), [10, 1, 2, 1]);
+  assert.equal(opened.equipment.find((e) => e.id === 'rations')!.name, 'Rations');
+  const two = unpacked({ ...SAMPLE, equipment: [{ id: 'explorers-pack', name: 'Explorer\u2019s Pack', count: 2 }] });
+  assert.equal(held(two, 'rations'), 20, 'two packs, twice the contents');
+  const plain = { ...SAMPLE, equipment: [{ id: 'torch', name: 'Torch', count: 2 }] };
+  assert.equal(unpacked(plain), plain);
+});
+
+test('a pack added comes opened', () => {
+  const bare = { ...SAMPLE, equipment: [] };
+  const got = addItem(bare, 'dungeoneer-pack');
+  assert.equal(held(got, 'dungeoneer-pack'), 0);
+  assert.equal(held(got, 'torch'), 10);
+  assert.equal(held(addItem(bare, 'dungeoneer-pack', 2), 'torch'), 20);
 });

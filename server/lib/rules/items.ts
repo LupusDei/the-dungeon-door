@@ -28,6 +28,8 @@ export interface ItemInfo {
   ability?: Ability;
   /** Magic items. */
   rarity?: string;
+  /** Packs: what is inside, opened when a hero gets one (inventory.ts). */
+  contents?: { id: string; count: number }[];
 }
 
 /** HP regained, by potion (5.2 Potions of Healing). */
@@ -46,7 +48,7 @@ const priced = { index: z.string(), name: z.string(), cost, weight: z.number().d
 const plain = (kind: ItemKind) => z.object(priced).transform((i): ItemInfo => ({ id: i.index, name: i.name, kind, cost: i.cost, weight: i.weight, consumable: false }));
 const tool = z.object({ ...priced, ability: z.object({ index: z.enum(ABILITIES) }) })
   .transform((i): ItemInfo => ({ id: i.index, name: i.name, kind: 'tool', cost: i.cost, weight: i.weight, consumable: false, ability: i.ability.index }));
-const pack = z.object({ index: z.string(), name: z.string(), cost });
+const pack = z.object({ index: z.string(), name: z.string(), cost, contents: z.array(z.object({ item: z.object({ index: z.string() }), quantity: z.number() })) });
 /** Pack weights from the SRD 5.2 Adventuring Gear table (the JSON's are missing or wrong for some packs). */
 const PACK_WEIGHTS: Readonly<Record<string, number>> = {
   'burglars-pack': 42, 'diplomat-pack': 39, 'dungeoneer-pack': 55, 'entertainers-pack': 58.5,
@@ -85,7 +87,7 @@ const loaded = once((): Map<string, ItemInfo> => {
   add(parseTable('tools', tool, toolsJson));
   add(parseTable('equipmentPacks', pack, packsJson).map((p) => ({
     id: p.index, name: p.name, kind: 'pack' as const, cost: p.cost, consumable: false,
-    weight: PACK_WEIGHTS[p.index],
+    weight: PACK_WEIGHTS[p.index], contents: p.contents.map((c) => ({ id: c.item.index, count: c.quantity })),
   })));
   add(POTIONS);
   add(parseTable('magicItems', magic, magicItemsJson));

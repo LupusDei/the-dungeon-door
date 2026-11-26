@@ -31,7 +31,25 @@ export function held(sheet: CharacterSheet, id: string): number {
   return found ? found.count : 0;
 }
 
+const contentsOf = (id: string) => items().get(id)?.contents;
+
+/** Its packs opened: each pack's contents stacked in its place (5.2 Equipment Packs); the same sheet without any. */
+export function unpacked(sheet: CharacterSheet): CharacterSheet {
+  if (!sheet.equipment.some((e) => contentsOf(e.id))) return sheet;
+  const stacked = new Map<string, { id: string; name: string; count: number }>();
+  const put = (id: string, name: string, count: number) => stacked.set(id, { id, name, count: (stacked.get(id)?.count ?? 0) + count });
+  for (const e of sheet.equipment) {
+    const inside = contentsOf(e.id);
+    if (!inside) put(e.id, e.name, e.count);
+    else for (const c of inside) put(c.id, item(c.id).name, c.count * e.count);
+  }
+  return { ...sheet, equipment: [...stacked.values()] };
+}
+
+/** Adds items; a pack comes opened (its contents). Refused past the drag limit. */
 export function addItem(sheet: CharacterSheet, id: string, count = 1): CharacterSheet {
+  const inside = contentsOf(id);
+  if (inside) return inside.reduce((s, c) => addItem(s, c.id, c.count * count), sheet);
   const { name } = item(id);
   const has = held(sheet, id);
   const equipment = has

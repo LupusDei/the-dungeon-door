@@ -31,7 +31,10 @@ test('time passes with every turn: a dark place is lit, the light burns, a rest 
   const torch = addItem({ ...fighter, equipment: [] }, 'torch', 2);
   const dungeon = startDungeon('fixed', 7, [1], 6);
   const into = playTurn(state({ party: party({ p1: torch }), dungeon }), { kind: 'move', exit: dungeon.map.nodes.r0.exits[0].id }, ballots(10, 10));
-  assert.equal(into.lines[1], 'Bryn lights a Torch (1 hour).', 'lit on the way in, before anything springs');
+  assert.equal(into.lines[0], 'Bryn lights a Torch (1 hour).', 'lit in the dim entrance before setting out');
+  const dark = playTurn(state({ party: party({ p1: torch }), dungeon }), { kind: 'fight', monsters: ['goblin-warrior'] }, ballots(10, 10));
+  assert.deepEqual(dark.lines.slice(0, 1), ['Bryn lights a Torch (1 hour).'], 'before the fight begins');
+  assert.equal(dark.lines.some((l) => l.includes('cannot see')), false, 'so nobody fights Blinded');
   assert.equal(into.party.clock, 600);
   const rested = playTurn({ ...into, combat: null }, { kind: 'rest', rest: 'long' }, []);
   assert.deepEqual([rested.party.clock, rested.party.lit?.left], [600 + 8 * 3600, into.party.lit?.left]);
