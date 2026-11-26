@@ -5,7 +5,7 @@ import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
-import { autoLevelUp, bestSpell, caught, fightRound, heroAction, improvement, MAX_ROUNDS, spellScore, startFight } from './fight.ts';
+import { autoLevelUp, bestSpell, caught, fightRound, healingSpell, heroAction, improvement, MAX_ROUNDS, spellScore, startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
@@ -396,4 +396,31 @@ test('an area spell catches the foes it can hurt first, the most wounded of them
   assert.deepEqual(caught(hurt, 'party', 2, 'fire'), ['foe-3', 'foe-2']);
   assert.deepEqual(caught(hurt, 'party', 3, 'fire'), ['foe-3', 'foe-2', 'foe-1']);
   assert.deepEqual(caught(hurt, 'party', 2, 'cold'), ['foe-1', 'foe-3']);
+});
+
+test('Cast with a dying friend: a healer casts its healing spell on them (a slot spent); without one, or none dying, the best attack spell', () => {
+  const healer = caster(['fire-bolt'], ['cure-wounds', 'guiding-bolt']);
+  const { combat } = startFight(party(), ['goblin-warrior']);
+  const down = patch(combat, { p1: { hp: 0, status: 'dying' } });
+  const { action, sheet } = heroAction(down, healer, 'p2', 'b', 12);
+  assert.deepEqual(action.kind === 'spell' && [action.cast.spellId, action.targets], ['cure-wounds', ['p1']]);
+  assert.equal(sheet.spellcasting!.expended[0], 1);
+  assert.equal(healingSpell(caster([], ['cure-wounds'], [4, 2, 0, 0, 0, 0, 0, 0, 0])), null, 'no slot left');
+  assert.equal(healingSpell(caster([], ['cure-wounds'], [4, 0, 0, 0, 0, 0, 0, 0, 0]))!.id, 'cure-wounds', 'upcast with a 2nd-level slot');
+  assert.equal(healingSpell(fighter), null);
+  assert.equal(healingSpell(caster(['fire-bolt'], ['guiding-bolt'])), null);
+  const attack = heroAction(combat, healer, 'p2', 'b', 12).action;
+  assert.deepEqual(attack.kind === 'spell' && attack.cast.spellId, 'guiding-bolt', 'no one dying: attack');
+  assert.equal(heroAction(down, healer, 'p2', 'a', 12).action.kind, 'attack', 'Attack still attacks');
+});
+
+test('the healed friend is back up and the round tells it', () => {
+  const healer = caster(['fire-bolt'], ['cure-wounds']);
+  const p = party({ p1: fighter, p2: healer });
+  const { combat } = startFight(p, ['goblin-warrior']);
+  const p2First = { ...patch(combat, { p1: { hp: 0, status: 'dying', conditions: ['unconscious'] }, 'foe-1': { attacks: harmless } }), order: ['p2', 'foe-1', 'p1'], turn: 0 };
+  const round = fightRound(p, p2First, { p2: { choiceId: 'b', roll: 10 } });
+  assert.equal(round.combat.combatants.p1.status, 'up');
+  assert.ok(round.combat.combatants.p1.hp > 0);
+  assert.ok(round.lines.some((l) => /^Cleo casts Cure Wounds: Bryn regains \d+ HP\.$/.test(l)), round.lines.join('\n'));
 });

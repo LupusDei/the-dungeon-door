@@ -33,7 +33,7 @@ import type { PartyState } from './state.ts';
 export const MAX_ROUNDS = 10;
 export const COMBAT_CHOICES = [
   { label: 'Attack', detail: 'Strike the most wounded foe with your best weapon.' },
-  { label: 'Cast', detail: 'Hurl your best attack spell at the most wounded foe; an area spell catches several (or strike, if you have none).' },
+  { label: 'Cast', detail: 'Hurl your best attack spell at the most wounded foe; an area spell catches several (or strike, if you have none). With a friend dying, a healer heals them instead.' },
   { label: 'Dodge', detail: 'Keep your guard up: attacks against you have disadvantage until your next turn. (Held fast, you try to break free instead; beside a dying friend, you help them.)' },
 ];
 
@@ -109,15 +109,38 @@ function attackAction(combat: CombatState, me: Combatant, sheet: CharacterSheet,
   return { kind: 'attack', attack, target: mostWounded(combat, me.side, weaponType(me)).id, natural, ...(extra ? { then: Array<string>(extra).fill(attack) } : {}) };
 }
 
-/** What a hero does on its turn for its vote. A spell spends its slot on the returned sheet. */
+/** The first healing spell the hero has prepared and a slot to cast. */
+export function healingSpell(sheet: CharacterSheet): SrdSpell | null {
+  if (!sheet.spellcasting) return null;
+  const left = slotsLeft(sheet);
+  const healing = sheet.spellcasting.prepared.map((id) => srd().spells.get(id)!).filter((s) => s.healing);
+  return healing.find((s) => left.slice(s.level - 1).some((n) => n > 0)) ?? null;
+}
+
+function casterOf(sheet: CharacterSheet) {
+  const { saveDc, attackBonus } = sheet.spellcasting!;
+  return { saveDc, attackBonus, modifier: attackBonus - sheet.proficiencyBonus };
+}
+
+/** Cast with a friend dying: the healer's healing spell on them; null if no one is dying or it has none to cast. */
+function healAction(combat: CombatState, sheet: CharacterSheet, me: Combatant, natural: number): { action: Action; sheet: CharacterSheet } | null {
+  const dying = Object.values(combat.combatants).find((c) => c.side === me.side && c.status === 'dying');
+  const spell = dying ? healingSpell(sheet) : null;
+  if (!spell) return null;
+  const { sheet: spent, cast } = castSpell(sheet, spell.id);
+  return { action: { kind: 'spell', caster: casterOf(sheet), cast, targets: [dying!.id], natural }, sheet: spent };
+}
+
+/** What a hero does on its turn for its vote. A spell spends its slot on the returned sheet. Cast heals a dying friend first. */
 export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId: string, choiceId: ChoiceId, natural: number): { action: Action; sheet: CharacterSheet } {
   const me = combat.combatants[playerId];
   if (choiceId === 'c') return { action: { kind: 'dodge' }, sheet };
+  const healed = choiceId === 'b' ? healAction(combat, sheet, me, natural) : null;
+  if (healed) return healed;
   const spell = choiceId === 'b' ? bestSpell(sheet) : null;
   if (!spell) return { action: attackAction(combat, me, sheet, natural), sheet };
   const { sheet: spent, cast } = castSpell(sheet, spell.id);
-  const { saveDc, attackBonus } = sheet.spellcasting!;
-  const caster = { saveDc, attackBonus, modifier: attackBonus - sheet.proficiencyBonus };
+  const caster = casterOf(sheet);
   const type = spell.damage!.type;
   const targets = spell.area ? caught(combat, me.side, areaCatch(spell.area), type) : Array<string>(cast.beams).fill(mostWounded(combat, me.side, type).id);
   return { action: { kind: 'spell', caster, cast, targets, natural }, sheet: spent };
@@ -149,7 +172,7 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
     (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.') + (rider ? ` ${riderLine(rider, name(r.target))}` : ''),
   spell: ({ actor, spellId, outcomes }, name) =>
     `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) =>
-      `${name(o.target)} ${o.attack ? (o.attack.hit ? 'is hit' : 'is missed') : o.save!.success ? 'saves' : 'fails the save'}` +
+      (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${o.attack ? (o.attack.hit ? 'is hit' : 'is missed') : o.save!.success ? 'saves' : 'fails the save'}`) +
       (o.damage > 0 ? `, ${o.damage} damage` : '')).join('; ') + '.',
   dodge: ({ actor }, name) => `${name(actor)} dodges.`,
   other: ({ text }) => text,
