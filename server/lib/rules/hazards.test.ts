@@ -13,6 +13,7 @@ test('falling: 1d6 Bludgeoning per 10 feet, at most 20d6, and the hero lands Pro
   assert.equal(sufferHazard(scriptedRng(Array(20).fill(1)), { ...bryn, hp: 30, maxHp: 30 }, { kind: 'falling', feet: 500 }).sheet.hp, 10);
   assert.deepEqual(sufferHazard(scriptedRng([]), bryn, { kind: 'falling', feet: 5 }), { sheet: bryn, line: 'Bryn drops 5 feet, unhurt' });
   assert.equal(sufferHazard(scriptedRng([6, 6]), { ...bryn, hp: 4 }, { kind: 'falling', feet: 20 }).sheet.hp, 0);
+  assert.equal(sufferHazard(scriptedRng(Array(20).fill(6)), bryn, { kind: 'falling', feet: 200 }).sheet.dead, true, 'massive damage');
 });
 
 test('burning: 1d4 Fire, then the hero drops Prone and rolls to put it out', () => {

@@ -8,10 +8,10 @@
  */
 import { passiveScore } from '../rules/checks.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
+import { damageHero } from '../rules/dying.ts';
 import { type HazardSpec, sufferHazard } from '../rules/hazards.ts';
 import type { Rng } from '../rules/rng.ts';
 import { seededRng } from '../rules/rng.ts';
-import type { CharacterSheet } from '../rules/sheet.ts';
 import { type DamagePart, type Trap, isTrap, trapAt } from '../rules/traps.ts';
 import { groupRoll, type Hero } from './checks.ts';
 import { ABILITY_NAMES, titleCase } from './hooks.ts';
@@ -48,7 +48,6 @@ function rollDamage(rng: Rng, parts: readonly DamagePart[]): { total: number; te
   return { total: rolled.reduce((sum, r) => sum + r.total, 0), text: `Damage ${rolled.map((r) => r.text).join(' + ')}` };
 }
 
-const hurt = (sheet: CharacterSheet, damage: number): CharacterSheet => ({ ...sheet, hp: Math.max(0, sheet.hp - damage) });
 
 interface Taking { hero: Hero; share: number }
 
@@ -59,7 +58,7 @@ function damageAll(rng: Rng, trap: Trap, taking: readonly Taking[]): { heroes: H
   const damage = rollDamage(rng, trap.damage);
   const taken = (t: Taking) => Math.floor(damage.total * t.share);
   return {
-    heroes: taking.map((t) => ({ ...t.hero, sheet: hurt(t.hero.sheet, taken(t)) })),
+    heroes: taking.map((t) => ({ ...t.hero, sheet: damageHero(t.hero.sheet, taken(t)) })),
     lines: [`${damage.text}: ${hit.map((t) => `${t.hero.sheet.name} takes ${taken(t)}`).join(', ')}`],
   };
 }

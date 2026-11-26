@@ -57,6 +57,11 @@ test('exhaustion costs 2 a level on saves too; a hero at 1 HP still rolls; 1 dam
   assert.equal(result.lines[1], 'Damage 1: Bryn takes 1');
 });
 
+test('a save\'s damage can kill outright (massive damage)', () => {
+  const r = groupRoll([bryn], { kind: 'save', ability: 'dex', dc: 30, damage: '1d1+30' }, { p1: 1 }, scriptedRng([1]));
+  assert.deepEqual([r.sheets[0].sheet.hp, r.sheets[0].sheet.dead], [0, true]);
+});
+
 test('a skill bonus is used even when it is 0', () => {
   const plain = { ...bryn, sheet: { ...SAMPLE, skillBonuses: { athletics: 0 } } };
   assert.equal(groupRoll([plain], { kind: 'check', ability: 'str', skill: 'athletics', dc: 10 }, { p1: 10 }, scriptedRng([])).rolls[0].bonus, 0);

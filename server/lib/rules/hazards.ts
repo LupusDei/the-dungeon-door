@@ -5,6 +5,7 @@
  */
 import { abilityModifier } from './abilities.ts';
 import { parseDice, rollDice } from './dice.ts';
+import { damageHero } from './dying.ts';
 import { exhaustionEffects, gainExhaustion } from './rests.ts';
 import { rollD20 } from './resolve.ts';
 import type { Rng } from './rng.ts';
@@ -26,7 +27,6 @@ const MAX_FALL_DICE = 20;
 const ROUNDS_PER_MINUTE = 10;
 const conMod = (s: CharacterSheet) => abilityModifier(s.abilityScores.con);
 const has = (s: CharacterSheet, id: string) => s.equipment.some((e) => e.id === id);
-const hurt = (s: CharacterSheet, damage: number) => ({ ...s, hp: Math.max(0, s.hp - damage) });
 
 /** Exhaustion gained, and death at 6. */
 function exhausted(sheet: CharacterSheet, levels: number, what: string): Suffered {
@@ -42,12 +42,12 @@ function fall(rng: Rng, s: CharacterSheet, feet: number): Suffered {
   const dice = Math.min(MAX_FALL_DICE, Math.floor(feet / 10));
   if (dice === 0) return { sheet: s, line: `${s.name} drops ${feet} feet, unhurt` };
   const damage = rollDice(rng, parseDice(`${dice}d6`)).total;
-  return { sheet: hurt(s, damage), line: `${s.name} falls ${feet} feet: ${damage} Bludgeoning damage, and lands Prone` };
+  return { sheet: damageHero(s, damage), line: `${s.name} falls ${feet} feet: ${damage} Bludgeoning damage, and lands Prone` };
 }
 
 function burn(rng: Rng, s: CharacterSheet): Suffered {
   const damage = rng.die(4);
-  return { sheet: hurt(s, damage), line: `${s.name} catches fire: ${damage} Fire damage, then drops Prone and rolls to put it out` };
+  return { sheet: damageHero(s, damage), line: `${s.name} catches fire: ${damage} Fire damage, then drops Prone and rolls to put it out` };
 }
 
 /** Exhaustion from suffocating goes once the hero breathes again, unless it reached 6. */
