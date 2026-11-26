@@ -7,7 +7,7 @@ import crToXpJson from '../../data/srd/5.2/crToXp.json' with { type: 'json' };
 import budgetsJson from '../../data/srd/5.2/encounterBudgets.json' with { type: 'json' };
 import monstersJson from '../../data/srd/5.2/monsters.json' with { type: 'json' };
 import { ABILITIES, type Ability, type AbilityScores, abilityModifier } from './abilities.ts';
-import { type Power, powersOf } from './powers.ts';
+import { type Power, powersOf, type Rider, riderOf } from './powers.ts';
 import { once, parseTable } from './srd.ts';
 import { lookup, require } from './violation.ts';
 
@@ -18,7 +18,7 @@ export type Difficulty = 'low' | 'moderate' | 'high';
 
 /** `advantageOnly`: extra damage the stat block grants only when the attack roll had Advantage. */
 export interface DamageRoll { dice: string; type: string; advantageOnly?: true }
-export interface MonsterAttack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[] }
+export interface MonsterAttack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider }
 export interface Monster {
   id: string; name: string; size: string; type: string;
   ac: number; hp: number; hitDice: string; speed: number;
@@ -91,6 +91,11 @@ function multiattackOf(actions: readonly z.infer<typeof action>[], attacks: read
   return named.length > 1 ? named : [];
 }
 
+const withRider = (a: z.infer<typeof action>) => {
+  const rider = riderOf(a);
+  return rider ? { rider } : {};
+};
+
 const SKILL = 'skill-';
 /** "60 ft." → 60; absent → 0. */
 const feet = (text: string | undefined) => (text ? parseInt(text, 10) : 0);
@@ -111,6 +116,7 @@ const monsterSchema = z.object({
   const attacks = m.actions.filter((a) => a.attackBonus !== undefined).map((a) => ({
     name: a.name, bonus: a.attackBonus!, ranged: a.desc.startsWith('Ranged'),
     damage: a.damage ? damageRolls(a.damage, ADVANTAGE_ONLY.test(a.desc)) : flatDamage(a.desc),
+    ...withRider(a),
   }));
   return {
     id: m.index, name: m.name, size: m.size, type: m.type,

@@ -71,3 +71,16 @@ export function powersOf(actions: readonly PowerSource[]): Power[] {
     };
   });
 }
+
+/** A condition an attack brings when it hits: after a save (`save`), or at once ("it has the Grappled condition"). */
+export interface Rider { ability: Ability; dc: number; save: boolean; lasting: Lasting }
+
+/** The rider of an attack-roll action with a save DC and a condition in its text; null without one. */
+export function riderOf(a: PowerSource): Rider | null {
+  if (!a.dc || a.attackBonus === undefined) return null;
+  const ability = a.dc.dcType.index as Ability;
+  const lasting = lastingOf(a.desc, ability, a.dc.dcValue);
+  if (!lasting) return null;
+  const onHit = a.desc.slice(a.desc.indexOf('Hit:'));
+  return { ability, dc: a.dc.dcValue, save: onHit.indexOf('Saving Throw') !== -1 && onHit.indexOf('Saving Throw') < onHit.indexOf('has the '), lasting };
+}

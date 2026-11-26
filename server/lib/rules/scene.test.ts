@@ -252,3 +252,34 @@ test('a spent power recharges on its d6 at the start of the monster turn; a powe
   assert.equal(monsterAction(onTurn(startCombat(2, [hero('bryn'), glad]), 'g'))!.kind, 'attack', 'at will, but it has attacks');
   assert.deepEqual(monsterAction(onTurn(startCombat(2, [hero('bryn'), { ...glad, attacks: [] }]), 'g')), { kind: 'power', power: 'Shield Bash', targets: ['bryn'] });
 });
+
+test('a hit with a rider: the target saves or takes the condition; no save means it takes it; a miss, or immunity, nothing', () => {
+  const ghoul = monsterCombatant('gh', monster('ghoul'));
+  const sure = { ...ghoul, attacks: ghoul.attacks.map((a) => ({ ...a, bonus: 50 })) };
+  const weak = hero('bryn', { hp: 90, maxHp: 90, saveBonuses: { ...hero('bryn').saveBonuses, con: -50 } });
+  const s = onTurn(startCombat(5, [weak, sure]), 'gh');
+  const clawed = act(s, { kind: 'attack', attack: 'Claw', target: 'bryn', natural: 15 });
+  const e = clawed.log.find((x) => x.kind === 'attack')!;
+  assert.ok(e.kind === 'attack');
+  assert.deepEqual({ ...e.rider!, roll: null }, { dc: 10, ability: 'con', roll: null, success: false, condition: 'paralyzed' });
+  assert.ok(e.rider!.roll !== null);
+  assert.deepEqual(clawed.combatants.bryn.conditions, ['paralyzed']);
+  const tough = act(onTurn(startCombat(5, [{ ...weak, saveBonuses: { ...weak.saveBonuses, con: 50 } }, sure]), 'gh'), { kind: 'attack', attack: 'Claw', target: 'bryn', natural: 15 });
+  const t = tough.log.find((x) => x.kind === 'attack')!;
+  assert.ok(t.kind === 'attack' && t.rider!.success && t.rider!.condition === null);
+  assert.deepEqual(tough.combatants.bryn.conditions, []);
+  const missed = act(s, { kind: 'attack', attack: 'Claw', target: 'bryn', natural: 1 });
+  const m = missed.log.find((x) => x.kind === 'attack')!;
+  assert.ok(m.kind === 'attack' && m.rider === undefined);
+  const toad = monsterCombatant('td', monster('giant-toad'));
+  const gulp = act(onTurn(startCombat(5, [weak, { ...toad, attacks: toad.attacks.map((a) => ({ ...a, bonus: 50 })) }]), 'td'), { kind: 'attack', attack: 'Bite', target: 'bryn', natural: 15 });
+  const g = gulp.log.find((x) => x.kind === 'attack')!;
+  assert.ok(g.kind === 'attack');
+  assert.deepEqual(g.rider, { dc: 12, ability: 'str', roll: null, success: false, condition: 'grappled' });
+  const free = act(onTurn(startCombat(5, [{ ...weak, conditionImmunities: ['paralyzed'] }, sure]), 'gh'), { kind: 'attack', attack: 'Claw', target: 'bryn', natural: 15 });
+  const f = free.log.find((x) => x.kind === 'attack')!;
+  assert.ok(f.kind === 'attack' && f.rider!.condition === null && !f.rider!.success);
+  const slain = act(onTurn(startCombat(5, [{ ...weak, hp: 1, maxHp: 1 }, sure]), 'gh'), { kind: 'attack', attack: 'Claw', target: 'bryn', natural: 15 });
+  const sl = slain.log.find((x) => x.kind === 'attack')!;
+  assert.ok(sl.kind === 'attack' && sl.rider === undefined, 'the dead take no condition');
+});

@@ -324,3 +324,19 @@ test('a monster power is told, and the condition it brings goes on the hero shee
   assert.ok(hard.lines.some((l) => /^Winter Wolf uses Cold Breath \(DC 12 CON save\): Bryn (saves|fails), \d+ damage\.$/.test(l)), hard.lines.join('\n'));
   assert.equal(hard.party.sheets.p1.conditions, undefined, 'no condition, nothing on the sheet');
 });
+
+test('a hit rider is told, and its condition goes on the hero sheet', () => {
+  const start = startFight(party({ p1: fighter }), ['ghoul']);
+  const sure = start.combat.combatants['foe-1'].attacks.map((a) => ({ ...a, bonus: 50 }));
+  const weak = patch(start.combat, { 'foe-1': { attacks: sure, multiattack: ['Claw'] }, p1: { saveBonuses: { ...start.combat.combatants.p1.saveBonuses, con: -50 }, attacks: harmless, hp: 500, maxHp: 500 } });
+  const round = fightRound(start.party, weak, {});
+  assert.ok(round.lines.some((l) => /^Ghoul attacks Bryn with Claw: .* hit for \d+\. Bryn fails the DC 10 CON save: Paralyzed\.$/.test(l)), round.lines.join('\n'));
+  assert.deepEqual(round.party.sheets.p1.conditions, [{ condition: 'paralyzed', until: { kind: 'time', left: 6 } }]);
+  const toad = startFight(party({ p1: fighter }), ['giant-toad']);
+  const bit = fightRound(toad.party, patch(toad.combat, { 'foe-1': { attacks: toad.combat.combatants['foe-1'].attacks.map((a) => ({ ...a, bonus: 50 })) }, p1: { attacks: harmless, hp: 500, maxHp: 500 } }), {});
+  assert.ok(bit.lines.some((l) => l.endsWith('Bryn is Grappled.')), bit.lines.join('\n'));
+  const tough = fightRound(start.party, patch(weak, { p1: { saveBonuses: { ...start.combat.combatants.p1.saveBonuses, con: 50 }, attacks: harmless, hp: 500, maxHp: 500 } }), {});
+  assert.ok(tough.lines.some((l) => l.endsWith('Bryn makes the DC 10 CON save.')), tough.lines.join('\n'));
+  const immune = fightRound(start.party, patch(weak, { p1: { conditionImmunities: ['paralyzed'], saveBonuses: { ...start.combat.combatants.p1.saveBonuses, con: -50 }, attacks: harmless, hp: 500, maxHp: 500 } }), {});
+  assert.ok(immune.lines.some((l) => l.endsWith('Bryn fails the DC 10 CON save: unaffected.')), immune.lines.join('\n'));
+});

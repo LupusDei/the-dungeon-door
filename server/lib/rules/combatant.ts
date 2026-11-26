@@ -1,7 +1,7 @@
 /** Heroes and monsters in one shape for combat. A Combatant is plain JSON, stored inside the combat state. */
 import { type Ability, abilityModifier } from './abilities.ts';
 import type { DamageRoll, Monster } from './monsters.ts';
-import type { Power } from './powers.ts';
+import type { Power, Rider } from './powers.ts';
 import { heroResistances } from './defenses.ts';
 import { d20Modifier } from './rests.ts';
 import type { CharacterSheet } from './sheet.ts';
@@ -11,7 +11,8 @@ import type { Condition } from './conditions.ts';
 
 export { CONDITIONS, type Condition } from './conditions.ts';
 
-export interface Attack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[] }
+/** `rider`: a monster attack's condition on a hit (powers.ts). */
+export interface Attack { name: string; bonus: number; ranged: boolean; damage: DamageRoll[]; rider?: Rider }
 
 /** up: fighting. dying: a hero at 0 HP making death saves. stable: at 0 HP, not dying. dead. */
 export type Status = 'up' | 'dying' | 'stable' | 'dead';

@@ -3,7 +3,7 @@
  * their players' votes (the vote's d20 is the roll); monsters act by simple rules. See docs/rules-design.md.
  */
 import type { Combatant, Condition, Status } from './combatant.ts';
-import type { Power } from './powers.ts';
+import type { Power, Rider } from './powers.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { addCondition, type AttackResult, type Cover, type D20, damageAfterDefenses, attackRoll, deathSave, heal, rollD20, savingThrow, takeDamage } from './resolve.ts';
 import { type Rng, seededRng } from './rng.ts';
@@ -20,7 +20,8 @@ export type Action =
   /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
   | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number };
 export type CombatEvent =
-  | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true }
+  /** `rider`: the condition the hit brought, or its save made. */
+  | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true; rider?: RiderOutcome }
   | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
   | { kind: 'dodge'; round: number; actor: string }
   | { kind: 'power'; round: number; actor: string; power: string; dc: number; ability: string; outcomes: PowerOutcome[] }
@@ -31,6 +32,7 @@ export type CombatEvent =
   /** A healing potion drunk as a Bonus Action before the turn's action. */
   | { kind: 'potion'; round: number; actor: string; item: string; healed: number };
 export interface Choice { label: string; action: Action }
+export interface RiderOutcome { dc: number; ability: string; roll: D20 | null; success: boolean; condition: Condition | null }
 /** `condition`: what the failed save brought (none if it is immune). */
 export interface PowerOutcome { target: string; roll: D20 | null; success: boolean; damage: number; condition: Condition | null }
 
@@ -130,7 +132,18 @@ export function choicesFor(state: CombatState, id: string): Choice[] {
 function strike(state: CombatState, actor: Combatant, target: Combatant, action: Extract<Action, { kind: 'attack' }>, rng: Rng): CombatState {
   const disadvantage = action.disadvantage || state.dodging.includes(target.id);
   const { result, target: hurt } = attackRoll(rng, actor, action.attack, target, { ...action, disadvantage });
-  return withEvent(state, { kind: 'attack', round: state.round, actor: actor.id, result }, hurt);
+  const rider = actor.attacks.find((a) => a.name === action.attack)!.rider;
+  if (!rider || !result.hit || hurt.status === 'dead') return withEvent(state, { kind: 'attack', round: state.round, actor: actor.id, result }, hurt);
+  const ridden = ride(rng, hurt, rider);
+  return withEvent(state, { kind: 'attack', round: state.round, actor: actor.id, result, rider: ridden.outcome }, ridden.target);
+}
+
+/** A hit's rider: the target saves if it may; a failure (or no save) brings the condition, unless it is immune. */
+function ride(rng: Rng, target: Combatant, rider: Rider): { outcome: RiderOutcome; target: Combatant } {
+  const { roll, success } = rider.save ? savingThrow(rng, target, rider.ability, rider.dc, {}) : { roll: null, success: false };
+  const after = success ? target : addCondition(target, rider.lasting.condition);
+  const condition = !success && after.conditions.includes(rider.lasting.condition) ? rider.lasting.condition : null;
+  return { outcome: { dc: rider.dc, ability: rider.ability, roll, success, condition }, target: after };
 }
 
 /** The living, up combatants against `side`. */

@@ -8,13 +8,14 @@ import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
 import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
 import { conditionsOf, withCondition } from '../rules/conditions.ts';
+import type { Lasting } from '../rules/powers.ts';
 import { type LightLevel, monsterSight, sightOf } from '../rules/light.ts';
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
 import { monster } from '../rules/monsters.ts';
 import { scriptedRng, seededRng } from '../rules/rng.ts';
 import { HEALING_POTIONS, item } from '../rules/items.ts';
 import { held, removeItem } from '../rules/inventory.ts';
-import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, startCombat, xpEarned } from '../rules/scene.ts';
+import { type Action, act, type CombatEvent, type CombatState, currentActor, drinkPotion, monsterAction, type RiderOutcome, startCombat, xpEarned } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { beamsAt, castSpell, endConcentration, slotsLeft, spellDamageDice } from '../rules/spells.ts';
 import { areaCatch } from '../rules/spellEffects.ts';
@@ -128,10 +129,18 @@ export function caught(combat: CombatState, side: Combatant['side'], n: number):
 type Names = (id: string) => string;
 const titled = (s: string) => s[0].toUpperCase() + s.slice(1);
 
+/** What a hit's rider did: "Bryn fails the DC 10 CON save: Paralyzed.", "Bryn is Grappled.", "Bryn makes the DC 10 CON save." */
+function riderLine(r: RiderOutcome, who: string): string {
+  const save = `the DC ${r.dc} ${r.ability.toUpperCase()} save`;
+  if (r.success) return `${who} makes ${save}.`;
+  const what = r.condition ? titled(r.condition) : 'unaffected';
+  return r.roll ? `${who} fails ${save}: ${what}.` : `${who} is ${what}.`;
+}
+
 const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>, name: Names) => string } = {
-  attack: ({ actor, result: r, reaction }, name) =>
+  attack: ({ actor, result: r, reaction, rider }, name) =>
     `${reaction ? 'Opportunity Attack: ' : ''}${name(actor)} attacks ${name(r.target)} with ${r.attack}: ${r.roll.natural} (total ${r.roll.total}) vs AC ${r.ac}, ` +
-    (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.'),
+    (r.hit ? `${r.critical ? 'critical hit' : 'hit'} for ${r.damage}.` : 'miss.') + (rider ? ` ${riderLine(rider, name(r.target))}` : ''),
   spell: ({ actor, spellId, outcomes }, name) =>
     `${name(actor)} casts ${srd().spells.get(spellId)!.name}: ` + outcomes.map((o) =>
       `${name(o.target)} ${o.attack ? (o.attack.hit ? 'is hit' : 'is missed') : o.save!.success ? 'saves' : 'fails the save'}` +
@@ -263,18 +272,24 @@ function freedFrom(combat: CombatState, sheets: Record<string, CharacterSheet>):
   return { ...combat, combatants };
 }
 
-/** A condition a monster's power brought a hero goes on its sheet, with how it ends; its combatant carries it. */
+/** The conditions monsters brought on heroes in these events (powers and hits' riders), with how each ends. */
+function laid(events: readonly CombatEvent[], combat: CombatState): { target: string; lasting: Lasting }[] {
+  return events.flatMap((e) => {
+    const me = combat.combatants[e.actor];
+    if (e.kind === 'attack' && e.rider?.condition) return [{ target: e.result.target, lasting: me.attacks.find((a) => a.name === e.result.attack)!.rider!.lasting }];
+    if (e.kind !== 'power') return [];
+    const lasting = me.powers!.find((p) => p.name === e.power)!.lasting!;
+    return e.outcomes.filter((o) => o.condition).map((o) => ({ target: o.target, lasting }));
+  });
+}
+
+/** Each condition a monster brought a hero goes on its sheet, with how it ends; its combatant carries it. */
 function lastingOnSheets(before: CombatState, after: CombatState, sheets: Record<string, CharacterSheet>): { combat: CombatState; sheets: Record<string, CharacterSheet> } {
   const out = { ...sheets };
   const combatants = { ...after.combatants };
-  for (const e of after.log.slice(before.log.length)) {
-    if (e.kind !== 'power') continue;
-    const lasting = after.combatants[e.actor].powers!.find((p) => p.name === e.power)!.lasting!;
-    for (const o of e.outcomes.filter((x) => x.condition && Object.hasOwn(out, x.target))) {
-      out[o.target] = withCondition(out[o.target], lasting);
-      const c = combatants[o.target];
-      combatants[o.target] = { ...c, carried: [...new Set([...(c.carried ?? []), lasting.condition])] };
-    }
+  for (const { target, lasting } of laid(after.log.slice(before.log.length), after).filter((l) => Object.hasOwn(out, l.target))) {
+    out[target] = withCondition(out[target], lasting);
+    combatants[target] = { ...combatants[target], carried: [...new Set([...(combatants[target].carried ?? []), lasting.condition])] };
   }
   return { combat: { ...after, combatants }, sheets: out };
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { monster } from './monsters.ts';
-import { lastingOf, powersOf } from './powers.ts';
+import { lastingOf, powersOf, riderOf } from './powers.ts';
 
 test('a breath weapon: the save, half on a success, its damage, recharge 5-6 and its area', () => {
   assert.deepEqual(monster('winter-wolf').powers, [{
@@ -32,4 +32,13 @@ test('the condition a failed save brings, and how it ends', () => {
   assert.deepEqual(lastingOf('Failure: The target has the Charmed condition.', 'wis', 15), { condition: 'charmed', until: { kind: 'time', left: 60 } }, 'otherwise a minute');
   assert.equal(lastingOf('Failure: The target is pushed 10 feet.', 'str', 15), null);
   assert.equal(lastingOf('Failure: The target has the Cursed condition.', 'str', 15), null, 'not a 5.2 condition');
+});
+
+test('a rider: the condition a hit brings, after a save or at once; none without a condition', () => {
+  const claw = monster('ghoul').attacks.find((a) => a.name === 'Claw')!;
+  assert.deepEqual(claw.rider, { ability: 'con', dc: 10, save: true, lasting: { condition: 'paralyzed', until: { kind: 'time', left: 6 } } });
+  assert.deepEqual(monster('giant-toad').attacks[0].rider, { ability: 'str', dc: 12, save: false, lasting: { condition: 'grappled', until: { kind: 'escape', ability: 'str', skill: 'athletics', dc: 12 } } });
+  assert.equal(monster('ghoul').attacks.find((a) => a.name === 'Bite')!.rider, undefined);
+  assert.equal(monster('werewolf-wolf').attacks.some((a) => a.rider), false, 'a save with no condition is no rider');
+  assert.equal(riderOf({ name: 'Glare', desc: 'Failure: The target has the Charmed condition.', dc: { dcType: { index: 'wis' }, dcValue: 10, successType: 'none' } }), null, 'no attack roll: a power, not a rider');
 });
