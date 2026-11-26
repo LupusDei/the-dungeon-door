@@ -1,17 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { type CharacterSheet, parseCharacterSheet } from './sheet.ts';
+import { SAMPLE } from './sheet.fixture.ts';
+import { parseCharacterSheet } from './sheet.ts';
 
-export const SAMPLE: CharacterSheet = {
-  version: 1, name: 'Bryn', level: 1, classId: 'fighter', speciesId: 'dwarf', backgroundId: 'soldier',
-  size: 'Medium', speed: 30,
-  abilityScores: { str: 17, dex: 14, con: 14, int: 12, wis: 10, cha: 8 }, abilityRolls: null,
-  proficiencyBonus: 2, maxHp: 13, hp: 13, armorClass: 16,
-  savingThrows: ['str', 'con'], skills: ['athletics', 'intimidation', 'perception', 'survival'], otherProficiencies: ['all-armor'],
-  saveBonuses: { str: 5, dex: 2, con: 4, int: 1, wis: 0, cha: -1 }, skillBonuses: { athletics: 5 }, passivePerception: 12,
-  equipment: [{ id: 'chain-mail', name: 'Chain Mail', count: 1 }], gp: 4, pendingChoices: [],
-  traits: ['dwarven-toughness'], feat: 'Savage Attacker', spellcasting: null,
-};
 
 test('a sheet survives a trip through JSON and the parser unchanged', () => {
   assert.deepEqual(parseCharacterSheet(JSON.parse(JSON.stringify(SAMPLE))), SAMPLE);
