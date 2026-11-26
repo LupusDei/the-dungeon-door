@@ -12,7 +12,7 @@ import { getDungeonMaster } from './dm/registry.ts';
 import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
-import { narrate, spokenText } from './voice.ts';
+import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
 import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type Message, type SceneView, type StoredChoice, type StoredScene } from './types.ts';
@@ -64,7 +64,8 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     title: current.title,
     narration: current.narration,
     imageUrl: current.imageUrl,
-    voiceUrl: current.voiceUrl,
+    voices: current.voices,
+    voiceUrl: current.voices[defaultNarrator().id] ?? null,
     choices: choicesFor(game, current, playerId),
     combat: game.combat !== null,
     canAct: canAct(game.combat, playerId),
@@ -111,7 +112,8 @@ export function toState(game: Game, playerId: string, messages: Message[]): Game
           index: s.index,
           title: s.title,
           imageUrl: s.imageUrl,
-          voiceUrl: s.voiceUrl,
+          voices: s.voices,
+          voiceUrl: s.voices[defaultNarrator().id] ?? null,
           // In a round each hero took their own action: there is no one choice the party made.
           choiceLabel: combat ? '' : (s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? ''),
           outcome: s.outcome as string,
@@ -314,46 +316,52 @@ export function narrationText(game: Game, scene: StoredScene): string {
 
 export interface Narration {
   sceneIndex: number;
-  /** "ready": `voiceUrl` is the audio. "making": the narrator is speaking; it will appear on the scene (`scene.voiceUrl`). */
+  /** The narrator whose reading this is (a catalog narrators id). */
+  voice: string;
+  /** "ready": `voiceUrl` is the audio. "making": the narrator is speaking; it will appear on the scene (`scene.voices`). */
   status: 'ready' | 'making';
   voiceUrl: string | null;
 }
 
 /**
- * POST /api/games/{code}/narration — a scene read aloud, on demand and once: the first player to ask has
- * the narrator speak it; the file is kept and every later request gets the same one. The request that
- * started the reading waits for it (up to `waitMs`) and answers with the file, or with a 502 if the reading
- * failed; anyone else asking meanwhile is told it is being made, and finds it on the scene when it is.
+ * POST /api/games/{code}/narration — a scene read aloud, on demand: the first player to ask for it in a
+ * narrator's voice has that narrator speak it; the file is kept and every later request for that voice gets
+ * the same one. The request that started the reading waits for it (up to `waitMs`) and answers with the
+ * file, or with a 502 if the reading failed; anyone else asking meanwhile is told it is being made, and
+ * finds it on the scene when it is. `voice` is a narrator id; without one it is the default narrator.
  */
-export async function requestNarration(code: string, playerId: string, sceneIndex: unknown, origin: string, waitMs = NARRATION_WAIT_MS): Promise<Narration> {
+export async function requestNarration(code: string, playerId: string, sceneIndex: unknown, voice: unknown, origin: string, waitMs = NARRATION_WAIT_MS): Promise<Narration> {
   if (typeof sceneIndex !== 'number' || !Number.isInteger(sceneIndex)) throw badRequest('sceneIndex must be a whole number');
+  const reader = voice === undefined || voice === null ? defaultNarrator() : typeof voice === 'string' ? narratorOf(voice) : null;
+  if (!reader) throw badRequest('voice must be a narrator id from the catalog');
   const game = await loadGame(code);
   member(game, playerId);
   const scene = game.scenes.find((s) => s.index === sceneIndex);
   if (!scene) throw notFound('no such scene');
-  if (scene.voiceUrl) return { sceneIndex, status: 'ready', voiceUrl: scene.voiceUrl };
+  const answer = (status: Narration['status'], voiceUrl: string | null): Narration => ({ sceneIndex, voice: reader.id, status, voiceUrl });
+  if (scene.voices[reader.id]) return answer('ready', scene.voices[reader.id]);
   const text = narrationText(game, scene);
   if (!text) throw conflict('that scene has nothing to read');
   const store = getStore();
-  if (!(await store.claimSceneVoice(code, sceneIndex, NARRATION_CLAIM_MS))) return { sceneIndex, status: 'making', voiceUrl: null };
+  if (!(await store.claimSceneVoice(code, sceneIndex, reader.id, NARRATION_CLAIM_MS))) return answer('making', null);
 
   const reading = (async () => {
     try {
-      const url = await getImageStore().save(await narrator(text), 'voices', origin);
-      await store.setSceneVoice(code, sceneIndex, url);
+      const url = await getImageStore().save(await narrator(text, reader), 'voices', origin);
+      await store.setSceneVoice(code, sceneIndex, reader.id, url);
       return url;
     } catch (error) {
-      await store.setSceneVoice(code, sceneIndex, null); // give the claim back: the next request tries again
+      await store.setSceneVoice(code, sceneIndex, reader.id, null); // give the claim back: the next request tries again
       throw error;
     }
   })();
   // The reading outlives this request if it takes longer than the wait.
-  runInBackground(`narrate ${code}#${sceneIndex}`, async () => { await reading; });
+  runInBackground(`narrate ${code}#${sceneIndex} (${reader.id})`, async () => { await reading; });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const patience = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), waitMs); });
   try {
     const voiceUrl = await Promise.race([reading, patience]);
-    return voiceUrl ? { sceneIndex, status: 'ready', voiceUrl } : { sceneIndex, status: 'making', voiceUrl: null };
+    return voiceUrl ? answer('ready', voiceUrl) : answer('making', null);
   } catch {
     throw new HttpError(502, 'the narrator could not read that scene; ask again');
   } finally {

@@ -117,20 +117,22 @@ export class PostgresStore implements Store {
       `SELECT g.*,
          COALESCE((SELECT json_agg(p ORDER BY p.joined_at) FROM game_players p WHERE p.game_code = g.code), '[]') AS players,
          COALESCE((SELECT json_agg(s ORDER BY s.idx) FROM scenes s WHERE s.game_code = g.code), '[]') AS scenes,
-         COALESCE((SELECT json_agg(v ORDER BY v.created_at) FROM votes v WHERE v.game_code = g.code), '[]') AS votes
+         COALESCE((SELECT json_agg(v ORDER BY v.created_at) FROM votes v WHERE v.game_code = g.code), '[]') AS votes,
+         COALESCE((SELECT json_agg(r) FROM scene_voices r WHERE r.game_code = g.code AND r.url IS NOT NULL), '[]') AS voices
        FROM games g WHERE g.code = $1`,
       [code],
     );
     if (!row) return null;
     const votes = (row.votes as Row[]).map((v) => ({ sceneIdx: v.scene_idx as number, vote: { playerId: v.player_id, choiceId: v.choice_id, roll: v.roll } as Vote }));
     const players = (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) }));
+    const readings = (row.voices ?? []) as Row[];
     const scenes = (row.scenes as Row[]).map((s): StoredScene => ({
       index: s.idx,
       title: s.title,
       narration: s.narration,
       imagePrompt: s.image_prompt,
       imageUrl: s.image_url,
-      voiceUrl: s.voice_url ?? null,
+      voices: Object.fromEntries(readings.filter((r) => r.scene_idx === s.idx).map((r) => [r.voice, r.url])),
       choices: s.choices as Choice[],
       isFinale: s.is_finale,
       votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
@@ -177,15 +179,18 @@ export class PostgresStore implements Store {
   // ---- scenes and votes ----
 
   async saveScene(code: string, scene: SceneDraftRecord) {
+    // Rewriting a scene's words throws away the readings of the old ones.
     await this.q(
-      `WITH s AS (
+      `WITH old AS (SELECT narration FROM scenes WHERE game_code = $1 AND idx = $2),
+       stale AS (
+         DELETE FROM scene_voices WHERE game_code = $1 AND scene_idx = $2 AND EXISTS (SELECT 1 FROM old WHERE old.narration <> $4)
+       ),
+       s AS (
          INSERT INTO scenes (game_code, idx, title, narration, image_prompt, image_url, choices, is_finale)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (game_code, idx) DO UPDATE SET title = EXCLUDED.title, narration = EXCLUDED.narration,
            image_prompt = EXCLUDED.image_prompt, image_url = EXCLUDED.image_url, choices = EXCLUDED.choices,
-           is_finale = EXCLUDED.is_finale,
-           voice_url = CASE WHEN scenes.narration = EXCLUDED.narration THEN scenes.voice_url END,
-           voice_started_at = CASE WHEN scenes.narration = EXCLUDED.narration THEN scenes.voice_started_at END
+           is_finale = EXCLUDED.is_finale
          RETURNING game_code
        )
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
@@ -201,22 +206,26 @@ export class PostgresStore implements Store {
     );
   }
 
-  async claimSceneVoice(code: string, index: number, staleMs: number) {
+  async claimSceneVoice(code: string, index: number, voice: string, staleMs: number) {
     const rows = await this.q(
-      `UPDATE scenes SET voice_started_at = now()
-       WHERE game_code = $1 AND idx = $2 AND voice_url IS NULL
-         AND (voice_started_at IS NULL OR voice_started_at < now() - ($3 * interval '1 millisecond'))
-       RETURNING idx`,
-      [code, index, staleMs],
+      `INSERT INTO scene_voices (game_code, scene_idx, voice, started_at)
+       SELECT $1, $2, $3, now() WHERE EXISTS (SELECT 1 FROM scenes WHERE game_code = $1 AND idx = $2)
+       ON CONFLICT (game_code, scene_idx, voice) DO UPDATE SET started_at = now()
+         WHERE scene_voices.url IS NULL
+           AND (scene_voices.started_at IS NULL OR scene_voices.started_at < now() - ($4 * interval '1 millisecond'))
+       RETURNING voice`,
+      [code, index, voice, staleMs],
     );
     return rows.length > 0;
   }
 
-  async setSceneVoice(code: string, index: number, voiceUrl: string | null) {
+  async setSceneVoice(code: string, index: number, voice: string, voiceUrl: string | null) {
     await this.q(
-      `WITH s AS (UPDATE scenes SET voice_url = $3, voice_started_at = NULL WHERE game_code = $1 AND idx = $2 RETURNING game_code)
-       UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
-      [code, index, voiceUrl],
+      `WITH r AS (
+         UPDATE scene_voices SET url = $4, started_at = NULL WHERE game_code = $1 AND scene_idx = $2 AND voice = $3 RETURNING game_code
+       )
+       UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM r)`,
+      [code, index, voice, voiceUrl],
     );
   }
 

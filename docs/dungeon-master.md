@@ -144,32 +144,38 @@ Gateway). Develop against `DD_FAKE_AI=1` first, then try real calls with `npm ru
 
 ## The narrator
 
-The words a dungeon master writes can be heard. `lib/voice.ts` is the narrator: one voice, an old
-storyteller, deep and unhurried. It is an original design (a stock synthetic voice with our own direction),
-never an imitation of a real person or a known performance.
+The words a dungeon master writes can be heard. `lib/voice.ts` holds the narrators: a handful of voices a
+player can choose between in the app. Each is a stock synthetic voice with our own direction, never an
+imitation of a real person or of a known performance.
 
-- **On demand, once.** Nothing is spoken until a player asks (`POST /api/games/{code}/narration`,
-  docs/api.md). The first request claims the scene (`store.claimSceneVoice`, one winner however many ask at
-  once) and is answered with the reading; it is saved beside the paintings and its URL goes on the scene
-  (`voiceUrl`) for every player. A failed reading answers 502 and gives the claim back.
+- **The narrators are presets** (`NARRATORS`): an id, a name and a line for the app's picker, a gateway
+  speech model, one of its voices, and how to deliver it. Models that take directions beside the text
+  (Google) get `style`; ElevenLabs v3 and v4 are directed inside the text, so their `tags` go at the head of
+  every passage (`[low, gravelly voice] …`) and are billed as characters. The catalog lists the narrators
+  (`narrators`, `defaultNarrator`), so adding one is a few lines here and no app release. `DD_VOICE` sets
+  the default (a narrator id); without it, it is `george-storyteller`.
+- **On demand, once per voice.** Nothing is spoken until a player asks (`POST /api/games/{code}/narration`
+  with a `voice`, docs/api.md). The first request for a scene in a voice claims it (`store.claimSceneVoice`,
+  one winner however many ask at once) and is answered with the reading; it is saved beside the paintings
+  and its URL goes on the scene (`voices[narratorId]`) for every player. A failed reading answers 502 and
+  gives the claim back. A second voice for the same scene is its own reading; switching back costs nothing.
 - **What is read** (`narrationText` in `lib/game.ts`): what came of the scene before, then the scene's
   narration, as the screen shows them. A combat round is its narration alone. Markup is stripped and a
   reading is capped at 4,000 characters.
 - **Fast enough to wait for.** The text is split into passages of about a paragraph, spoken at the same
-  time and joined in order (`passages`, `joinAudio`), so a full scene takes about ten seconds to make
-  rather than thirty.
-- **The voice is configuration**, read at call time like the other models:
-  `DD_VOICE_MODEL` (default `google/gemini-3.8-flash-tts`), `DD_VOICE_NAME` (default `Charon`),
-  `DD_VOICE_STYLE` (the direction: age, depth, pace, mood) and `DD_VOICE_SPEED` (models that take one).
-  Any speech model on the AI Gateway works; changing these needs no app release. Scenes already read keep
-  the voice they were read in.
-- **Cost.** Billed by the gateway per second of audio (Google) or per character (most others). Measured
-  with the default: a 916-character scene is 83 seconds of audio and 1.9 cents. ElevenLabs voices are 4 to
-  8 cents for the same text.
-- **Hearing it.** `npm run voice:check` makes one real reading and saves it to a file (a cent or two);
-  `--voice`, `--model`, `--style` and `--text` try alternatives. The candidates tried when the voice was
-  chosen are in `design/narrator/`. With `DD_FAKE_AI=1` the narrator "says" silence, about as long as the words would take.
-- The archetypes' `ttsVoice` descriptions are not used yet: every dungeon master is read by the same
+  time and joined in order (`passages`, `joinAudio`), so a full scene takes about eight to ten seconds to
+  make rather than thirty. WAVs are joined with a short pause; MP3s frame after frame, without the tag and
+  the first frame that declare a length (a player that trusted them would stop after the first passage).
+- **Cost and size**, measured on one 916-character scene: ElevenLabs v4 (the two Georges) about 8 cents
+  with tags, a 1 MB MP3, made in 8 seconds; Google (Charon, Algenib) 1.9 cents, a 4 MB WAV, made in 10.
+- **ElevenLabs withdraws its stock voices on 31 December 2026**, George among them. Before then the
+  Georges need a successor: a voice from ElevenLabs' library, or one designed for the game (that needs an
+  ElevenLabs account and its key; not set up).
+- **Hearing them.** `npm run voice:check -- --narrator <id>` makes one real reading and saves it to a file
+  (a few cents); `--model`, `--voice`, `--style`, `--tags` and `--text` try a candidate. The samples and
+  measurements behind the choice are in `design/narrator/`. With `DD_FAKE_AI=1` every narrator "says"
+  silence, about as long as the words would take.
+- The archetypes' `ttsVoice` descriptions are not used yet: every dungeon master is read by the player's
   narrator.
 
 ## Testing

@@ -53,10 +53,25 @@ CREATE TABLE IF NOT EXISTS scenes (
   PRIMARY KEY (game_code, idx)
 );
 
--- The narrator's reading of a scene (lib/narration.ts): an audio file made when a player first asks for it.
--- voice_started_at is the claim of whoever is making it; it is cleared when the voice is set or the try fails.
+-- The narrators' readings of scenes (lib/voice.ts, lib/game.ts requestNarration): one audio file per scene
+-- per narrator, made when a player first asks for it. A row with no url is the claim of whoever is making it
+-- (started_at); a failed try clears started_at so the next request can claim it again.
+CREATE TABLE IF NOT EXISTS scene_voices (
+  game_code  text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
+  scene_idx  int  NOT NULL,
+  voice      text NOT NULL,           -- a narrator id
+  url        text,
+  started_at timestamptz,
+  PRIMARY KEY (game_code, scene_idx, voice)
+);
+
+-- Before there were several narrators, a scene's one reading (always by "charon") was kept on the scene.
+-- Those columns are no longer read or written; their readings are carried over once.
 ALTER TABLE scenes ADD COLUMN IF NOT EXISTS voice_url text;
 ALTER TABLE scenes ADD COLUMN IF NOT EXISTS voice_started_at timestamptz;
+INSERT INTO scene_voices (game_code, scene_idx, voice, url)
+  SELECT game_code, idx, 'charon', voice_url FROM scenes WHERE voice_url IS NOT NULL
+  ON CONFLICT (game_code, scene_idx, voice) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS votes (
   game_code  text NOT NULL REFERENCES games (code) ON DELETE CASCADE,

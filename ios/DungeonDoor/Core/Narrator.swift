@@ -1,11 +1,11 @@
 import AVFoundation
 import Observation
 
-/// The narrator: reads a scene aloud in the storyteller's voice.
+/// The narrator: reads a scene aloud, in the voice the player picked.
 ///
-/// A reading is made on the server the first time anyone in the party asks for it, and kept, so
-/// the narrator asks, waits for the file to arrive on the scene (the game's own poll brings it),
-/// downloads it and plays it. One reading at a time; a new scene ends the one before.
+/// A reading is made on the server the first time anyone in the party asks for it in that voice,
+/// and kept, so the narrator asks, waits for the file to arrive on the scene (the game's own poll
+/// brings it), downloads it and plays it. One reading at a time; a new scene ends the one before.
 @MainActor @Observable
 final class Narrator {
     enum Phase: Equatable {
@@ -33,6 +33,42 @@ final class Narrator {
     }
 
     private static let everySceneKey = "dd.narrateScenes"
+    private static let voiceKey = "dd.narratorVoice"
+
+    /// The voices the server offers (`catalog.narrators`) and the one it uses by default. Empty on
+    /// a server with a single voice: there is then nothing to pick.
+    private(set) var offered: [NarratorInfo] = []
+    private var houseVoice: String?
+    /// The voice this player picked, kept between launches; `-dd.narratorVoice <id>` sets it for a
+    /// launch. Nil until they pick one.
+    private var picked: String? = UserDefaults.standard.string(forKey: Narrator.voiceKey)
+
+    /// The narrator id readings are asked for in: the player's pick while the server still offers
+    /// it, else the server's default. Nil on a server with a single voice.
+    var voice: String? {
+        if let picked, offered.contains(where: { $0.id == picked }) { return picked }
+        if let houseVoice, offered.contains(where: { $0.id == houseVoice }) { return houseVoice }
+        return offered.first?.id
+    }
+
+    var voiceName: String? { offered.first { $0.id == voice }?.name }
+
+    /// What the catalog says can be chosen.
+    func offer(_ catalog: Catalog?) {
+        let voices = catalog?.narrators ?? []
+        if voices != offered { offered = voices }
+        if houseVoice != catalog?.defaultNarrator { houseVoice = catalog?.defaultNarrator }
+    }
+
+    /// Picks a voice. A reading under way starts over in the new one, so two voices can be told apart
+    /// on the same scene.
+    func choose(_ id: String, hearing scene: GameScene, in session: GameSession) {
+        guard id != voice else { return }
+        let wasBusy = isBusy(with: scene)
+        picked = id
+        UserDefaults.standard.set(id, forKey: Narrator.voiceKey)
+        if wasBusy { read(scene, in: session) }
+    }
     /// How long to watch for a reading someone else started before asking the server again, and
     /// how many times to ask in all. A full scene takes about ten seconds to make.
     private static let patience: Duration = .seconds(15)
@@ -77,10 +113,11 @@ final class Narrator {
     private func read(_ scene: GameScene, in session: GameSession) {
         stop()
         let index = scene.index
+        let voice = voice
         phase = .preparing(scene: index)
         work = Task { [weak self] in
             do {
-                let url = try await Self.reading(of: scene, in: session)
+                let url = try await Self.reading(of: scene, by: voice, in: session)
                 guard let self, !Task.isCancelled else { return }
                 let audio = try await self.audio(at: url, from: session.api)
                 guard !Task.isCancelled else { return }
@@ -98,18 +135,19 @@ final class Narrator {
         }
     }
 
-    /// Where this scene's reading is: on the scene already, or asked for. The request that starts a
-    /// reading is answered with it, or with its failure. Anyone else is told it is being made: they
-    /// watch the scene for it, and ask again now and then in case the one making it failed.
-    private static func reading(of scene: GameScene, in session: GameSession) async throws -> URL {
-        if let url = session.reading(ofScene: scene.index) ?? scene.voiceURL { return url }
+    /// Where this scene's reading in that voice is: on the scene already, or asked for. The request
+    /// that starts a reading is answered with it, or with its failure. Anyone else is told it is
+    /// being made: they watch the scene for it, and ask again now and then in case the one making it
+    /// failed.
+    private static func reading(of scene: GameScene, by voice: String?, in session: GameSession) async throws -> URL {
+        if let url = session.reading(ofScene: scene.index, by: voice) ?? scene.reading(by: voice) { return url }
         for _ in 0..<asks {
-            let reply = try await session.api.narration(session.code, sceneIndex: scene.index)
+            let reply = try await session.api.narration(session.code, sceneIndex: scene.index, voice: voice)
             if let url = reply.voiceURL { return url }
             let deadline = ContinuousClock.now + patience
             while ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(500))
-                if let url = session.reading(ofScene: scene.index) { return url }
+                if let url = session.reading(ofScene: scene.index, by: voice) { return url }
             }
         }
         throw URLError(.timedOut)
@@ -152,10 +190,10 @@ final class Narrator {
 }
 
 extension GameSession {
-    /// The narrator's reading of a scene of this game, if it has been made: on the scene on show, or
-    /// in the chronicle once the story has moved on.
-    func reading(ofScene index: Int) -> URL? {
-        if let scene = state.scene, scene.index == index { return scene.voiceURL }
-        return state.chronicle?.first { $0.index == index }?.voiceURL
+    /// A narrator's reading of a scene of this game, if it has been made: on the scene on show, or in
+    /// the chronicle once the story has moved on.
+    func reading(ofScene index: Int, by voice: String?) -> URL? {
+        if let scene = state.scene, scene.index == index { return scene.reading(by: voice) }
+        return state.chronicle?.first { $0.index == index }?.reading(by: voice)
     }
 }

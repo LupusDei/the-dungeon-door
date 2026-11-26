@@ -4,7 +4,7 @@ import { test } from 'node:test';
 process.env.DD_FAKE_AI = '1';
 delete process.env.DD_FAKE_DELAY_MS;
 
-import { joinAudio, MAX_SPOKEN_CHARACTERS, narrate, narratorVoice, passages, silentWav, spokenText } from './voice.ts';
+import { DEFAULT_NARRATOR, defaultNarrator, joinAudio, MAX_SPOKEN_CHARACTERS, mp3Frames, narrate, narratorOf, NARRATORS, passages, publicNarrators, silentWav, spokenText } from './voice.ts';
 
 test('spokenText: the parts in order as paragraphs, without markup or empty lines', () => {
   assert.equal(spokenText('The door  opens.', null, 'A *bell* tolls.\n\n\n# Below\nSomething stirs.'), 'The door opens.\n\nA bell tolls.\n\nBelow\n\nSomething stirs.');
@@ -46,12 +46,27 @@ test('joinAudio: WAV passages become one WAV, in order, with a short pause betwe
   assert.ok(data.subarray(0, 16000).every((v) => v === 1) && data.subarray(16000, 16000 + gap).every((v) => v === 0) && data.subarray(16000 + gap).every((v) => v === 2));
 });
 
-test('joinAudio: one passage is itself; MP3 passages follow one another without their tags; mixed formats are refused', () => {
+/** An MPEG 1 Layer III frame at 128 kbps, 44.1 kHz (417 bytes), filled with `fill`, optionally declaring a length. */
+function mp3Frame(fill: number, note = ''): number[] {
+  const frame = new Array<number>(417).fill(fill);
+  frame.splice(0, 4, 0xff, 0xfb, 0x90, 0x00);
+  [...note].forEach((ch, k) => { frame[36 + k] = ch.charCodeAt(0); });
+  return frame;
+}
+const id3 = (...frames: number[][]) => new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 3, 9, 9, 9, ...frames.flat()]);
+
+test('mp3Frames: the tag and the frame that declares the length go; the sound frames stay', () => {
+  assert.deepEqual([...mp3Frames(id3(mp3Frame(0, 'Info'), mp3Frame(1)))], mp3Frame(1));
+  assert.deepEqual([...mp3Frames(id3(mp3Frame(0, 'Xing'), mp3Frame(1), mp3Frame(2)))], [...mp3Frame(1), ...mp3Frame(2)]);
+  assert.deepEqual([...mp3Frames(new Uint8Array(mp3Frame(5)))], mp3Frame(5), 'a file with neither is left alone');
+  assert.deepEqual([...mp3Frames(new Uint8Array([1, 2, 3]))], [1, 2, 3], 'not an MP3: untouched');
+});
+
+test('joinAudio: one passage is itself; MP3 passages follow one another as sound frames only; mixed formats are refused', () => {
   const only = { bytes: silentWav(), mediaType: 'audio/wav' };
   assert.equal(joinAudio([only]), only);
-  const id3 = (frames: number[]) => new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 3, 9, 9, 9, ...frames]);
-  const joined = joinAudio([{ bytes: id3([0xff, 0xfb, 1]), mediaType: 'audio/mpeg' }, { bytes: id3([0xff, 0xfb, 2]), mediaType: 'audio/mpeg' }]);
-  assert.deepEqual([...joined.bytes.subarray(13)], [0xff, 0xfb, 1, 0xff, 0xfb, 2], 'the first keeps its tag, the second gives only frames');
+  const joined = joinAudio([{ bytes: id3(mp3Frame(0, 'Info'), mp3Frame(1)), mediaType: 'audio/mpeg' }, { bytes: id3(mp3Frame(0, 'Info'), mp3Frame(2)), mediaType: 'audio/mpeg' }]);
+  assert.deepEqual([...joined.bytes], [...mp3Frame(1), ...mp3Frame(2)], 'a player that trusted the first length frame would stop after the first passage');
   assert.throws(() => joinAudio([only, { bytes: new Uint8Array([0xff, 0xfb]), mediaType: 'audio/mpeg' }]), /different audio formats/);
 });
 
@@ -63,11 +78,19 @@ test('narrate: with the fake narrator a reading is a WAV, one passage after anot
   await assert.rejects(narrate(''), /nothing to read/);
 });
 
-test('narratorVoice: the env picks the model, the voice, the direction and the speed', () => {
-  const base = narratorVoice({});
-  assert.match(base.model, /^[a-z-]+\//);
-  assert.equal(base.speed, null);
-  assert.deepEqual(narratorVoice({ DD_VOICE_MODEL: 'openai/tts-1-hd', DD_VOICE_NAME: 'onyx', DD_VOICE_STYLE: 'Slowly.', DD_VOICE_SPEED: '0.9' }),
-    { model: 'openai/tts-1-hd', voice: 'onyx', style: 'Slowly.', speed: 0.9 });
-  assert.equal(narratorVoice({ DD_VOICE_SPEED: 'fast' }).speed, null);
+test('the narrators: four to choose from, the storyteller by default, and DD_VOICE picks another', () => {
+  assert.deepEqual(NARRATORS.map((n) => n.id), ['george-storyteller', 'george', 'charon', 'algenib']);
+  assert.equal(new Set(NARRATORS.map((n) => n.id)).size, NARRATORS.length);
+  assert.equal(defaultNarrator({}).id, DEFAULT_NARRATOR);
+  assert.equal(defaultNarrator({ DD_VOICE: 'charon' }).id, 'charon');
+  assert.equal(defaultNarrator({ DD_VOICE: 'nobody' }).id, DEFAULT_NARRATOR, 'an unknown id falls back');
+  assert.equal(narratorOf('nobody'), null);
+  for (const n of NARRATORS) {
+    assert.match(n.model, /^[a-z-]+\/[a-z0-9.-]+$/, n.id);
+    assert.ok(n.name && n.description && n.voice, n.id);
+    assert.ok(!(n.style && n.tags), `${n.id}: direction is given one way, by instructions or by tags`);
+    if (n.tags) assert.match(n.tags, /^(\[[^\]]+\] ?)+$/, 'tags are bracketed directions');
+  }
+  assert.deepEqual(publicNarrators()[0], { id: 'george-storyteller', name: 'George, the old storyteller', description: 'Low and grave: a tale told slowly by the fire.' });
+  assert.deepEqual(Object.keys(publicNarrators()[2]).sort(), ['description', 'id', 'name'], 'the model and the voice id stay on the server');
 });

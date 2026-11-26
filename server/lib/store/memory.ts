@@ -17,7 +17,7 @@ const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 export class MemoryStore implements Store {
   private characters = new Map<string, StoredCharacter>();
   private games = new Map<string, GameData>();
-  /** When each scene's narration was claimed, by "CODE#index". */
+  /** When each reading was claimed, by "CODE#index#voice". */
   private voiceClaims = new Map<string, number>();
 
   async getCharacter(id: string) {
@@ -121,10 +121,10 @@ export class MemoryStore implements Store {
     if (!game) return;
     const existing = game.scenes.find((s) => s.index === scene.index);
     if (existing) {
-      if (existing.narration !== scene.narration) this.forgetVoice(code, existing); // new words need a new reading
+      if (existing.narration !== scene.narration) this.forgetVoices(code, existing); // new words need new readings
       Object.assign(existing, structuredClone(scene));
     } else {
-      game.scenes.push({ ...structuredClone(scene), voiceUrl: null, votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
+      game.scenes.push({ ...structuredClone(scene), voices: {}, votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
       game.scenes.sort((a, b) => a.index - b.index);
     }
     game.updatedAt = now();
@@ -139,30 +139,31 @@ export class MemoryStore implements Store {
     game.updatedAt = now();
   }
 
-  async claimSceneVoice(code: string, index: number, staleMs: number) {
+  async claimSceneVoice(code: string, index: number, voice: string, staleMs: number) {
     await tick();
     const scene = this.games.get(code)?.game.scenes.find((s) => s.index === index);
-    if (!scene || scene.voiceUrl !== null) return false;
-    const key = `${code}#${index}`;
+    if (!scene || scene.voices[voice]) return false;
+    const key = `${code}#${index}#${voice}`;
     const claimed = this.voiceClaims.get(key);
     if (claimed !== undefined && Date.now() - claimed < staleMs) return false;
     this.voiceClaims.set(key, Date.now());
     return true;
   }
 
-  async setSceneVoice(code: string, index: number, voiceUrl: string | null) {
+  async setSceneVoice(code: string, index: number, voice: string, voiceUrl: string | null) {
     await tick();
     const game = this.games.get(code)?.game;
     const scene = game?.scenes.find((s) => s.index === index);
     if (!game || !scene) return;
-    this.voiceClaims.delete(`${code}#${index}`);
-    scene.voiceUrl = voiceUrl;
+    this.voiceClaims.delete(`${code}#${index}#${voice}`);
+    if (voiceUrl === null) delete scene.voices[voice];
+    else scene.voices[voice] = voiceUrl;
     game.updatedAt = now();
   }
 
-  private forgetVoice(code: string, scene: StoredScene) {
-    this.voiceClaims.delete(`${code}#${scene.index}`);
-    scene.voiceUrl = null;
+  private forgetVoices(code: string, scene: StoredScene) {
+    for (const key of [...this.voiceClaims.keys()]) if (key.startsWith(`${code}#${scene.index}#`)) this.voiceClaims.delete(key);
+    scene.voices = {};
   }
 
   async setSceneOutcome(code: string, index: number, outcome: string, chosenChoiceId: ChoiceId | null) {

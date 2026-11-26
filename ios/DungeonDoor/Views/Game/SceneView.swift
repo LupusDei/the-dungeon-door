@@ -63,8 +63,10 @@ struct SceneView: View {
             }
             .task(id: state.scene?.index) {
                 // A new scene ends the reading of the one before, and may start its own.
+                narrator.offer(model.catalog)
                 narrator.arrived(at: state.scene, in: session)
             }
+            .onChange(of: model.catalog?.narrators) { _, _ in narrator.offer(model.catalog) }
             .task {
                 // Screenshot checks: `-scrollTo choices`, `combat` or `bottom` jumps below the fold.
                 guard let anchor = AppConfig.scrollToArgument else { return }
@@ -113,7 +115,9 @@ struct SceneView: View {
         if scene.isFinale { return "Finale" }
         if let combat = fight(in: scene) { return "Battle · Round \(combat.round)" }
         if let dungeon = rules?.dungeon, let here = dungeon.here {
-            return "\(dungeon.kind) · \(DungeonNames.label(here))"
+            // The level is named once the party has gone deeper than where it began.
+            let level = dungeon.levelReached.map { " · Level \($0)" } ?? ""
+            return "\(dungeon.kind)\(level) · \(DungeonNames.label(here))"
         }
         return state.sceneCount > 0 ? "Scene \(scene.index + 1) of \(state.sceneCount)" : "Scene \(scene.index + 1)"
     }
@@ -286,9 +290,9 @@ extension SceneView {
                             Text(hero.name)
                                 .font(.system(size: 15, weight: .semibold, design: .serif))
                                 .foregroundStyle(hero.dead ? Palette.muted : hero.playerId == session.playerId ? Palette.gold : Palette.parchment)
-                            Text(hero.dead ? "Fell on this adventure" : next(hero))
+                            Text(hero.dead ? "Fell on this adventure" : rise(of: hero) ?? next(hero))
                                 .font(.caption)
-                                .foregroundStyle(hero.dead ? Palette.ember : Palette.muted)
+                                .foregroundStyle(hero.dead ? Palette.ember : rise(of: hero) != nil ? Palette.gold : Palette.muted)
                         }
                         Spacer(minLength: 8)
                         VStack(alignment: .trailing, spacing: 1) {
@@ -309,6 +313,12 @@ extension SceneView {
             }
         }
         .card()
+    }
+
+    /// "Rose from level 1 to level 2" for a hero the quest's end levelled up.
+    private func rise(of hero: HeroStanding) -> String? {
+        guard let up = rules?.levelUps.first(where: { $0.playerId == hero.playerId }), up.to > up.from else { return nil }
+        return "Rose from level \(up.from) to level \(up.to)"
     }
 
     private func next(_ hero: HeroStanding) -> String {
@@ -453,7 +463,33 @@ private struct NarratorBar: View {
                     .foregroundStyle(Palette.ember)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if narrator.offered.count > 1, let name = narrator.voiceName { voices(reading: name) }
         }
+    }
+
+    /// Who reads: the voice in use, and a menu of the others. Picking one while a reading is under way
+    /// starts it over in the new voice.
+    private func voices(reading name: String) -> some View {
+        Menu {
+            ForEach(narrator.offered) { voice in
+                Button { narrator.choose(voice.id, hearing: scene, in: session) } label: {
+                    if voice.id == narrator.voice { Image(systemName: "checkmark") }
+                    Text(voice.name)
+                    if !voice.description.isEmpty { Text(voice.description) }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text("Read by \(name)")
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(.caption, design: .serif))
+            .foregroundStyle(Palette.muted)
+            .padding(.vertical, 4)
+            .contentShape(.rect)
+        }
+        .accessibilityLabel("Narrator voice: \(name)")
+        .accessibilityHint("Chooses who reads the scenes aloud")
     }
 
     private var listen: some View {

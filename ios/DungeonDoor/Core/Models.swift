@@ -42,6 +42,22 @@ struct DungeonMasterInfo: Codable, Hashable, Identifiable {
     var accent: String?
 }
 
+/// A voice the narrator can read in (`catalog.narrators`).
+struct NarratorInfo: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    var description: String = ""
+}
+
+extension NarratorInfo {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.value(.name, or: id.capitalized)
+        description = try c.value(.description, or: "")
+    }
+}
+
 struct Catalog: Codable, Hashable {
     var races: [CatalogOption]
     var classes: [CatalogOption]
@@ -54,6 +70,11 @@ struct Catalog: Codable, Hashable {
     /// Empty on a server that only tells stories.
     var dungeons: [CatalogOption]
     var dungeonMasters: [DungeonMasterInfo]
+    /// The voices a scene can be read aloud in, in the order to show them. Empty on a server
+    /// without them: the narrator then reads in the server's one voice.
+    var narrators: [NarratorInfo] = []
+    /// The narrator a request gets when it names none.
+    var defaultNarrator: String?
 
     func name(_ id: String, in list: KeyPath<Catalog, [CatalogOption]>) -> String {
         self[keyPath: list].first { $0.id == id }?.name ?? id.capitalized
@@ -75,6 +96,8 @@ extension Catalog {
         backgrounds = try c.value(.backgrounds, or: [])
         dungeons = try c.value(.dungeons, or: [])
         dungeonMasters = try c.decode([DungeonMasterInfo].self, forKey: .dungeonMasters)
+        narrators = try c.value(.narrators, or: [])
+        defaultNarrator = try c.decodeIfPresent(String.self, forKey: .defaultNarrator)
     }
 }
 
@@ -522,7 +545,9 @@ struct GameScene: Codable, Hashable {
     let title: String
     let narration: String
     let imageUrl: String?
-    /// The narrator's reading of this scene, an audio file; nil until a player asks for it.
+    /// The readings of this scene made so far, by narrator id: audio files.
+    var voices: [String: String] = [:]
+    /// The default narrator's reading; all a server from before the voice picker sends.
     var voiceUrl: String? = nil
     /// Three, or none for the epilogue. In a fight they are written for the caller's own hero.
     let choices: [Choice]
@@ -536,7 +561,12 @@ struct GameScene: Codable, Hashable {
     let outcome: String?
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
-    var voiceURL: URL? { voiceUrl.flatMap(URL.init(string:)) }
+
+    /// This scene's reading by that narrator, if it has been made. Without an id (a server with one
+    /// voice) it is the scene's only reading.
+    func reading(by narrator: String?) -> URL? {
+        (narrator.flatMap { voices[$0] } ?? (narrator == nil ? voiceUrl : nil)).flatMap(URL.init(string:))
+    }
 }
 
 /// The answer to asking for a scene to be read aloud: the file, or word that it is being made (it
@@ -557,6 +587,7 @@ extension GameScene {
         title = try c.value(.title, or: "")
         narration = try c.value(.narration, or: "")
         imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        voices = try c.value(.voices, or: [:])
         voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choices = try c.value(.choices, or: [])
         combat = try c.value(.combat, or: false)
@@ -836,6 +867,14 @@ struct DungeonMap: Codable, Hashable {
     let areas: [DungeonArea]
     /// Foes in this area who are watching, not attacking. Nil when there are none.
     let waiting: WaitingFoes?
+    /// The dungeon level the party has reached: it starts at the party's level, and a new door can
+    /// lead a level deeper. Nil from a server older than dungeon levels.
+    var level: Int? = nil
+    /// Where the way led deeper, oldest first.
+    var deepened: [Deepening] = []
+
+    /// The level to name on screen: only once the party has gone deeper than where it began.
+    var levelReached: Int? { deepened.isEmpty ? nil : level }
 
     var here: DungeonArea? { areas.first { $0.id == at } }
     func area(_ id: String?) -> DungeonArea? { areas.first { $0.id == id } }
@@ -849,7 +888,22 @@ extension DungeonMap {
         at = try c.value(.at, or: "")
         areas = try c.value(.areas, or: [])
         waiting = (try? c.decodeIfPresent(WaitingFoes.self, forKey: .waiting)).flatMap { $0 }.flatMap { $0.foes.isEmpty ? nil : $0 }
+        level = try? c.decodeIfPresent(Int.self, forKey: .level)
+        deepened = (try? c.decodeIfPresent([Deepening].self, forKey: .deepened)) ?? []
     }
+}
+
+/// An area where the dungeon went a level deeper (`rules.dungeon.deepened[]`).
+struct Deepening: Codable, Hashable {
+    let at: String
+    let level: Int
+}
+
+/// A hero who levelled up at the quest's end (`rules.levelUps[]`).
+struct QuestLevelUp: Codable, Hashable {
+    let playerId: String
+    let from: Int
+    let to: Int
 }
 
 /// The adventure's clock: it starts at 8 in the morning of day 1, and every choice moves it on.
@@ -906,6 +960,8 @@ struct RulesView: Codable, Hashable {
     /// Nil from a server older than the clock.
     let time: GameClock?
     let light: PartyLight?
+    /// Who levelled up at the quest's end; empty until then.
+    var levelUps: [QuestLevelUp] = []
 }
 
 extension RulesView {
@@ -917,6 +973,7 @@ extension RulesView {
         results = try c.value(.results, or: [])
         time = try c.decodeIfPresent(GameClock.self, forKey: .time)
         light = try c.decodeIfPresent(PartyLight.self, forKey: .light)
+        levelUps = (try? c.decodeIfPresent([QuestLevelUp].self, forKey: .levelUps)) ?? []
     }
 }
 
@@ -924,14 +981,19 @@ struct ChronicleEntry: Codable, Hashable, Identifiable {
     let index: Int
     let title: String
     let imageUrl: String?
-    /// The narrator's reading of that scene, if anyone asked for it.
+    /// The readings of that scene that were made, by narrator id.
+    var voices: [String: String] = [:]
+    /// The default narrator's reading; all a server from before the voice picker sends.
     var voiceUrl: String? = nil
     /// The most-voted choice. Empty for a round of a fight, where each hero acts for themselves.
     let choiceLabel: String
     let outcome: String
     var id: Int { index }
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
-    var voiceURL: URL? { voiceUrl.flatMap(URL.init(string:)) }
+
+    func reading(by narrator: String?) -> URL? {
+        (narrator.flatMap { voices[$0] } ?? (narrator == nil ? voiceUrl : nil)).flatMap(URL.init(string:))
+    }
 }
 
 extension ChronicleEntry {
@@ -940,6 +1002,7 @@ extension ChronicleEntry {
         index = try c.decode(Int.self, forKey: .index)
         title = try c.value(.title, or: "")
         imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        voices = try c.value(.voices, or: [:])
         voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choiceLabel = try c.value(.choiceLabel, or: "")
         outcome = try c.value(.outcome, or: "")

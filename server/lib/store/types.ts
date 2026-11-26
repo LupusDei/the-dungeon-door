@@ -36,7 +36,7 @@ export interface NewMessage {
 }
 
 /** A scene as written by the DM: everything but its votes and resolution. */
-export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voiceUrl'>;
+export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices'>;
 
 /**
  * Persistence for characters, games and chat. Two implementations: Postgres (`postgres.ts`, when
@@ -70,12 +70,13 @@ export interface Store {
   saveScene(code: string, scene: SceneDraftRecord): Promise<void>;
   setSceneImage(code: string, index: number, imageUrl: string): Promise<void>;
   /**
-   * Claims the making of a scene's narration: true for exactly one caller, until the voice is set or the
-   * claim is given back, or `staleMs` pass without either (the maker died). False once the scene has a voice.
+   * Claims the making of a scene's reading in one narrator's voice: true for exactly one caller, until the
+   * reading is set or the claim is given back, or `staleMs` pass without either (the maker died). False once
+   * the scene has that reading.
    */
-  claimSceneVoice(code: string, index: number, staleMs: number): Promise<boolean>;
-  /** Sets the scene's narration; null gives the claim back so the next request tries again. */
-  setSceneVoice(code: string, index: number, voiceUrl: string | null): Promise<void>;
+  claimSceneVoice(code: string, index: number, voice: string, staleMs: number): Promise<boolean>;
+  /** Sets the scene's reading in that voice; null gives the claim back so the next request tries again. */
+  setSceneVoice(code: string, index: number, voice: string, voiceUrl: string | null): Promise<void>;
   setSceneOutcome(code: string, index: number, outcome: string, chosenChoiceId: ChoiceId | null): Promise<void>;
   /**
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its

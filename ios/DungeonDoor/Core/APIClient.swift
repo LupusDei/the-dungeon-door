@@ -114,9 +114,10 @@ struct APIClient: Sendable {
 
     /// Asks for a scene to be read aloud. The server makes one reading per scene, the first time
     /// anyone asks; while it is "making", the file arrives on the scene itself.
-    func narration(_ code: String, sceneIndex: Int) async throws -> NarrationReply {
-        struct Body: Encodable { let sceneIndex: Int }
-        return try await send("POST", "api/games/\(code)/narration", body: Body(sceneIndex: sceneIndex))
+    /// `voice` is a catalog narrators id; nil leaves the choice to the server.
+    func narration(_ code: String, sceneIndex: Int, voice: String?) async throws -> NarrationReply {
+        struct Body: Encodable { let sceneIndex: Int; let voice: String? }
+        return try await send("POST", "api/games/\(code)/narration", body: Body(sceneIndex: sceneIndex, voice: voice))
     }
 
     /// A reading's audio, whole: it is played from memory, so any server that can send a file will do.

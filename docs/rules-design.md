@@ -502,6 +502,12 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
   each condition ends, and that they are concentrating; a hero's sheet in a game lists the same
   (`party[].conditions`, `party[].concentratingOn`). The dice log marks a monster's power, a recharge, a
   hero breaking free or failing to, and a spell lost.
+- **Deeper levels and the quest's end** (app): a scene names the dungeon level once the party has gone
+  deeper than where it began (`rules.dungeon.level`, `deepened`), and the finale says who rose a level
+  (`rules.levelUps`).
+- **The narrator** (`lib/voice.ts`, app): any scene can be read aloud in a voice the player picks from the
+  catalog's `narrators`; one reading per scene per voice, made on demand and kept. See
+  docs/dungeon-master.md, "The narrator".
 - **One picture per fight**: the round that begins a fight is painted; later rounds carry the same
   picture. Paintings are most of what a game costs.
 - **A rules error never strands a table** (`lib/game.ts`, `withoutTheEngine`): if the engine throws, the

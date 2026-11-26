@@ -10,13 +10,20 @@ play, so this voice is made at runtime through the AI Gateway, on demand, and ke
 
 ## What is live
 
-| Setting | Value |
-| --- | --- |
-| `DD_VOICE_MODEL` | `google/gemini-3.8-flash-tts` |
-| `DD_VOICE_NAME` | `Charon` |
-| `DD_VOICE_STYLE` | the direction in `DEFAULT_VOICE_STYLE` (old storyteller, deep, gravelly, warm, a flowing pace) |
+Chosen by the owner on 2026-11-26: four narrators, picked in the app ("Read by …" on a scene), M by default.
 
-These are the defaults in code; the env vars change them with no app release.
+| Narrator id | In the app | Sample | Model, voice, direction |
+| --- | --- | --- | --- |
+| `george-storyteller` (default) | George, the old storyteller | M | elevenlabs/eleven-v4, George, tags `[low, gravelly voice] [an old storyteller, slow and grave]` |
+| `george` | George | E | elevenlabs/eleven-v4, George, no direction |
+| `charon` | Charon | B | google/gemini-3.8-flash-tts, Charon, the "brisk" direction |
+| `algenib` | Algenib | C | google/gemini-3.8-flash-tts, Algenib, the "steady" direction |
+
+They are the `NARRATORS` in `server/lib/voice.ts`. `DD_VOICE=<id>` on Vercel changes the default with no
+app release; adding or changing a narrator is a few lines there and a server deploy.
+
+Sample M's last line was marked by hand (`[quietly, with dread]`). The live narrator gets only the opening
+direction, on every passage, so its delivery of a closing line is the model's own.
 
 ## Candidates
 
@@ -45,8 +52,7 @@ Notes:
   newsreader" 120. It returns WAV (24 kHz mono, about 48 KB a second: 4 MB for an 83-second scene); the
   others return MP3 at a tenth of that.
 - Google has no speed setting and no custom voices through the gateway: a prebuilt voice plus direction.
-- To switch: set the three env vars on Vercel (for D, also `DD_VOICE_SPEED=0.9`). Scenes already read keep
-  the voice they were read in.
+- Readings are kept per scene per narrator, so a scene already read in one voice is read afresh in another.
 
 ## ElevenLabs (checked 2026-11-26)
 
@@ -69,8 +75,9 @@ Notes:
 
 ```bash
 cd server
-npm run voice:check -- --out /tmp/try --voice Algenib
-npm run voice:check -- --out /tmp/try --style "An old storyteller, deeper and slower, grave."
+npm run voice:check -- --out /tmp/try --narrator algenib
+npm run voice:check -- --out /tmp/try --narrator charon --style "An old storyteller, deeper and slower, grave."
+npm run voice:check -- --out /tmp/try --model elevenlabs/eleven-v4 --voice nPczCjzI2devNBz1zQrb --tags "[low, gravelly voice]"
 npm run voice:check -- --out /tmp/try --model openai/tts-1-hd --voice onyx --speed 0.9
 ```
 

@@ -1,11 +1,11 @@
 /**
- * The narrator: one voice that reads a scene aloud. Speech goes through the AI Gateway like the game's
- * other models (lib/models.ts), so the owner can change the voice with env vars alone:
- *   DD_VOICE_MODEL  — a gateway speech model (https://ai-gateway.vercel.sh/v1/models, type "speech").
- *   DD_VOICE_NAME   — the voice, as that model names it (a prebuilt voice name, or a provider voice id).
- *   DD_VOICE_STYLE  — how to deliver it, for models that take directions; others ignore it.
- *   DD_VOICE_SPEED  — playback speed for models that take one (1 is normal).
- * The voice is an original design: an old storyteller, never an imitation of a real person.
+ * The narrators: the voices that read a scene aloud. Speech goes through the AI Gateway like the game's other
+ * models (lib/models.ts). Each narrator is a preset below: a speech model, one of its voices, and how to
+ * deliver it. A player picks one in the app (the catalog lists them); `DD_VOICE` sets which one is the
+ * default (a narrator id).
+ *
+ * Every voice here is a stock synthetic voice with our own direction: never an imitation of a real person or
+ * of a known performance.
  *
  * A reading is split into passages that are spoken at the same time and joined, so a long scene takes about
  * as long to make as its longest paragraph.
@@ -13,29 +13,58 @@
 import { generateSpeech } from 'ai';
 import { fakeAI, fakeDelay } from './models.ts';
 
-export const DEFAULT_VOICE_MODEL = 'google/gemini-3.8-flash-tts';
-export const DEFAULT_VOICE_NAME = 'Charon';
-export const DEFAULT_VOICE_STYLE =
+export interface Narrator {
+  /** Kept with every reading made in this voice, so never reuse an id for a different voice. */
+  id: string;
+  name: string;
+  /** One line for the app's picker. */
+  description: string;
+  /** A gateway speech model (https://ai-gateway.vercel.sh/v1/models, type "speech"). */
+  model: string;
+  /** The voice as that model names it: a prebuilt voice name, or a provider's voice id. */
+  voice: string;
+  /** Delivery, for models that take directions beside the text (Google). */
+  style?: string;
+  /** Delivery written into the text, at the head of every passage: ElevenLabs v3 and v4 audio tags. Billed as characters. */
+  tags?: string;
+  /** Playback speed, for models that take one (1 is normal). */
+  speed?: number;
+}
+
+const BRISK =
   'An old storyteller with a deep, low, gravelly voice, aged and warm. He tells the tale at a flowing pace, ' +
   'as brisk as a radio newsreader, with short pauses only between sentences. Grave when the tale darkens, ' +
   'a dry twinkle when it lightens. Read every word as written and add none.';
+const STEADY =
+  'An old storyteller reading by a fire. A deep, low, gravelly male voice, aged and warm, at a steady, ' +
+  'measured pace: unhurried, never slow. Grave when the tale darkens, a dry twinkle when it lightens. ' +
+  'Clear diction and weight on the words that matter. Read every word as written and add none.';
 
-export interface NarratorVoice {
-  model: string;
-  voice: string;
-  style: string;
-  speed: number | null;
+/** ElevenLabs' stock voice "George". ElevenLabs withdraws its stock ("default") voices on 31 December 2026. */
+const GEORGE = 'JBFqnCBsd6RMkjVDRZzb';
+
+/** In the order the app lists them. design/narrator/README.md has each one's sample and measurements. */
+export const NARRATORS: readonly Narrator[] = [
+  {
+    id: 'george-storyteller', name: 'George, the old storyteller', description: 'Low and grave: a tale told slowly by the fire.',
+    model: 'elevenlabs/eleven-v4', voice: GEORGE, tags: '[low, gravelly voice] [an old storyteller, slow and grave]',
+  },
+  { id: 'george', name: 'George', description: 'A warm British storyteller, as he comes.', model: 'elevenlabs/eleven-v4', voice: GEORGE },
+  { id: 'charon', name: 'Charon', description: 'Deep and steady, at a newsreader\u2019s pace.', model: 'google/gemini-3.8-flash-tts', voice: 'Charon', style: BRISK },
+  { id: 'algenib', name: 'Algenib', description: 'Gravelly and unhurried.', model: 'google/gemini-3.8-flash-tts', voice: 'Algenib', style: STEADY },
+];
+
+export const DEFAULT_NARRATOR = 'george-storyteller';
+
+export const narratorOf = (id: string): Narrator | null => NARRATORS.find((n) => n.id === id) ?? null;
+
+/** The narrator a request gets when it names none: `DD_VOICE` if it names one of ours, else the house default. */
+export function defaultNarrator(env: NodeJS.ProcessEnv = process.env): Narrator {
+  return narratorOf(env.DD_VOICE ?? '') ?? narratorOf(DEFAULT_NARRATOR)!;
 }
 
-export function narratorVoice(env: NodeJS.ProcessEnv = process.env): NarratorVoice {
-  const speed = Number(env.DD_VOICE_SPEED);
-  return {
-    model: env.DD_VOICE_MODEL || DEFAULT_VOICE_MODEL,
-    voice: env.DD_VOICE_NAME || DEFAULT_VOICE_NAME,
-    style: env.DD_VOICE_STYLE || DEFAULT_VOICE_STYLE,
-    speed: Number.isFinite(speed) && speed > 0 ? speed : null,
-  };
-}
+/** The narrators as the app's picker shows them. */
+export const publicNarrators = () => NARRATORS.map(({ id, name, description }) => ({ id, name, description }));
 
 export interface SpokenAudio {
   bytes: Uint8Array;
@@ -81,22 +110,23 @@ export function silentWav(seconds = 1): Uint8Array {
 /** Google's speech models return WAV; the others are asked for MP3, which is a tenth the size. */
 const formatFor = (model: string) => (model.startsWith('google/') ? undefined : 'mp3');
 
-/** Reads `text` aloud in the narrator's voice. One paid call (see docs/dungeon-master.md, "The narrator"). */
-export async function speak(text: string, voice: NarratorVoice = narratorVoice()): Promise<SpokenAudio> {
+/** Reads `text` aloud in a narrator's voice. One paid call (see docs/dungeon-master.md, "The narrator"). */
+export async function speak(text: string, narrator: Narrator = defaultNarrator()): Promise<SpokenAudio> {
   if (fakeAI()) {
     await fakeDelay();
     // As long as the words would take, so the app's "playing" state can be seen locally.
     return { bytes: silentWav(Math.max(1, Math.min(20, text.length / 15))), mediaType: 'audio/wav' };
   }
+  const format = formatFor(narrator.model);
   const result = await generateSpeech({
-    model: voice.model,
-    text,
-    voice: voice.voice,
-    instructions: voice.style,
-    ...(voice.speed !== null && { speed: voice.speed }),
-    ...(formatFor(voice.model) && { outputFormat: formatFor(voice.model) }),
+    model: narrator.model,
+    text: narrator.tags ? `${narrator.tags} ${text}` : text,
+    voice: narrator.voice,
+    ...(narrator.style && { instructions: narrator.style }),
+    ...(narrator.speed && { speed: narrator.speed }),
+    ...(format && { outputFormat: format }),
   });
-  for (const warning of result.warnings ?? []) console.warn(`narrator (${voice.model}):`, JSON.stringify(warning));
+  for (const warning of result.warnings ?? []) console.warn(`narrator ${narrator.id} (${narrator.model}):`, JSON.stringify(warning));
   return { bytes: result.audio.uint8Array, mediaType: result.audio.mediaType || 'audio/mpeg' };
 }
 
@@ -156,11 +186,35 @@ function joinWavs(wavs: Wav[]): Uint8Array {
   return new Uint8Array(Buffer.concat([header, chunk('fmt ', format.length), format, chunk('data', data.length), data]));
 }
 
-/** An MP3 without its ID3v2 tag: frames only, so files can follow one another. */
-function mp3Frames(bytes: Uint8Array): Uint8Array {
-  if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return bytes;
-  const size = ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) | ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f);
-  return bytes.subarray(10 + size);
+const MP3_KBPS = { 1: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], 2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160] } as const;
+const MP3_HZ = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] } as const;
+
+/** The length in bytes of the MPEG Layer III frame that starts at `at`, or 0 if none does. */
+function mp3FrameLength(b: Uint8Array, at: number): number {
+  if (at + 4 > b.length || b[at] !== 0xff || (b[at + 1] & 0xe0) !== 0xe0 || ((b[at + 1] >> 1) & 3) !== 1) return 0;
+  const version = (b[at + 1] >> 3) & 3; // 3: MPEG 1, 2: MPEG 2, 0: MPEG 2.5
+  const kbps = MP3_KBPS[version === 3 ? 1 : 2][b[at + 2] >> 4];
+  const hz = (MP3_HZ as Record<number, readonly number[]>)[version]?.[(b[at + 2] >> 2) & 3];
+  if (!kbps || !hz) return 0;
+  return Math.floor(((version === 3 ? 144 : 72) * kbps * 1000) / hz) + ((b[at + 2] >> 1) & 1);
+}
+
+/**
+ * An MP3 as sound frames only, so files can follow one another: without its ID3v2 tag, and without the
+ * silent first frame that says how long the file is ("Xing" or "Info"). A player that trusts that frame
+ * would stop where the first passage ends; with none, it works the length out from the file itself.
+ */
+export function mp3Frames(bytes: Uint8Array): Uint8Array {
+  let at = 0;
+  if (bytes.length >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    at = 10 + (((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) | ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f));
+  }
+  const first = mp3FrameLength(bytes, at);
+  if (first > 0) {
+    const frame = Buffer.from(bytes.buffer, bytes.byteOffset + at, Math.min(first, bytes.length - at)).toString('latin1');
+    if (frame.includes('Xing') || frame.includes('Info')) at += first;
+  }
+  return bytes.subarray(at);
 }
 
 /** Passages as one file, in order: WAVs with the same format are joined with a short pause, MP3s frame after frame. */
@@ -172,20 +226,20 @@ export function joinAudio(parts: SpokenAudio[]): SpokenAudio {
     return { bytes: joinWavs(wavs), mediaType: 'audio/wav' };
   }
   if (wavs.some((w) => w !== null) || !parts.every((p) => p.mediaType === parts[0].mediaType)) throw new Error('the passages came back in different audio formats');
-  return { bytes: new Uint8Array(Buffer.concat(parts.map((p, i) => (i === 0 ? p.bytes : mp3Frames(p.bytes))))), mediaType: parts[0].mediaType };
+  return { bytes: new Uint8Array(Buffer.concat(parts.map((p) => mp3Frames(p.bytes)))), mediaType: parts[0].mediaType };
 }
 
 /** How many passages are spoken at once. */
 const AT_ONCE = 4;
 
 /** Reads a whole scene aloud: its passages spoken at the same time, joined in order. One paid call per passage. */
-export async function narrate(text: string, voice: NarratorVoice = narratorVoice()): Promise<SpokenAudio> {
+export async function narrate(text: string, narrator: Narrator = defaultNarrator()): Promise<SpokenAudio> {
   const parts = passages(text);
   if (parts.length === 0) throw new Error('nothing to read');
   const spoken = new Array<SpokenAudio>(parts.length);
   let next = 0;
   const worker = async () => {
-    for (let i = next++; i < parts.length; i = next++) spoken[i] = await speak(parts[i], voice);
+    for (let i = next++; i < parts.length; i = next++) spoken[i] = await speak(parts[i], narrator);
   };
   await Promise.all(Array.from({ length: Math.min(AT_ONCE, parts.length) }, worker));
   return joinAudio(spoken);

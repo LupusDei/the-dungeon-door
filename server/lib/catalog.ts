@@ -1,4 +1,5 @@
 import { srd } from './rules/srd.ts';
+import { defaultNarrator, publicNarrators } from './voice.ts';
 
 /**
  * The option lists the character forge and lobby show (GET /api/catalog). Server-owned so the DM team
@@ -203,6 +204,8 @@ export function publicCatalog() {
     dungeonMasters: DUNGEON_MASTERS.map(({ id, name, tagline, description, symbol, accent }) => ({
       id, name, tagline, description, symbol, accent,
     })),
+    narrators: publicNarrators(),
+    defaultNarrator: defaultNarrator().id,
   };
 }
 

@@ -32,7 +32,9 @@ DM team can add archetypes without an app release.
   "dungeonMasters": [{
     "id": "chronicler", "name": "The Chronicler", "tagline": "…", "description": "…",
     "symbol": "book.closed", "accent": "#C9A227"
-  }]
+  }],
+  "narrators": [{ "id": "george-storyteller", "name": "George, the old storyteller", "description": "…" }],
+  "defaultNarrator": "george-storyteller"
 }
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
@@ -40,6 +42,8 @@ DM team can add archetypes without an app release.
 A background's `abilities` are the three scores it can raise (the builder puts +2 and +1 on two of them).
 `dungeons` are the kinds of game a host can start (the `dungeon` of `POST …/start`): `none`, `fixed`
 and `explore`, in the order to show them.
+`narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
+to show them; `defaultNarrator` is the one used when a request names none. New voices need no app release.
 
 ## Characters
 
@@ -173,8 +177,10 @@ Scene {
   title: string
   narration: string                  // 2–4 short paragraphs
   imageUrl: string | null            // null while the art is still painting
-  voiceUrl: string | null            // the narrator's reading of this scene (an audio file), or null until a
-                                     // player asks for it: POST /api/games/{code}/narration
+  voices: { [narratorId]: string }   // the readings of this scene made so far (audio files), by narrator id;
+                                     // empty until a player asks for one: POST /api/games/{code}/narration
+  voiceUrl: string | null            // the default narrator's reading: `voices[catalog.defaultNarrator]`, for
+                                     // apps from before the voice picker
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
               rules: string | null }]  // e.g. "Athletics check, DC 12"; exactly 3; empty for the epilogue
   combat: boolean                    // true for a combat round: each vote is that player's own hero's action,
@@ -191,7 +197,8 @@ Scene {
 
 ChronicleEntry {
   index: number; title: string; imageUrl: string | null
-  voiceUrl: string | null            // the narrator's reading of that scene, if anyone asked for it
+  voices: { [narratorId]: string }   // the readings of that scene that were made
+  voiceUrl: string | null            // the default narrator's, as on a scene
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
   combat: boolean                    // a combat round: every hero took their own action
@@ -280,23 +287,25 @@ Message {
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
 - `POST /api/games/{code}/advance` → `GameState`. Host only: resolve now with the votes that are in
   (for an AFK player). Needs at least one vote.
-- `POST /api/games/{code}/narration` with `{ sceneIndex }` → `{ sceneIndex, status, voiceUrl }`. The scene
-  read aloud by the narrator, on demand: nothing is spoken until a player asks.
-  - `status: "ready"`: `voiceUrl` is the audio (WAV or MP3, by the speech model; a public URL like
-    `imageUrl`). Download it and play it.
-  - `status: "making"`, `voiceUrl: null`: the narrator is speaking it now. The URL then appears on the
-    scene itself (`scene.voiceUrl`, and `chronicle[].voiceUrl` once the scene is past), so the game poll
+- `POST /api/games/{code}/narration` with `{ sceneIndex, voice? }` → `{ sceneIndex, voice, status, voiceUrl }`.
+  The scene read aloud, on demand: nothing is spoken until a player asks. `voice` is a catalog `narrators`
+  id; left out, it is `defaultNarrator`. The answer names the narrator it is for.
+  - `status: "ready"`: `voiceUrl` is the audio (MP3 or WAV, by the narrator's speech model; a public URL
+    like `imageUrl`). Download it and play it.
+  - `status: "making"`, `voiceUrl: null`: that narrator is speaking it now. The URL then appears on the
+    scene itself (`scene.voices[voice]`, and `chronicle[].voices` once the scene is past), so the game poll
     delivers it to every player.
-  - One reading per scene. The first request claims it and is held until the reading is made (about ten
-    seconds for a full scene, at most 20): it answers "ready", or **502** if the reading failed. Requests
-    that arrive meanwhile get "making" at once. A failed reading gives the claim back, so asking again
-    retries; a client waiting on "making" should ask again every 15 seconds or so in case the reading it
-    was waiting for failed.
+  - One reading per scene per narrator. The first request for a voice claims it and is held until the
+    reading is made (about ten seconds for a full scene, at most 20): it answers "ready", or **502** if the
+    reading failed. Requests for the same voice that arrive meanwhile get "making" at once. A failed
+    reading gives the claim back, so asking again retries; a client waiting on "making" should ask again
+    every 15 seconds or so in case the reading it was waiting for failed. Another voice of the same scene is
+    its own reading, made the same way; those already made stay.
   - What is read is what the screen shows for that turn: what came of the scene before (its `outcome`),
     then the scene's `narration`. A combat round is its `narration` alone. Any scene of the game can be
     asked for, not only the current one.
-  - 400 `sceneIndex` not a whole number; 403 not in this game; 404 no such game or scene; 502 the
-    reading failed.
+  - 400 `sceneIndex` not a whole number, or `voice` not a narrator id; 403 not in this game; 404 no such
+    game or scene; 502 the reading failed.
 
 ### The rules engine in play
 

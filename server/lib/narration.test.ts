@@ -8,6 +8,7 @@ delete process.env.BLOB_READ_WRITE_TOKEN;
 delete process.env.DD_APP_KEY;
 delete process.env.DD_FAKE_DELAY_MS;
 
+import * as catalogApi from '../api/catalog.ts';
 import * as imageApi from '../api/image.ts';
 import * as narrationApi from '../api/game-narration.ts';
 import * as startApi from '../api/game-start.ts';
@@ -24,12 +25,14 @@ import type { GameState } from './types.ts';
 import { silentWav } from './voice.ts';
 
 let readings: string[] = [];
+let readers: string[] = [];
 
 beforeEach(() => {
   setStore(new MemoryStore());
   setDice({ d20: () => 10, seed: () => 42 });
   readings = [];
-  setNarrator(async (text) => { readings.push(text); return { bytes: silentWav(0.1), mediaType: 'audio/wav' }; });
+  readers = [];
+  setNarrator(async (text, narrator) => { readings.push(text); readers.push(narrator!.id); return { bytes: silentWav(0.1), mediaType: 'audio/wav' }; });
 });
 afterEach(async () => {
   await settle();
@@ -48,7 +51,7 @@ async function table() {
   return { code: body.code, players };
 }
 const view = async (code: string, player: string) => (await call<GameState>(gameApi.GET, gamePath(code), { player })).body;
-const ask = (code: string, player: string, sceneIndex: unknown) => call<Narration>(narrationApi.POST, gamePath(code, 'narration'), { player, body: { sceneIndex } });
+const ask = (code: string, player: string, sceneIndex: unknown, voice?: unknown) => call<Narration>(narrationApi.POST, gamePath(code, 'narration'), { player, body: voice === undefined ? { sceneIndex } : { sceneIndex, voice } });
 
 test('a scene is read aloud when a player asks, once, and every player gets the same file', async () => {
   const { code, players } = await table();
@@ -68,7 +71,9 @@ test('a scene is read aloud when a player asks, once, and every player gets the 
   assert.equal(theirs.scene!.voiceUrl, mine.scene!.voiceUrl);
   assert.equal(asked.find((r) => r.body.status === 'ready')!.body.voiceUrl, mine.scene!.voiceUrl);
   const again = await ask(code, players[1], 0);
-  assert.deepEqual(again.body, { sceneIndex: 0, status: 'ready', voiceUrl: mine.scene!.voiceUrl });
+  assert.deepEqual(again.body, { sceneIndex: 0, voice: 'george-storyteller', status: 'ready', voiceUrl: mine.scene!.voiceUrl });
+  assert.deepEqual(mine.scene!.voices, { 'george-storyteller': mine.scene!.voiceUrl });
+  assert.deepEqual(readers, ['george-storyteller'], 'no voice named: the default narrator reads');
   assert.equal(readings.length, 1, 'asked again, not read again');
 
   const file = await imageApi.GET(new Request(mine.scene!.voiceUrl!));
@@ -106,7 +111,7 @@ test('a reading that fails says so to whoever asked, gives its claim back, and t
   await settle();
   assert.equal((await view(code, players[0])).scene!.voiceUrl, null);
 
-  setNarrator(async (text) => { readings.push(text); return { bytes: silentWav(0.1), mediaType: 'audio/wav' }; });
+  setNarrator(async (text, narrator) => { readings.push(text); readers.push(narrator!.id); return { bytes: silentWav(0.1), mediaType: 'audio/wav' }; });
   assert.equal((await ask(code, players[1], 0)).body.status, 'ready');
   assert.equal(readings.length, 1);
   assert.ok((await view(code, players[0])).scene!.voiceUrl);
@@ -116,14 +121,39 @@ test('a slow reading: the asker is told it is being made, and it arrives on the 
   const { code, players } = await table();
   let finish = () => {};
   setNarrator((text) => new Promise((resolve) => { finish = () => { readings.push(text); resolve({ bytes: silentWav(0.1), mediaType: 'audio/wav' }); }; }));
-  const first = await requestNarration(code, players[0], 0, 'http://localhost:3000', 20);
-  assert.deepEqual(first, { sceneIndex: 0, status: 'making', voiceUrl: null });
+  const first = await requestNarration(code, players[0], 0, undefined, 'http://localhost:3000', 20);
+  assert.deepEqual(first, { sceneIndex: 0, voice: 'george-storyteller', status: 'making', voiceUrl: null });
   assert.equal((await ask(code, players[1], 0)).body.status, 'making', 'someone else asking meanwhile starts nothing');
   assert.equal((await view(code, players[1])).scene!.voiceUrl, null);
   finish();
   await settle();
   assert.equal(readings.length, 1);
   assert.ok((await view(code, players[1])).scene!.voiceUrl);
+});
+
+test('a scene has one reading per narrator: each voice is made once, and they sit side by side', async () => {
+  const { code, players } = await table();
+  const george = await ask(code, players[0], 0);
+  const charon = await ask(code, players[1], 0, 'charon');
+  assert.deepEqual([george.body.voice, george.body.status, charon.body.voice, charon.body.status], ['george-storyteller', 'ready', 'charon', 'ready']);
+  assert.notEqual(george.body.voiceUrl, charon.body.voiceUrl);
+  assert.deepEqual(readers, ['george-storyteller', 'charon']);
+  assert.equal(readings[0], readings[1], 'the same words in both voices');
+
+  const again = await Promise.all([ask(code, players[0], 0, 'charon'), ask(code, players[1], 0, 'george-storyteller'), ask(code, players[0], 0, 'algenib')]);
+  assert.deepEqual(again.map((r) => r.body.voiceUrl === charon.body.voiceUrl || r.body.voiceUrl === george.body.voiceUrl), [true, true, false]);
+  assert.deepEqual(readers, ['george-storyteller', 'charon', 'algenib'], 'only the voice not yet heard is read');
+  const state = await view(code, players[1]);
+  assert.deepEqual(Object.keys(state.scene!.voices).sort(), ['algenib', 'charon', 'george-storyteller']);
+  assert.equal(state.scene!.voiceUrl, george.body.voiceUrl, 'voiceUrl stays the default narrator\u2019s, for apps without the picker');
+  assert.equal((await ask(code, players[0], 0, 'nobody')).status, 400);
+  assert.equal((await ask(code, players[0], 0, 7)).status, 400);
+});
+
+test('the catalog lists the narrators the app can offer', async () => {
+  const { body } = await call<{ narrators: { id: string; name: string; description: string }[]; defaultNarrator: string }>(catalogApi.GET, '/api/catalog');
+  assert.deepEqual(body.narrators.map((n) => n.id), ['george-storyteller', 'george', 'charon', 'algenib']);
+  assert.equal(body.defaultNarrator, 'george-storyteller');
 });
 
 test('narration is for the party: strangers, missing scenes and bad requests are refused', async () => {

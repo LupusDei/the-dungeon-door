@@ -61,7 +61,7 @@ test('a choice keeps a hook that holds up and shows it as a label; a bad hook or
   assert.deepEqual(choiceView({ id: 'c', label: 'x', detail: 'y' }), { id: 'c', label: 'x', detail: 'y', rules: null });
 });
 
-const scene = (choices: StoredScene['choices']): StoredScene => ({ index: 0, title: '', narration: '', imagePrompt: '', imageUrl: null, voiceUrl: null, choices, isFinale: false, votes: [], outcome: null, chosenChoiceId: null, createdAt: '' });
+const scene = (choices: StoredScene['choices']): StoredScene => ({ index: 0, title: '', narration: '', imagePrompt: '', imageUrl: null, voices: {}, choices, isFinale: false, votes: [], outcome: null, chosenChoiceId: null, createdAt: '' });
 const resolution = (leaders: Resolution['leaders'], votes: [string, 'a' | 'b' | 'c', number][]): Resolution => ({
   scene: {} as Resolution['scene'], tally: { a: 0, b: 0, c: 0 }, abstained: [], rules: null, leaders,
   votes: votes.map(([playerId, choiceId, roll]) => ({ playerId, characterName: playerId, choiceId, choiceLabel: '', roll })),

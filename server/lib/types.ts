@@ -68,8 +68,8 @@ export interface StoredScene {
   narration: string;
   imagePrompt: string;
   imageUrl: string | null;
-  /** The narrator's reading of this scene, once a player has asked for it (lib/narration.ts). */
-  voiceUrl: string | null;
+  /** The readings of this scene made so far, by narrator id (lib/voice.ts): one per voice a player has asked for. */
+  voices: Record<string, string>;
   choices: StoredChoice[];
   isFinale: boolean;
   votes: Vote[];
@@ -123,7 +123,9 @@ export interface SceneView {
   title: string;
   narration: string;
   imageUrl: string | null;
-  /** The narrator's reading of this scene (an audio file), or null until a player asks for it: POST …/narration. */
+  /** The readings of this scene made so far, by narrator id: audio files. A player asks for one with POST …/narration. */
+  voices: Record<string, string>;
+  /** The default narrator's reading, or null: what apps from before the voice picker play. */
   voiceUrl: string | null;
   choices: ChoiceView[];
   /** A combat round: each vote is that player's own hero's action, and the choices are written for the caller's hero. */
@@ -140,7 +142,8 @@ export interface ChronicleEntry {
   index: number;
   title: string;
   imageUrl: string | null;
-  /** The narrator's reading of that scene, if anyone asked for it. */
+  /** The readings of that scene that were made, by narrator id; `voiceUrl` is the default narrator's. */
+  voices: Record<string, string>;
   voiceUrl: string | null;
   choiceLabel: string;
   outcome: string;
