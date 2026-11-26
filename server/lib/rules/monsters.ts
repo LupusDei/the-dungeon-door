@@ -7,7 +7,7 @@ import crToXpJson from '../../data/srd/5.2/crToXp.json' with { type: 'json' };
 import budgetsJson from '../../data/srd/5.2/encounterBudgets.json' with { type: 'json' };
 import monstersJson from '../../data/srd/5.2/monsters.json' with { type: 'json' };
 import { ABILITIES, type Ability, type AbilityScores, abilityModifier } from './abilities.ts';
-import { parseTable } from './srd.ts';
+import { once, parseTable } from './srd.ts';
 import { lookup, require } from './violation.ts';
 
 export const DAMAGE_TYPES = [
@@ -84,16 +84,11 @@ const crSchema = z.object({ challengeRating: z.string(), xp: z.number() })
 const budgetSchema = z.object({ level: z.number(), low: z.number(), moderate: z.number(), high: z.number() });
 
 interface Tables { monsters: Map<string, Monster>; xp: Map<number, number>; budgets: Map<number, Record<Difficulty, number>> }
-let tables: Tables | null = null;
-
-function loaded(): Tables {
-  tables ??= {
-    monsters: new Map(parseTable('monsters', monsterSchema, monstersJson).map((m) => [m.id, m])),
-    xp: new Map(parseTable('crToXp', crSchema, crToXpJson)),
-    budgets: new Map(parseTable('encounterBudgets', budgetSchema, budgetsJson).map((b) => [b.level, b])),
-  };
-  return tables;
-}
+const loaded = once((): Tables => ({
+  monsters: new Map(parseTable('monsters', monsterSchema, monstersJson).map((m) => [m.id, m])),
+  xp: new Map(parseTable('crToXp', crSchema, crToXpJson)),
+  budgets: new Map(parseTable('encounterBudgets', budgetSchema, budgetsJson).map((b) => [b.level, b])),
+}));
 
 export const monsters = (): ReadonlyMap<string, Monster> => loaded().monsters;
 

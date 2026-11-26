@@ -19,7 +19,7 @@ server/lib/rules/            pure TypeScript, no I/O, no clock, no Math.random
   sheet.ts                   the CharacterSheet type and its stored (JSON) shape
   violation.ts               RuleViolation: a choice the rules forbid
   dice, monsters, combatant, resolve, encounter, scene (PR B): combat
-  dungeon/… (PR C)           fixed room graph or explore-as-you-go, stocking, encounters, loot
+  dungeonTables, dungeon, explore (PR C): fixed room graph or explore-as-you-go, stocking, loot
 server/data/srd/             SRD 5.2 (preferred) and 5.1 JSON, plus open-licensed extras
 ```
 
@@ -173,6 +173,25 @@ and the starting-wealth tables.
 
 Either way the DM gets a room at a time to narrate, and the game stores which rooms are explored and
 cleared.
+
+As built (PR C): `dungeonTables.ts` (every table, checked to cover its die once at load), `dungeon.ts`
+(`stockRoom`, `rollTreasure`, `generateDungeon(seed, size, levels)`), `explore.ts` (`startExplore`,
+`expand`, `unexplored`) and `rng.ts`'s `derivedRng(seed, key)` (FNV-1a of `seed/key`). Decisions:
+
+- Fixed maps: the path runs r0 → goal; branches hang off path rooms (off the entrance too on a short
+  map, never off the goal); loops are drawn from room pairs not yet linked. The entrance is empty, the
+  goal always a high-difficulty monster with treasure, other rooms moderate. A stairs connection on a
+  fixed map is a way between rooms on the same level, not a level change.
+- Explore mode: an area's id is the path to it (`e.x1.ahead.door`), so its dice depend on where it is,
+  not when it was found. Behind a door is a room or a plain passage. Stairs lead one level deeper, and
+  room monsters get harder with depth (low, moderate, then high from level 3).
+- **The main line never closes.** Off it, dead ends and rooms with no way on are allowed; on the
+  main line (the entrance, then each area's first way on), a dead end becomes a passage going on and a
+  room has at least one way on. So an explore dungeon can't run out, and the rule depends only on ids.
+- Treasure is OSE's band for the level in coins, gems and jewellery counts; a magic item is drawn from
+  the SRD 5.2 magic items (common and uncommon, rare from level 4).
+- Not yet: wandering monsters, traps' DCs and damage, treasure values for gems and jewellery, and
+  marking rooms cleared (the game stores that beside the dungeon).
 
 ## Integration (later, contract first)
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pick, sample, scriptedRng, seededRng } from './rng.ts';
+import { derivedRng, pick, sample, scriptedRng, seededRng } from './rng.ts';
 
 const faces = (rng: { die(s: number): number }, sides: number, n: number) => Array.from({ length: n }, () => rng.die(sides));
 
@@ -71,4 +71,12 @@ test('sample leaves the list it was given alone', () => {
   const list = ['a', 'b', 'c'];
   sample(scriptedRng([3, 1, 1]), list, 3);
   assert.deepEqual(list, ['a', 'b', 'c']);
+});
+
+test('a derived rng depends only on the seed and the key', () => {
+  const roll = (seed: number, key: string) => Array.from({ length: 5 }, ((r) => () => r.die(100))(derivedRng(seed, key)));
+  assert.deepEqual(roll(9, 'e.ahead'), roll(9, 'e.ahead'));
+  assert.notDeepEqual(roll(9, 'e.ahead'), roll(9, 'e.left'));
+  assert.notDeepEqual(roll(9, 'e.ahead'), roll(10, 'e.ahead'));
+  assert.deepEqual(roll(9, 'e.ahead'), [81, 70, 54, 99, 79]);
 });

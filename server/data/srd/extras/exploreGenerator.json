@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "title": "The Dungeon Door Explore-As-You-Go Procedure (original tables)",
+    "version": "original",
+    "srd": "original",
+    "ruleset": "2024/2014 5e-compatible",
+    "license": "CC0-1.0",
+    "attribution": "Original tables written for The Dungeon Door and dedicated to the public domain under CC0 1.0.",
+    "sourceUrl": null,
+    "fetched": "2026-11-25",
+    "recordCount": 1,
+    "notes": "Inspired only by the mechanics of the classic 'roll the passage ahead as you explore' procedure (the dungeon grows where the party goes: passage, then room, then contents). No table, wording, die size or probability was copied or closely paraphrased from the 1979 AD&D Dungeon Masters Guide Appendix A or any later DMG, which remain under copyright. Room sizes and door types reuse extras/dungeonGenerator.json (also CC0); contents use extras/oseDungeonStocking.json (CC-BY-4.0)."
+  },
+  "records": [
+    {
+      "index": "dungeon-door-explore-procedure",
+      "name": "The Dungeon Door Explore-As-You-Go Procedure",
+      "origin": "original",
+      "license": "CC0-1.0",
+      "purpose": "Grow an unlimited dungeon lazily: each time the party takes an unexplored way, roll what lies beyond it.",
+      "seeding": "Each new area's dice come from the dungeon seed and the new area's id, so the result depends only on the seed and the path taken, never on the order the party explores in.",
+      "beyondAnExit": {
+        "dice": "1d100",
+        "rows": [
+          { "min": 1, "max": 30, "result": "onward", "name": "The way runs on", "exits": ["ahead"] },
+          { "min": 31, "max": 45, "result": "door", "name": "A door blocks the way" },
+          { "min": 46, "max": 58, "result": "fork", "name": "The way forks", "exits": ["left", "right"] },
+          { "min": 59, "max": 68, "result": "bend", "name": "The way bends", "exits": ["ahead"] },
+          { "min": 69, "max": 88, "result": "room", "name": "It opens into a room" },
+          { "min": 89, "max": 93, "result": "stairs", "name": "Steps lead down", "exits": ["down"] },
+          { "min": 94, "max": 100, "result": "dead-end", "name": "It ends in bare stone", "exits": [] }
+        ]
+      },
+      "behindADoor": {
+        "dice": "1d6",
+        "rows": [
+          { "min": 1, "max": 4, "result": "room" },
+          { "min": 5, "max": 6, "result": "onward" }
+        ]
+      },
+      "roomExits": {
+        "dice": "1d8",
+        "notes": "Ways out of a new room besides the one the party came in by.",
+        "rows": [
+          { "min": 1, "max": 1, "count": 0 },
+          { "min": 2, "max": 4, "count": 1 },
+          { "min": 5, "max": 6, "count": 2 },
+          { "min": 7, "max": 7, "count": 3 },
+          { "min": 8, "max": 8, "count": 4 }
+        ]
+      },
+      "difficultyByDepth": [
+        { "depth": 1, "difficulty": "low" },
+        { "depth": 2, "difficulty": "moderate" },
+        { "depth": 3, "difficulty": "high" }
+      ],
+      "notes": [
+        "The entrance is an empty room with one to three ways on (roll roomExits again on a 1).",
+        "Going down stairs starts a deeper level: encounters there use the next difficulty, and stay at 'high' from depth 3.",
+        "A dead end may hide a secret door; that is the DM's call, not a roll."
+      ]
+    }
+  ]
+}

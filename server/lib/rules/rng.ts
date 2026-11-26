@@ -47,3 +47,13 @@ export function sample<T>(rng: Rng, items: readonly T[], n: number): T[] {
   const left = [...items];
   return Array.from({ length: n }, () => left.splice(rng.die(left.length) - 1, 1)[0]);
 }
+
+/**
+ * An rng for one named thing inside a seeded whole (a dungeon area): FNV-1a of `seed/key` seeds it, so its
+ * dice depend only on the seed and the key, never on what was rolled before.
+ */
+export function derivedRng(seed: number, key: string): Rng {
+  let hash = 0x811c9dc5;
+  for (const ch of `${seed}/${key}`) hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return seededRng(hash);
+}
