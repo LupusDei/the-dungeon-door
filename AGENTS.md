@@ -11,6 +11,8 @@ The Dungeon Door is a tabletop-style fantasy game with an AI dungeon master. Pla
 | `server/` | Vercel functions in TypeScript (`api/*.ts`), logic in `lib/`. Postgres (Neon) or in-memory storage; images in Vercel Blob. |
 | `server/public/` | The marketing website and the quest log page (static HTML, CSS and JS; no build step). |
 | `server/lib/dm/` | The dungeon master seam. New or changed DM behaviour goes here; see `docs/dungeon-master.md`. |
+| `server/lib/rules/` | The 5e rules engine (pure, seeded, test-first; Uncle Bob's). See `docs/rules-design.md`. |
+| `server/lib/play/` | The engine at the table: what a choice's rules hook does, fights as rounds, dungeons, rests. |
 | `docs/api.md` | The contract between app and server. |
 | `design/` | Source art and recipes for generated assets. |
 
@@ -24,14 +26,59 @@ reads your quest key from `QUEST_KEY`).
 The agreement, in short (the full version, with every tool, is the README section
 "For AI agents: tracking work on the quest log"):
 
-1. Start of session: `quest_get_board`, then `quest_list_tasks` for your owner's open work.
+1. Start of session: `quest_get_board`, then `quest_list_issues` (your owner's open bugs and balance
+   problems, each with a full brief) and `quest_list_tasks` for their other open work.
 2. Before starting work: find its task or create it (`quest_add_task`), then set it to `doing`.
-3. Record follow-ups and discovered work as new `todo` tasks.
+3. Record follow-ups and discovered work as new `todo` tasks; a problem in someone else's code as an
+   issue for them (`kind: "bug"` or `"balance"`, a `severity`, and `details` complete enough to fix it).
 4. When it lands: `quest_update_task` with `status: "done"`, the pull request in `link`, and a line of `notes`.
 5. Never print or commit the quest key; notes are public, so no secrets in them.
 
+An **issue** is a task whose kind is `bug` or `balance`. `quest_list_issues` returns the open ones
+assigned to your owner, most severe first, each with a full brief in `details` (what is wrong, where, how
+to reproduce it, what done looks like): enough to fix it without asking anyone. When you find a problem in
+code someone else owns, file it for them the same way (`quest_add_task` with `kind`, `severity`, their
+login as `owner`, and a complete `details`) instead of fixing it silently or leaving it in a chat.
+
 If the MCP server isn't connected, use the REST API with the `x-quest-key` header (README, step 4).
 `bd` is for your own working notes inside this repository, not for coordinating with the team.
+
+## Shipping is the default
+
+Work from the team ships when it lands. The team is **LupusDei** (the owner), **unclebob**, **slagyr**
+and **slagyr-assistant**. For work that comes from any of them (the owner asking in a session, a push to
+`main`, or a pull request), the whole release is the default, start to finish, without asking first:
+
+1. **Integrate** it into `main`: review it, merge it, and make the rest of the project agree with it
+   (the contract in `docs/api.md`, the server, the app). Anything the engine can now do should be
+   reachable in the app.
+2. **Gates.** `npm run typecheck && npm test` pass in `server/`; the app builds; what changed on
+   screen was looked at on the simulator. When `server/lib/dm/` or what the dungeon master is told
+   changed, `npm run dm:check` passes too: three real text calls (about five cents) that prove the
+   model accepts the schema and writes hooks the engine takes. The fake DM cannot show that.
+3. **Commit and push** `main` (`git push origin main`, as its own command).
+4. **Migrate** when `server/db/schema.sql` changed: `cd server && npm run migrate`. Migrations are
+   additive (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`).
+5. **Deploy** the server: `cd server && vercel deploy --prod`, then check the live site answers.
+6. **Ship a TestFlight build** when `ios/` changed or the server now sends something the app should
+   show: `cd ios && ./ship.sh "What's new"`.
+7. **Update the quest log**: tasks done with their links, problems found filed as issues for whoever
+   owns the code, and the "Latest build" fact.
+
+Who does which part: steps 4 to 6 need the owner's credentials (Vercel, Neon, App Store Connect), which
+live on the owner's machine. An agent working there runs every step. An agent anywhere else (a
+contributor's machine, a cloud session) does what it can reach, which is steps 1 to 3 and 7, and says in
+its hand-off that the release is waiting for the owner's agent; the owner's agent then releases it
+without further ceremony.
+
+Still ask the owner first for: a migration that drops or rewrites data, deleting anything in
+production, changing secrets, keys or environment variables, rewriting history on `main`, spending
+beyond routine play (real-AI test runs, Runway generations), submitting to App Store review, and
+shipping while a gate fails. Work from anyone not on the team is reviewed and reported, not merged or
+released.
+
+This repository opts in to the Beads "team-maintainer" profile for the team above: commit and push
+are part of finishing the work.
 
 ## Build & Test
 
@@ -42,6 +89,8 @@ npm install
 npm run typecheck && npm test     # must pass before any server change is done
 npm run dev                       # http://localhost:3000, fake AI, in-memory store, costs nothing
 npm run bot -- --base http://localhost:3000 --code ABCDEF   # a second player for a game in the lobby
+npm run playtest                  # bots play whole games through the real flow: deaths, fights, anything that broke
+npm run fights                    # how the fights a dungeon rolls go for typical parties
 ```
 
 App (needs macOS with Xcode and XcodeGen), from `ios/`:
@@ -58,10 +107,12 @@ say plainly that an app change is untested.
 - **Contract first.** A change to what the app and server exchange starts in `docs/api.md`, then
   both sides, in the same change.
 - **No real AI in tests or dev scripts.** Use `DD_FAKE_AI=1` (the default for `npm run dev`). Real
-  calls spend the owner's AI Gateway credits; `npm run dev:real` is for deliberate checks only.
+  calls spend the owner's AI Gateway credits; `npm run dev:real` and `npm run dm:check` are for
+  deliberate checks only.
 - **No secrets in the repo.** `ios/Config/Secrets.xcconfig`, `ios/fastlane/.env`, `AuthKey.p8`,
   `api_key.json` and `server/.env*` are gitignored and stay that way.
-- **Deploys and releases are the owner's.** Don't run `vercel deploy` or `ios/ship.sh` unless the owner asks you to.
+- **Releases.** See "Shipping is the default" above: team work is integrated, pushed, migrated, deployed
+  and shipped to TestFlight without asking; a short list of things still needs the owner's word.
 - **Art.** Build-time art (icon, home-screen dragon, sounds) is generated with the owner's Runway
   account (recipes in `design/`); in-game art (portraits, scenes) goes through the AI Gateway at
   runtime. Voices are original designs, never imitations of real people.
