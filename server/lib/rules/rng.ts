@@ -41,3 +41,9 @@ export function scriptedRng(faces: readonly number[]): Rng {
 export function pick<T>(rng: Rng, items: readonly T[]): T {
   return items[rng.die(items.length) - 1];
 }
+
+/** `n` different elements, chosen by the rng in turn from what is left. */
+export function sample<T>(rng: Rng, items: readonly T[], n: number): T[] {
+  const left = [...items];
+  return Array.from({ length: n }, () => left.splice(rng.die(left.length) - 1, 1)[0]);
+}

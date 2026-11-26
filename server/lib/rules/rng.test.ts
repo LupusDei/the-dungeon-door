@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pick, scriptedRng, seededRng } from './rng.ts';
+import { pick, sample, scriptedRng, seededRng } from './rng.ts';
 
 const faces = (rng: { die(s: number): number }, sides: number, n: number) => Array.from({ length: n }, () => rng.die(sides));
 
@@ -59,4 +59,16 @@ test('a scripted rng reports how many faces it has used as its state', () => {
 test('pick takes the element the die points at', () => {
   assert.equal(pick(scriptedRng([1]), ['a', 'b', 'c']), 'a');
   assert.equal(pick(scriptedRng([3]), ['a', 'b', 'c']), 'c');
+});
+
+test('sample takes n different elements, chosen by the rng', () => {
+  assert.deepEqual(sample(scriptedRng([1, 1]), ['a', 'b', 'c'], 2), ['a', 'b']);
+  assert.deepEqual(sample(scriptedRng([3, 2]), ['a', 'b', 'c'], 2), ['c', 'b']);
+  assert.deepEqual(sample(scriptedRng([]), ['a', 'b'], 0), []);
+});
+
+test('sample leaves the list it was given alone', () => {
+  const list = ['a', 'b', 'c'];
+  sample(scriptedRng([3, 1, 1]), list, 3);
+  assert.deepEqual(list, ['a', 'b', 'c']);
 });
