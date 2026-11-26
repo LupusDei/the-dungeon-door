@@ -294,8 +294,10 @@ struct CharacterSheet: Codable, Hashable {
     var features: [String]
     /// Uses spent of limited class features, by resource id ("rage", "second-wind").
     var resourcesUsed: [String: Int]
-    /// The hero died and stays dead: it cannot create or join a game.
+    /// The hero died and stays dead until raised: it cannot create or join a game.
     var dead: Bool
+    /// Raised from the dead: this much off every d20 roll (0 to 4), one less after each long rest.
+    var revivalPenalty: Int
     var spellcasting: Spellcasting?
 
     var hitDiceLeft: Int { max(0, level - hitDiceSpent) }
@@ -345,6 +347,7 @@ extension CharacterSheet {
         features = try c.value(.features, or: [])
         resourcesUsed = try c.value(.resourcesUsed, or: [:])
         dead = try c.value(.dead, or: false)
+        revivalPenalty = try c.whole(.revivalPenalty)
         spellcasting = try c.decodeIfPresent(Spellcasting.self, forKey: .spellcasting)
     }
 }
@@ -596,9 +599,16 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     let capacity: Double
     let dragLimit: Double
     let dragging: Bool
+    /// How the hero sees where the party is: "clear", "dim" (Perception rolls twice, worse die) or
+    /// "none" (in darkness: checks that need eyes fail, and in a fight the hero is blinded).
+    let sight: String
+    /// Feet of darkvision from the hero's species; 0 without.
+    let darkvision: Int
 
     var id: String { playerId }
     var isUp: Bool { !down && !dead }
+    var cannotSee: Bool { sight == "none" }
+    var seesDimly: Bool { sight == "dim" }
 
     /// "Standing", "Down" or "Fallen".
     var word: String { dead ? "Fallen" : down ? "Down" : "Standing" }
@@ -629,6 +639,8 @@ extension HeroStanding {
         capacity = try c.value(.capacity, or: 0)
         dragLimit = try c.value(.dragLimit, or: 0)
         dragging = try c.value(.dragging, or: false)
+        sight = try c.value(.sight, or: "clear")
+        darkvision = try c.whole(.darkvision)
     }
 }
 
@@ -722,6 +734,24 @@ extension DungeonArea {
     }
 }
 
+/// Foes in the party's room who did not attack: a Parley choice talks to them.
+struct WaitingFoes: Codable, Hashable {
+    /// "Boar ×3", "Goblin Warrior ×2, Bugbear Warrior".
+    let foes: String
+    /// "indifferent" or "friendly".
+    let attitude: String
+
+    var isFriendly: Bool { attitude == "friendly" }
+}
+
+extension WaitingFoes {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        foes = try c.value(.foes, or: "")
+        attitude = try c.value(.attitude, or: "indifferent")
+    }
+}
+
 /// What the party has seen of the dungeon. There are no coordinates: the app lays the map out
 /// from the exits, breadth-first from the first area.
 struct DungeonMap: Codable, Hashable {
@@ -733,6 +763,8 @@ struct DungeonMap: Codable, Hashable {
     let at: String
     /// Only areas the party has entered, in the order they were entered.
     let areas: [DungeonArea]
+    /// Foes in this area who are watching, not attacking. Nil when there are none.
+    let waiting: WaitingFoes?
 
     var here: DungeonArea? { areas.first { $0.id == at } }
     func area(_ id: String?) -> DungeonArea? { areas.first { $0.id == id } }
@@ -745,6 +777,51 @@ extension DungeonMap {
         kind = try c.value(.kind, or: "Dungeon")
         at = try c.value(.at, or: "")
         areas = try c.value(.areas, or: [])
+        waiting = (try? c.decodeIfPresent(WaitingFoes.self, forKey: .waiting)).flatMap { $0 }.flatMap { $0.foes.isEmpty ? nil : $0 }
+    }
+}
+
+/// The adventure's clock: it starts at 8 in the morning of day 1, and every choice moves it on.
+struct GameClock: Codable, Hashable {
+    let seconds: Int
+    /// "Day 1, 08:40".
+    let label: String
+}
+
+extension GameClock {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        seconds = try c.whole(.seconds)
+        label = try c.value(.label, or: "")
+    }
+}
+
+/// What the party sees by where it is.
+struct PartyLight: Codable, Hashable {
+    /// The light the party carries lit: what it is, who holds it, and the minutes it has left.
+    struct Source: Codable, Hashable {
+        let name: String
+        let holder: String
+        let minutesLeft: Int
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.value(.name, or: "Light")
+            holder = try c.value(.holder, or: "")
+            minutesLeft = try c.whole(.minutesLeft)
+        }
+    }
+
+    /// "bright", "dim" or "dark": bright wherever the party's own light burns.
+    let level: String
+    let source: Source?
+}
+
+extension PartyLight {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        level = try c.value(.level, or: "bright")
+        source = try c.decodeIfPresent(Source.self, forKey: .source)
     }
 }
 
@@ -755,6 +832,9 @@ struct RulesView: Codable, Hashable {
     let dungeon: DungeonMap?
     /// The engine's dice lines for the last resolved scene.
     let results: [String]
+    /// Nil from a server older than the clock.
+    let time: GameClock?
+    let light: PartyLight?
 }
 
 extension RulesView {
@@ -764,6 +844,8 @@ extension RulesView {
         combat = try c.decodeIfPresent(Combat.self, forKey: .combat)
         dungeon = try c.decodeIfPresent(DungeonMap.self, forKey: .dungeon)
         results = try c.value(.results, or: [])
+        time = try c.decodeIfPresent(GameClock.self, forKey: .time)
+        light = try c.decodeIfPresent(PartyLight.self, forKey: .light)
     }
 }
 

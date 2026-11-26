@@ -72,6 +72,16 @@ final class AppModel {
         persistCharacters()
     }
 
+    /// Has a temple raise a dead hero, paid from `payer`'s purse (the hero's own, or another of
+    /// the player's living heroes).
+    func raise(_ hero: Character, paidBy payer: Character) async throws {
+        let raised = try await api.revive(characterId: hero.id, payerId: payer.id == hero.id ? nil : payer.id)
+        if let i = characters.firstIndex(where: { $0.id == raised.id }) { characters[i] = raised }
+        persistCharacters()
+        // The payer's purse is lighter now: fetch the roster as the server has it.
+        await refresh()
+    }
+
     func enter(_ state: GameState) {
         activeGame?.stop()
         let session = GameSession(api: api, playerId: playerId, initial: state)

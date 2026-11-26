@@ -45,7 +45,7 @@ struct HeroIdentityHeader: View {
             }
             if fallen {
                 Label {
-                    Text("\(character.name) died on an adventure. The dead stay dead: they can't go through a door again, but their sheet and their story are kept.")
+                    Text("\(character.name) died on an adventure. The dead can't go through a door again unless they are raised. Their sheet and their story are kept.")
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "leaf.fill")
@@ -56,6 +56,20 @@ struct HeroIdentityHeader: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Palette.ember.opacity(0.14), in: .rect(cornerRadius: 12))
                 .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.ember.opacity(0.5), lineWidth: 1) }
+            } else if let penalty = character.sheet?.revivalPenalty, penalty > 0 {
+                // Raised from the dead: the numbers below are the hero's own, so say what comes off them.
+                Label {
+                    Text("Raised from the dead and still weak: \u{2212}\(penalty) on every d20 roll. Each long rest eases it by 1.")
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                .font(.serif(.footnote))
+                .foregroundStyle(Palette.parchment.opacity(0.9))
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.gold.opacity(0.10), in: .rect(cornerRadius: 12))
+                .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.gold.opacity(0.4), lineWidth: 1) }
             }
         }
     }

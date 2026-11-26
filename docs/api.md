@@ -207,6 +207,9 @@ RulesView {                          // SRD 5.2 (2024 rules)
     inventory: [{ id: string; name: string; count: number }]
     carried: number; capacity: number; dragLimit: number   // pounds; over capacity the hero is dragging
     dragging: boolean                 // Speed 5 ft
+    sight: "clear" | "dim" | "none"   // how the hero sees here: dim, Perception has Disadvantage; none,
+                                      // Perception and Investigation fail and in a fight the hero is Blinded
+    darkvision: number                // feet, from the species; 0 without
   }]
   combat: null | {
     round: number
@@ -224,6 +227,12 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // area who did not attack; a Parley choice talks to them
   }
   results: string[]                   // the engine's dice lines for the last resolved scene
+  time: { seconds: number; label: string }   // the adventure's clock, from 8 in the morning of day 1:
+                                      // "Day 1, 08:40". A choice takes ten minutes, a rest its length.
+  light: {
+    level: "bright" | "dim" | "dark"  // what the party sees by here; bright wherever its own light burns
+    source: null | { name: string; holder: string; minutesLeft: number }   // "Torch", "Bryn", 40
+  }
 }
 
 Message {
@@ -277,6 +286,16 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   sprung); a hazard ("Hazard: Falling (30 feet)"); "Parley" or "Parley with Goblin Warrior" (the best
   talker tries to sway them); "Raise the dead" (a temple: every dead hero is raised while the party's gold
   lasts).
+- **Time and light.** The engine keeps a clock (`rules.time`) and the party's light (`rules.light`). Where
+  the place is not bright, the standing hero with the best light lights it (the Light cantrip, a lantern or
+  lamp with oil, a torch, a candle), and the next when it burns out. A dungeon's entrance is dim, most
+  rooms and every corridor are dark; outdoors it is bright by day and dark by night. Each hero's `sight`
+  follows from the light and their darkvision. `time` and `light` are absent from servers older than this.
+- **Corridors and wanderers.** A way between two rooms may run through a corridor: it is an area in
+  `rules.dungeon.areas` like any other (its `purpose` is null), passed in the same move, and it can be
+  trapped. In a dungeon the engine rolls for wandering monsters every half hour of the clock (d6, a 1), and
+  at once after noise (a fight that ended, a trap that went off: 1 or 2). Wanderers roll an attitude like
+  any foes: the Hostile attack, the others go their way.
 - **Meeting monsters.** Foes in a dungeon room roll an attitude (2d6): 2–5 Hostile, and the fight starts;
   6–9 Indifferent or 10–12 Friendly, and they wait (`rules.dungeon.waiting`). Undead, constructs and oozes
   are always Hostile. A parley that works leaves the room to the party (their treasure stays theirs); one
@@ -302,7 +321,10 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     when a save, trap or hazard drops a hero outside a fight.
   - **Written for you.** In a combat round each caller gets their own `choices`: the same three ids, with
     `label` and `detail` saying what their hero will do ("Attack with Greatsword" / "+5 to hit, 2d6+3
-    slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them.
+    slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them. An area spell names
+    every foe it will catch ("3d6 fire, Dexterity save DC 12 for half, at Goblin Warrior 2 and Goblin
+    Warrior 1."), and a hero about to drink a potion is told so on all three (the detail ends " First
+    drinks a Potion of Healing.").
   - **Who must act.** A hero that is down or dead has no action: `scene.canAct` is false for its player,
     a vote from them is accepted and changes nothing, and the round resolves when every hero that can act has voted.
     If no hero can act the round resolves at once. The host can still `advance` with no votes in.

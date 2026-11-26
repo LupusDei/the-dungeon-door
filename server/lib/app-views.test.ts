@@ -29,6 +29,7 @@ import type { DungeonMaster } from './dm/types.ts';
 import { setDice } from './game.ts';
 import { DUNGEON_MODES } from './play/table.ts';
 import { autoLevelUp } from './play/fight.ts';
+import { addItem } from './rules/inventory.ts';
 import { awardXp } from './rules/leveling.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 import { srd } from './rules/srd.ts';
@@ -247,8 +248,23 @@ test('a combat round is written for each player: what their own hero will do', a
   assert.equal(fighter.scene!.choices[2].label, 'Dodge');
 
   assert.equal(wizard.scene!.choices[1].label, 'Cast Burning Hands');
-  assert.match(wizard.scene!.choices[1].detail, /^3d6 fire, Dexterity save DC \d+ for half, at Goblin Warrior [12]\. Uses a level 1 slot \(\d left\)\.$/);
+  assert.match(wizard.scene!.choices[1].detail, /^3d6 fire, Dexterity save DC \d+ for half, at Goblin Warrior [12] and Goblin Warrior [12]\. Uses a level 1 slot \(\d left\)\.$/, 'a 15-foot cone catches two');
   assert.match(wizard.scene!.choices[0].label, /^Attack with /);
+});
+
+test('a hero at half its hit points or less is told it will drink its potion first, and the engine has it do so', async () => {
+  const { code, players } = await intoFight(['fighter', 'fighter'], ['goblin-warrior']);
+  const game = (await getStore().getGame(code))!;
+  const carrying = Object.fromEntries(players.map((p) => [p, addItem(game.party!.sheets[p], 'potion-of-healing')]));
+  await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: carrying } });
+  await wound(code, players[0], 4);
+  const [hurt, hale] = await Promise.all(players.map((p) => view(code, p)));
+  for (const choice of hurt.scene!.choices) assert.match(choice.detail, / First drinks a Potion of Healing\.$/, choice.label);
+  for (const choice of hale.scene!.choices) assert.doesNotMatch(choice.detail, /Potion/, 'unhurt: the potion stays in the pack');
+  for (const p of players) await vote(code, p, hurt.scene!.index, 'c');
+  await settle();
+  const after = await view(code, players[0]);
+  assert.equal(after.rules!.results.filter((line) => /drinks a Potion of Healing as a Bonus Action/.test(line)).length, 1, after.rules!.results.join(' | '));
 });
 
 test('a hero that is down has no action, and the round does not wait for its player', async () => {

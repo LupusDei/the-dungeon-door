@@ -43,6 +43,13 @@ struct APIClient: Sendable {
         let _: OK = try await send("DELETE", "api/characters", query: ["id": characterId])
     }
 
+    /// A temple's Raise Dead between adventures. The dead hero's own purse pays, or `payerId`'s:
+    /// another living hero of the same player. 409 when the purse is too light.
+    func revive(characterId: String, payerId: String?) async throws -> Character {
+        struct Body: Encodable { let characterId: String; let payerId: String? }
+        return try await send("POST", "api/characters/revive", body: Body(characterId: characterId, payerId: payerId))
+    }
+
     /// The level-1 sheet a save would build for this hero; nothing is stored. The id seeds the
     /// build, so the preview is the hero that will be saved.
     func sheet(id: String, name: String, race: String, characterClass: String, backgroundId: String?) async throws -> SheetPreview {

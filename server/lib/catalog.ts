@@ -187,8 +187,8 @@ const BACKGROUND_BLURBS: Readonly<Record<string, string>> = {
 /** The kinds of game a host can start, by the `dungeon` of POST …/start (lib/play/table.ts DUNGEON_MODES). */
 export const DUNGEONS: (Option & { symbol: string })[] = [
   { id: 'none', name: 'A tale told', symbol: 'book.pages.fill', blurb: 'The dungeon master spins a short adventure, scene by scene. Your skills decide how each choice goes, and a fight can break out.' },
-  { id: 'fixed', name: 'Delve a dungeon', symbol: 'map.fill', blurb: 'A mapped dungeon of rooms and doors, with monsters, traps and treasure behind them. Longer adventures get bigger maps. Deadly: a hero who dies stays dead.' },
-  { id: 'explore', name: 'Explore the deep', symbol: 'flashlight.on.fill', blurb: 'A dungeon that grows where you go: each door opens on a room nobody has seen, the dungeon master included. Deadly: a hero who dies stays dead.' },
+  { id: 'fixed', name: 'Delve a dungeon', symbol: 'map.fill', blurb: 'A mapped dungeon of rooms and doors, with monsters, traps and treasure behind them. Longer adventures get bigger maps. Not every monster attacks on sight. Deadly: a hero who dies stays dead unless the party can pay to raise them.' },
+  { id: 'explore', name: 'Explore the deep', symbol: 'flashlight.on.fill', blurb: 'A dungeon that grows where you go: each door opens on a room nobody has seen, the dungeon master included. Deadly: a hero who dies stays dead unless the party can pay to raise them.' },
 ];
 
 export function publicCatalog() {

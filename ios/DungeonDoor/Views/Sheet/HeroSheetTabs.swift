@@ -216,14 +216,23 @@ struct CombatTab: View {
         guard let live else {
             return sheet.dead ? [SheetRow(id: "status", title: "Fallen", strong: true,
                                           tags: [SheetRow.Tag(text: "Dead", tint: Palette.ember)],
-                                          subtitle: "Died on an adventure. The dead stay dead.")] : []
+                                          subtitle: "Died on an adventure. A temple can raise the dead, for a price.")] : []
         }
         var rows: [SheetRow] = []
         let standing = live.standing
         if !standing.isUp {
             rows.append(SheetRow(id: "status", title: standing.word, strong: true,
                                  tags: [SheetRow.Tag(text: standing.dead ? "Dead" : "0 hit points", tint: Palette.ember)],
-                                 subtitle: standing.dead ? "Beyond the party's help." : "Out of the fight until healed or rested."))
+                                 subtitle: standing.dead ? "Only a Revivify spell or a temple can bring them back." : "Out of the fight until healed or rested."))
+        }
+        if standing.isUp, standing.cannotSee {
+            rows.append(SheetRow(id: "sight", title: "Cannot see", strong: true,
+                                 tags: [SheetRow.Tag(text: "Darkness", tint: Palette.ember)],
+                                 subtitle: "No light and no darkvision. Perception and Investigation fail, and in a fight the hero is blinded."))
+        } else if standing.isUp, standing.seesDimly {
+            rows.append(SheetRow(id: "sight", title: "Sees dimly",
+                                 tags: [SheetRow.Tag(text: standing.darkvision > 0 ? "Darkvision \(standing.darkvision) ft" : "Dim light", tint: Palette.muted)],
+                                 subtitle: "Perception is rolled twice and the worse die counts."))
         }
         rows += live.conditions.map { id in
             SheetRow(id: "condition/\(id)", title: rules.conditionName(id),
@@ -271,6 +280,14 @@ struct CombatTab: View {
                                  value: "\(exhaustion)",
                                  spoken: "Exhaustion level \(exhaustion) of 6",
                                  detail: rules.condition("exhaustion")))
+        }
+        if sheet.revivalPenalty > 0 {
+            let penalty = sheet.revivalPenalty
+            rows.append(SheetRow(id: "revival", title: "Weakened by the ordeal",
+                                 tags: [SheetRow.Tag(text: "Raised from the dead", tint: Palette.ember)],
+                                 subtitle: "\u{2212}\(penalty) to every d20 roll: attacks, checks and saves. Each long rest eases it by 1.",
+                                 value: "\u{2212}\(penalty)",
+                                 spoken: "Weakened by being raised from the dead, minus \(penalty) to every d 20 roll"))
         }
         return rows
     }

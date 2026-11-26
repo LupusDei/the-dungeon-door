@@ -348,8 +348,16 @@ What the game adds around the engine so the app can show it (Justin's side; `doc
   the sheet screen shows current HP, slots, level and gear during play.
 - **A round written for each player** (`lib/play/your-turn.ts`): the three combat choices say what the
   caller's own hero will do ("Attack with Greatsword", "+5 to hit, 2d6+3 slashing, at Goblin Warrior 2"),
-  using the same picks as `play/fight.ts`. A hero that is down or dead has no action (`scene.canAct`),
-  and a round waits only for the heroes that can act.
+  using the same picks as `play/fight.ts`: an area spell names every foe it will catch, and a hero the
+  engine will have drink a potion first is told so. A hero that is down or dead has no action
+  (`scene.canAct`), and a round waits only for the heroes that can act.
+- **The hour and the light** (app): a scene shows the clock, the light the party carries and how long it
+  has left, and what the caller's own hero can see (`rules.time`, `rules.light`, `party[].sight`); a
+  hero's sheet in a game says when they cannot see.
+- **Waiting foes and the dead** (app): a room whose foes did not attack shows who they are and what a
+  parley would do (`rules.dungeon.waiting`); a dead hero's page has the temple (`POST
+  /api/characters/revive`), listing which of the player's purses can pay; a raised hero's page and sheet
+  show the revival penalty.
 - **One picture per fight**: the round that begins a fight is painted; later rounds carry the same
   picture. Paintings are most of what a game costs.
 - **A rules error never strands a table** (`lib/game.ts`, `withoutTheEngine`): if the engine throws, the

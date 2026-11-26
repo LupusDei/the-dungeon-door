@@ -22,6 +22,11 @@ struct CharacterDetailView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 14)
+                if hero.isFallen {
+                    TempleCard(hero: hero)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 14)
+                }
                 HeroSheetView(character: hero, tab: $tab)
                 if hero.sheet == nil {
                     // No sheet to hold the Story tab yet: their words still belong on the page.

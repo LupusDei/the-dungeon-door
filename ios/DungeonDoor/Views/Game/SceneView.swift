@@ -36,6 +36,9 @@ struct SceneView: View {
                             if scene.isFinale {
                                 finale
                             } else {
+                                if !scene.combat, let waiting = rules?.dungeon?.waiting {
+                                    WaitingFoesNotice(waiting: waiting)
+                                }
                                 choices(scene).id("choices")
                                 status(scene)
                             }
@@ -88,6 +91,11 @@ struct SceneView: View {
         VStack(alignment: .leading, spacing: 4) {
             SectionLabel(eyebrow(scene))
             Text(scene.title).font(.display(28, weight: .bold))
+            if !scene.isFinale, let rules, rules.time != nil || rules.light != nil {
+                TimeAndLight(clock: rules.time, light: rules.light,
+                             mine: rules.party.first { $0.playerId == session.playerId })
+                    .padding(.top, 6)
+            }
         }
     }
 
@@ -322,8 +330,106 @@ enum ChoiceLetter {
     }
 }
 
+/// The hour and what the party sees by: "Day 1, 08:40", "Torch, 40 min left (Bryn)" or "Dark, and
+/// no light". Under it, what the caller's own hero can make out when that is less than everything.
+private struct TimeAndLight: View {
+    let clock: GameClock?
+    let light: PartyLight?
+    let mine: HeroStanding?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 14) {
+                if let clock, !clock.label.isEmpty {
+                    Label(clock.label, systemImage: "clock")
+                }
+                if let light {
+                    Label(lightText(light), systemImage: lightSymbol(light))
+                        .foregroundStyle(light.source != nil ? Palette.gold : Palette.muted)
+                }
+            }
+            .font(.system(.caption, design: .serif, weight: .semibold))
+            .foregroundStyle(Palette.muted)
+            .labelStyle(.titleAndIcon)
+            if let mine, mine.isUp, let warning = sightWarning(mine) {
+                Label(warning, systemImage: mine.cannotSee ? "eye.slash.fill" : "eye.trianglebadge.exclamationmark")
+                    .font(.footnote)
+                    .foregroundStyle(mine.cannotSee ? Palette.ember : Palette.parchment.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func lightText(_ light: PartyLight) -> String {
+        if let source = light.source {
+            let left = source.minutesLeft >= 120 ? "\(source.minutesLeft / 60) h left" : "\(source.minutesLeft) min left"
+            return source.holder.isEmpty ? "\(source.name), \(left)" : "\(source.name), \(left) (\(source.holder))"
+        }
+        switch light.level {
+        case "dark": return "Dark, and no light"
+        case "dim": return "Dim light"
+        default: return "Well lit"
+        }
+    }
+
+    private func lightSymbol(_ light: PartyLight) -> String {
+        if light.source != nil { return "flame.fill" }
+        switch light.level {
+        case "dark": return "moon.fill"
+        case "dim": return "cloud.sun.fill"
+        default: return "sun.max.fill"
+        }
+    }
+
+    private func sightWarning(_ hero: HeroStanding) -> String? {
+        if hero.cannotSee {
+            return "\(hero.name) cannot see here. Perception and Investigation fail, traps go unseen, and in a fight \(hero.name) is blinded."
+        }
+        if hero.seesDimly {
+            return hero.darkvision > 0
+                ? "\(hero.name) sees dimly by darkvision: Perception is rolled twice and the worse die counts."
+                : "\(hero.name) sees only dimly: Perception is rolled twice and the worse die counts."
+        }
+        return nil
+    }
+}
+
+/// Foes in the room who did not attack: who they are, how they take to the party, and what a
+/// parley with them would do.
+private struct WaitingFoesNotice: View {
+    let waiting: WaitingFoes
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: waiting.isFriendly ? "hand.wave.fill" : "eye.fill")
+                .font(.system(size: 17))
+                .foregroundStyle(Palette.verdigris)
+                .frame(width: 26)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Here: \(waiting.foes)")
+                    .font(.display(16))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(waiting.isFriendly
+                     ? "Friendly. They will not attack. A parley with them is rolled twice and the better die counts; one that fails leaves them indifferent."
+                     : "Indifferent. They watch and wait. A parley can win the room; one that fails turns them hostile, and they attack.")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.verdigris.opacity(0.10), in: .rect(cornerRadius: 12))
+        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.verdigris.opacity(0.45), lineWidth: 1) }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// The rules label of a choice ("Athletics check, DC 12", "Fight: 2 Goblin Warriors", "Short
-/// rest"), with a symbol and a tint for the kind of thing it is.
+/// rest", "Parley"), with a symbol and a tint for the kind of thing it is.
 struct RuleTag: Equatable {
     let text: String
     let symbol: String
@@ -346,6 +452,10 @@ struct RuleTag: Equatable {
             (text, symbol, tint) = (label, "bag.fill", Palette.gold)
         } else if lower.hasPrefix("drink") {
             (text, symbol, tint) = (label, "cross.vial.fill", Palette.verdigris)
+        } else if lower.hasPrefix("parley") {
+            (text, symbol, tint) = (label, "bubble.left.and.bubble.right.fill", Palette.verdigris)
+        } else if lower.hasPrefix("raise the dead") {
+            (text, symbol, tint) = (label, "sparkles", Palette.gold)
         } else if lower.hasPrefix("risk") || lower.hasPrefix("hazard") {
             (text, symbol, tint) = (label, "exclamationmark.triangle.fill", Palette.ember)
         } else {

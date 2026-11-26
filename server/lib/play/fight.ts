@@ -109,7 +109,7 @@ export function heroAction(combat: CombatState, sheet: CharacterSheet, playerId:
 }
 
 /** The `n` most wounded living foes (fewer if fewer are left), for an area spell. */
-function caught(combat: CombatState, side: Combatant['side'], n: number): string[] {
+export function caught(combat: CombatState, side: Combatant['side'], n: number): string[] {
   const foes = Object.values(combat.combatants).filter((c) => c.side !== side && living(c));
   return foes.sort((a, b) => a.hp - b.hp).slice(0, n).map((c) => c.id);
 }
