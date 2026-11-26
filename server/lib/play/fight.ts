@@ -23,7 +23,7 @@ import { type Cast, castSpell, endConcentration, slotsLeft, spellDamageDice, str
 import { areaCatch, type SpellOutcome } from '../rules/spellEffects.ts';
 import { type SrdSpell, srd } from '../rules/srd.ts';
 import type { ChoiceId } from '../types.ts';
-import { takeThird } from './actions.ts';
+import { adjudicateCheck, takeThird, type CheckRuling } from './actions.ts';
 import { keepConcentration } from './concentration.ts';
 import { shakeOff } from './conditions.ts';
 import { afterFight } from './dying.ts';
@@ -39,7 +39,8 @@ export const COMBAT_CHOICES = [
 ];
 
 export type FightEnd = 'victory' | 'defeat' | 'fled';
-export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: number }>>;
+/** `freeform` is a written check, already classified; it is this hero's action instead of `choiceId`. */
+export type CombatVotes = Readonly<Record<string, { choiceId: ChoiceId; roll: number; text?: string; freeform?: CheckRuling }>>;
 export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
 
 /** Duplicate monsters are numbered: "Goblin Warrior 1", "Goblin Warrior 2". */
@@ -310,6 +311,13 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   const drunk = bonusAction(state, sheets, id);
   const vote = votes[id];
   if (!vote) return { action: { kind: 'dodge' }, ...drunk };
+  if (vote.freeform && vote.text) {
+    const rng = seededRng(drunk.state.rng);
+    const foeId = caught(drunk.state, drunk.state.combatants[id].side, 1)[0];
+    const done = adjudicateCheck(rng, drunk.sheets[id], vote.text, vote.freeform, vote.roll, foeId ? drunk.state.combatants[foeId] : null);
+    const combatants = done.foe ? { ...drunk.state.combatants, [done.foe.id]: done.foe } : drunk.state.combatants;
+    return { action: { kind: 'other', text: done.text }, state: { ...drunk.state, rng: rng.state(), combatants }, sheets: drunk.sheets };
+  }
   if (vote.choiceId === 'c') {
     const third = takeThird(drunk.state, drunk.sheets[id], id);
     return { action: third.action, state: third.combat, sheets: { ...drunk.sheets, [id]: third.sheet } };

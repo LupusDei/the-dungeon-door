@@ -5,6 +5,9 @@
 .beads-credential-key
 .beads/proxieddb/
 
+# Generated Gherkin specs (npm run features writes them)
+server/target/
+
 # Personal quest keys for the website tracker (never commit)
 .quest-keys.local
 .quest-keys/

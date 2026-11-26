@@ -44,6 +44,11 @@ export interface Vote {
   choiceId: ChoiceId;
   /** d20, rolled by the server on the first vote and kept when the vote changes. */
   roll: number;
+  /**
+   * Set when the player wrote a check instead of choosing a, b or c. `choiceId` is then ignored:
+   * the row counts as having acted, and it does not add to the tally.
+   */
+  freeform?: { text: string; ruling: import('./play/actions.ts').CheckRuling };
 }
 
 /** A vote as the app sees it. In a combat round `label` is what that hero is doing, in their own choice's words: "Cast Fire Bolt", "Break Free", "Help Ilsa". */
@@ -135,7 +140,12 @@ export interface SceneView {
   /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
   canAct: boolean;
   isFinale: boolean;
+  /** Votes for a, b or c. A written check is in `actions`, not here. */
   votes: VoteView[];
+  /** Written checks this scene: the player's words and the d20. Each of these players has acted. */
+  actions: { playerId: string; text: string; roll: number }[];
+  /** The caller's written check, or null. */
+  myAction: { text: string; roll: number } | null;
   myVote: ChoiceId | null;
   outcome: string | null;
 }

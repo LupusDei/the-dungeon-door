@@ -196,8 +196,14 @@ Scene {
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
   votes: [{ playerId, choiceId, roll: number /* d20 */,
             label?: string }]        // in a combat round: what that hero is doing, in their own choice's words
-                                     // ("Attack with Longsword", "Cast Fire Bolt", "Break Free", "Help Ilsa", "Dodge")
-  myVote: string | null              // choiceId of the caller
+                                     // ("Attack with Longsword", "Cast Fire Bolt", "Break Free", "Help Ilsa", "Dodge").
+                                     // A written check is not listed here; it is in `actions`
+  actions: [{ playerId, text, roll: number }]
+                                     // written checks this scene (the player's own words and the d20).
+                                     // Each of these players has acted. Absent on servers from before written actions
+  myAction: { text, roll: number } | null
+                                     // the caller's written check, or null. Absent on older servers
+  myVote: string | null              // choiceId of the caller; null when they wrote a check or have not acted
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
 }
 
@@ -300,8 +306,30 @@ Message {
   for each vote (kept when you change your vote). When every player has voted the scene resolves:
   status `resolving`, the DM weighs all votes and rolls, writes `outcome` on the old scene and the
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
+  Voting again replaces a written action (below) and keeps the same d20.
+- `POST /api/games/{code}/action` body `{ sceneIndex, text }` → `GameState` with `action`.
+  Voting status only. `text` is the player's own action, 1–280 characters ("I kick the brazier onto
+  the goblins"). The dungeon master classifies it; the engine checks that classification and owns
+  every number (docs/rules-design.md, "Freeform turns").
+  - `action.ruling` is `"known"`, `"check"` or `"impossible"`. `action.spent` is false only for
+    `"impossible"` (a bad classification counts as impossible): the turn is not used, `narration`
+    says why, and the player may still vote or write another action. A system message carries the
+    same refusal.
+  - `"known"` maps onto one of today's actions and is stored as that vote (`action.choiceId` is
+    `"a"`, `"b"` or `"c"`). In a fight those are Attack, Cast and Dodge. Outside a fight they are
+    the three choices on offer. The d20 is rolled the same way a vote's is, and kept if the player
+    rewrites the action or switches to a vote.
+  - `"check"` is an ability check. The dungeon master names a skill or ability, a tier (easy,
+    medium, hard) and an effect category; the engine sets the DC (10, 15, 20), the damage dice and
+    the save. It is stored on the vote as `freeform` and counts as having acted, but it does not
+    count toward which choice the party picked. The d20 is in the dice log when the scene resolves,
+    the same lines as any other roll.
+  - `action.roll` is that d20 when the turn was spent, otherwise null.
+  - 400 `sceneIndex` not a whole number, or `text` empty or longer than 280 characters; 403 not in
+    this game; 409 the game is not voting on that scene. A hero that cannot act gets `spent: false`
+    and nothing is stored.
 - `POST /api/games/{code}/advance` → `GameState`. Host only: resolve now with the votes that are in
-  (for an AFK player). Needs at least one vote.
+  (for an AFK player). Needs at least one vote or written action. A combat round needs neither.
 - `POST /api/games/{code}/narration` with `{ sceneIndex, voice? }` → `{ sceneIndex, voice, status, voiceUrl }`.
   The scene read aloud, on demand: nothing is spoken until a player asks. `voice` is a catalog `narrators`
   id; left out, it is `defaultNarrator`. The answer names the narrator it is for.
@@ -450,6 +478,13 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   removed. A hero at 0 HP regains 1 HP first.
 - **Dice in chat.** The engine posts its results as `system` messages ("Bryn: Athletics 14 + 5 = 19 vs DC
   12, success"), so the current app shows them without an update. The same lines are in `rules.results`.
+  A written check is one of those lines, quoting what the player wrote.
+- **Written actions** (`POST …/action`, `play/actions.ts`). A player may write what they do instead of
+  picking a choice, in or out of a fight. The dungeon master classifies the words; the engine keeps the
+  numbers. A known action becomes today's Attack, Cast or Dodge in a fight, or one of the three choices
+  outside one. A check uses the tier's DC and, on a success, the effect category's damage or a save for
+  its condition. Impossible, and a classification the engine cannot read, is a narrated no and does not
+  spend the turn. The list of known actions is today's three; a later per-hero list can replace it.
 - **When it ends.** The heroes' sheets (level, XP, features, gold and gear; HP and slots restored) are
   saved back to each player's character, so the next adventure starts where this one left off. A dead
   hero goes home dead.

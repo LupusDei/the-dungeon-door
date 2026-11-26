@@ -83,6 +83,11 @@ export interface Store {
    * original roll. Returns the stored vote, or null when the game isn't voting on that scene.
    */
   castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number): Promise<Vote | null>;
+  /**
+   * Records a written check on this player's vote — only while the game is voting on scene `index`.
+   * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.
+   */
+  setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>): Promise<Vote | null>;
 
   /** Appends a chat/system/dm message with the game's next message id. */
   addMessage(code: string, message: NewMessage): Promise<Message>;

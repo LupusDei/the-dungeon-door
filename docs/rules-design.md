@@ -394,6 +394,8 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
   mechanical effect beyond needing to Break Free (simplified).
 - **The third choice** (`play/actions.ts`, **original** for a three-slot vote): Break Free when held,
   Help to stabilize a dying friend (a Healer's Kit, or DC 10 Medicine), else Dodge.
+- **Freeform turns** (`play/actions.ts`, **original**). A player may write their own action. The DM
+  classifies the words and never names a number. See "Freeform turns" below.
 - **Fleeing and targeting.** A monster with Disengage as a Bonus Action (goblins) flees without
   Opportunity Attacks. Monsters prefer heroes who aren't Dodging. Heroes aim past foes immune to their
   damage type (the most wounded foe they can hurt, else the most wounded); an area spell catches those it
@@ -406,6 +408,39 @@ the sheet, so games and characters stored before Phase 4 load unchanged (no migr
 Still simplified: legendary actions and legendary resistance; Hide, Dash, Ready and Search as combat
 actions; rider creature-type and size limits; subspecies resistances (tiefling legacies, dragonborn
 ancestry) until the sheet records the subspecies; overland travel pace.
+
+## Freeform turns
+
+**Original.** A player may write what they do ("I kick the brazier onto the goblins") instead of picking
+one of the three choices, in a fight or out of one. The dungeon master only classifies the words. The
+engine owns every number.
+
+The classification is one of three:
+
+- **A known action.** It maps onto today's actions: in a fight, Attack, Cast or Dodge (the third choice,
+  so Break Free or Help when that is what Dodge means now); outside a fight, one of the three choices on
+  offer. `knownActionIds` is that list. A later per-hero legal-actions list replaces the body of that
+  function; `choiceFor` is the only place the id becomes a choice.
+- **A check.** An ability, or a skill, a tier, and an effect category. Tiers are the 5e ones: easy DC 10,
+  medium DC 15, hard DC 20. A natural 20 or 1 is not automatic, same as any other check. The player's d20
+  is the one rolled for a vote, and the line is posted with the other dice.
+- **Impossible.** The fiction does not allow it. The engine narrates the no (or a fixed line when the
+  classification cannot be read, or the narration contains a number). The turn is not spent.
+
+Effect categories, on a successful check:
+
+- **none.** Success is the whole result.
+- **damage.** The DM names a severity. The dice are light 1d6, moderate 2d6, severe 4d6, and the type is
+  an SRD damage type or bludgeoning. In a fight that damage hits the most wounded foe, the same target an
+  Attack would pick, after resistance, immunity and vulnerability. Outside a fight the dice are still
+  rolled and logged; there is no creature in the state to mark.
+- **condition.** The DM names an SRD condition other than exhaustion, and the ability of the save. The DC
+  is the same tier. In a fight the most wounded foe saves; on a failure the condition lands for the fight.
+  Outside a fight the line states the save and the DC for the DM to narrate.
+
+A classification the engine cannot read (unknown skill, missing tier, a number where a word belongs) is
+treated as impossible, so a bad reply cannot spend the turn or invent a result. The known-action id has
+to be one of today's.
 
 ## Phase 5: dungeon levels, fights that fit, XP at the quest's end
 

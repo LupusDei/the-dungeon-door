@@ -3,6 +3,7 @@ import { renderImage, SCENE_STYLE } from './ai.ts';
 import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
+import { knownActionIds, settleRuling, type CheckRuling } from './play/actions.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
 import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
@@ -49,15 +50,22 @@ function choicesFor(game: Game, current: StoredScene, playerId: string): SceneVi
   return canAct(game.combat, playerId) ? yourChoices(game.combat, game.party.sheets[playerId], playerId) : anyonesChoices();
 }
 
+const choosing = (votes: StoredScene['votes']) => votes.filter((v) => !v.freeform);
+
 /** In a combat round each vote says what that hero is doing: the label of their own choice, which differs hero to hero. */
 function votesFor(game: Game, current: StoredScene): SceneView['votes'] {
+  const votes = choosing(current.votes);
   const { combat, party } = game;
-  if (!combat || !party || current.outcome !== null || current.isFinale) return current.votes;
-  return current.votes.map((v) => {
+  if (!combat || !party || current.outcome !== null || current.isFinale) return votes;
+  return votes.map((v) => {
     if (!canAct(combat, v.playerId) || !Object.hasOwn(party.sheets, v.playerId)) return v;
     const label = yourChoices(combat, party.sheets[v.playerId], v.playerId).find((c) => c.id === v.choiceId)?.label;
     return label ? { ...v, label } : v;
   });
+}
+
+function actionsFor(current: StoredScene): SceneView['actions'] {
+  return current.votes.flatMap((v) => (v.freeform ? [{ playerId: v.playerId, text: v.freeform.text, roll: v.roll }] : []));
 }
 
 function sceneView(game: Game, current: StoredScene, playerId: string): SceneView {
@@ -73,7 +81,9 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     canAct: canAct(game.combat, playerId),
     isFinale: current.isFinale,
     votes: votesFor(game, current),
-    myVote: current.votes.find((v) => v.playerId === playerId)?.choiceId ?? null,
+    actions: actionsFor(current),
+    myAction: actionsFor(current).find((a) => a.playerId === playerId) ?? null,
+    myVote: choosing(current.votes).find((v) => v.playerId === playerId)?.choiceId ?? null,
     outcome: current.outcome,
   };
 }
@@ -296,6 +306,72 @@ export async function castVote(code: string, playerId: string, sceneIndex: unkno
   return viewGame(code, playerId);
 }
 
+const MAX_ACTION = 280;
+
+export interface ActionOutcome {
+  spent: boolean;
+  text: string;
+  ruling: 'known' | 'check' | 'impossible';
+  roll: number | null;
+  choiceId: ChoiceId | null;
+  narration: string | null;
+}
+
+const outcome = (text: string, settled: { spent: boolean; ruling: { kind: ActionOutcome['ruling'] }; choiceId: ChoiceId | null; narration: string | null }, roll: number | null): ActionOutcome =>
+  ({ spent: settled.spent, text, ruling: settled.ruling.kind, roll, choiceId: settled.choiceId, narration: settled.narration });
+
+/**
+ * POST /api/games/{code}/action — the player writes what they do. The DM classifies it; the engine checks
+ * that and rolls, the same d20 a vote keeps. Impossible (and a classification that cannot be read) does
+ * not spend the turn.
+ */
+export async function castAction(code: string, playerId: string, sceneIndex: unknown, text: unknown, origin: string): Promise<GameState & { action: ActionOutcome }> {
+  if (typeof sceneIndex !== 'number' || !Number.isInteger(sceneIndex)) throw badRequest('sceneIndex must be a whole number');
+  if (typeof text !== 'string' || text.trim().length === 0 || text.trim().length > MAX_ACTION) throw badRequest(`text must be from 1 to ${MAX_ACTION} characters`);
+  const written = text.trim();
+  const game = await loadGame(code);
+  const player = member(game, playerId);
+  if (game.status !== 'voting') throw conflict(`can't act: the game is ${game.status}`);
+  if (sceneIndex !== game.sceneIndex) throw conflict('that scene is not the current one');
+  const idle: ActionOutcome = { spent: false, text: written, ruling: 'impossible', roll: null, choiceId: null, narration: 'You cannot act.' };
+  if (!canAct(game.combat, playerId)) return { ...(await viewGame(code, playerId)), action: idle };
+  const scene = game.scenes.find((s) => s.index === sceneIndex);
+  if (!scene) throw conflict('that scene is not the current one');
+  const inCombat = game.combat !== null;
+  const allowed = knownActionIds(inCombat);
+  let raw: unknown = null;
+  const dm = getDungeonMaster(game.dungeonMaster);
+  if (dm.classifyAction) {
+    try {
+      raw = await dm.classifyAction(await contextFor(game, sceneIndex), {
+        characterName: player.character.name,
+        text: written,
+        inCombat,
+        actions: allowed,
+        choices: scene.choices.map((c) => ({ id: c.id, label: c.label })),
+      });
+    } catch (error) {
+      console.warn(`classifying an action in ${code} failed:`, error);
+    }
+  }
+  const settled = settleRuling(raw, allowed);
+  if (!settled.spent) {
+    await system(code, `${player.character.name}: ${settled.narration}`);
+    return { ...(await viewGame(code, playerId)), action: outcome(written, settled, null) };
+  }
+  if (settled.ruling.kind === 'known' && settled.choiceId) {
+    const vote = await getStore().castVote(code, sceneIndex, playerId, settled.choiceId, dice.d20());
+    if (!vote) throw conflict('voting on that scene has closed');
+    await resolveIfAllVoted(code, sceneIndex, origin);
+    return { ...(await viewGame(code, playerId)), action: outcome(written, settled, vote.roll) };
+  }
+  const ruling = settled.ruling as CheckRuling;
+  const vote = await getStore().setFreeform(code, sceneIndex, playerId, dice.d20(), { text: written, ruling });
+  if (!vote?.freeform) throw conflict('voting on that scene has closed');
+  await resolveIfAllVoted(code, sceneIndex, origin);
+  return { ...(await viewGame(code, playerId)), action: outcome(written, settled, vote.roll) };
+}
+
 /** Who reads a scene aloud. Tests may set their own (to count readings, or to fail). */
 let narrator = narrate;
 export function setNarrator(next: typeof narrate = narrate): void {
@@ -458,13 +534,15 @@ async function contextFor(game: Game, sceneIndex: number, rules: RulesState | nu
 }
 
 export function resolutionOf(game: Game, scene: StoredScene): Resolution {
-  // Votes from players still at the table (everyone's, if nobody is left).
+  // Votes from players still at the table (everyone's, if nobody is left). A written check has acted,
+  // so it is not an abstention, but it is not a vote for a, b or c.
   const present = scene.votes.filter((v) => game.players.some((p) => p.playerId === v.playerId));
-  const votes = voteRecords(game, { ...scene, votes: present.length ? present : scene.votes });
+  const acting = present.length ? present : scene.votes;
+  const votes = voteRecords(game, { ...scene, votes: acting.filter((v) => !v.freeform) });
   const tally = { a: 0, b: 0, c: 0 } as Record<ChoiceId, number>;
   for (const v of votes) tally[v.choiceId]++;
   const top = Math.max(...CHOICE_IDS.map((id) => tally[id]));
-  const voted = new Set(votes.map((v) => v.playerId));
+  const voted = new Set(acting.map((v) => v.playerId));
   return {
     scene: pastScene(game, scene),
     votes,

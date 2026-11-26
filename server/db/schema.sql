@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS votes (
   PRIMARY KEY (game_code, scene_idx, player_id)
 );
 
+-- A written check on a vote (play/actions.ts): { text, ruling }. Null on an ordinary vote for a, b or c.
+-- The choice_id of such a row is ignored. Added without rewriting existing votes.
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS freeform jsonb;
+
 CREATE TABLE IF NOT EXISTS messages (
   game_code      text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
   id             int  NOT NULL,

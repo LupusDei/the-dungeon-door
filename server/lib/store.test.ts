@@ -33,6 +33,11 @@ test('memory store: votes keep their first roll; message ids increase', async ()
   await store.updateGame('ABCDEF', {}, { status: 'voting', sceneIndex: 0 });
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'a', 7), { playerId: 'p1', choiceId: 'a', roll: 7 });
   assert.deepEqual(await store.castVote('ABCDEF', 0, 'p1', 'c', 19), { playerId: 'p1', choiceId: 'c', roll: 7 });
+  const written = { text: 'I kick the brazier', ruling: { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', tier: 'medium' as const, effect: { category: 'damage' as const, severity: 'moderate' as const, damageType: 'bludgeoning' } } };
+  assert.equal((await store.setFreeform('ABCDEF', 0, 'p1', 19, written))!.roll, 7, 'a written action keeps the first d20');
+  assert.deepEqual((await store.getGame('ABCDEF'))!.scenes[0].votes[0].freeform, written);
+  assert.equal((await store.castVote('ABCDEF', 0, 'p1', 'b', 3))!.freeform, undefined, 'voting again clears the written check');
+  assert.equal((await store.castVote('ABCDEF', 0, 'p1', 'b', 3))!.roll, 7);
   assert.equal(await store.castVote('ABCDEF', 1, 'p1', 'c', 19), null, 'wrong scene');
 
   const ids = (await Promise.all(Array.from({ length: 20 }, (_, i) =>

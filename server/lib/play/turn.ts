@@ -8,6 +8,7 @@ import { capFight } from '../rules/encounter.ts';
 import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId, StoredChoice } from '../types.ts';
+import { adjudicateCheck, type CheckRuling } from './actions.ts';
 import { groupRoll } from './checks.ts';
 import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
@@ -26,6 +27,8 @@ import { partyHazard, springTrap } from './traps.ts';
 
 export interface RulesState { party: PartyState; combat: CombatState | null; dungeon: DungeonState | null }
 export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number }
+/** A written check, already accepted by the engine. It is this hero's action and not a vote for a choice. */
+export interface FreeformBallot { playerId: string; roll: number; text: string; ruling: CheckRuling }
 export type FightNews = 'started' | FightEnd | null;
 export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews }
 
@@ -74,8 +77,11 @@ function clearHere(s: RulesState, lines: string[]): { state: RulesState; lines: 
   return { state: { ...s, party: loot.party, dungeon: clearRoom(dungeon, dungeon.at) }, lines: [...lines, ...loot.lines] };
 }
 
-function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballot[]): RulesTurn {
-  const votes = Object.fromEntries(ballots.map((b) => [b.playerId, { choiceId: b.choiceId, roll: b.roll }]));
+function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {
+  const votes = {
+    ...Object.fromEntries(ballots.map((b) => [b.playerId, { choiceId: b.choiceId, roll: b.roll }])),
+    ...Object.fromEntries(freeforms.map((f) => [f.playerId, { choiceId: 'c' as const, roll: f.roll, text: f.text, freeform: f.ruling }])),
+  };
   const round = fightRound(s.party, combat, votes);
   const after = { ...s, party: round.party, combat: round.ended ? null : round.combat };
   if (round.ended === null || round.ended === 'defeat') return done(after, round.lines, null, round.ended);
@@ -271,17 +277,29 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   revive: (s) => traded(s, raiseTheDead(s.party)),
 };
 
-/** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
-export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[]): RulesTurn {
-  return withDeathTimes(clockOf(s.party), turnPlayed(s, hook, ballots));
+/** A written check outside a fight: the dice are rolled and logged. There is no creature here to mark. */
+function improvise(s: RulesState, freeforms: readonly FreeformBallot[]): { state: RulesState; lines: string[] } {
+  if (!freeforms.length) return { state: s, lines: [] };
+  const rng = seededRng(s.party.rng);
+  const lines = freeforms.map((f) => {
+    const sheet = s.party.sheets[f.playerId];
+    if (!sheet || sheet.dead || sheet.hp <= 0) return `${sheet?.name ?? 'A hero'} is down and does not act.`;
+    return adjudicateCheck(rng, sheet, f.text, f.ruling, f.roll, null).text;
+  });
+  return { state: { ...s, party: { ...s.party, rng: rng.state() } }, lines };
 }
 
-function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[]): RulesTurn {
-  if (s.combat) return wander(elapse(combatRound(s, s.combat, ballots), ROUND_SECONDS), ROUND_SECONDS);
+/** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
+export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[] = []): RulesTurn {
+  return withDeathTimes(clockOf(s.party), turnPlayed(s, hook, ballots, freeforms));
+}
+
+function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {
+  if (s.combat) return wander(elapse(combatRound(s, s.combat, ballots, freeforms), ROUND_SECONDS), ROUND_SECONDS);
   const lit = lightUp(s.party, ambientLight(s)); // a light is lit before anything is tried in the dark
-  const ready = { ...s, party: lit.party };
-  const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(ready, hook, ballots) : done(ready);
-  const played = { ...hooked, lines: [...lit.lines, ...hooked.lines] };
+  const ready = improvise({ ...s, party: lit.party }, freeforms);
+  const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(ready.state, hook, ballots) : done(ready.state);
+  const played = { ...hooked, lines: [...lit.lines, ...ready.lines, ...hooked.lines] };
   if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' || played.dungeon?.facing ? 0 : secondsFor(hook), true);
   return wander(elapse(played, secondsFor(hook)), secondsFor(hook));
 }

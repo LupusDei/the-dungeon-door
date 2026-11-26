@@ -4,7 +4,8 @@ import { heroSheet } from '../characters.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { takeThird, thirdChoice, thirdWords } from './actions.ts';
+import { adjudicateCheck, choiceFor, DAMAGE_BY_SEVERITY, DC_BY_TIER, knownActionIds, REFUSED, settleRuling, UNREADABLE, takeThird, thirdChoice, thirdWords } from './actions.ts';
+import { scriptedRng } from '../rules/rng.ts';
 import { COMBAT_CHOICES, fightRound, startFight } from './fight.ts';
 import { yourChoices } from './your-turn.ts';
 
@@ -76,6 +77,72 @@ test('Help: stabilize a dying friend with a Medicine check, or surely with a Hea
   assert.deepEqual([...outcomes].sort(), ['dying', 'stable']);
   assert.equal(takeThird(fallen, wise, 'p1').combat.combatants.p2.status, 'stable');
   assert.deepEqual(takeThird(fight(fighter).combat, fighter, 'p1').action, { kind: 'dodge' });
+});
+
+const strong = { ...fighter, abilityScores: { ...fighter.abilityScores, str: 16 }, skillBonuses: { ...fighter.skillBonuses, athletics: 5 } };
+const kickFlat = { kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'damage', severity: 'moderate', damageType: 'bludgeoning' };
+const kick = { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', tier: 'medium' as const, effect: { category: 'damage' as const, severity: 'moderate' as const, damageType: 'bludgeoning' } };
+
+test('a written action maps onto today\'s choices, and a bad classification spends nothing', () => {
+  assert.deepEqual(knownActionIds(true), ['attack', 'cast', 'dodge']);
+  assert.deepEqual(knownActionIds(false), ['a', 'b', 'c']);
+  assert.equal(choiceFor('attack'), 'a');
+  assert.equal(choiceFor('cast'), 'b');
+  assert.equal(choiceFor('dodge'), 'c');
+  assert.equal(choiceFor('a'), 'a');
+  assert.equal(DC_BY_TIER.easy, 10);
+  assert.equal(DC_BY_TIER.medium, 15);
+  assert.equal(DC_BY_TIER.hard, 20);
+  assert.deepEqual(DAMAGE_BY_SEVERITY, { light: '1d6', moderate: '2d6', severe: '4d6' });
+
+  const known = settleRuling({ kind: 'known', action: 'attack' }, knownActionIds(true));
+  assert.deepEqual([known.spent, known.choiceId], [true, 'a']);
+  assert.equal(settleRuling({ kind: 'known', action: 'attack' }, knownActionIds(false)).spent, false, 'attack is not a choice outside a fight');
+  const refused = settleRuling({ kind: 'impossible', narration: 'The moon is too far.' }, knownActionIds(true));
+  assert.equal(refused.spent, false);
+  assert.equal(refused.narration, 'The moon is too far.');
+  assert.equal(settleRuling({ kind: 'impossible', narration: 'DC 30' }, knownActionIds(true)).narration, REFUSED);
+  assert.equal(settleRuling({ kind: 'banana' }, knownActionIds(true)).narration, UNREADABLE);
+  assert.equal(settleRuling(null, knownActionIds(true)).spent, false);
+  assert.equal(settleRuling({ kind: 'check', ability: 'str', skill: 'not-a-skill', tier: 'medium', effect: 'none' }, knownActionIds(true)).spent, false);
+  const check = settleRuling(kickFlat, knownActionIds(true));
+  assert.equal(check.spent, true);
+  assert.equal(check.ruling.kind, 'check');
+});
+
+test('kicking the brazier is a check: the engine sets the DC and the damage, in a fight and out of one', () => {
+  const started = fight(strong);
+  const foe = started.combat.combatants['foe-1'];
+  const hit = adjudicateCheck(scriptedRng([3, 4]), strong, 'I kick the brazier onto the goblins', kick, 15, foe);
+  assert.match(hit.text, /Bryn \("I kick the brazier onto the goblins"\): Athletics 15 \+ 5 = 20 vs DC 15, success\. Goblin Warrior takes 7 bludgeoning\./);
+  assert.equal(hit.foe!.hp, foe.hp - 7);
+  const miss = adjudicateCheck(scriptedRng([]), strong, 'I kick the brazier onto the goblins', kick, 4, foe);
+  assert.match(miss.text, /vs DC 15, failure\./);
+  assert.equal(miss.foe, foe, 'a failure does not touch the foe');
+  const outside = adjudicateCheck(scriptedRng([3, 4]), strong, 'I kick the brazier onto the goblins', kick, 15, null);
+  assert.match(outside.text, /vs DC 15, success\. Improvised damage 7 bludgeoning\./);
+  assert.equal(outside.foe, null);
+
+  const harmless = [{ name: 'Poke', bonus: -100, ranged: false, damage: [{ dice: '0', type: 'force' }] }];
+  const round = fightRound(started.party, patch(started.combat, { 'foe-1': { attacks: harmless }, p1: {} }), {
+    p1: { choiceId: 'c', roll: 15, text: 'I kick the brazier onto the goblins', freeform: kick },
+  });
+  assert.ok(round.lines.some((l) => /Bryn \("I kick the brazier onto the goblins"\): Athletics 15 \+ 5 = 20 vs DC 15, success/.test(l)), round.lines.join('\n'));
+  assert.ok(round.combat.combatants['foe-1'].hp < foe.hp);
+});
+
+test('a written condition is a save at the same DC; the foe is prone only on a failure', () => {
+  const started = fight(strong);
+  const foe = { ...started.combat.combatants['foe-1'], saveBonuses: { ...started.combat.combatants['foe-1'].saveBonuses, dex: 0 } };
+  const prone = { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', tier: 'easy' as const, effect: { category: 'condition' as const, condition: 'prone' as const, save: 'dex' as const } };
+  const failed = adjudicateCheck(scriptedRng([5]), strong, 'I sweep their legs', prone, 12, foe);
+  assert.match(failed.text, /vs DC 10, success\. Goblin Warrior: Dexterity save 5 \+ 0 = 5 vs DC 10, failure: Prone\./);
+  assert.ok(failed.foe!.conditions.includes('prone'));
+  const saved = adjudicateCheck(scriptedRng([18]), strong, 'I sweep their legs', prone, 12, foe);
+  assert.match(saved.text, /Dexterity save 18 \+ 0 = 18 vs DC 10, success\./);
+  assert.ok(!saved.foe!.conditions.includes('prone'));
+  const told = adjudicateCheck(scriptedRng([]), strong, 'I sweep their legs', prone, 12, null);
+  assert.match(told.text, /A Dexterity save against DC 10 would leave them Prone\./);
 });
 
 test('in a round, a held hero voting for the third choice spends its turn breaking free', () => {
