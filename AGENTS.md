@@ -1,5 +1,55 @@
 # Agent Instructions
 
+## The project
+
+The Dungeon Door is a tabletop-style fantasy game with an AI dungeon master. Players forge a hero
+(AI-painted portrait), gather in a party by door code, chat, and vote on three choices per scene.
+
+| Path | What |
+| --- | --- |
+| `ios/` | SwiftUI iPhone/iPad app (XcodeGen). `Core/` talks to the server, `Views/` are the screens, `UI/` holds the theme and the home-screen dragon. |
+| `server/` | Vercel functions in TypeScript (`api/*.ts`), logic in `lib/`. Postgres (Neon) or in-memory storage; images in Vercel Blob. |
+| `server/lib/dm/` | The dungeon master seam. New or changed DM behaviour goes here; see `docs/dungeon-master.md`. |
+| `docs/api.md` | The contract between app and server. |
+| `design/` | Source art and recipes for generated assets. |
+
+## Build & Test
+
+Server (Node 22+), from `server/`:
+
+```bash
+npm install
+npm run typecheck && npm test     # must pass before any server change is done
+npm run dev                       # http://localhost:3000, fake AI, in-memory store, costs nothing
+npm run bot -- --base http://localhost:3000 --code ABCDEF   # a second player for a game in the lobby
+```
+
+App (needs macOS with Xcode and XcodeGen), from `ios/`:
+
+```bash
+./run.sh -apiBase http://localhost:3000    # build, install and launch on the simulator
+```
+
+A cloud agent without Xcode cannot build or run the app. Keep to `server/` and `docs/` there, or
+say plainly that an app change is untested.
+
+## Conventions
+
+- **Contract first.** A change to what the app and server exchange starts in `docs/api.md`, then
+  both sides, in the same change.
+- **No real AI in tests or dev scripts.** Use `DD_FAKE_AI=1` (the default for `npm run dev`). Real
+  calls spend the owner's AI Gateway credits; `npm run dev:real` is for deliberate checks only.
+- **No secrets in the repo.** `ios/Config/Secrets.xcconfig`, `ios/fastlane/.env`, `AuthKey.p8`,
+  `api_key.json` and `server/.env*` are gitignored and stay that way.
+- **Deploys and releases are the owner's.** Don't run `vercel deploy` or `ios/ship.sh` unless the owner asks you to.
+- **Art.** Build-time art (icon, home-screen dragon, sounds) is generated with the owner's Runway
+  account (recipes in `design/`); in-game art (portraits, scenes) goes through the AI Gateway at
+  runtime. Voices are original designs, never imitations of real people.
+- **App code.** SwiftUI with `@Observable` models, Swift 5 language mode, no third-party packages.
+  Reuse `Palette`, `.card()`, `.glassCard()` and the button styles in `UI/Theme.swift`.
+
+## Issue tracking
+
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
 > **Architecture in one line:** Issues live in a local Dolt database
