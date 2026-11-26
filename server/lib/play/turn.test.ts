@@ -90,7 +90,8 @@ test('in a fight every vote is that hero’s action; a won fight ends and clears
 function boarRoom(): DungeonState {
   const d = startDungeon('fixed', 3, [1, 1], 4);
   const r1 = d.map.nodes.r1;
-  return { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r1: { ...r1, contents: { ...r1.contents!, treasure: { gp: 60, sp: 0, gems: 0, jewellery: 0, magicItem: null } } } } } };
+  const contents = { ...r1.contents!, kind: 'monster' as const, trap: null, encounter: { difficulty: 'moderate' as const, budget: 75, xp: 75, monsters: ['boar', 'boar', 'boar'] }, treasure: { gp: 60, sp: 0, gems: 0, jewellery: 0, magicItem: null } };
+  return { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r1: { ...r1, name: 'Cramped (15 x 15 ft.)', purpose: 'Failed experiment', contents } } } };
 }
 const intoBoars = (rng: number) => playTurn({ ...state({ dungeon: boarRoom() }), party: { ...party(), rng } }, { kind: 'move', exit: 'r1' }, ballots(5, 5));
 const boarMeetings = Array.from({ length: 40 }, (_, i) => intoBoars(i + 1));
@@ -105,7 +106,9 @@ test('a way on: the party moves, and what is in the room springs: monsters fight
   assert.match(boars.lines[1], /^Boar ×3: hostile \(2d6: [2-5]\)\.$/);
   assert.match(boars.lines[2], /^A fight begins: /);
   assert.ok(!boars.dungeon!.cleared.includes('r1'), 'cleared once the boars are beaten');
-  const loot = playTurn(state({ dungeon: d }), { kind: 'move', exit: 'r4' }, ballots(5, 5));
+  const r4 = d.map.nodes.r4;
+  const looted = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, r4: { ...r4, contents: { ...r4.contents!, kind: 'empty' as const, encounter: null, trap: null, treasure: { gp: 60, sp: 0, gems: 0, jewellery: 0, magicItem: null } } } } } };
+  const loot = playTurn(state({ dungeon: looted }), { kind: 'move', exit: 'r4' }, ballots(5, 5));
   assert.deepEqual([loot.fight, loot.dungeon!.cleared.includes('r4')], [null, true]);
   assert.ok(loot.lines.includes('Treasure: 60 gp in coin (30 each).'));
   const back = playTurn(state({ dungeon: clearRoom(d, 'r1') }), { kind: 'move', exit: 'r1' }, []);

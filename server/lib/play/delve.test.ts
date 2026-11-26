@@ -28,10 +28,14 @@ test('taking an exit moves the party, remembers where it has been, and refuses a
 
 test('arriving in a room that is not cleared: its monsters are a fight, its trap goes off, its treasure loot', () => {
   const d = startDungeon('fixed', 3, [1, 1], 4);
-  const boars = arrival(d, d.map.nodes.r1);
-  assert.deepEqual(boars.fight, ['boar', 'boar', 'boar']);
-  assert.deepEqual([boars.trap, boars.treasure], [null, null]);
-  const loot = arrival(d, d.map.nodes.r4);
+  const rooms = Object.values(d.map.nodes).filter((n) => n.contents);
+  const guarded = rooms.find((n) => n.contents!.encounter)!;
+  assert.deepEqual(arrival(d, guarded).fight, guarded.contents!.encounter!.monsters);
+  const r1 = d.map.nodes.r1;
+  const boars = arrival(d, { ...r1, contents: { ...r1.contents!, kind: 'monster', encounter: { difficulty: 'moderate', budget: 75, xp: 75, monsters: ['boar'] }, trap: null, treasure: null } });
+  assert.deepEqual([boars.fight, boars.trap, boars.treasure], [['boar'], null, null]);
+  const coins = { sp: 600, gp: 0, gems: 0, jewellery: 0, magicItem: null };
+  const loot = arrival(d, { ...r1, contents: { ...r1.contents!, kind: 'empty', encounter: null, trap: null, treasure: coins } });
   assert.deepEqual([loot.fight, loot.treasure!.sp], [null, 600]);
   assert.deepEqual(arrival(clearRoom(d, 'r1'), d.map.nodes.r1), { fight: null, trap: null, treasure: null });
   const trapped = { ...d.map.nodes.r4, contents: { ...d.map.nodes.r4.contents!, kind: 'trap' as const, trap: 'pits', treasure: null } };

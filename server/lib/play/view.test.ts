@@ -61,7 +61,7 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual(ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior'), { name: 'Goblin Warrior', side: 'foes', hp: combat.combatants['foe-1'].hp, maxHp: combat.combatants['foe-1'].maxHp, status: 'up' });
   assert.deepEqual(ctx.dungeon, {
     kind: d.map.kind, area: d.map.nodes.r0.name, purpose: 'Threshold',
-    exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.)' }, { id: 'r4', connection: 'unlocked-door', leadsTo: 'Cramped (15 x 15 ft.), by a winding passage' }],
+    exits: [{ id: 'r1', connection: 'unlocked-door', leadsTo: d.map.nodes.r1.name }, { id: 'r4', connection: 'unlocked-door', leadsTo: `${d.map.nodes.r4.name}, by a winding passage` }],
     waiting: null,
   });
   assert.deepEqual(ctx.monsters, suitableMonsters([1, 1]));
@@ -69,7 +69,10 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
 });
 
 test('foes who did not attack are shown waiting, with their attitude, to the app and the DM', () => {
-  const met = { ...enter(startDungeon('fixed', 3, [1, 1], 4), 'r1')!.dungeon, attitudes: { r1: 'friendly' as const } };
+  const entered = enter(startDungeon('fixed', 3, [1, 1], 4), 'r1')!.dungeon;
+  const r1 = entered.map.nodes.r1;
+  const boars = { ...r1, contents: { ...r1.contents!, kind: 'monster' as const, encounter: { difficulty: 'moderate' as const, budget: 75, xp: 75, monsters: ['boar', 'boar', 'boar'] } } };
+  const met = { ...entered, map: { ...entered.map, nodes: { ...entered.map.nodes, r1: boars } }, attitudes: { r1: 'friendly' as const } };
   const s = { party, combat: null, dungeon: met };
   const expected = { foes: 'Boar ×3', attitude: 'friendly' };
   assert.deepEqual([rulesView(s, []).dungeon!.waiting, rulesContext(s).dungeon!.waiting], [expected, expected]);

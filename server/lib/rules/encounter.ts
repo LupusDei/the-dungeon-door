@@ -1,4 +1,8 @@
-/** Encounter building, SRD 5.2: spend the party's XP budget on monsters no tougher than the party. */
+/**
+ * Encounter building, SRD 5.2: spend the party's XP budget on monsters no tougher than the party. At
+ * levels 1 and 2, where the 5.2 table is swingy, the budget is halved and the foes are few; an encounter
+ * is at most two kinds of monster. See docs/rules-design.md (Phase 5).
+ */
 import { type Difficulty, encounterBudget, type Monster, monsters } from './monsters.ts';
 import { type Rng, pick } from './rng.ts';
 import { require } from './violation.ts';
@@ -6,36 +10,56 @@ import { require } from './violation.ts';
 export interface Encounter { difficulty: Difficulty; budget: number; xp: number; monsters: string[] }
 
 const MAX_MONSTERS = 8;
+const MAX_KINDS = 2;
+/** Up to this level the 5.2 budget is halved. */
+const GENTLE_UP_TO = 2;
+
+const top = (levels: readonly number[]) => Math.max(...levels);
+
+/** The 5.2 budget for these levels, halved (rounded down) when the best of them is 1 or 2. */
+export function temperedBudget(levels: readonly number[], difficulty: Difficulty): number {
+  const budget = encounterBudget(levels, difficulty);
+  return top(levels) <= GENTLE_UP_TO ? Math.floor(budget / 2) : budget;
+}
+
+/** How many foes an encounter may have: half the party (rounded up) at levels 1–2, the party at 3–4, twice it from 5; never above eight. */
+export function foeCap(partySize: number, level: number): number {
+  const cap = level <= GENTLE_UP_TO ? Math.ceil(partySize / 2) : level <= 4 ? partySize : 2 * partySize;
+  return Math.min(MAX_MONSTERS, cap);
+}
 
 /** Monsters the engine can fight: an attack roll, a CR no higher than the party's best level. */
 export function candidates(levels: readonly number[], pool: readonly string[] | undefined): Monster[] {
   const allowed = pool ? new Set(pool) : null;
-  const top = Math.max(...levels);
-  return [...monsters().values()].filter((m) => m.attacks.length > 0 && m.cr <= top && (!allowed || allowed.has(m.id)));
+  return [...monsters().values()].filter((m) => m.attacks.length > 0 && m.cr <= top(levels) && (!allowed || allowed.has(m.id)));
 }
 
-/** Monsters worth at least 1/16 of the budget, so eight of them spend at least half; any, if none are. */
-export function worthwhile(all: Monster[], budget: number): Monster[] {
-  const big = all.filter((m) => m.xp * 2 * MAX_MONSTERS >= budget && m.xp <= budget);
+/** Monsters worth at least 1/(2 × cap) of the budget, so `cap` of them spend at least half; any, if none are. */
+export function worthwhile(all: Monster[], budget: number, cap: number = MAX_MONSTERS): Monster[] {
+  const big = all.filter((m) => m.xp * 2 * cap >= budget && m.xp <= budget);
   return big.length > 0 ? big : all;
 }
 
 /**
  * Keeps adding monsters that fit what is left of the budget (half the time another of the same kind, so
- * encounters come in groups), up to eight.
+ * encounters come in groups), up to the cap for the party's size and level.
  */
 export function buildEncounter(rng: Rng, levels: readonly number[], difficulty: Difficulty, pool?: readonly string[]): Encounter {
-  const budget = encounterBudget(levels, difficulty);
-  return { difficulty, ...composeEncounter(rng, budget, worthwhile(candidates(levels, pool), budget)) };
+  const budget = temperedBudget(levels, difficulty);
+  const cap = foeCap(levels.length, top(levels));
+  return { difficulty, ...composeEncounter(rng, budget, worthwhile(candidates(levels, pool), budget, cap), cap) };
 }
 
-/** Spends `budget` on `kinds`, as buildEncounter describes. */
-export function composeEncounter(rng: Rng, budget: number, kinds: readonly Monster[]): Omit<Encounter, 'difficulty'> {
-  const fits = (left: number) => kinds.filter((m) => m.xp <= left);
-  require(fits(budget).length > 0, `no monster in the pool fits a budget of ${budget} XP`);
+/** Spends `budget` on `kinds`, as buildEncounter describes: at most `cap` monsters of at most two kinds. */
+export function composeEncounter(rng: Rng, budget: number, kinds: readonly Monster[], cap: number = MAX_MONSTERS): Omit<Encounter, 'difficulty'> {
   const chosen: Monster[] = [];
+  const fits = (left: number) => {
+    const met = [...new Set(chosen)];
+    return (met.length < MAX_KINDS ? kinds : met).filter((m) => m.xp <= left);
+  };
+  require(fits(budget).length > 0, `no monster in the pool fits a budget of ${budget} XP`);
   let left = budget;
-  while (chosen.length < MAX_MONSTERS && fits(left).length > 0) {
+  while (chosen.length < cap && fits(left).length > 0) {
     const last = chosen.at(-1);
     const next = last && last.xp <= left && rng.die(2) === 1 ? last : pick(rng, fits(left));
     chosen.push(next);
