@@ -15,7 +15,7 @@ export type Action =
   /** A cast from castSpell (the slot is already spent on the sheet), at these targets (one per beam). */
   | { kind: 'spell'; caster: Omit<Caster, 'combatant'>; cast: Cast; targets: string[]; natural?: number };
 export type CombatEvent =
-  | { kind: 'attack'; round: number; actor: string; result: AttackResult }
+  | { kind: 'attack'; round: number; actor: string; result: AttackResult; reaction?: true }
   | { kind: 'spell'; round: number; actor: string; spellId: string; outcomes: SpellOutcome[] }
   | { kind: 'dodge'; round: number; actor: string }
   | { kind: 'deathSave'; round: number; actor: string; status: Status }
@@ -135,6 +135,14 @@ export function act(state: CombatState, action: Action): CombatState {
   const done = (ACTIONS[action.kind] as (s: CombatState, a: Combatant, x: Action, r: Rng) => CombatState)(state, actor, action, rng);
   const next = advance(done, rng);
   return { ...next, rng: rng.state() };
+}
+
+/** A reaction attack outside the turn order (an Opportunity Attack on a fleeing foe): nobody's turn is spent. */
+export function reactionAttack(state: CombatState, actor: string, attack: string, target: string): CombatState {
+  const rng = seededRng(state.rng);
+  const done = resolveAttack(state, state.combatants[actor], { kind: 'attack', attack, target }, rng);
+  const event = { ...done.log[done.log.length - 1], reaction: true as const };
+  return { ...done, log: [...done.log.slice(0, -1), event], rng: rng.state() };
 }
 
 /** A monster's turn: its first melee attack (or first attack) on the up hero with the fewest HP. Null on a hero's turn. */

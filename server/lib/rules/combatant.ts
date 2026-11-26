@@ -35,7 +35,11 @@ export interface Combatant {
   status: Status;
   /** What defeating it is worth (monsters); 0 for heroes. */
   xp: number;
+  /** Undead, constructs and oozes: they never break (no morale check). Monsters only. */
+  fearless?: true;
 }
+
+const FEARLESS = /undead|construct|ooze/;
 
 /** "1d8" with a modifier, written the way the SRD writes it: "1d8+3", "1d8", "1d8-1". */
 function withModifier(dice: string, modifier: number): string {
@@ -82,6 +86,6 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     id, name: m.name, side: 'foes', ac: m.ac, hp: m.hp, maxHp: m.hp,
     initiative: abilityModifier(m.abilities.dex), saveBonuses: { ...m.saveBonuses }, attacks: m.attacks,
     resistances: m.resistances, vulnerabilities: m.vulnerabilities, immunities: m.immunities, conditionImmunities: m.conditionImmunities,
-    ...fresh(), xp: m.xp,
+    ...fresh(), xp: m.xp, ...(FEARLESS.test(m.type) ? { fearless: true as const } : {}),
   };
 }

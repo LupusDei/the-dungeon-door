@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { type Combatant, heroCombatant, monsterCombatant } from './combatant.ts';
 import { monster } from './monsters.ts';
-import { act, choicesFor, currentActor, monsterAction, orderByInitiative, playRound, startCombat, xpEarned } from './scene.ts';
+import { act, choicesFor, currentActor, monsterAction, orderByInitiative, playRound, reactionAttack, startCombat, xpEarned } from './scene.ts';
 import { SAMPLE } from './sheet.fixture.ts';
 
 const hero = (id: string, o: Partial<Combatant> = {}): Combatant => ({ ...heroCombatant(id, { ...SAMPLE, name: id }), ...o });
@@ -149,4 +149,14 @@ test('a stored combat resumes exactly: same seed and same choices, same fight', 
   const direct = playRound(playRound(start(), votes), votes);
   const stored = JSON.parse(JSON.stringify(playRound(start(), votes)));
   assert.deepEqual(playRound(stored, votes), direct);
+});
+
+test('a reaction attack (an Opportunity Attack) strikes outside the turn order and can end the fight', () => {
+  const s = startCombat(3, [hero('h1', { attacks: deadly }), goblin('g1')]);
+  const struck = reactionAttack(s, 'h1', 'Doom', 'g1');
+  assert.deepEqual([struck.turn, struck.round, struck.order], [s.turn, s.round, s.order], 'nobody\'s turn is used');
+  assert.equal(struck.combatants.g1.status, 'dead');
+  assert.equal(struck.outcome, 'victory');
+  assert.deepEqual(struck.log.slice(s.log.length).map((e) => [e.kind, e.actor, e.kind === 'attack' && e.reaction]), [['attack', 'h1', true]]);
+  assert.notEqual(struck.rng, s.rng, 'the dice move on');
 });
