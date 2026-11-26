@@ -7,13 +7,14 @@ import { knownActionIds, settleRuling } from './play/actions.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
 import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { checkVote, legalActions } from './play/legal.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import { hasStolenHeroSpeech, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
-import type { DMChoice, DMContext, NextScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
+import type { DMChoice, DMContext, NextScene, OpeningScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
 import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
@@ -319,8 +320,9 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   const game = await loadGame(code);
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
-  const rules = newRules(game.players, mode, dice.seed(), count);
-  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: count, ...rules }))) {
+  const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for
+  const scenes = count + (rules.dungeon?.trek ? TREK_SCENES : 0); // a dungeon game opens with the road to its door
+  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
     throw conflict('the game is already starting');
   }
   await system(code, `${host.character.name} opened the dungeon door. ${archetype(game.dungeonMaster).name} is preparing the adventure…`);
@@ -641,6 +643,12 @@ function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | nul
   });
 }
 
+/** The DM's choices, or Engage, Run and Parley when foes bar the road as the game starts. */
+function openingChoices(draft: OpeningScene, game: Game): StoredChoice[] {
+  const rules = rulesStateOf(game);
+  return (rules && confrontationChoices(rules)) ?? choicesOf(draft.choices, rules);
+}
+
 const sceneTitle = (text: SceneText, fallback: string) => clip(text.title?.trim() || fallback, 120);
 
 async function writeOpening(code: string, origin: string): Promise<void> {
@@ -656,7 +664,7 @@ async function writeOpening(code: string, origin: string): Promise<void> {
       narration: draft.narration.trim(),
       imagePrompt: draft.imagePrompt,
       imageUrl: null,
-      choices: choicesOf(draft.choices, game.party && game),
+      choices: openingChoices(draft, game),
       isFinale: false,
     };
     await store.saveScene(code, scene);

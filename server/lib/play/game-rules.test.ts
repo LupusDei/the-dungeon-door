@@ -56,6 +56,18 @@ async function voteAll(code: string, players: string[], sceneIndex: number, choi
 }
 
 /** A DM whose first choice carries this hook, and that records what it was told. */
+/**
+ * Walk the road to the dungeon door (play/trek.ts) with the fake DM: Run from foes barring the way, else look
+ * around. `door` is the DM that writes the door scene (scene 2), if not the fake.
+ */
+async function walkTheRoad(code: string, players: string[], door?: DungeonMaster) {
+  await voteAll(code, players, 0, 'b');
+  await settle();
+  if (door) registerDungeonMaster('chronicler', door);
+  await voteAll(code, players, 1, 'b');
+  await settle();
+}
+
 function hookDM(hook: unknown, label: string, seen: { ctx: DMContext; resolution?: Resolution }[] = []): DungeonMaster {
   const withHook = <T extends { choices: { label: string; detail: string; rules?: unknown }[] }>(scene: T): T =>
     ({ ...scene, choices: [{ label, detail: 'Try it.', rules: hook }, ...scene.choices.slice(1)] });
@@ -174,17 +186,49 @@ test('every hero down: the fight is lost and the next scene is the epilogue', as
   assert.ok(sheet.dead === true ? sheet.hp === 0 : sheet.hp === sheet.maxHp, 'the slain go home dead; a hero who pulled through goes home rested');
 });
 
+test('a dungeon game begins on the road from the tavern: two scenes of it, then the door; the game is two scenes longer', async () => {
+  const { code, players, host } = await table(2);
+  await start(code, host, { dungeon: 'fixed' });
+  await settle();
+  let state = await view(code, host);
+  assert.equal(state.sceneCount, 6, 'the 4 asked for, after the road');
+  assert.deepEqual([state.rules!.trek!.stretch, state.rules!.trek!.of, state.rules!.dungeon], [1, 2, null]);
+  assert.ok(state.scene!.choices.every((c) => !/^Go on/.test(c.rules ?? '')), 'no way on along the road');
+  await voteAll(code, players, 0, 'b');
+  await settle();
+  state = await view(code, host);
+  assert.equal(state.rules!.trek!.stretch, 2);
+  await voteAll(code, players, 1, 'b');
+  await settle();
+  state = await view(code, host);
+  assert.deepEqual([state.rules!.trek, state.rules!.dungeon!.at], [null, 'r0']);
+  assert.ok(state.rules!.results.includes('The party reaches the dungeon door.'));
+  assert.match(state.scene!.choices[0].rules!, /^Go on/, 'the door scene starts as it always has');
+  assert.equal(state.sceneCount, 6);
+});
+
+test('foes barring the road as the game starts: the opening scene offers Engage, Run and Parley', async () => {
+  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 8 });
+  const { code, host } = await table(2);
+  await start(code, host, { dungeon: 'fixed' });
+  await settle();
+  const state = await view(code, host);
+  assert.equal(state.rules!.trek!.waiting!.attitude, 'hostile');
+  assert.deepEqual(state.scene!.choices.map((c) => c.label), ['Engage', 'Run', 'Parley']);
+});
+
 test('a fixed dungeon chosen at start: the map, the party moving through it, what is in each room', async () => {
   const { code, players, host } = await table(2);
   assert.equal((await start(code, host, { dungeon: 'maze' })).status, 400);
   await start(code, host, { dungeon: 'fixed' });
   await settle();
+  await walkTheRoad(code, players);
   let state = await view(code, host);
   const map = state.rules!.dungeon!;
   assert.deepEqual([map.mode, map.at, map.areas.length], ['fixed', 'r0', 1]);
   const exit = map.areas[0].exits[0].id;
   assert.match(state.scene!.choices[0].rules!, /^Go on \([a-z ]+\)$/, 'the way, not the exit id');
-  await voteAll(code, players, 0, 'a');
+  await voteAll(code, players, 2, 'a');
   state = await view(code, host);
   assert.equal(state.rules!.dungeon!.at, exit, 'through any corridor to the room');
   assert.deepEqual(state.rules!.dungeon!.areas.map((a) => a.id).filter((id) => !id.includes('-')), ['r0', exit]);
@@ -199,10 +243,11 @@ test('explore mode rolls each area as the party opens it', async () => {
   const { code, players, host } = await table(1);
   await start(code, host, { dungeon: 'explore' });
   await settle();
+  await walkTheRoad(code, players);
   let state = await view(code, host);
   assert.equal(state.rules!.dungeon!.mode, 'explore');
   assert.ok(state.rules!.dungeon!.areas[0].exits.every((x) => x.to === null));
-  await voteAll(code, players, 0, 'a');
+  await voteAll(code, players, 2, 'a');
   state = await view(code, host);
   assert.equal(state.rules!.dungeon!.areas.length, 2);
 });
@@ -278,27 +323,29 @@ test('a dead hero goes to the temple between adventures, comes back with 1 HP an
 
 test('phase 4 in play: the clock, the torch from the pack, a web that holds, Break Free, and what the DM is told', async () => {
   const seen: { ctx: DMContext; resolution?: Resolution }[] = [];
-  registerDungeonMaster('chronicler', fightingDM(['giant-spider'], seen));
+  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 1 }); // a game whose spider webs on its first turn
   const { code, players, host } = await table(1);
   await start(code, host, { sceneCount: 3, dungeon: 'fixed' });
   await settle();
-  await voteAll(code, players, 0, 'a');
+  await walkTheRoad(code, players, fightingDM(['giant-spider'], seen));
+  const arrived = (await view(code, host)).rules!.time;
+  await voteAll(code, players, 2, 'a');
   let state = await view(code, host);
-  assert.deepEqual(state.rules!.time, { seconds: 0, label: 'Day 1, 08:00' }, 'a fight takes no time to start');
+  assert.deepEqual(state.rules!.time, arrived, 'a fight takes no time to start');
   assert.equal(state.rules!.results[0], 'Hero 1 lights a Torch (1 hour).', 'from the opened Dungeoneer\u2019s Pack, before the fight');
   assert.deepEqual([state.rules!.light.level, state.rules!.light.source!.holder], ['bright', 'Hero 1']);
   assert.equal(state.rules!.party[0].sight, 'clear');
   assert.ok(state.rules!.party[0].inventory.some((i) => i.id === 'rations'), 'the pack is opened');
   assert.equal(state.rules!.party[0].inventory.some((i) => i.id === 'dungeoneer-pack'), false);
-  await voteAll(code, players, 1, 'a');
+  await voteAll(code, players, 3, 'a');
   state = await view(code, host);
   assert.ok(state.rules!.results.includes('Giant Spider uses Web (DC 13 DEX save): Hero 1 fails, Restrained.'), state.rules!.results.join(' | '));
   assert.deepEqual(state.rules!.party[0].conditions, [{ condition: 'restrained', ends: 'DC 13 Athletics to break free' }]);
   assert.equal(state.scene!.choices[2].label, 'Break Free', 'the third choice, for the held hero');
   assert.equal(seen.at(-1)!.ctx.rules!.party[0].conditions, 'restrained (DC 13 Athletics to break free)', 'the DM is told');
-  assert.equal(state.rules!.time.seconds, 6, 'a round is 6 seconds');
+  assert.equal(state.rules!.time.seconds, arrived.seconds + 6, 'a round is 6 seconds');
   d20(20);
-  await voteAll(code, players, 2, 'c');
+  await voteAll(code, players, 4, 'c');
   state = await view(code, host);
   assert.ok(state.rules!.results.some((l) => /^Hero 1 (breaks free|strains against being Restrained)/.test(l)), state.rules!.results.join(' | '));
 });

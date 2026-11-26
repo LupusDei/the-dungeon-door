@@ -283,7 +283,14 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // a hero's id is its playerId; toughness is null for a hero, and the
                                       // foe's own rating against this party (absent from older servers)
   }
-  dungeon: null | {
+  trek: null | {                      // the road from the tavern to the dungeon door, while the party is on it
+    stretch: number; of: number       // stretch 1 of 2 (each a scene)
+    terrain: string                   // "a forest road under old oaks"
+    event: "bandits" | "varmints" | "band" | "vendor" | "quiet"
+    wares: [{ id: string; name: string; cost: number }]   // a wandering vendor's goods (gp); else []
+    waiting: null | { ... }           // foes met on this stretch, as dungeon.waiting
+  }                                   // absent from older servers
+  dungeon: null | {                   // null on the road: the dungeon begins at its door
     mode: "fixed" | "explore"; kind: string
     at: string                        // area id the party is in
     level: number                     // the dungeon level reached, 1–20: it starts at the living heroes'
@@ -338,7 +345,9 @@ Message {
   Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
   map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
   The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
-  becomes `voting` when it's ready.
+  becomes `voting` when it's ready. A dungeon game opens with two scenes on the road from the tavern to
+  the dungeon door (`rules.trek`; `rules.dungeon` is null until the door), so its `sceneCount` is two more
+  than asked for. Foes on the road who bar the way give Engage, Run and Parley, as in a room.
 - `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId }` or `{ sceneIndex, actionId, targets? }` → `GameState`.
   `choiceId` is still `"a"`, `"b"` or `"c"`. `actionId` is an id from `scene.actions`, and `targets` are ids
   from that action (omit them when `picks` is `"none"`; one id when `"one"`; one or more, up to `limit`,

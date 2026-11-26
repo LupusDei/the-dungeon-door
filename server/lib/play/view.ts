@@ -6,6 +6,7 @@ import { passiveScore } from '../rules/checks.ts';
 import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
 import { load } from '../rules/inventory.ts';
+import { items } from '../rules/items.ts';
 import { speedNow } from '../rules/rests.ts';
 import { clockLabel, darkvision, type LightLevel, LIGHTS, type Sight, sightOf } from '../rules/light.ts';
 import { candidates, fightBand, rateEncounter, temperedBudget, toughnessFor, type FightBand, type Toughness } from '../rules/encounter.ts';
@@ -17,6 +18,7 @@ import { foesNamed } from './hooks.ts';
 import type { Attitude } from './parley.ts';
 import type { DungeonState } from './state.ts';
 import { clockOf, lightLevel } from './time.ts';
+import type { TrekEvent } from './trek.ts';
 import type { RulesState } from './turn.ts';
 
 export interface RatedFoe { name: string; count: number; toughness: Toughness }
@@ -38,6 +40,26 @@ function waiting(dungeon: DungeonState, levels: readonly number[]): Waiting | nu
   const rated = rateEncounter(levels, here.monsters);
   return { foes: foesNamed(here.monsters), attitude: here.attitude, band: rated.band, monsters: grouped(rated.monsters) };
 }
+
+/** The stretch of road the party is on (play/trek.ts), what is on it, and who bars the way; null once at the door. */
+export interface TrekView {
+  stretch: number; of: number; terrain: string; event: TrekEvent;
+  /** A wandering vendor's goods, at SRD prices (gp). */
+  wares: { id: string; name: string; cost: number }[];
+  waiting: Waiting | null;
+}
+
+function trekView(state: RulesState): TrekView | null {
+  const { party, combat, dungeon } = state;
+  const trek = dungeon?.trek;
+  if (!trek) return null;
+  const leg = trek.legs[trek.leg];
+  const wares = leg.wares.map((id) => items().get(id)!).map(({ id, name, cost }) => ({ id, name, cost }));
+  return { stretch: trek.leg + 1, of: trek.legs.length, terrain: trek.terrain, event: leg.event, wares, waiting: combat ? null : waiting(dungeon, foeLevels(party, dungeon)) };
+}
+
+/** The dungeon as the party has it, once it is at the door (not on the road). */
+const inDungeon = (dungeon: DungeonState | null) => (dungeon?.trek ? null : dungeon);
 
 function ratedCombat(state: RulesState, combat: NonNullable<RulesState['combat']>) {
   const levels = foeLevels(state.party, state.dungeon);
@@ -98,6 +120,9 @@ export interface RulesView {
     band: FightBand;
     combatants: { id: string; name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; conditions: string[]; toughness: Toughness | null }[];
   };
+  /** The road from the tavern to the dungeon door, while the party is on it; then null. */
+  trek: TrekView | null;
+  /** The dungeon, once the party is at its door (null on the road). */
   dungeon: null | {
     mode: 'fixed' | 'explore'; kind: string; at: string;
     /** The dungeon level the party has reached (Phase 5), and where it went deeper, oldest first. */
@@ -138,8 +163,22 @@ const passives = (s: CharacterSheet) => ({
 /** "Potion of Healing ×2, Rope". */
 const itemsLine = (s: CharacterSheet) => s.equipment.map((e) => (e.count > 1 ? `${e.name} ×${e.count}` : e.name)).join(', ');
 
+function dungeonView({ party, combat, dungeon: d }: RulesState): RulesView['dungeon'] {
+  const dungeon = inDungeon(d);
+  return dungeon && {
+    mode: dungeon.map.mode,
+    kind: dungeon.map.kind,
+    at: dungeon.at,
+    level: dungeonLevel(dungeon),
+    deepened: dungeon.deepened ?? [],
+    areas: dungeon.visited.map((id) => dungeon.map.nodes[id]).map(({ id, name, purpose, exits }) =>
+      ({ id, name, purpose, cleared: dungeon.cleared.includes(id), exits: exits.map(({ id: x, connection, to }) => ({ id: x, connection, to })) })),
+    waiting: combat ? null : waiting(dungeon, foeLevels(party, dungeon)),
+  };
+}
+
 export function rulesView(state: RulesState, results: string[]): RulesView {
-  const { party, combat, dungeon } = state;
+  const { party, combat } = state;
   const light = lightLevel(state);
   return {
     party: Object.entries(party.sheets).map(([id, s]) => heroView(id, s, light)),
@@ -155,16 +194,8 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
         })),
       };
     })(),
-    dungeon: dungeon && {
-      mode: dungeon.map.mode,
-      kind: dungeon.map.kind,
-      at: dungeon.at,
-      level: dungeonLevel(dungeon),
-      deepened: dungeon.deepened ?? [],
-      areas: dungeon.visited.map((id) => dungeon.map.nodes[id]).map(({ id, name, purpose, exits }) =>
-        ({ id, name, purpose, cleared: dungeon.cleared.includes(id), exits: exits.map(({ id: x, connection, to }) => ({ id: x, connection, to })) })),
-      waiting: combat ? null : waiting(dungeon, foeLevels(party, dungeon)),
-    },
+    trek: trekView(state),
+    dungeon: dungeonView(state),
     results,
     levelUps: (party.levelUps ?? []).map((u) => ({ ...u, name: party.sheets[u.playerId].name })),
     time: { seconds: clockOf(party), label: clockLabel(clockOf(party)) },
@@ -188,6 +219,7 @@ export interface RulesContext {
     round: number; band: FightBand;
     combatants: { name: string; side: 'party' | 'foes'; hp: number; maxHp: number; status: string; toughness: Toughness | null }[];
   };
+  trek: TrekView | null;
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
   monsters: string[];
@@ -221,7 +253,7 @@ export function rulesContext(state: RulesState): RulesContext {
   const { party, combat, dungeon } = state;
   const sheets = Object.values(party.sheets);
   const light = lightLevel(state);
-  const here = dungeon && dungeon.map.nodes[dungeon.at];
+  const here = inDungeon(dungeon) && dungeon!.map.nodes[dungeon!.at];
   return {
     party: sheets.map((s) => ({
       name: s.name, level: s.level, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass, exhaustion: s.exhaustion, slotsLeft: slotsLeft(s),
@@ -237,6 +269,7 @@ export function rulesContext(state: RulesState): RulesContext {
         combatants: rated.ordered.map((c) => ({ name: c.name, side: c.side, hp: c.hp, maxHp: c.maxHp, status: c.status, toughness: rated.toughness(c) })),
       };
     })(),
+    trek: trekView(state),
     dungeon: dungeon && here && {
       kind: dungeon.map.kind,
       level: dungeonLevel(dungeon),

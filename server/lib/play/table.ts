@@ -11,10 +11,11 @@ import { longRest } from '../rules/rests.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
 import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } from '../types.ts';
-import { startDungeon } from './delve.ts';
+import { dungeonLevel, startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
 import type { DungeonState, LevelUp, PartyState } from './state.ts';
+import { meetOnTheRoad, planTrek } from './trek.ts';
 import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState } from './turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
@@ -31,11 +32,11 @@ const sheetOf = ({ character }: GamePlayer): CharacterSheet => upgradeCharacter(
 export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed: number, sceneCount: number): RulesState {
   const sheets = Object.fromEntries(players.map((p) => [p.playerId, unpacked(sheetOf(p))]));
   const levels = Object.values(sheets).filter((s) => !s.dead).map((s) => s.level); // the dungeon starts at the living heroes' level
-  return {
-    party: { version: 1, rng: seed, sheets },
-    combat: null,
-    dungeon: mode === 'none' ? null : startDungeon(mode, seed, levels, sceneCount),
-  };
+  const party: PartyState = { version: 1, rng: seed, sheets };
+  if (mode === 'none') return { party, combat: null, dungeon: null };
+  const dungeon = startDungeon(mode, seed, levels, sceneCount);
+  const met = meetOnTheRoad(party, { ...dungeon, trek: planTrek(seed, levels, dungeonLevel(dungeon)) }); // first, the road from the tavern
+  return { party: met.party, combat: null, dungeon: met.dungeon };
 }
 
 const openPacks = (party: PartyState): PartyState =>

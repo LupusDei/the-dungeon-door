@@ -7,7 +7,9 @@ import { habitat, kindIdOf } from '../rules/habitats.ts';
 import { encounterBudget, monsters } from '../rules/monsters.ts';
 import { startDungeon, enter } from './delve.ts';
 import { startFight } from './fight.ts';
-import type { PartyState } from './state.ts';
+import { items } from '../rules/items.ts';
+import type { DungeonState, PartyState } from './state.ts';
+import { ROAD_MONSTERS, type TrekLeg } from './trek.ts';
 import { rulesContext, rulesView, suitableMonsters } from './view.ts';
 import { asItStands } from '../rules/checks.ts';
 
@@ -136,4 +138,19 @@ test('an exhausted hero: the sheet and the party view give the same passive Perc
   const laden = { ...fighter, equipment: [...fighter.equipment, { ...mail, count: 10 }] };
   assert.ok(load(laden).dragging);
   assert.deepEqual([heroOf(laden).speed, heroOf({ ...laden, exhaustion: 5 }).speed, heroOf({ ...laden, speed: 20, exhaustion: 5 }).speed], [5, 5, 0], 'dragging: 5 ft at most');
+});
+
+test('on the road: no dungeon yet; the stretch, its terrain, what is on it (wares, who bars the way), to the app and the DM; road monsters to use', () => {
+  const quiet: TrekLeg = { event: 'quiet', roll: 11, monsters: [], treasure: null, wares: [] };
+  const road = (second: TrekLeg, facing?: DungeonState['facing']) =>
+    ({ party, combat: null, dungeon: { ...startDungeon('fixed', 3, [1, 1], 4), trek: { terrain: 'a forest road', leg: 1, legs: [quiet, second] }, ...(facing ? { facing } : {}) } });
+  const vendor = road({ event: 'vendor', roll: 9, monsters: [], treasure: null, wares: ['potion-of-healing', 'rope'] });
+  const expected = { stretch: 2, of: 2, terrain: 'a forest road', event: 'vendor', wares: [{ id: 'potion-of-healing', name: 'Potion of Healing', cost: 50 }, { id: 'rope', name: items().get('rope')!.name, cost: 1 }], waiting: null };
+  assert.deepEqual([rulesView(vendor, []).trek, rulesContext(vendor).trek], [expected, expected]);
+  assert.deepEqual([rulesView(vendor, []).dungeon, rulesContext(vendor).dungeon], [null, null]);
+  assert.ok(rulesContext(vendor).monsters.length > 0 && rulesContext(vendor).monsters.every((m) => ROAD_MONSTERS.includes(m)));
+  const bandits = road({ event: 'bandits', roll: 2, monsters: ['bandit', 'bandit'], treasure: null, wares: [] }, { monsters: ['bandit', 'bandit'], attitude: 'hostile' });
+  assert.deepEqual([rulesView(bandits, []).trek!.waiting!.foes, rulesContext(bandits).trek!.waiting!.attitude], ['Bandit ×2', 'hostile']);
+  const door = { party, combat: null, dungeon: startDungeon('fixed', 3, [1, 1], 4) };
+  assert.deepEqual([rulesView(door, []).trek, rulesContext(door).trek], [null, null]);
 });
