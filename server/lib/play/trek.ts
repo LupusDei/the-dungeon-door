@@ -8,7 +8,7 @@
  * a Potion of Healing and some SRD gear at SRD prices. See docs/rules-design.md, "The road".
  */
 import { rollTreasure, type Treasure } from '../rules/dungeon.ts';
-import { buildEncounter } from '../rules/encounter.ts';
+import { buildEncounter, candidates, temperedBudget } from '../rules/encounter.ts';
 import { items } from '../rules/items.ts';
 import { derivedRng, pick, type Rng, sample, seededRng } from '../rules/rng.ts';
 import { foesNamed } from './hooks.ts';
@@ -50,8 +50,20 @@ export function legOf(rng: Rng, event: TrekEvent, roll: number, levels: readonly
   const none: TrekLeg = { event, roll, monsters: [], treasure: null, wares: [] };
   if (event === 'vendor') return { ...none, wares: ['potion-of-healing', ...sample(rng, goods(), WARES)] };
   if (event === 'quiet' || levels.length === 0) return none; // no living hero to meet them: an empty road
-  const { monsters } = buildEncounter(rng, levels, 'low', ROAD_POOLS[event]);
+  const budget = roadBudget(levels);
+  if (!candidates(levels, ROAD_POOLS[event]).some((m) => m.xp <= budget)) return { ...none, event: 'quiet' }; // no one so small: a lone traveller is let by
+  const { monsters } = buildEncounter(rng, levels, 'low', ROAD_POOLS[event], budget);
   return { ...none, monsters, treasure: event === 'varmints' ? null : rollTreasure(rng, level) };
+}
+
+/**
+ * The XP the road's foes may spend: a low encounter (2024 DMG), tempered at levels 1–2 as in the dungeon; for a
+ * lone hero, half that again. One hero has no one to share the blows or pick them up, and the road comes
+ * before the dungeon: at level 1 only CR 0 beasts are met.
+ */
+export function roadBudget(levels: readonly number[]): number {
+  const low = temperedBudget(levels, 'low');
+  return levels.length === 1 ? Math.floor(low / 2) : low;
 }
 
 /** The road from the tavern to the door, rolled when the game starts, for the party's levels and the dungeon's starting level. */

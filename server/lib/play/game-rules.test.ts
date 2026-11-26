@@ -332,7 +332,7 @@ test('a dead hero goes to the temple between adventures, comes back with 1 HP an
 
 test('phase 4 in play: the clock, the torch from the pack, a web that holds, Break Free, and what the DM is told', async () => {
   const seen: { ctx: DMContext; resolution?: Resolution }[] = [];
-  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 1 }); // a game whose spider webs on its first turn
+  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 5 }); // a game whose spider webs on its first turn
   const { code, players, host } = await table(1);
   await start(code, host, { sceneCount: 3, dungeon: 'fixed' });
   await settle();

@@ -602,6 +602,13 @@ for the count asked for).
   budget, tempering and party-size cap as a dungeon room), at the levels the dungeon starts at (in a tale
   told, the party's level); the tougher ones only appear for parties that can afford them. Bandits and
   monster bands carry treasure for that level; beasts carry none.
+- **A lone hero meets less** (`roadBudget`): half the low budget again, since one hero has no one to share
+  the blows or pick them up, and the road comes before the dungeon. At level 1 that is 12 XP: only CR 0
+  beasts (a jackal or a hyena). Bandits and monster bands have no one that small, so for a lone traveller
+  that stretch is quiet. Groups keep the full low budget. Measured (`npm run playtest`, fixed dungeon,
+  under the range-band rules): a lone level-1 wizard dies in 4% of games with the road as it was, with this
+  budget, and with a road that has no one on it (1,000 games each): the road adds no measurable deaths.
+  Road fights for a lone wizard drop from 0.6 to 0.4 a game (0.2 is the dungeon's own).
 - **Foes are met** as in a dungeon room: they roll an attitude (2d6: 2–5 Hostile, about 28%). Hostile ones
   bar the way: Engage, Run (slip past: no fight, no loot, no XP) or Parley. If a parley fails and they are
   still Hostile, they attack: there is no way back on the road. Others watch and wait while the party goes on.

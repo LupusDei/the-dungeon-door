@@ -55,10 +55,10 @@ export function worthwhile(all: Monster[], budget: number, cap: number = MAX_MON
 
 /**
  * Keeps adding monsters that fit what is left of the budget (half the time another of the same kind, so
- * encounters come in groups), up to the cap for the party's size and level.
+ * encounters come in groups), up to the cap for the party's size and level. `budget` is the tempered one
+ * for the difficulty unless given (the road's, play/trek.ts roadBudget).
  */
-export function buildEncounter(rng: Rng, levels: readonly number[], difficulty: Difficulty, pool?: readonly string[]): Encounter {
-  const budget = temperedBudget(levels, difficulty);
+export function buildEncounter(rng: Rng, levels: readonly number[], difficulty: Difficulty, pool?: readonly string[], budget = temperedBudget(levels, difficulty)): Encounter {
   const cap = foeCap(levels.length, top(levels));
   return { difficulty, ...composeEncounter(rng, budget, worthwhile(candidates(levels, pool), budget, cap), cap) };
 }

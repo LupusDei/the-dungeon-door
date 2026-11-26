@@ -6,7 +6,7 @@ import { items } from '../rules/items.ts';
 import { monster } from '../rules/monsters.ts';
 import { derivedRng, seededRng } from '../rules/rng.ts';
 import type { PartyState } from './state.ts';
-import { eventFor, legOf, meetOnTheRoad, planTrek, ROAD_END, ROAD_MONSTERS, ROAD_POOLS, TREK_SCENES } from './trek.ts';
+import { eventFor, legOf, meetOnTheRoad, planTrek, ROAD_END, ROAD_MONSTERS, ROAD_POOLS, roadBudget, TREK_SCENES } from './trek.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const party: PartyState = { version: 1, rng: 5, sheets: { p1: fighter, p2: { ...fighter, name: 'Ash' } } };
@@ -36,6 +36,24 @@ test('foes on the road are a low SRD 5.2 encounter for the dungeon\u2019s starti
   }
   assert.ok(ROAD_POOLS.bandits.includes('bandit') && ROAD_POOLS.varmints.includes('wolf') && ROAD_POOLS.band.includes('goblin-warrior'));
   assert.deepEqual(ROAD_MONSTERS, [...ROAD_POOLS.bandits, ...ROAD_POOLS.varmints, ...ROAD_POOLS.band]);
+});
+
+test('a lone hero meets less on the road: half the low budget again, so at level 1 only CR 0 beasts; bandits and bands with no one that small let them by', () => {
+  assert.deepEqual([roadBudget([1]), roadBudget([3]), roadBudget([1, 1]), roadBudget([2, 2, 2, 2])],
+    [Math.floor(temperedBudget([1], 'low') / 2), Math.floor(temperedBudget([3], 'low') / 2), temperedBudget([1, 1], 'low'), temperedBudget([2, 2, 2, 2], 'low')]);
+  const seen = new Set<string>();
+  for (let seed = 1; seed <= 40; seed++) {
+    const beasts = legOf(derivedRng(seed, 'leg'), 'varmints', 5, [1], 1);
+    assert.equal(beasts.monsters.length, 1);
+    assert.ok(monster(beasts.monsters[0]).xp <= roadBudget([1]), beasts.monsters[0]);
+    beasts.monsters.forEach((m) => seen.add(m));
+    for (const event of ['bandits', 'band'] as const) {
+      assert.deepEqual(legOf(derivedRng(seed, 'leg'), event, 2, [1], 1), { event: 'quiet', roll: 2, monsters: [], treasure: null, wares: [] }, event);
+    }
+    const veteran = legOf(derivedRng(seed, 'leg'), 'bandits', 2, [3], 3);
+    assert.ok(veteran.monsters.length === 1 && monster(veteran.monsters[0]).xp <= roadBudget([3]), `${veteran.monsters}`);
+  }
+  assert.deepEqual([...seen].sort(), ['hyena', 'jackal']);
 });
 
 test('a wandering vendor has a Potion of Healing and SRD gear, all at SRD prices; a quiet stretch has nothing', () => {
