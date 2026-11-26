@@ -581,6 +581,10 @@ struct Vote: Codable, Hashable {
     var targets: [String] = []
     /// A move taken with the vote: a range band, a square, or both.
     var move: VoteMove? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case playerId, choiceId, roll, label, actionId, targets, move
+    }
 }
 
 extension Vote {
@@ -612,6 +616,8 @@ struct GridPoint: Codable, Hashable, Identifiable {
         x = try c.whole(.x)
         y = try c.whole(.y)
     }
+
+    private enum CodingKeys: String, CodingKey { case x, y }
 }
 
 /// A move sent with a vote. Older servers use a range band (`to`); a tactical map uses a square (`x`, `y`).
@@ -659,6 +665,10 @@ struct VoteMove: Codable, Hashable {
         try c.encodeIfPresent(x, forKey: .x)
         try c.encodeIfPresent(y, forKey: .y)
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case to, engage, dash, disengage, x, y
+    }
 }
 
 /// Who or what a legal action may name.
@@ -676,6 +686,8 @@ struct LegalTarget: Codable, Hashable, Identifiable {
         id = try c.value(.id, or: "")
         name = try c.value(.name, or: id)
     }
+
+    private enum CodingKeys: String, CodingKey { case id, name }
 }
 
 /// How far an attack or spell reaches, in feet. `long` is the disadvantage band when the server sends one.
@@ -693,6 +705,8 @@ struct ActionRange: Codable, Hashable {
         normal = try c.whole(.normal)
         long = try c.optionalWhole(.long)
     }
+
+    private enum CodingKeys: String, CodingKey { case normal, long }
 }
 
 /// One action this hero may take this turn (`scene.actions`). A kind the app has not met is still shown.
@@ -749,6 +763,10 @@ struct LegalAction: Codable, Hashable, Identifiable {
         reachFeet = try c.optionalWhole(.reachFeet)
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, label, kind, detail, targets, picks, limit, available, reason, squares, rangeFeet, reachFeet
+    }
+
     var namesDash: Bool {
         id.localizedCaseInsensitiveContains("dash") || label.localizedCaseInsensitiveContains("dash")
     }
@@ -771,7 +789,7 @@ struct CoverCell: Codable, Hashable, Identifiable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        if let square = try? c.decodeIfPresent(GridPoint.self, forKey: .square), let square {
+        if let square = (try? c.decodeIfPresent(GridPoint.self, forKey: .square)) ?? nil {
             x = square.x
             y = square.y
         } else {
@@ -818,6 +836,10 @@ struct Battlefield: Codable, Hashable {
         cover = (try? c.decode([CoverCell].self, forKey: .cover)) ?? []
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case width, height, squareFeet, walls, cover
+    }
+
     /// Columns of the grid.
     var columns: Int { Self.span(width, squareFeet: squareFeet) }
     /// Rows of the grid.
@@ -860,8 +882,8 @@ struct Battlefield: Codable, Hashable {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             x = c.contains(.x) ? try c.whole(.x) : nil
             y = c.contains(.y) ? try c.whole(.y) : nil
-            from = try? c.decodeIfPresent(GridPoint.self, forKey: .from)
-            to = try? c.decodeIfPresent(GridPoint.self, forKey: .to)
+            from = (try? c.decodeIfPresent(GridPoint.self, forKey: .from)) ?? nil
+            to = (try? c.decodeIfPresent(GridPoint.self, forKey: .to)) ?? nil
         }
 
         private enum CodingKeys: String, CodingKey { case x, y, from, to }
@@ -883,6 +905,8 @@ struct MyAction: Codable, Hashable {
         id = try c.value(.id, or: "")
         targets = try c.value(.targets, or: [])
     }
+
+    private enum CodingKeys: String, CodingKey { case id, targets }
 }
 
 /// A turn the player wrote in their own words (`scene.myFreeform`, `scene.freeforms`).
@@ -903,6 +927,8 @@ struct FreeformTurn: Codable, Hashable {
         text = try c.value(.text, or: "")
         roll = try c.whole(.roll)
     }
+
+    private enum CodingKeys: String, CodingKey { case playerId, text, roll }
 }
 
 /// A line or a deed a player gave in character. No roll.
