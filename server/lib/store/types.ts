@@ -1,3 +1,4 @@
+import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Message, MessageKind, StoredScene, Vote } from '../types.ts';
 
 export interface NewGame {
@@ -16,6 +17,9 @@ export interface GamePatch {
   dungeonMaster?: string;
   sceneCount?: number;
   hostId?: string;
+  party?: PartyState | null;
+  combat?: CombatState | null;
+  dungeon?: DungeonState | null;
 }
 
 /** The precondition of a compare-and-set game update. */

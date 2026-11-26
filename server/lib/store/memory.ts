@@ -58,6 +58,9 @@ export class MemoryStore implements Store {
         sceneIndex: -1,
         players: [structuredClone(game.host)],
         scenes: [],
+        party: null,
+        combat: null,
+        dungeon: null,
         createdAt: t,
         updatedAt: t,
       },
@@ -79,7 +82,7 @@ export class MemoryStore implements Store {
     if (expect.status !== undefined && game.status !== expect.status) return false;
     if (expect.sceneIndex !== undefined && game.sceneIndex !== expect.sceneIndex) return false;
     for (const [key, value] of Object.entries(patch)) {
-      if (value !== undefined) (game as unknown as Record<string, unknown>)[key] = value;
+      if (value !== undefined) (game as unknown as Record<string, unknown>)[key] = structuredClone(value);
     }
     game.updatedAt = now();
     return true;

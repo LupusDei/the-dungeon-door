@@ -13,7 +13,47 @@ const GAME_COLUMNS: Record<keyof GamePatch, string> = {
   dungeonMaster: 'dungeon_master',
   sceneCount: 'scene_count',
   hostId: 'host_id',
+  party: 'party',
+  combat: 'combat',
+  dungeon: 'dungeon',
 };
+const JSON_FIELDS = new Set<keyof GamePatch>(['party', 'combat', 'dungeon']);
+const encode = (key: keyof GamePatch, value: unknown) => (JSON_FIELDS.has(key) && value !== null ? JSON.stringify(value) : value);
+
+/** The compare-and-set UPDATE: `patch` where the game matches `expect`. */
+export function gameUpdate(code: string, expect: GameExpectation, patch: GamePatch): { text: string; params: unknown[] } {
+  const params: unknown[] = [code];
+  const add = (value: unknown) => `$${params.push(value)}`;
+  const sets = ['updated_at = now()'];
+  for (const [key, value] of Object.entries(patch) as [keyof GamePatch, unknown][]) {
+    if (value !== undefined) sets.push(`${GAME_COLUMNS[key]} = ${add(encode(key, value))}`);
+  }
+  const where = ['code = $1'];
+  if (expect.status !== undefined) where.push(`status = ${add(expect.status)}`);
+  if (expect.sceneIndex !== undefined) where.push(`scene_index = ${add(expect.sceneIndex)}`);
+  return { text: `UPDATE games SET ${sets.join(', ')} WHERE ${where.join(' AND ')} RETURNING code`, params };
+}
+
+/** A games row as a Game. Rows from before the rules engine have no rules columns: they read as null. */
+export function gameRow(row: Row, players: GamePlayer[], scenes: StoredScene[]): Game {
+  const { party = null, combat = null, dungeon = null } = row;
+  return {
+    code: row.code,
+    hostId: row.host_id,
+    status: row.status as GameStatus,
+    dungeonMaster: row.dungeon_master,
+    title: row.title,
+    sceneCount: row.scene_count,
+    sceneIndex: row.scene_index,
+    players,
+    scenes,
+    party,
+    combat,
+    dungeon,
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  };
+}
 
 /**
  * Postgres store over Neon's HTTP driver (one round trip per statement, no pooled connections, which
@@ -83,52 +123,26 @@ export class PostgresStore implements Store {
     );
     if (!row) return null;
     const votes = (row.votes as Row[]).map((v) => ({ sceneIdx: v.scene_idx as number, vote: { playerId: v.player_id, choiceId: v.choice_id, roll: v.roll } as Vote }));
-    return {
-      code: row.code,
-      hostId: row.host_id,
-      status: row.status as GameStatus,
-      dungeonMaster: row.dungeon_master,
-      title: row.title,
-      sceneCount: row.scene_count,
-      sceneIndex: row.scene_index,
-      players: (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) })),
-      scenes: (row.scenes as Row[]).map((s): StoredScene => ({
-        index: s.idx,
-        title: s.title,
-        narration: s.narration,
-        imagePrompt: s.image_prompt,
-        imageUrl: s.image_url,
-        choices: s.choices as Choice[],
-        isFinale: s.is_finale,
-        votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
-        outcome: s.outcome,
-        chosenChoiceId: s.chosen_choice_id as ChoiceId | null,
-        createdAt: iso(s.created_at),
-      })),
-      createdAt: iso(row.created_at),
-      updatedAt: iso(row.updated_at),
-    };
+    const players = (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) }));
+    const scenes = (row.scenes as Row[]).map((s): StoredScene => ({
+      index: s.idx,
+      title: s.title,
+      narration: s.narration,
+      imagePrompt: s.image_prompt,
+      imageUrl: s.image_url,
+      choices: s.choices as Choice[],
+      isFinale: s.is_finale,
+      votes: votes.filter((v) => v.sceneIdx === s.idx).map((v) => v.vote),
+      outcome: s.outcome,
+      chosenChoiceId: s.chosen_choice_id as ChoiceId | null,
+      createdAt: iso(s.created_at),
+    }));
+    return gameRow(row, players, scenes);
   }
 
   async updateGame(code: string, expect: GameExpectation, patch: GamePatch) {
-    const params: unknown[] = [code];
-    const sets = ['updated_at = now()'];
-    for (const [key, value] of Object.entries(patch) as [keyof GamePatch, unknown][]) {
-      if (value === undefined) continue;
-      params.push(value);
-      sets.push(`${GAME_COLUMNS[key]} = $${params.length}`);
-    }
-    const where = ['code = $1'];
-    if (expect.status !== undefined) {
-      params.push(expect.status);
-      where.push(`status = $${params.length}`);
-    }
-    if (expect.sceneIndex !== undefined) {
-      params.push(expect.sceneIndex);
-      where.push(`scene_index = $${params.length}`);
-    }
-    const rows = await this.q(`UPDATE games SET ${sets.join(', ')} WHERE ${where.join(' AND ')} RETURNING code`, params);
-    return rows.length > 0;
+    const { text, params } = gameUpdate(code, expect, patch);
+    return (await this.q(text, params)).length > 0;
   }
 
   async upsertPlayer(code: string, player: GamePlayer, maxPlayers: number) {

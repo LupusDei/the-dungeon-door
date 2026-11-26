@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS games (
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
 
+-- Rules engine state (lib/play/state.ts). Null for games from before the engine, which play as before.
+-- party: PartyState (the heroes' sheets in this game, dice state); combat: CombatState while a fight is
+-- on; dungeon: DungeonState (the map, where the party is, what it has seen).
+ALTER TABLE games ADD COLUMN IF NOT EXISTS party jsonb;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS combat jsonb;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS dungeon jsonb;
+
 CREATE TABLE IF NOT EXISTS game_players (
   game_code  text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
   player_id  text NOT NULL,

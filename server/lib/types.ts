@@ -1,4 +1,5 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
+import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { CharacterSheet } from './rules/sheet.ts';
 
 export interface Character {
@@ -74,6 +75,10 @@ export interface Game {
   sceneIndex: number;
   players: GamePlayer[]; // oldest first
   scenes: StoredScene[]; // oldest first
+  /** Rules engine state; all null for games from before the engine. */
+  party: PartyState | null;
+  combat: CombatState | null;
+  dungeon: DungeonState | null;
   createdAt: string;
   updatedAt: string;
 }
