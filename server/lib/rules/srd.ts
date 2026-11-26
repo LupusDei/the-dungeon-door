@@ -30,12 +30,15 @@ export interface SrdClass {
   proficiencies: string[];
   choices: ProficiencyChoice[];
   equipment: EquipmentOption[];
-  /** Levels 1 to 20: the features gained at each. */
-  levels: { level: number; features: { id: string; name: string }[] }[];
+  /** Levels 1 to 20: the features gained at each, and the class's own numbers there (Rages, Focus Points…). */
+  levels: { level: number; features: SrdFeature[]; counts: Record<string, number> }[];
   subclasses: string[];
   /** The class level at which the subclass is chosen (its first "<class>-subclass" feature). */
   subclassLevel: number;
 }
+/** What finishing a Short Rest gives back of a limited feature: one use, all of them, or nothing. */
+export type ShortRestRecharge = 'one' | 'all' | 'none';
+export interface SrdFeature { id: string; name: string; shortRest: ShortRestRecharge }
 export interface SrdSubclass { id: string; name: string; classId: string; features: { name: string; level: number }[] }
 export interface Advancement { level: number; xp: number; proficiencyBonus: number }
 export type FeatType = 'origin' | 'general' | 'fighting-style' | 'epic-boon';
@@ -137,14 +140,30 @@ const choiceOption = z.union([
 const proficiencyChoice = z.object({ choose: z.number(), from: z.object({ options: z.array(choiceOption) }) })
   .transform((c) => ({ choose: c.choose, from: c.from.options.flat() }));
 
+const SHORT_REST_ONE = /regain one (?:of its )?expended uses? when you finish a Short Rest/;
+const SHORT_REST_ALL = /finish a Short or Long Rest/;
+
+function shortRestOf(description: string): ShortRestRecharge {
+  if (SHORT_REST_ONE.test(description)) return 'one';
+  return SHORT_REST_ALL.test(description) ? 'all' : 'none';
+}
+
 const classSchema = z.object({
   index: z.string(), name: z.string(), hitDie: z.number(), savingThrows: z.array(z.enum(ABILITIES)),
   proficiencies: z.array(ref), proficiencyChoices: z.array(proficiencyChoice), startingEquipmentOptions: equipmentOptions,
-  subclasses: z.array(ref), levels: z.array(z.object({ level: z.number(), features: z.array(ref) })).length(20),
+  subclasses: z.array(ref),
+  levels: z.array(z.object({
+    level: z.number(), features: z.array(ref.extend({ description: z.string() })),
+    classSpecific: z.record(z.string(), z.unknown()).nullable(),
+  })).length(20),
 }).transform((c): SrdClass => ({
   id: c.index, name: c.name, hitDie: c.hitDie, saves: c.savingThrows, proficiencies: c.proficiencies.map((p) => p.index),
   choices: c.proficiencyChoices, equipment: c.startingEquipmentOptions,
-  levels: c.levels.map((l) => ({ level: l.level, features: l.features.map((f) => ({ id: f.index, name: f.name })) })),
+  levels: c.levels.map((l) => ({
+    level: l.level,
+    features: l.features.map((f) => ({ id: f.index, name: f.name, shortRest: shortRestOf(f.description) })),
+    counts: Object.fromEntries(Object.entries(l.classSpecific ?? {}).filter((e): e is [string, number] => typeof e[1] === 'number')),
+  })),
   subclasses: c.subclasses.map((s) => s.index),
   subclassLevel: c.levels.find((l) => l.features.some((f) => f.index === `${c.index}-subclass`))!.level,
 }));

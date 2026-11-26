@@ -118,6 +118,9 @@ test('classes carry their features by level, their subclasses and the level a su
   assert.equal(fighter.levels.length, 20);
   assert.ok(fighter.levels[0].features.some((f) => f.name === 'Second Wind'));
   assert.deepEqual(fighter.levels[3].features.map((f) => f.id), ['fighter-ability-score-improvement']);
+  assert.deepEqual(fighter.levels[8].counts, { secondWindUses: 3, weaponMastery: 4 });
+  assert.deepEqual(srd().classes.get('wizard')!.levels[0].counts, {}, 'a class with no numbers of its own');
+  assert.deepEqual(srd().classes.get('rogue')!.levels[0].counts, {}, 'Sneak Attack dice are not a count');
   assert.deepEqual([fighter.subclasses, fighter.subclassLevel], [['champion'], 3]);
   const champion = srd().subclasses.get('champion')!;
   assert.deepEqual([champion.classId, champion.features[0]], ['fighter', { name: 'Improved Critical', level: 3 }]);
@@ -167,4 +170,16 @@ test('cantrips scale with character level: more dice, or more beams', () => {
   assert.deepEqual(cantripScaling.get('fire-bolt'), [{ level: 5, dice: '2d10', beams: null }, { level: 11, dice: '3d10', beams: null }, { level: 17, dice: '4d10', beams: null }]);
   assert.deepEqual(cantripScaling.get('eldritch-blast')!.map((s) => s.beams), [2, 3, 4]);
   assert.deepEqual(cantripScaling.get('spare-the-dying'), [], 'non-damage upgrades are left to the DM');
+});
+
+test('each class feature says what a Short Rest gives back, read from its text', () => {
+  const feature = (classId: string, name: string) => srd().classes.get(classId)!.levels.flatMap((l) => l.features).find((f) => f.name === name)!;
+  assert.equal(feature('barbarian', 'Rage').shortRest, 'one');
+  assert.equal(feature('cleric', 'Channel Divinity').shortRest, 'one');
+  assert.equal(feature('fighter', 'Action Surge').shortRest, 'all');
+  assert.equal(feature('monk', "Monk's Focus").shortRest, 'all');
+  assert.equal(feature('bard', 'Font of Inspiration').shortRest, 'all');
+  assert.equal(feature('bard', 'Bardic Inspiration').shortRest, 'none');
+  assert.equal(feature('sorcerer', 'Font of Magic').shortRest, 'none');
+  assert.equal(feature('wizard', 'Arcane Recovery').shortRest, 'none');
 });
