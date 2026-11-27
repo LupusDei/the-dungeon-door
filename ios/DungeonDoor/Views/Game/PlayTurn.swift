@@ -1,6 +1,6 @@
 import Foundation
 
-/// One row of "the table offers": a legal action, or a choice letter when the server sent none.
+/// One row of "the table offers": a plot choice. Mechanical actions stay on the sheet and the map.
 struct TableOffer: Identifiable {
     let id: String
     let label: String
@@ -14,18 +14,8 @@ struct TableOffer: Identifiable {
     let choice: Choice?
 
     static func list(in scene: GameScene) -> [TableOffer] {
-        if !scene.actions.isEmpty {
-            let offers = scene.actions.map { action in
-                TableOffer(id: action.id, label: action.label, detail: action.detail, note: nil,
-                           available: action.available, reason: action.reason, kind: action.kind,
-                           action: action, choice: nil)
-            }
-            // What the hero can do comes first, in the server's order; what they cannot follows, grey.
-            // Outside a fight the server lists every combat action as unavailable ahead of the scene's
-            // three choices, which would otherwise sit under a screen and a half of grey rows.
-            return offers.filter(\.available) + offers.filter { !$0.available }
-        }
-        return scene.choices.map { choice in
+        let choices = scene.offers.isEmpty ? scene.choices : scene.offers
+        return choices.map { choice in
             TableOffer(id: "choice:\(choice.id)", label: choice.label, detail: choice.detail,
                        note: choice.rules, available: true, reason: nil, kind: "choice",
                        action: nil, choice: choice)
@@ -55,6 +45,10 @@ enum PlayTurn {
     /// The line under Act once this hero has chosen: the action, the letter, or the words they wrote.
     static func chosenLine(scene: GameScene, playerId: String) -> String? {
         if let mine = scene.myAction, let action = scene.actions.first(where: { $0.id == mine.id }) {
+            let extra = mine.intent ?? (action.kind == "skill" ? scene.myFreeform?.text : nil)
+            if let extra, !extra.isEmpty, extra.compare(action.label, options: .caseInsensitive) != .orderedSame {
+                return "\(action.label) — \(extra)"
+            }
             return action.label
         }
         if let vote = scene.votes.first(where: { $0.playerId == playerId }) {

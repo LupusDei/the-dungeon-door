@@ -14,6 +14,7 @@ import * as gamesApi from '../api/games.ts';
 import * as joinApi from '../api/game-join.ts';
 import * as speakApi from '../api/game-speak.ts';
 import * as startApi from '../api/game-start.ts';
+import * as rollApi from '../api/game-roll.ts';
 import * as voteApi from '../api/game-vote.ts';
 import * as advanceApi from '../api/game-advance.ts';
 import { call, gamePath, makeCharacter } from './api.fixture.ts';
@@ -148,6 +149,7 @@ test('a written action is the player\'s own words: invented speech is stripped, 
   await settle();
   const acted = await call(actionApi.POST, gamePath(code, 'action'), { player: host, body: { sceneIndex: 0, text: 'I kick the brazier onto the goblins' } });
   assert.equal(acted.status, 200);
+  await call(rollApi.POST, gamePath(code, 'roll'), { player: host, body: { sceneIndex: 0 } });
   await settle();
   const state = await view(code, host);
   assert.equal(state.scene?.narration.includes('Die, goblins'), false);

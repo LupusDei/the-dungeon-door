@@ -1,12 +1,13 @@
 /**
  * What one hero can do on this turn, and what a vote that names one of those actions does.
  * The list is the sheet's: each weapon, each spell they know or have prepared, each usable item,
- * each class feature with uses, the common actions, and, in a fight, each legal move. One they
+ * each class feature with uses, each skill, the common actions, and, in a fight, each legal move. One they
  * cannot take stays on the list with the reason. Nothing here assumes the set of kinds is closed.
  *
  * A letter vote (choice a, b or c) is untouched. A vote that names an action is checked against
  * this list, then played as that action. The vote's d20 is still the die, when the action rolls one.
  */
+import { abilityModifier } from '../rules/abilities.ts';
 import { abilityCheck } from '../rules/checks.ts';
 import { type Attack, type Combatant, extraAttacks, heroCombatant } from '../rules/combatant.ts';
 import { areaFromSelf, rangedShot, spellHits } from '../rules/bands.ts';
@@ -275,6 +276,37 @@ function commonOf(inFight: boolean, foes: { id: string; name: string }[], allies
   });
 }
 
+const ABILITY_IDS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+
+/** The six abilities, as a check the player can choose. */
+function abilitiesOf(sheet: CharacterSheet): LegalAction[] {
+  return ABILITY_IDS.map((id) => offer({
+    id: `ability:${id}`, label: ABILITY[id], kind: 'ability',
+    detail: `${ABILITY[id]} ${signed(abilityModifier(sheet.abilityScores[id]))}. A medium check.`,
+    targets: [], picks: 'none', reason: null,
+  }));
+}
+
+const skillName = (id: string) => id.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join(' ');
+
+/** Every skill on the sheet. A tap is a medium check; it does not pick the party's plot choice. */
+function skillsOf(sheet: CharacterSheet): LegalAction[] {
+  const known = srd().skills;
+  return [...known.keys()]
+    .filter((id) => sheet.skills.includes(id) || Object.hasOwn(sheet.skillBonuses, id))
+    .map((id) => {
+      const ability = known.get(id)!;
+      const name = skillName(id);
+      const bonus = sheet.skillBonuses[id] ?? 0;
+      return offer({
+        id: `skill:${id}`, label: name, kind: 'skill',
+        detail: `${ABILITY[ability] ?? ability} (${name}) ${signed(bonus)}. A medium check.`,
+        targets: [], picks: 'none', reason: null,
+      });
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function choicesOf(choices: LegalInput['choices']): LegalAction[] {
   return choices.map((c) => offer({
     id: `choice:${c.id}`, label: c.label, kind: 'choice', detail: c.detail, targets: [], picks: 'none', reason: null,
@@ -358,6 +390,8 @@ export function legalActions({ combat, sheet, playerId, choices, canAct }: Legal
     ...spellsOf(sheet, inFight, fight, playerId),
     ...itemsOf(sheet, inFight, dying),
     ...featuresOf(sheet, inFight, hurtAllies(combat, playerId)),
+    ...abilitiesOf(sheet),
+    ...skillsOf(sheet),
     ...commonOf(inFight, commonFoes, allies, gear, heldFast),
     ...movesOf(fight, playerId),
     ...choicesOf(choices),

@@ -111,6 +111,38 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
   the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
 - `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
+## Past adventures
+
+`GET /api/adventures` → `{ adventures: Adventure[] }`: the caller's adventures, most recently played
+first (the newest 40 games they have a seat in). `?characterId=<id>` keeps only the ones that hero went
+on, which is what a hero's page shows. A door that never opened is not listed. Nor is a game the player
+left: leaving gives up the seat.
+
+```
+Adventure {
+  code: string                       // read the story with GET /api/games/{code}, as for a game being played:
+                                     // `chronicle` is every resolved scene with its picture and outcome, and
+                                     // `scene` is the epilogue once it has ended
+  title: string | null               // the dungeon master's name for it
+  status: "voting" | "resolving" | "ended" | "preparing" | "lobby"
+  ended: boolean                     // the epilogue has been told. False: still going, or left unfinished
+  dungeonMaster: string              // a catalog dungeonMasters id
+  startedAt: string; lastPlayedAt: string   // the first scene, and the last one told (reading it later does not count)
+  hero: { characterId: string; name: string; portraitUrl: string | null }   // the caller's hero, as they joined
+  party: string[]                    // the other heroes' names
+  scenes: number                     // scenes told so far, the epilogue included
+  images: string[]                   // the scene pictures in order, painted ones only; a fight's rounds
+                                     // share one picture, listed once
+  ending: string | null              // the epilogue, once ended
+  result: null | {                   // how it came out for the caller's hero; null for a game from before the rules
+    level: number                    // their level as the adventure stands (or stood, at its end)
+    levelsGained: number; xpGained: number
+    fell: boolean                    // the caller's hero died on it
+    fallen: string[]                 // every hero who died on it, the caller's included
+  }
+}
+```
+
 ## Characters
 
 ```ts
@@ -344,9 +376,10 @@ Scene {
                                      // apps from before the voice picker
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
               rules: string | null }]  // e.g. "Athletics check, DC 12", "Fight: Goblin Warrior (weak) — low";
-                                     // exactly 3; empty for the epilogue
+                                     // two or three; empty for the epilogue. Still the letters a vote may name.
   actions: LegalAction[]             // this caller's hero, this turn. Weapons, spells they know or have
-                                     // prepared, usable items, class features with uses, and the common
+                                     // prepared, usable items, each skill (kind "skill", id "skill:athletics"),
+                                     // class features with uses, and the common
                                      // actions, plus the scene's choices. One they cannot take is listed
                                      // with `reason` rather than left out. Empty for the epilogue and once
                                      // the scene has resolved. A kind the app has not seen (a later "move")
@@ -362,8 +395,9 @@ Scene {
   canAct: boolean                    // false when the caller's hero cannot act this round (down or dead):
                                      // nothing to choose, and the round does not wait for them
   isFinale: boolean                  // true for the epilogue scene (no choices, game ended)
-  votes: [{ playerId, choiceId, roll: number /* d20 */,
-            label?: string, actionId?: string, targets?: string[],
+  votes: [{ playerId, choiceId, roll: number | null /* d20, null until thrown */,
+            pending?: boolean, formula?: string, total?: number | null,
+            label?: string, actionId?: string, targets?: string[], intent?: string,
             move?: { x: number; y: number; dash?: boolean; disengage?: boolean }
                  | { to: "engaged" | "near" | "far", engage?: string[], dash?: boolean, disengage?: boolean } }]
                                      // in a combat round, `label` is what that hero is doing ("Attack with
@@ -377,11 +411,14 @@ Scene {
   myAction: null | { id: string; targets: string[] }
                                      // the caller's vote as an action. A letter vote is "choice:a"
                                      // (and "choice:b", "choice:c"). Null until they vote, and null for a written check
-  freeforms: [{ playerId, text, roll: number }]
-                                     // written checks this scene (the player's own words and the d20).
+  freeforms: [{ playerId, text, roll: number | null, pending?: boolean }]
+                                     // written checks this scene. `roll` is null until that player throws.
                                      // Each of these players has acted. Absent on servers from before written actions
-  myFreeform: { text, roll: number } | null
-                                     // the caller's written check, or null. Absent on older servers
+  myDie: null | { sides: 20, modifier: number, formula: string, purpose: string }
+                                     // the d20 the caller still has to throw. The face is not here.
+                                     // Null once thrown, or when the action needs no throw. Absent on older servers
+  myFreeform: { text, roll: number | null, pending?: boolean } | null
+                                     // the caller's written check. `roll` is null until they throw. Absent on older servers
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
   roleplay: [{ playerId: string; characterName: string; text: string }]
                                      // in-character lines and deeds this turn, oldest first. No roll.
@@ -390,9 +427,11 @@ Scene {
 
 LegalAction {
   id: string                         // stable: "attack:greatsword", "spell:fire-bolt", "item:potion-of-healing",
-                                     // "feature:second-wind", "common:dash", "choice:a"
+                                     // "feature:second-wind", "common:dash", "choice:a", "skill:athletics",
+                                     // "ability:str"
   label: string                      // "Attack with Greatsword", "Cast Fire Bolt", "Dash", "Engage"
-  kind: string                       // "attack", "spell", "item", "feature", "common", "choice" or "move".
+  kind: string                       // "attack", "spell", "item", "feature", "common", "choice", "move",
+                                     // "skill" or "ability".
   detail: string
   targets: [{ id: string; name: string }]   // who or what a vote may name; empty when it needs no target
   picks: "none" | "one" | "many"     // how many of `targets` the vote names
@@ -626,12 +665,23 @@ Reaction {
   (`rules.trek`), to the dungeon door (`rules.dungeon` is null until the door) or, in a tale told, to
   where the tale begins, so its `sceneCount` is two more than asked for. Foes on the road who bar the way
   give Engage, Run and Parley, as in a room.
-- `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId, move? }` or `{ sceneIndex, actionId, targets?, move? }` → `GameState`.
+- `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId, move?, text? }` or `{ sceneIndex, actionId, targets?, move?, text? }` → `GameState`.
   `choiceId` is still `"a"`, `"b"` or `"c"`. `actionId` is an id from `scene.actions`, and `targets` are ids
   from that action (omit them when `picks` is `"none"`; one id when `"one"`; one or more, up to `limit`,
   when `"many"`). `"choice:a"` is the same vote as `choiceId` `"a"`. A move action (`kind` `"move"`) is named
   the same way; its id is the move. When both a letter and `actionId` are sent, `actionId` is the
-  vote. The server checks the action is one this hero can take and the targets are among its `targets`;
+  vote.   `text` (also accepted as `intent`), 1–280 characters, is optional words beside that action
+  ("I aim the bolt at the chandelier"). It is stored with the vote and does not replace it. A skill
+  (`kind` `"skill"`, id `skill:<skill id>`) or an ability (`kind` `"ability"`, id `ability:str`) is a
+  medium check (DC 15, no extra effect). `text` is what the hero is attempting (the name when `text` is
+  omitted), and it does not add to which plot choice the party picked. Typing the skill's or ability's
+  name in `POST …/action` maps onto that same check.
+  When the action needs the player's d20 (a skill, an ability, an attack, an attack spell, or a written
+  check), the server rolls the face then and does not send it. `scene.myDie` is the formula
+  (`"d20+5"`). `POST /api/games/{code}/roll` `{ sceneIndex }` reveals that face. Throwing again returns
+  the same one. If the choice window (`turn.deadline`) ends first, the next poll reveals it. The scene
+  waits for that throw. A letter vote that is not one of those actions still carries its d20 at once.
+  The server checks the action is one this hero can take and the targets are among its `targets`;
   otherwise 400, and `error` says why (`"No level 1 spell slot or higher left"`, `"that is not a valid target"`).
   Voting status only; you can change your vote until the scene resolves. The server rolls a d20
   for each vote (kept when you change your vote). `move`, only in a fight, is either a destination
@@ -767,7 +817,7 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   **Dodge**. The id is always `c`; read its `label` and `detail`.
   - **Legal actions** (`scene.actions`). The same turn, as a list a sheet can tap: each weapon, each cantrip
     and prepared spell (one with no slot is still listed, with the reason), each usable item (a potion, a
-    healer's kit), each class feature that has uses, and the common actions Attack, Dash, Disengage, Dodge,
+    healer's kit), each skill (`kind` `"skill"`), each class feature that has uses, and the common actions Attack, Dash, Disengage, Dodge,
     Help, Hide, Ready and Use an Object. A vote may name one (`actionId`, and `targets` when it needs them)
     instead of a choice letter; the letter votes keep working, and the d20 on the vote is still the die the
     engine uses. The list is the same shape out of a fight, where the scene's own choices (a way on, Engage,
@@ -855,10 +905,11 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   A written check is one of those lines, quoting what the player wrote.
 - **Written actions** (`POST …/action`, `play/actions.ts`). A player may write what they do instead of
   picking a choice, in or out of a fight. The dungeon master classifies the words; the engine keeps the
-  numbers. A known action is an id from this hero's `scene.actions`. A check uses the tier's DC and, on
+  numbers. A known action is an id from this hero's `scene.actions`. A skill the words name is a medium
+  check (DC 15), the same as voting that `skill:` action. Any other check uses the tier's DC and, on
   a success, the effect category's damage or a save for its condition. Impossible, and a classification
   the engine cannot read, is a narrated no and does not spend the turn. A written check is `scene.freeforms`,
-  not `scene.actions`.
+  not a vote for a plot choice. Words sent as `text` on a vote that is not a skill stay with that action.
 - **When it ends.** The heroes' sheets (level, XP, features, gold and gear; HP and slots restored) are
   saved back to each player's character, so the next adventure starts where this one left off. A dead
   hero goes home dead.

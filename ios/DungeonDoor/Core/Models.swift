@@ -612,6 +612,102 @@ struct Companion: Codable, Hashable, Identifiable {
     var id: String { playerId }
 }
 
+/// One of the player's adventures, as a hero's page lists it (docs/api.md, "Past adventures"). The
+/// story itself is the game: `GET /api/games/{code}` gives every scene and the epilogue.
+struct Adventure: Codable, Hashable, Identifiable {
+    struct Hero: Codable, Hashable {
+        var characterId = ""
+        var name = ""
+        var portraitUrl: String? = nil
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            characterId = try c.value(.characterId, or: "")
+            name = try c.value(.name, or: "")
+            portraitUrl = try c.decodeIfPresent(String.self, forKey: .portraitUrl)
+        }
+    }
+
+    /// How it came out for the player's hero.
+    struct Outcome: Codable, Hashable {
+        var level = 1
+        var levelsGained = 0
+        var xpGained = 0
+        /// The player's hero died on it.
+        var fell = false
+        /// Every hero who died on it.
+        var fallen: [String] = []
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            level = try c.whole(.level, or: 1)
+            levelsGained = try c.whole(.levelsGained)
+            xpGained = try c.whole(.xpGained)
+            fell = try c.value(.fell, or: false)
+            fallen = try c.value(.fallen, or: [])
+        }
+    }
+
+    let code: String
+    var title: String? = nil
+    /// The epilogue has been told. False: still going, or left unfinished.
+    var ended = false
+    var dungeonMaster = ""
+    var startedAt = ""
+    var lastPlayedAt = ""
+    var hero: Hero? = nil
+    /// The other heroes, by name.
+    var party: [String] = []
+    /// Scenes told so far, the epilogue included.
+    var scenes = 0
+    /// The scene pictures, in order.
+    var images: [String] = []
+    /// The epilogue, once it has ended.
+    var ending: String? = nil
+    /// Nil for a game from before the rules engine.
+    var result: Outcome? = nil
+
+    var id: String { code }
+    var imageURLs: [URL] { images.compactMap(URL.init(string:)) }
+    /// The picture to show it by: the last one painted, which for a finished adventure is its ending.
+    var coverURL: URL? { imageURLs.last }
+    var name: String { title?.isEmpty == false ? title! : "An untitled adventure" }
+
+    /// "26 Nov 2026", or nothing when the date cannot be read.
+    var day: String? {
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = precise.date(from: lastPlayedAt) ?? ISO8601DateFormatter().date(from: lastPlayedAt) else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    /// One line on how it came out: "Fell on this adventure", "Finished at level 2 (+300 XP)", "Unfinished: 3 scenes in".
+    var verdict: String {
+        if result?.fell == true { return ended ? "Fell on this adventure" : "Fell, and the adventure is unfinished" }
+        guard ended else { return "Unfinished: \(scenes) scene\(scenes == 1 ? "" : "s") in" }
+        guard let result else { return "Finished" }
+        var line = result.levelsGained > 0 ? "Finished, and rose to level \(result.level)" : "Finished at level \(result.level)"
+        if result.xpGained > 0 { line += " (+\(result.xpGained) XP)" }
+        return line
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        ended = try c.value(.ended, or: false)
+        dungeonMaster = try c.value(.dungeonMaster, or: "")
+        startedAt = try c.value(.startedAt, or: "")
+        lastPlayedAt = try c.value(.lastPlayedAt, or: "")
+        hero = try? c.decodeIfPresent(Hero.self, forKey: .hero)
+        party = try c.value(.party, or: [])
+        scenes = try c.whole(.scenes)
+        images = try c.value(.images, or: [])
+        ending = try c.decodeIfPresent(String.self, forKey: .ending)
+        result = try? c.decodeIfPresent(Outcome.self, forKey: .result)
+    }
+}
+
 /// An invitation to a party still gathering in its lobby.
 struct Invitation: Codable, Hashable, Identifiable {
     let code: String
@@ -700,8 +796,8 @@ extension Choice {
 struct Vote: Codable, Hashable {
     let playerId: String
     let choiceId: String
-    /// The d20 the server rolled with the vote. In a fight it is the hero's attack roll.
-    let roll: Int
+    /// The d20. Nil while the player has not thrown, and on a server that hid it.
+    var roll: Int?
     /// In a round of a fight: what that hero is doing, in their own choice's words ("Cast Fire
     /// Bolt", "Break Free", "Help Ilsa"). The same id means different things for different heroes.
     var label: String? = nil
@@ -711,9 +807,17 @@ struct Vote: Codable, Hashable {
     var targets: [String] = []
     /// A move taken with the vote: a range band, a square, or both.
     var move: VoteMove? = nil
+    /// Words the player added beside a named action. Nil on a plain vote and on an older server.
+    var intent: String? = nil
+    /// True while the face is still hidden.
+    var pending: Bool = false
+    /// "d20+5" while a throw is asked for.
+    var formula: String?
+    /// Natural plus modifier, once the die is shown.
+    var total: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case playerId, choiceId, roll, label, actionId, targets, move
+        case playerId, choiceId, roll, label, actionId, targets, move, intent, pending, formula, total
     }
 }
 
@@ -722,11 +826,15 @@ extension Vote {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         playerId = try c.decode(String.self, forKey: .playerId)
         choiceId = try c.value(.choiceId, or: "")
-        roll = try c.whole(.roll)
+        roll = try c.optionalWhole(.roll)
         label = try c.decodeIfPresent(String.self, forKey: .label)
         actionId = try c.decodeIfPresent(String.self, forKey: .actionId)
         targets = try c.value(.targets, or: [])
         move = try? c.decode(VoteMove.self, forKey: .move)
+        intent = try c.decodeIfPresent(String.self, forKey: .intent).flatMap { $0.isEmpty ? nil : $0 }
+        pending = (try? c.decode(Bool.self, forKey: .pending)) ?? false
+        formula = try c.decodeIfPresent(String.self, forKey: .formula)
+        total = try c.optionalWhole(.total)
     }
 }
 
@@ -1020,41 +1128,48 @@ struct Battlefield: Codable, Hashable {
 struct MyAction: Codable, Hashable {
     let id: String
     var targets: [String] = []
+    /// Words sent with the action. Nil when the vote was the action alone.
+    var intent: String? = nil
 
-    init(id: String, targets: [String] = []) {
+    init(id: String, targets: [String] = [], intent: String? = nil) {
         self.id = id
         self.targets = targets
+        self.intent = intent
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.value(.id, or: "")
         targets = try c.value(.targets, or: [])
+        intent = try c.decodeIfPresent(String.self, forKey: .intent).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private enum CodingKeys: String, CodingKey { case id, targets }
+    private enum CodingKeys: String, CodingKey { case id, targets, intent }
 }
 
 /// A turn the player wrote in their own words (`scene.myFreeform`, `scene.freeforms`).
 struct FreeformTurn: Codable, Hashable {
     var playerId: String? = nil
     let text: String
-    let roll: Int
+    var roll: Int?
+    var pending: Bool = false
 
-    init(playerId: String? = nil, text: String, roll: Int) {
+    init(playerId: String? = nil, text: String, roll: Int? = nil, pending: Bool = false) {
         self.playerId = playerId
         self.text = text
         self.roll = roll
+        self.pending = pending
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         playerId = try c.decodeIfPresent(String.self, forKey: .playerId)
         text = try c.value(.text, or: "")
-        roll = try c.whole(.roll)
+        roll = try c.optionalWhole(.roll)
+        pending = (try? c.decode(Bool.self, forKey: .pending)) ?? false
     }
 
-    private enum CodingKeys: String, CodingKey { case playerId, text, roll }
+    private enum CodingKeys: String, CodingKey { case playerId, text, roll, pending }
 }
 
 /// A line or a deed a player gave in character. No roll.
@@ -1073,8 +1188,11 @@ struct GameScene: Codable, Hashable {
     var voices: [String: String] = [:]
     /// The default narrator's reading; all a server from before the voice picker sends.
     var voiceUrl: String? = nil
-    /// Three, or none for the epilogue. In a fight they are written for the caller's own hero.
+    /// Two or three, or none for the epilogue. In a fight they are written for the caller's own hero.
     let choices: [Choice]
+    /// The Story list: a few plot choices, or a few tactical lines in a fight. Empty on a server
+    /// from before it, in which case Story shows `choices`.
+    var offers: [Choice] = []
     /// A round of a fight: each vote is that player's own hero's action.
     let combat: Bool
     /// False when the caller's hero is down or dead: nothing to choose, and the round doesn't wait.
@@ -1095,6 +1213,8 @@ struct GameScene: Codable, Hashable {
     var myFreeform: FreeformTurn? = nil
     /// The caller's vote as an action. Nil until they vote, and nil for a written check.
     var myAction: MyAction? = nil
+    /// The d20 still to throw. Nil once thrown, or when this action needs no throw.
+    var myDie: PlayerDie? = nil
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -1126,6 +1246,7 @@ extension GameScene {
         voices = try c.value(.voices, or: [:])
         voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choices = try c.value(.choices, or: [])
+        offers = (try? c.decode([Choice].self, forKey: .offers)) ?? []
         combat = try c.value(.combat, or: false)
         canAct = try c.value(.canAct, or: true)
         isFinale = try c.value(.isFinale, or: false)
@@ -1139,6 +1260,27 @@ extension GameScene {
         freeforms = (try? c.decode([FreeformTurn].self, forKey: .freeforms)) ?? []
         myFreeform = try? c.decode(FreeformTurn.self, forKey: .myFreeform)
         myAction = try? c.decode(MyAction.self, forKey: .myAction)
+        myDie = try? c.decode(PlayerDie.self, forKey: .myDie)
+    }
+}
+
+/// The d20 the server is holding until the player throws it. The face is not in here.
+struct PlayerDie: Codable, Hashable {
+    let sides: Int
+    let modifier: Int
+    let formula: String
+    let purpose: String
+
+    private enum CodingKeys: String, CodingKey { case sides, modifier, formula, purpose }
+}
+
+extension PlayerDie {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sides = try c.whole(.sides, or: 20)
+        modifier = try c.whole(.modifier)
+        formula = try c.value(.formula, or: "d20")
+        purpose = try c.value(.purpose, or: "")
     }
 }
 
@@ -1776,8 +1918,9 @@ struct GameState: Codable, Hashable {
     /// The rules engine's numbers; nil for a game from before it, and on a server without one.
     let rules: RulesView?
     /// The choice window while the table is voting. Nil on a server from before it, and whenever
-    /// the table is not choosing (lobby, preparing, resolving, ended).
-    let turn: TurnWindow? = nil
+    /// the table is not choosing. A `var`: a `let` that already has a nil default cannot be
+    /// assigned again in `init(from:)`.
+    var turn: TurnWindow? = nil
     let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
@@ -1847,7 +1990,7 @@ extension GameState {
         typing = try c.value(.typing, or: [])
         rules = try c.decodeIfPresent(RulesView.self, forKey: .rules)
         // A missing or unreadable window leaves the scene playable. The bars simply don't count.
-        turn = (try? c.decodeIfPresent(TurnWindow.self, forKey: .turn)) ?? nil
+        turn = try? c.decodeIfPresent(TurnWindow.self, forKey: .turn)
         updatedAt = try c.value(.updatedAt, or: "")
     }
 }

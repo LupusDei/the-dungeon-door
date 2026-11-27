@@ -87,8 +87,9 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   the damage and the save. An impossible action does not spend their turn. When you narrate, the
   engine's lines already include any written action, quoting their words: colour that result, and do not add
   speech, feelings, or deeds beyond the words they wrote.
-- During combat the engine replaces your choices with Attack, Cast and Dodge; narrate the round and set up the
-  next one (still write three choices; they are ignored).`;
+- During combat the engine replaces your choices with Attack, Cast and Dodge: a few tactical lines, not every
+  weapon, spell, or square. Still write two or three choices that move the fight's story. Players take other
+  attacks and spells from the sheet and movement from the map. Narrate the round and set up the next one.`;
 
 const slots = (left: number[]) => {
   const last = left.findLastIndex((n) => n > 0);

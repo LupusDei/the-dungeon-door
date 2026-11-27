@@ -51,7 +51,7 @@ export class FreeformSteps {
       combat: this.combat, sheet: this.sheet, playerId: 'p1', canAct: true,
       choices: this.inCombat ? [] : [
         { id: 'a', label: 'Charge straight in', detail: '' },
-        { id: 'b', label: 'Look for another way', detail: '' },
+        { id: 'b', label: 'Find a quieter way', detail: '' },
         { id: 'c', label: 'Parley first', detail: '' },
       ],
     };

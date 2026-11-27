@@ -16,7 +16,6 @@ struct PlayStoryPage: View {
     var focusOffers: Int
     /// Offer-focuses the shell has already scrolled to. A later visit must not jump down again.
     @Binding var offersSeen: Int
-    var onOffer: (TableOffer) -> Void
 
     @State private var freeform = ""
     @State private var spoken = ""
@@ -58,9 +57,11 @@ struct PlayStoryPage: View {
                     if !inCombat, let waiting = state.rules?.dungeon?.waiting {
                         WaitingFoesNotice(waiting: waiting)
                     }
-                    offers
+                    declaredDie
                     freeformBox
-                    votes
+                    if let scene {
+                        ChoiceWaitPanel(session: session, scene: scene)
+                    }
                     if scene?.isFinale == true { finale }
                     dice
                     ErrorLine(text: session.error)
@@ -247,82 +248,20 @@ struct PlayStoryPage: View {
         }
     }
 
-    private var offers: some View {
-        let rows = scene.map { TableOffer.list(in: $0) } ?? []
-        return VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(inCombat ? "Your action this round" : "The table offers")
-            Text(inCombat
-                 ? "A blow, a spell, a move, or another action. You can change it until the round resolves."
-                 : "What the party does together. You can also write your own, below.")
-                .font(.serif(.caption))
-                .foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            if rows.isEmpty {
-                Text("Nothing is on offer yet.")
-                    .font(.serif(.footnote).italic())
-                    .foregroundStyle(Palette.muted)
+    /// The d20 the server is holding. A tap or a flick throws it; the face is the server's.
+    @ViewBuilder private var declaredDie: some View {
+        if let die = scene?.myDie, canSend {
+            ThrowDie(die: die) {
+                Task { await session.throwDie() }
             }
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, offer in
-                offerButton(offer, index: index)
-            }
+            .id("offers")
         }
-        .id("offers")
-    }
-
-    private func offerButton(_ offer: TableOffer, index: Int) -> some View {
-        let selected = scene.map { offer.isChosen(in: $0, playerId: session.playerId) } ?? false
-        let enabled = offer.available && canSend
-        let opensMap = offer.kind == "move" && offer.action?.squares.isEmpty == false
-        return Button { onOffer(offer) } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Text(ChoiceLetter.at(index))
-                    .font(.serif(.headline, weight: .bold))
-                    .foregroundStyle(selected ? Palette.ink : Palette.gold)
-                    .frame(width: 28, height: 28)
-                    .background(selected ? Palette.gold : Palette.raised, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(offer.label)
-                        .font(.serif(.body, weight: .semibold))
-                        .foregroundStyle(enabled || selected ? Palette.parchment : Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !offer.detail.isEmpty {
-                        Text(offer.detail)
-                            .font(.serif(.footnote))
-                            .foregroundStyle(Palette.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if offer.kind == "move", let action = offer.action, !action.squares.isEmpty {
-                        Text("Pick a gold square on the map.")
-                            .font(.serif(.caption, weight: .semibold))
-                            .foregroundStyle(Palette.gold.opacity(0.85))
-                    }
-                    if let note = offer.note, !note.isEmpty {
-                        Text(note)
-                            .font(.serif(.caption, weight: .semibold))
-                            .foregroundStyle(Palette.gold.opacity(0.85))
-                    }
-                    if let reason = offer.reason, !offer.available, !reason.isEmpty {
-                        Text(reason)
-                            .font(.serif(.caption))
-                            .foregroundStyle(Palette.ember)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(12)
-            .card(highlighted: selected)
-        }
-        .buttonStyle(.plain)
-        .disabled(!offer.available || (!canSend && !opensMap))
-        .opacity(enabled || selected || opensMap ? 1 : 0.55)
-        .accessibilityLabel(offer.label)
     }
 
     private var freeformBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("In your own words")
-            Text("Say what you do. If it matches something on your sheet, it becomes that action.")
+            SectionLabel("What do you do?")
+            Text("Say it in your own words. Name a skill if you are using one. Or pick an attack, spell, item, skill, or ability on your sheet and add how you use it.")
                 .font(.serif(.caption))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -338,18 +277,12 @@ struct PlayStoryPage: View {
             }
             .buttonStyle(.gilded)
             .disabled(!canSend || freeform.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if let written = scene?.myFreeform, !written.text.isEmpty {
+            if scene?.myAction == nil, let written = scene?.myFreeform, !written.text.isEmpty {
                 Text("Written: \(written.text)")
                     .font(.serif(.footnote).italic())
                     .foregroundStyle(Palette.gold)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-    }
-
-    @ViewBuilder private var votes: some View {
-        if state.status == .voting, let scene, !scene.isFinale {
-            ChoiceWaitPanel(session: session, scene: scene)
         }
     }
 
@@ -375,5 +308,51 @@ struct PlayStoryPage: View {
             let title = inCombat ? (round.map { $0 > 1 ? "Round \($0 - 1)" : "How it began" } ?? "The dice") : "The dice"
             DiceLog(lines: lines, heroes: heroes, title: title)
         }
+    }
+}
+
+/// A d20 the player throws. The tumble is local; the number is the one the server rolled when they declared.
+struct ThrowDie: View {
+    let die: PlayerDie
+    var throwIt: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var tumbling = false
+    @State private var drag = CGSize.zero
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Your die")
+            Text("\(die.purpose). \(die.formula). Tap or flick it.")
+                .font(.serif(.caption))
+                .foregroundStyle(Palette.muted)
+            HStack {
+                Spacer()
+                TumblingD20(size: 88)
+                    .rotationEffect(.degrees(tumbling && !reduceMotion ? 360 : Double(drag.width)))
+                    .offset(drag)
+                    .gesture(flick)
+                    .onTapGesture { launch() }
+                    .accessibilityLabel("Throw \(die.formula) for \(die.purpose)")
+                    .accessibilityAddTraits(.isButton)
+                Spacer()
+            }
+        }
+        .id("die")
+    }
+
+    private var flick: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { drag = $0.translation }
+            .onEnded { value in
+                drag = .zero
+                let flick = hypot(value.predictedEndTranslation.width, value.predictedEndTranslation.height)
+                if flick > 48 { launch() }
+            }
+    }
+
+    private func launch() {
+        guard !tumbling else { return }
+        tumbling = true
+        throwIt()
     }
 }

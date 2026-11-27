@@ -17,6 +17,9 @@ function voteOf(row: Row): Vote {
   if (freeform && typeof freeform === 'object') vote.freeform = freeform as Vote['freeform'];
   const move = typeof row.move === 'string' ? JSON.parse(row.move) as unknown : row.move;
   if (move && typeof move === 'object') vote.move = move as Vote['move'];
+  const die = typeof row.die === 'string' ? JSON.parse(row.die) as unknown : row.die;
+  if (die && typeof die === 'object') vote.die = die as Vote['die'];
+  if (row.revealed === false) vote.revealed = false;
   return vote;
 }
 
@@ -290,35 +293,46 @@ export class PostgresStore implements Store {
     return row && Array.isArray(row.roleplay) ? row.roleplay as RoleplayLine[] : null;
   }
 
-  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null, move?: Move | null) {
+  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null, move?: Move | null, note?: Vote['freeform'] | null, die?: Vote['die'] | null) {
     // Only while the game is voting on this scene; a changed vote keeps its first roll. FOR SHARE waits
     // for a concurrent resolve (voting → resolving) to commit and then sees it, so no vote sneaks in late.
     // (It deliberately doesn't touch games.updated_at: two votes updating the row they share-lock would deadlock.)
     const rows = await this.q(
       `WITH ok AS (SELECT code FROM games WHERE code = $1 AND status = 'voting' AND scene_index = $2 FOR SHARE)
-       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move)
-       SELECT code, $2, $3, $4, $5, $6, $7::jsonb, NULL, $8::jsonb FROM ok
+       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed)
+       SELECT code, $2, $3, $4, $5, $6, $7::jsonb, $9::jsonb, $8::jsonb, $10::jsonb, $11 FROM ok
        ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
-         SET choice_id = EXCLUDED.choice_id, action_id = EXCLUDED.action_id, targets = EXCLUDED.targets, freeform = NULL, move = EXCLUDED.move
-       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move`,
-      [code, index, playerId, choiceId, roll, named?.actionId ?? null, named ? JSON.stringify(named.targets) : null, move ? JSON.stringify(move) : null],
+         SET choice_id = EXCLUDED.choice_id, action_id = EXCLUDED.action_id, targets = EXCLUDED.targets,
+             freeform = EXCLUDED.freeform, move = EXCLUDED.move, die = EXCLUDED.die, revealed = EXCLUDED.revealed
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed`,
+      [code, index, playerId, choiceId, roll, named?.actionId ?? null, named ? JSON.stringify(named.targets) : null, move ? JSON.stringify(move) : null, note?.text ? JSON.stringify(note) : null, die ? JSON.stringify(die) : null, die ? false : true],
     );
     const [row] = rows;
     return row ? voteOf(row) : null;
   }
 
-  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>) {
+  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>, die?: Vote['die'] | null) {
     const rows = await this.q(
       `WITH ok AS (SELECT code FROM games WHERE code = $1 AND status = 'voting' AND scene_index = $2 FOR SHARE)
-       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move)
-       SELECT code, $2, $3, 'a', $4, NULL, NULL, $5::jsonb, NULL FROM ok
+       INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed)
+       SELECT code, $2, $3, 'a', $4, NULL, NULL, $5::jsonb, NULL, $6::jsonb, $7 FROM ok
        ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
-         SET freeform = EXCLUDED.freeform, action_id = NULL, targets = NULL, move = NULL
-       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move`,
-      [code, index, playerId, roll, JSON.stringify(freeform)],
+         SET freeform = EXCLUDED.freeform, action_id = NULL, targets = NULL, move = NULL, die = EXCLUDED.die, revealed = EXCLUDED.revealed
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed`,
+      [code, index, playerId, roll, JSON.stringify(freeform), die ? JSON.stringify(die) : null, die ? false : true],
     );
     const [row] = rows;
     return row ? voteOf(row) : null;
+  }
+
+  async revealRoll(code: string, index: number, playerId: string): Promise<boolean> {
+    const rows = await this.q(
+      `UPDATE votes SET revealed = true
+       WHERE game_code = $1 AND scene_idx = $2 AND player_id = $3 AND revealed = false AND die IS NOT NULL
+       RETURNING player_id`,
+      [code, index, playerId],
+    );
+    return rows.length > 0;
   }
 
   // ---- chat ----
@@ -457,6 +471,15 @@ export class PostgresStore implements Store {
       [playerId, limit],
     );
     return rows.map((r): Companion => ({ playerId: r.player_id, name: r.name, lastPlayedAt: iso(r.last_played) }));
+  }
+
+  async listGameCodes(playerId: string, limit = 40) {
+    const rows = await this.q(
+      `SELECT g.code FROM games g JOIN game_players p ON p.game_code = g.code
+       WHERE p.player_id = $1 ORDER BY g.updated_at DESC LIMIT $2`,
+      [playerId, limit],
+    );
+    return rows.map((r) => r.code as string);
   }
 
   async addInvite(invite: Invite) {

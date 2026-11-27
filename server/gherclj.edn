@@ -6,6 +6,6 @@
                    gherclj.player-voice-steps
                    gherclj.band-steps
                    gherclj.party-chat-steps
-                   gherclj.choice-window-steps
-                   gherclj.app-version-steps]
+                   gherclj.app-version-steps
+                   gherclj.choice-window-steps]
  :framework :typescript/node-test}

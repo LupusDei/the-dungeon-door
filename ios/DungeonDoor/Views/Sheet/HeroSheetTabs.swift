@@ -40,6 +40,12 @@ struct AbilitiesTab: View {
     var live: LiveHero?
     let rules: RuleBook
     let open: (RuleDetail) -> Void
+    /// When set, each skill can be this turn's action. Nil on the hero page, outside a game.
+    var onSkill: ((String) -> Void)? = nil
+    var readySkills: Set<String> = []
+    var chosenSkill: String? = nil
+    /// An ability used as this turn's check. Nil on the hero page.
+    var onAbility: ((String) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -47,7 +53,11 @@ struct AbilitiesTab: View {
                 ForEach(SRD.abilities, id: \.self) { ability($0) }
             }
             SheetSection(title: "Skills") {
-                SheetRowGroup(rows: skillRows, open: open)
+                if onSkill != nil {
+                    playableSkills
+                } else {
+                    SheetRowGroup(rows: skillRows, open: open)
+                }
             }
             SheetSection(title: "Passive senses") {
                 SheetRowGroup(rows: [
@@ -65,6 +75,41 @@ struct AbilitiesTab: View {
     /// out of a game it is 10 plus the Insight bonus.
     private var passiveInsight: Int {
         live?.standing.passiveInsight ?? 10 + (sheet.skillBonuses["insight"] ?? SRD.modifier(sheet.abilityScores.wis))
+    }
+
+    /// Skills as this turn's action. The rule text stays on the hero page, where `onSkill` is nil.
+    private var playableSkills: some View {
+        VStack(spacing: 8) {
+            ForEach(skillRows) { row in
+                let id = String(row.id.dropFirst("skill/".count))
+                let ready = readySkills.contains(id)
+                let chosen = chosenSkill == id
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.title)
+                            .font(.serif(.body, weight: row.strong ? .bold : .semibold))
+                            .foregroundStyle(Palette.parchment)
+                        if let value = row.value {
+                            Text(value)
+                                .font(.serif(.caption))
+                                .foregroundStyle(Palette.muted)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Button(chosen ? "Chosen" : "This turn") { onSkill?(id) }
+                        .font(.serif(.caption, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(ready ? Palette.gold : Palette.raised, in: Capsule())
+                        .foregroundStyle(ready ? Palette.ink : Palette.muted)
+                        .disabled(!ready)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Use \(row.title) this turn")
+                }
+                .padding(12)
+                .card(highlighted: chosen)
+            }
+        }
     }
 
     private func ability(_ id: String) -> some View {
@@ -110,12 +155,22 @@ struct AbilitiesTab: View {
             .minimumScaleFactor(0.75)
             .padding(.vertical, 6)
             .padding(.horizontal, 4)
+            if onAbility != nil {
+                Button("This turn") { onAbility?(id) }
+                    .font(.serif(.caption2, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Palette.gold, in: Capsule())
+                    .foregroundStyle(Palette.ink)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Use \(SRD.abilityName(id)) this turn")
+            }
         }
         .padding(.top, 10)
         .frame(maxWidth: .infinity)
         .card()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(SRD.abilityName(id)), modifier \(SRD.spoken(modifier)), score \(score), saving throw \(SRD.spoken(save))\(proficient ? ", proficient" : "")")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(SRD.abilityName(id)), modifier \(SRD.spoken(modifier)), score \(score), saving throw \(SRD.spoken(save))\(proficient ? ", proficient" : "")")
     }
 
     /// All the skills the sheet (or the reference) knows, by name, each with its ability as a tag.

@@ -59,6 +59,10 @@
       "destination": "/api/game-vote?code=:code"
     },
     {
+      "source": "/api/games/:code/roll",
+      "destination": "/api/game-roll?code=:code"
+    },
+    {
       "source": "/api/games/:code/action",
       "destination": "/api/game-action?code=:code"
     },

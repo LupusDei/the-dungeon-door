@@ -157,10 +157,12 @@ struct ChoiceWaitPanel: View {
 
     private func acted(_ playerId: String) -> (detail: String, roll: Int?)? {
         if let vote = scene.votes.first(where: { $0.playerId == playerId }) {
-            return (words(vote), vote.roll)
+            let waiting = vote.pending ? (vote.formula.map { " · \($0)" } ?? " · d20") : ""
+            return (words(vote) + waiting, vote.roll)
         }
         if let written = scene.freeforms.first(where: { $0.playerId == playerId }) {
-            return (written.text, written.roll)
+            let waiting = written.pending ? " · d20" : ""
+            return (written.text + waiting, written.roll)
         }
         guard playerId == session.playerId else { return nil }
         if let written = scene.myFreeform { return (written.text, written.roll) }
@@ -175,10 +177,16 @@ struct ChoiceWaitPanel: View {
     }
 
     private func words(_ vote: Vote) -> String {
-        if let label = vote.label, !label.isEmpty { return label }
-        if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
-        if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
-        return "Chosen"
+        let base: String = {
+            if let label = vote.label, !label.isEmpty { return label }
+            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
+            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
+            return "Chosen"
+        }()
+        if let intent = vote.intent, !intent.isEmpty, intent.compare(base, options: .caseInsensitive) != .orderedSame {
+            return "\(base) — \(intent)"
+        }
+        return base
     }
 
     /// Seconds left on the server's clock. Nil when this server sent no window.

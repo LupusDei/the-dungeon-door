@@ -76,17 +76,25 @@ export interface Vote {
   /** Ids from that action's targets. Absent when the action needs none. */
   targets?: string[];
   /**
-   * Set when the player wrote a check instead of choosing. `choiceId` and `actionId` are then ignored:
-   * the row counts as having acted, and it does not add to the tally.
+   * Words kept with this vote. A `ruling` is a check (a written action, or a skill or ability from
+   * the sheet): it counts as having acted and does not add to the tally. Text without a ruling is
+   * intent beside a named action and the action still resolves.
    */
-  freeform?: { text: string; ruling: import('./play/actions.ts').CheckRuling };
+  freeform?: { text: string; ruling?: import('./play/actions.ts').CheckRuling };
+  /**
+   * Set when this vote's d20 is the player's to throw. The face is `roll`, hidden until `revealed`.
+   * Absent when the engine does not ask them to throw.
+   */
+  die?: import('./play/dice.ts').PlayerDie;
+  /** False while `die` is still hidden. Absent means the roll was never hidden. */
+  revealed?: boolean;
 }
 
 /** One thing the caller's hero might do this turn. See docs/api.md, LegalAction. */
 export interface LegalAction {
   id: string;
   label: string;
-  /** "attack", "spell", "item", "feature", "common", "choice", or "move". */
+  /** "attack", "spell", "item", "feature", "common", "choice", "move", "skill", or "ability". */
   kind: string;
   detail: string;
   targets: { id: string; name: string }[];
@@ -105,9 +113,17 @@ export interface LegalAction {
   reason: string | null;
 }
 
-/** A vote as the app sees it. In a combat round `label` is what that hero is doing, in their own choice's words: "Cast Fire Bolt", "Break Free", "Help Ilsa". */
-export interface VoteView extends Vote {
+/** A vote as the app sees it. `roll` is null while the player has not thrown. */
+export interface VoteView extends Omit<Vote, 'roll' | 'die' | 'revealed' | 'freeform'> {
+  roll: number | null;
+  /** The thrown total, natural plus modifier, once the die is revealed. */
+  total?: number | null;
+  formula?: string;
+  /** True while the face is still hidden. */
+  pending?: boolean;
   label?: string;
+  /** Words the player added to a named action. A check's words are in `freeforms` instead. */
+  intent?: string;
 }
 
 /** A scene as stored. `imagePrompt` and `chosenChoiceId` are server-only. */
@@ -254,6 +270,11 @@ export interface SceneView {
   choices: ChoiceView[];
   /** What the caller's hero can take this turn. Empty for the epilogue and a resolved scene. */
   actions: LegalAction[];
+  /**
+   * The d20 the caller still has to throw. Null when they have thrown, or when this action
+   * needs no throw. The face is not in here.
+   */
+  myDie: import('./play/dice.ts').PlayerDie | null;
   /** A combat round: each vote is that player's own hero's action, and the choices are written for the caller's hero. */
   combat: boolean;
   /** False when the caller's hero cannot act this round (down or dead): the round does not wait for them. */
@@ -264,12 +285,12 @@ export interface SceneView {
   /** Votes for a, b or c, or a named legal action. A written check is in `freeforms`, not here. */
   votes: VoteView[];
   myVote: ChoiceId | null;
-  /** The caller's vote as an action id. A letter vote is "choice:a" and so on. Null until they vote, and null for a written check. */
-  myAction: { id: string; targets: string[] } | null;
-  /** Written checks this scene: the player's words and the d20. Each of these players has acted. */
-  freeforms: { playerId: string; text: string; roll: number }[];
+  /** The caller's vote as an action id. A letter vote is "choice:a" and so on. Null until they vote, and null for a written check with no action. `intent` is words they added. */
+  myAction: { id: string; targets: string[]; intent?: string } | null;
+  /** Written checks this scene. `roll` is null until that player throws. */
+  freeforms: { playerId: string; text: string; roll: number | null; pending?: boolean }[];
   /** The caller's written check, or null. */
-  myFreeform: { text: string; roll: number } | null;
+  myFreeform: { text: string; roll: number | null; pending?: boolean } | null;
   outcome: string | null;
   /** In-character lines this turn, oldest first. Empty when nobody has spoken. */
   roleplay: RoleplayLine[];

@@ -23,6 +23,8 @@ import SwiftUI
 /// - `-openMySheet YES` presents the caller's own hero sheet as soon as a game is open;
 ///   `-openSheetOf <name>` presents the sheet of the party's hero with that name instead.
 /// - `-showChronicle YES` presents the story so far as soon as an open game has one.
+/// - `-openQuests YES` (with `-openHeroNamed`) opens that hero's quests from their page, and
+///   `-openQuest <CODE|latest>` goes on to open that adventure's record.
 /// - `-newGame YES` opens the "A New Adventure" sheet (the hero picker) from the home screen.
 /// - `-scrollTo <choices|combat|bottom>` scrolls an open scene down to its choices, its fight or
 ///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end, and
@@ -110,6 +112,8 @@ enum AppConfig {
     static var openMySheetArgument: Bool { UserDefaults.standard.bool(forKey: "openMySheet") }
     static var openSheetOfArgument: String? { argument("openSheetOf") }
     static var showChronicleArgument: Bool { UserDefaults.standard.bool(forKey: "showChronicle") }
+    static var openQuestsArgument: Bool { UserDefaults.standard.bool(forKey: "openQuests") || openQuestArgument != nil }
+    static var openQuestArgument: String? { argument("openQuest") }
     static var newGameArgument: Bool { UserDefaults.standard.bool(forKey: "newGame") }
     static var scrollToArgument: String? { argument("scrollTo")?.lowercased() }
     static var playTabArgument: PlayTab? { argument("playTab").flatMap { PlayTab(rawValue: $0.lowercased()) } }
