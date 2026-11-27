@@ -1,0 +1,163 @@
+name: TestFlight
+
+# The same path as Adjutant and Herborica: same Apple team, App Store Connect key, match
+# repository and password, plus this app's own key for the game server (DD_APP_KEY).
+#
+# Ships once per MARKETING_VERSION. To release, bump MARKETING_VERSION in ios/project.yml and push
+# to main. The build number comes from TestFlight's own counter (fastlane's bump_build lane). Use
+# "Run workflow" to ship the current commit without a version bump.
+#
+# Tests are not run here yet; they run locally before pushing (see AGENTS.md, "Gates").
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/testflight.yml'
+  workflow_dispatch:
+    inputs:
+      changelog:
+        description: 'What is new in this build'
+        required: false
+        default: 'New build'
+
+concurrency:
+  # Two uploads racing for the same build number is a rejected upload.
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    name: Has this version shipped?
+    runs-on: ubuntu-latest
+    outputs:
+      ship: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.check.outputs.ship }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Asks whether this version was ever uploaded (a testflight/v<version> tag, pushed only after
+      # a successful upload), not whether it differs from the previous commit. So a push of several
+      # commits, or a retry after a failed upload, still ships.
+      - name: Read the version and look for its tag
+        id: check
+        run: |
+          VERSION=$(grep -m1 'MARKETING_VERSION:' ios/project.yml | sed 's/.*: *//; s/["[:space:]]//g')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read MARKETING_VERSION from ios/project.yml."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/testflight/v$VERSION" >/dev/null 2>&1; then
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+            echo "$VERSION is already on TestFlight; bump MARKETING_VERSION in ios/project.yml to ship."
+          else
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+            echo "$VERSION has never been uploaded; shipping it."
+          fi
+
+  deploy:
+    name: Build and upload
+    needs: check-version
+    if: needs.check-version.outputs.ship == 'true'
+    # macos-26 has Xcode 26 and the iOS 26 SDK, which App Store Connect requires (older SDKs are
+    # rejected with a 409 after a successful build).
+    runs-on: macos-26
+    permissions:
+      contents: write   # for the testflight/v<version> tag
+    defaults:
+      run:
+        working-directory: ios
+    env:
+      APP_IDENTIFIER: com.jmm.the-dungeon-door
+      TEAM_ID: 2BRYAM5Q52
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs from the committed Gemfile.lock, which lists arm64-darwin.
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: ios
+
+      # The Xcode project is generated from project.yml and is not committed.
+      - name: Generate the Xcode project
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate --quiet
+
+      # The app's key for the game server, read by Config/App.xcconfig.
+      - name: Write the app secrets
+        env:
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+        run: printf 'DD_APP_KEY = %s\n' "$DD_APP_KEY" > Config/Secrets.xcconfig
+
+      # Two forms of the same key: the raw .p8 for app_store_connect_api_key, and the JSON form
+      # that match and pilot read from APP_STORE_CONNECT_API_KEY_PATH.
+      - name: Write the App Store Connect key
+        env:
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          mkdir -p fastlane
+          echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > fastlane/AuthKey.p8
+          KEY_CONTENT=$(awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' fastlane/AuthKey.p8)
+          printf '{"key_id":"%s","issuer_id":"%s","key":"%s","in_house":false}' \
+            "$APP_STORE_CONNECT_API_KEY_ID" "$APP_STORE_CONNECT_API_ISSUER_ID" "$KEY_CONTENT" \
+            > fastlane/api_key.json
+
+      - name: Configure fastlane
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          # Through env, never interpolated into the script: the changelog and the commit message
+          # are user-controlled and this runner holds signing credentials.
+          CHANGELOG_INPUT: ${{ github.event.inputs.changelog }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          NOTES=${CHANGELOG_INPUT:-$(printf '%s' "$COMMIT_MESSAGE" | head -1)}
+          printf '%s\n' \
+            "APP_STORE_CONNECT_API_KEY_ID=$APP_STORE_CONNECT_API_KEY_ID" \
+            "APP_STORE_CONNECT_API_ISSUER_ID=$APP_STORE_CONNECT_API_ISSUER_ID" \
+            "APP_STORE_CONNECT_API_KEY_PATH=./fastlane/api_key.json" \
+            "APP_IDENTIFIER=$APP_IDENTIFIER" \
+            "TEAM_ID=$TEAM_ID" \
+            "MATCH_GIT_URL=$MATCH_GIT_URL" \
+            "MATCH_PASSWORD=$MATCH_PASSWORD" \
+            > fastlane/.env
+          # The changelog goes through the environment, not the .env file, so quotes and newlines
+          # in it cannot break dotenv parsing.
+          {
+            echo "CHANGELOG<<CHANGELOG_EOF"
+            echo "$VERSION: ${NOTES:-New build} (${COMMIT_SHA:0:7})"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up SSH for match
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.MATCH_DEPLOY_KEY }}
+
+      - name: Build and upload to TestFlight
+        run: bundle exec fastlane beta
+
+      # After the upload, never before: a tag written first would mark a failed build as shipped.
+      - name: Record that this version is on TestFlight
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          git tag "testflight/v$VERSION"
+          git push origin "testflight/v$VERSION"
+
+      - name: Remove the credentials
+        if: always()
+        run: rm -f fastlane/AuthKey.p8 fastlane/api_key.json fastlane/.env Config/Secrets.xcconfig
