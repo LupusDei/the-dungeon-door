@@ -22,6 +22,7 @@ import { clockOf, lightLevel } from './time.ts';
 import type { RoadEnd, TrekEvent } from './trek.ts';
 import type { RulesState } from './turn.ts';
 import { counted } from '../rules/counted.ts';
+import { XP_LABELS, type XpReason } from './xp.ts';
 
 export interface RatedFoe { name: string; count: number; toughness: Toughness }
 export interface Waiting { foes: string; attitude: Attitude; band: FightBand; monsters: RatedFoe[] }
@@ -108,6 +109,18 @@ export interface HeroView {
   conditions: { condition: string; ends: string }[];
   /** The spell the hero holds by concentration ("Bless"), or null. */
   concentratingOn: string | null;
+  /** The XP at which the hero reaches its next level (the 2024 thresholds), or null at level 20. It levels up at the quest's end. */
+  nextLevelXp: number | null;
+  /** XP the hero has earned on this adventure, fights and all (play/xp.ts). */
+  questXp: number;
+}
+
+/** One hero's XP outside a fight in the last resolved scene, reason by reason (play/xp.ts). */
+export interface XpAwardView {
+  playerId: string; name: string; xp: number;
+  /** Their die was left to the clock: the awards are halved. */
+  idle: boolean;
+  reasons: { reason: XpReason; label: string; xp: number }[];
 }
 
 const WHEN: { [K in TimedCondition['until']['kind']]: (u: Extract<TimedCondition['until'], { kind: K }>) => string } = {
@@ -160,19 +173,21 @@ export interface RulesView {
   results: string[];
   /** Who levelled up at the quest's end (empty until then). */
   levelUps: { playerId: string; name: string; from: number; to: number }[];
+  /** The XP each hero earned outside a fight in the last resolved scene (empty for none, and for a round of a fight). */
+  xpAwards: XpAwardView[];
   /** Seconds since the adventure began, and the clock ("Day 1, 08:40"). */
   time: { seconds: number; label: string };
   /** What the party sees by here: the light level and the light it carries. */
   light: { level: LightLevel; source: LitView | null };
 }
 
-const heroView = (playerId: string, s: CharacterSheet, light: LightLevel): HeroView => ({
+const heroView = (playerId: string, s: CharacterSheet, light: LightLevel, earned: Readonly<Record<string, number>>): HeroView => ({
   playerId, name: s.name, level: s.level, xp: s.xp, hp: s.hp, maxHp: s.maxHp, armorClass: s.armorClass,
   exhaustion: s.exhaustion, hitDiceLeft: s.level - s.hitDiceSpent, slotsLeft: slotsLeft(s),
   resources: resourcesOf(s).map(({ id, name, left, max }) => ({ id, name, left, max })), down: s.hp === 0, dead: s.dead === true,
   ...passives(s), speed: movingAt(s), gp: s.gp, inventory: s.equipment.map(({ id, name, count }) => ({ id, name, count })),
   ...load(s), sight: sightOf(s, light), darkvision: darkvision(s), resistances: heroResistances(s), conditions: conditionViews(s),
-  concentratingOn: held(s),
+  concentratingOn: held(s), nextLevelXp: srd().advancement[s.level]?.xp ?? null, questXp: earned[playerId] ?? 0,
 });
 
 const held = (s: CharacterSheet) => {
@@ -206,7 +221,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
   const { party, combat } = state;
   const light = lightLevel(state);
   return {
-    party: Object.entries(party.sheets).map(([id, s]) => heroView(id, s, light)),
+    party: Object.entries(party.sheets).map(([id, s]) => heroView(id, s, light, party.earned ?? {})),
     combat: combat && (() => {
       const rated = ratedCombat(state, combat);
       return {
@@ -226,6 +241,10 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
     dungeon: dungeonView(state),
     results,
     levelUps: (party.levelUps ?? []).map((u) => ({ ...u, name: party.sheets[u.playerId].name })),
+    xpAwards: (party.xpAwards ?? []).map((a) => ({
+      playerId: a.playerId, name: party.sheets[a.playerId].name, xp: a.xp, idle: a.idle,
+      reasons: a.reasons.map((r) => ({ ...r, label: XP_LABELS[r.reason] })),
+    })),
     time: { seconds: clockOf(party), label: clockLabel(clockOf(party)) },
     light: { level: light, source: litView(state) },
   };

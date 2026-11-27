@@ -29,6 +29,7 @@ test('the API view: each hero’s numbers, the fight in initiative order, the ar
     resources: [{ id: 'second-wind', name: 'Second Wind', left: 2, max: 2 }], down: true, dead: false,
     passivePerception: 10 + fighter.skillBonuses.perception, passiveInsight: 10 + fighter.skillBonuses.insight, speed: fighter.speed,
     gp: fighter.gp, inventory: fighter.equipment, ...load(fighter), sight: 'none', darkvision: 0, resistances: [], conditions: [], concentratingOn: null,
+    nextLevelXp: 300, questXp: 0,
   });
   assert.deepEqual([view.party[1].sight, view.party[1].darkvision], ['dim', 60], 'an elf sees the dark room dimly');
   assert.deepEqual(rulesView({ party: { ...party, sheets: { p1: { ...fighter, traits: ['dwarven-resilience'] } } }, combat: null, dungeon: null }, []).party[0].resistances, ['poison']);

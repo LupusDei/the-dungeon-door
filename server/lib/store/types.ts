@@ -111,8 +111,11 @@ export interface Store {
    * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.
    */
   setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>, die?: Vote['die'] | null): Promise<Vote | null>;
-  /** Shows the stored d20. False when there is no hidden die for that player. */
-  revealRoll(code: string, index: number, playerId: string): Promise<boolean>;
+  /**
+   * Shows the stored d20. `auto`: the server threw it for the player (the window ran out, the host advanced),
+   * and the vote keeps `autoRolled`. False when there is no hidden die for that player.
+   */
+  revealRoll(code: string, index: number, playerId: string, auto?: boolean): Promise<boolean>;
   /**
    * Appends an in-character line to the scene, only while the game is voting on it and the turn holds
    * fewer than 20. Returns the turn's lines, or null when the scene is not open.

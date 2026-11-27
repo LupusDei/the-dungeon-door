@@ -100,3 +100,12 @@ test('the LLM DM opens a road game on the road from the tavern, not at the door'
 test('a foe\u2019s hit points are hidden: the DM tells its wounds by the wound word, never in numbers', () => {
   for (const words of ['wound word', 'without its damage', 'Unhurt, Scratched, Bleeding, Bloodied (half or less), Staggering, Gasping', 'never its hit points']) assert.ok(RULES_INSTRUCTIONS.includes(words), words);
 });
+
+test('the DM is told how experience works: it may tag a choice, the engine sets the numbers, and the story carries none', () => {
+  assert.match(RULES_INSTRUCTIONS, /Tag a choice's "reward"/);
+  assert.match(RULES_INSTRUCTIONS, /discovery[\s\S]*social[\s\S]*puzzle[\s\S]*milestone/);
+  assert.match(RULES_INSTRUCTIONS, /The engine sets every amount/);
+  assert.match(RULES_INSTRUCTIONS, /no XP numbers in the story/);
+  const results: RulesResults = { chosen: 'c', lines: ['Bryn: Persuasion 17 + 2 = 19 vs DC 15, success', '+25 XP: a clever parley (Bryn).'], success: true, fight: null };
+  assert.ok(resultsBlock(results).split('\n').includes('+25 XP: a clever parley (Bryn).'), 'the awards are in the results it narrates');
+});

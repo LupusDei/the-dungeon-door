@@ -15,10 +15,11 @@ import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } 
 import { isPersonalCheck } from './actions.ts';
 import { dungeonLevel, partyLevel, startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
-import { hookLabel, parseHook } from './hooks.ts';
+import { hookLabel, parseHook, type RulesHook } from './hooks.ts';
 import type { DungeonState, LevelUp, PartyState } from './state.ts';
 import { meetOnTheRoad, planTrek, type Trek } from './trek.ts';
-import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState } from './turn.ts';
+import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState, type RulesTurn } from './turn.ts';
+import { type Deeds, questXp, sceneXp, type XpEvent, xpTag } from './xp.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
 export type DungeonMode = (typeof DUNGEON_MODES)[number];
@@ -68,17 +69,18 @@ export function rulesStateOf({ party, combat, dungeon }: Game): RulesState | nul
   return { party: moved.party, combat: gridded(moved.party, combat), dungeon: { ...moved.dungeon, map: currentTraps(moved.dungeon.map) } };
 }
 
-/** A choice with its hook, if it holds up, and the hook's label from where the party is now. */
-export function storedChoice(choice: Choice, hook: unknown, dungeon: DungeonState | null = null): StoredChoice {
+/** A choice with its hook, if it holds up, the hook's label from where the party is now, and the DM's XP tag if it is one. */
+export function storedChoice(choice: Choice, hook: unknown, dungeon: DungeonState | null = null, reward: unknown = null): StoredChoice {
   const parsed = parseHook(hook);
-  return { ...choice, hook: parsed, rules: parsed && hookLabel(parsed, dungeon) };
+  const tag = xpTag(reward);
+  return { ...choice, hook: parsed, rules: parsed && hookLabel(parsed, dungeon), ...(tag ? { reward: tag } : {}) };
 }
 
 /**
  * The choice as the app shows it. A way on keeps the name stored when it was offered. A fight or an
  * engage is rated against the party now (`levels`). Anything else uses the stored label, or the hook.
  */
-export function choiceView({ hook, rules, ...choice }: StoredChoice, levels?: readonly number[]): ChoiceView {
+export function choiceView({ hook, rules, reward: _, ...choice }: StoredChoice, levels?: readonly number[]): ChoiceView {
   const rated = hook && (hook.kind === 'fight' || hook.kind === 'engage') ? hookLabel(hook, levels) : null;
   return { ...choice, rules: rated ?? rules ?? (hook ? hookLabel(hook) : null) };
 }
@@ -114,26 +116,49 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
   const inFight = state.combat !== null;
   const choice = inFight ? undefined : scene.choices.find((c) => c.id === chosen);
   const turn = playTurn(state, choice?.hook || null, ballots, freeformsOf(scene));
+  const xp = sceneXp(turn.party, deedsOf(state, turn, scene, inFight ? null : choice ?? null, inFight));
+  const lines = [...turn.lines, ...xp.lines];
   return {
-    state: { party: { ...turn.party, results: turn.lines }, combat: turn.combat, dungeon: turn.dungeon },
+    state: { party: { ...xp.party, results: lines }, combat: turn.combat, dungeon: turn.dungeon },
     resolution: {
       ...resolution,
       leaders: chosen ? [chosen] : [],
-      rules: { chosen: inFight ? null : chosen, lines: turn.lines, success: turn.success, fight: turn.fight },
+      rules: { chosen: inFight ? null : chosen, lines, success: turn.success, fight: turn.fight },
     },
     fight: turn.fight,
     round: inFight,
   };
 }
 
+/** Hooks whose XP is the fight's own: a DM's tag on them pays nothing. */
+const FIGHTING: readonly RulesHook['kind'][] = ['fight', 'engage', 'run'];
+
+/** What the heroes did this scene that earns XP outside a fight (play/xp.ts). */
+function deedsOf(before: RulesState, turn: RulesTurn, scene: StoredScene, choice: StoredChoice | null, round: boolean): Deeds {
+  const actors = scene.votes.map((v) => ({ playerId: v.playerId, idle: v.autoRolled === true }));
+  const hook = choice?.hook ?? null;
+  const events: XpEvent[] = [];
+  if ((hook?.kind === 'trap' || hook?.kind === 'move') && turn.success === true) events.push('trap');
+  if (hook?.kind === 'parley' && turn.success === true) events.push('social');
+  if (before.dungeon && turn.dungeon) {
+    const map = turn.dungeon.map;
+    if (turn.dungeon.visited.some((id) => !before.dungeon!.visited.includes(id) && map.nodes[id].type !== 'corridor')) events.push('new-ground');
+    if (dungeonLevel(turn.dungeon) > dungeonLevel(before.dungeon)) events.push('deeper');
+  }
+  const paid = choice?.reward && !(hook && FIGHTING.includes(hook.kind)) && turn.fight === null && turn.success !== false;
+  return { sceneIndex: scene.index, actors, rolls: turn.rolled, events, tag: paid ? choice.reward! : null, round };
+}
+
 /**
- * The quest is over: each living hero levels up as far as its XP reaches (2024 thresholds, play/fight.ts
- * autoLevelUp). The lines join the scene's, for the table and for the DM's epilogue.
+ * The quest is over: each living hero who took part gets the adventure's-end milestone (play/xp.ts), then
+ * levels up as far as its XP reaches (2024 thresholds, play/fight.ts autoLevelUp). The lines join the
+ * scene's, for the table and for the DM's epilogue.
  */
 export function endQuest(step: EngineStep): EngineStep {
-  const { party } = step.state;
+  const ended = questXp(step.state.party);
+  const party = ended.party;
   const levelUps: LevelUp[] = [];
-  const lines = [...(party.results ?? [])];
+  const lines = [...(party.results ?? []), ...ended.lines];
   const sheets = { ...party.sheets };
   for (const [playerId, sheet] of Object.entries(party.sheets).filter(([, s]) => !s.dead)) {
     const up = autoLevelUp(sheet);

@@ -8,6 +8,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import type { Attitude } from './parley.ts';
 import type { Lit } from './time.ts';
 import type { Trek } from './trek.ts';
+import type { XpAward } from './xp.ts';
 
 export type { CombatState } from '../rules/scene.ts';
 
@@ -25,6 +26,12 @@ export interface PartyState {
   lit?: Lit | null;
   /** Who levelled up at the quest's end (play/table.ts endQuest); absent before it ends. */
   levelUps?: LevelUp[];
+  /** XP each hero has earned on this adventure, fights and all (play/xp.ts); a hero is listed once they take part. Absent: none yet. */
+  earned?: Record<string, number>;
+  /** The XP each hero earned outside a fight in the last resolved scene (play/xp.ts); absent or empty: none. */
+  xpAwards?: XpAward[];
+  /** The scene index of the last chapter milestone (play/xp.ts CHAPTER_EVERY); absent: none yet. */
+  chapterAt?: number;
   /**
    * On the road from the tavern (play/trek.ts), to the dungeon door or to where a tale told begins; absent once
    * the road has ended, and in games from before it. Kept with the party, apart from any dungeon.

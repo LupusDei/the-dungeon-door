@@ -224,7 +224,7 @@ function effectOf(row: Record<string, unknown>): ImprovisedEffect | null {
   return null;
 }
 
-export interface Adjudicated { text: string; foe: Combatant | null }
+export interface Adjudicated { text: string; foe: Combatant | null; success: boolean }
 
 const quoted = (text: string) => text.replaceAll('"', "'");
 
@@ -248,12 +248,13 @@ export function adjudicateCheck(rng: Rng, sheet: CharacterSheet, text: string, r
   const dc = DC_BY_TIER[ruling.tier];
   const roll = abilityCheck(rng, sheet, { ability: ruling.ability, skill: ruling.skill }, { natural });
   const head = `${sheet.name} ("${quoted(text)}"): ${checkName(ruling)} ${faces(roll.natural, roll.rolls, roll.mode)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dc}, ${roll.total >= dc ? 'success' : 'failure'}`;
-  if (roll.total < dc || ruling.effect.category === 'none') return { text: `${head}.`, foe };
-  if (ruling.effect.category === 'damage') return strike(rng, head, ruling.effect, foe);
-  return afflict(rng, head, ruling.effect, dc, foe);
+  const success = roll.total >= dc;
+  if (!success || ruling.effect.category === 'none') return { text: `${head}.`, foe, success };
+  if (ruling.effect.category === 'damage') return { ...strike(rng, head, ruling.effect, foe), success };
+  return { ...afflict(rng, head, ruling.effect, dc, foe), success };
 }
 
-function strike(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'damage' }>, foe: Combatant | null): Adjudicated {
+function strike(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'damage' }>, foe: Combatant | null): Omit<Adjudicated, 'success'> {
   const rolled = rollDice(rng, parseDice(DAMAGE_BY_SEVERITY[effect.severity])).total;
   if (!foe) return { text: `${head}. Improvised damage ${rolled} ${effect.damageType}.`, foe: null };
   const taken = damageAfterDefenses(foe, rolled, effect.damageType);
@@ -261,7 +262,7 @@ function strike(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { cate
   return { text: `${head}. ${foe.name} ${told}.`, foe: takeDamage(foe, taken, false) };
 }
 
-function afflict(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'condition' }>, dc: number, foe: Combatant | null): Adjudicated {
+function afflict(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'condition' }>, dc: number, foe: Combatant | null): Omit<Adjudicated, 'success'> {
   const name = titleCase(effect.condition);
   if (!foe) return { text: `${head}. A ${ABILITY_NAMES[effect.save]} save against DC ${dc} would leave them ${name}.`, foe: null };
   const save = savingThrow(rng, foe, effect.save, dc, {});

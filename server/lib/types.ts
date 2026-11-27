@@ -88,6 +88,11 @@ export interface Vote {
   die?: import('./play/dice.ts').PlayerDie;
   /** False while `die` is still hidden. Absent means the roll was never hidden. */
   revealed?: boolean;
+  /**
+   * The server threw `die` for the player: the choice window ran out, or the host advanced first. The hero was
+   * idle that scene and earns half its XP (play/xp.ts). Absent: the player threw it, or there was nothing to throw.
+   */
+  autoRolled?: true;
 }
 
 /** One thing the caller's hero might do this turn. See docs/api.md, LegalAction. */
@@ -132,6 +137,8 @@ export interface StoredChoice extends Choice {
   hook?: RulesHook | null;
   /** The hook's label, made where the choice was offered (a way on is named from there); absent on choices from before. */
   rules?: string | null;
+  /** What the DM said taking it would be (play/xp.ts): the engine pays XP for it if its dice do not fail. Server-only. */
+  reward?: import('./play/xp.ts').XpTag;
 }
 
 /** A choice as the API shows it: the hook as a label ("Athletics check, DC 12"). */

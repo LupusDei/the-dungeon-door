@@ -16,6 +16,10 @@ const Choice = z.object({
   label: z.string().describe('What the party does, 2–6 words, imperative ("Storm the gatehouse")'),
   detail: z.string().describe('One enticing sentence about the approach and its risk'),
   rules: FlatHook.nullable().describe('The dice behind this choice (rules-engine games only), or null for pure story'),
+  reward: z.enum(['none', 'discovery', 'social', 'puzzle', 'milestone']).describe(
+    'What taking this choice would be, for experience: discovery (a secret, a hidden place, lost lore), social (winning ' +
+    'someone over), puzzle (a riddle, a mechanism, a lock of wits), milestone (it closes a chapter of the story), or none (most choices)',
+  ),
 });
 
 const sceneFields = {

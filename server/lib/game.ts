@@ -810,7 +810,7 @@ export async function settleDice(code: string, origin: string): Promise<void> {
 async function revealPending(code: string, index: number, votes: StoredScene['votes']): Promise<boolean> {
   let any = false;
   for (const vote of votes) {
-    if (rollPending(vote)) any = await getStore().revealRoll(code, index, vote.playerId) || any;
+    if (rollPending(vote)) any = await getStore().revealRoll(code, index, vote.playerId, true) || any;
   }
   return any;
 }
@@ -961,7 +961,7 @@ function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | nul
   if (choices.length < 2) throw new Error(`the DM wrote ${choices.length} choices, not 2 or 3`);
   return choices.slice(0, 3).map((c, i) => {
     const choice = { id: CHOICE_IDS[i], label: clip(c.label.trim(), 80), detail: clip(c.detail.trim(), 300) };
-    return rules ? storedChoice(choice, c.rules, rules.dungeon) : choice;
+    return rules ? storedChoice(choice, c.rules, rules.dungeon, c.reward) : choice;
   });
 }
 

@@ -20,6 +20,7 @@ function voteOf(row: Row): Vote {
   const die = typeof row.die === 'string' ? JSON.parse(row.die) as unknown : row.die;
   if (die && typeof die === 'object') vote.die = die as Vote['die'];
   if (row.revealed === false) vote.revealed = false;
+  if (row.auto_rolled === true) vote.autoRolled = true;
   return vote;
 }
 
@@ -303,8 +304,8 @@ export class PostgresStore implements Store {
        SELECT code, $2, $3, $4, $5, $6, $7::jsonb, $9::jsonb, $8::jsonb, $10::jsonb, $11 FROM ok
        ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
          SET choice_id = EXCLUDED.choice_id, action_id = EXCLUDED.action_id, targets = EXCLUDED.targets,
-             freeform = EXCLUDED.freeform, move = EXCLUDED.move, die = EXCLUDED.die, revealed = EXCLUDED.revealed
-       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed`,
+             freeform = EXCLUDED.freeform, move = EXCLUDED.move, die = EXCLUDED.die, revealed = EXCLUDED.revealed, auto_rolled = false
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed, auto_rolled`,
       [code, index, playerId, choiceId, roll, named?.actionId ?? null, named ? JSON.stringify(named.targets) : null, move ? JSON.stringify(move) : null, note?.text ? JSON.stringify(note) : null, die ? JSON.stringify(die) : null, die ? false : true],
     );
     const [row] = rows;
@@ -317,20 +318,20 @@ export class PostgresStore implements Store {
        INSERT INTO votes (game_code, scene_idx, player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed)
        SELECT code, $2, $3, 'a', $4, NULL, NULL, $5::jsonb, NULL, $6::jsonb, $7 FROM ok
        ON CONFLICT (game_code, scene_idx, player_id) DO UPDATE
-         SET freeform = EXCLUDED.freeform, action_id = NULL, targets = NULL, move = NULL, die = EXCLUDED.die, revealed = EXCLUDED.revealed
-       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed`,
+         SET freeform = EXCLUDED.freeform, action_id = NULL, targets = NULL, move = NULL, die = EXCLUDED.die, revealed = EXCLUDED.revealed, auto_rolled = false
+       RETURNING player_id, choice_id, roll, action_id, targets, freeform, move, die, revealed, auto_rolled`,
       [code, index, playerId, roll, JSON.stringify(freeform), die ? JSON.stringify(die) : null, die ? false : true],
     );
     const [row] = rows;
     return row ? voteOf(row) : null;
   }
 
-  async revealRoll(code: string, index: number, playerId: string): Promise<boolean> {
+  async revealRoll(code: string, index: number, playerId: string, auto = false): Promise<boolean> {
     const rows = await this.q(
-      `UPDATE votes SET revealed = true
+      `UPDATE votes SET revealed = true, auto_rolled = $4
        WHERE game_code = $1 AND scene_idx = $2 AND player_id = $3 AND revealed = false AND die IS NOT NULL
        RETURNING player_id`,
-      [code, index, playerId],
+      [code, index, playerId, auto],
     );
     return rows.length > 0;
   }

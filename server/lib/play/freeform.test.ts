@@ -10,6 +10,7 @@ delete process.env.DD_APP_KEY;
 delete process.env.DD_FAKE_DELAY_MS;
 
 import * as actionApi from '../../api/game-action.ts';
+import * as advanceApi from '../../api/game-advance.ts';
 import * as joinApi from '../../api/game-join.ts';
 import * as startApi from '../../api/game-start.ts';
 import * as rollApi from '../../api/game-roll.ts';
@@ -149,4 +150,24 @@ test('a classification the engine cannot read does not spend the turn', async ()
   assert.equal(acted.body.action.narration, UNREADABLE);
   assert.equal(acted.body.status, 'voting');
   assert.equal((await call(actionApi.POST, gamePath(code, 'action'), { player: host, body: { sceneIndex: 0, text: '' } })).status, 400);
+});
+
+test('a die the player throws earns full XP; one the host’s advance throws for them earns half, and the view says so', async () => {
+  d20(15, 15);
+  const { code, host, players } = await table(2);
+  await call(actionApi.POST, gamePath(code, 'action'), { player: host, body: { sceneIndex: 0, text: 'I search the ditch' } });
+  await call(actionApi.POST, gamePath(code, 'action'), { player: players[1], body: { sceneIndex: 0, text: 'I search the hedge' } });
+  await call(rollApi.POST, gamePath(code, 'roll'), { player: host, body: { sceneIndex: 0 } });
+  assert.equal((await getStore().getGame(code))!.scenes[0].votes.find((v) => v.playerId === host)!.autoRolled, undefined, 'thrown by the player');
+  await call(advanceApi.POST, gamePath(code, 'advance'), { player: host });
+  await settle();
+  assert.equal((await getStore().getGame(code))!.scenes[0].votes.find((v) => v.playerId === players[1])!.autoRolled, true, 'thrown for them');
+  const state = await view(code, host);
+  assert.ok(state.rules!.results.includes('+5 XP: taking part (Hero 1).'), state.rules!.results.join(' | '));
+  assert.ok(state.rules!.results.includes('+2 XP: taking part, halved: their die was left to the clock (Hero 2).'), state.rules!.results.join(' | '));
+  const [mine, theirs] = state.rules!.xpAwards;
+  assert.deepEqual([mine.name, mine.idle, mine.reasons[0]], ['Hero 1', false, { reason: 'took-part', label: 'taking part', xp: 5 }]);
+  assert.deepEqual([theirs.name, theirs.idle, theirs.xp], ['Hero 2', true, Math.floor(mine.xp / 2)]);
+  const hero = state.rules!.party.find((h) => h.playerId === host)!;
+  assert.deepEqual([hero.xp, hero.questXp, hero.nextLevelXp], [mine.xp, mine.xp, 300]);
 });

@@ -87,6 +87,14 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   the damage and the save. An impossible action does not spend their turn. When you narrate, the
   engine's lines already include any written action, quoting their words: colour that result, and do not add
   speech, feelings, or deeds beyond the words they wrote.
+- Experience: the engine gives the heroes XP for what they do outside fights too: a little for each hero who
+  acts in a scene, more for a check that comes good (and some for a brave failure), for a trap overcome, a
+  parley won, new ground in a dungeon, and a milestone at the adventure's end. Tag a choice's "reward" when
+  taking it would be a discovery (a secret, a hidden place, lost lore), social (winning someone over), a
+  puzzle (a riddle, a mechanism, a lock of wits) or a milestone (it closes a chapter of the story; rarely,
+  never two scenes running); most choices are "none". The engine sets every amount, caps it, and pays a tag
+  only when the party takes that choice and its dice do not fail. Its results then say so ("+25 XP: a clever
+  parley (Bryn)"): you may let the heroes feel they have grown, but put no XP numbers in the story.
 - During combat the engine replaces your choices with Attack, Cast and Dodge: a few tactical lines, not every
   weapon, spell, or square. Still write two or three choices that move the fight's story. Players take other
   attacks and spells from the sheet and movement from the map. Narrate the round and set up the next one.`;

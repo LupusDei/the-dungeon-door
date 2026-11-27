@@ -61,3 +61,11 @@ test('a hook left empty, or filled for the wrong kind, is no hook: the choice is
   assert.equal(parseHook(hookFromFlat(null)), null);
   assert.equal(parseHook(hookFromFlat('fight')), null);
 });
+
+test('every choice the model writes carries an XP tag, "none" for most; the engine reads only the four tags', () => {
+  for (const name of ['opening', 'next'] as const) {
+    const choice = (z.toJSONSchema(DM_SCHEMAS[name]) as unknown as { properties: { choices: { items: { properties: Record<string, { enum?: string[] }>; required: string[] } } } }).properties.choices.items;
+    assert.deepEqual(choice.properties.reward.enum, ['none', 'discovery', 'social', 'puzzle', 'milestone'], name);
+    assert.ok(choice.required.includes('reward'), `${name}: not nullable, so it adds no union-typed field`);
+  }
+});

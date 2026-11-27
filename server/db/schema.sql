@@ -105,6 +105,9 @@ ALTER TABLE votes ADD COLUMN IF NOT EXISTS move jsonb;
 -- throw or the choice window ends. Existing votes are already revealed. Needs `npm run migrate`.
 ALTER TABLE votes ADD COLUMN IF NOT EXISTS die jsonb;
 ALTER TABLE votes ADD COLUMN IF NOT EXISTS revealed boolean DEFAULT true;
+-- The server threw that hidden die for the player (the window ran out, or the host advanced first): the hero
+-- was idle that scene and earns half its XP (play/xp.ts). Existing votes were thrown by their players.
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS auto_rolled boolean DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS messages (
   game_code      text NOT NULL REFERENCES games (code) ON DELETE CASCADE,

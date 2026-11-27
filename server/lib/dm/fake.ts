@@ -40,6 +40,9 @@ function placeHooks(rules: RulesContext) {
   ];
 }
 
+/** The XP tags on the three choices (play/xp.ts): the quieter way finds something, the parley wins someone over. */
+const REWARDS = ['none', 'discovery', 'social'];
+
 function choicesFor(place: string, ctx: DMContext): DMChoice[] {
   const choices: DMChoice[] = [
     { label: 'Charge straight in', detail: `Burst into ${place} before anything inside can prepare.` },
@@ -48,7 +51,7 @@ function choicesFor(place: string, ctx: DMContext): DMChoice[] {
   ];
   if (!ctx.rules) return choices;
   const hooks = hooksFor(ctx.rules);
-  return choices.map((c, i) => ({ ...c, rules: hooks[i] }));
+  return choices.map((c, i) => ({ ...c, rules: hooks[i], reward: REWARDS[i] }));
 }
 
 function resolve(r: Resolution) {

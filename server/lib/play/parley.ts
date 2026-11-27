@@ -28,7 +28,11 @@ export function rollAttitude(rng: Rng, monsterIds: readonly string[]): { attitud
 
 const WORSE: Readonly<Record<Attitude, Attitude>> = { friendly: 'indifferent', indifferent: 'hostile', hostile: 'hostile' };
 
-export interface Parley { party: PartyState; success: boolean; attitude: Attitude; lines: string[] }
+export interface Parley {
+  party: PartyState; success: boolean; attitude: Attitude; lines: string[];
+  /** Who rolled the Influence check (the best talker), and how it went. */
+  rolls: { playerId: string; success: boolean }[];
+}
 
 const TALK = { ability: 'cha', skill: 'persuasion' } as const;
 
@@ -44,5 +48,6 @@ export function parley(party: PartyState, monsterIds: readonly string[], attitud
   const rolled = groupRoll(heroes, hook, votes, rng);
   const after = rolled.success ? attitude : WORSE[attitude];
   const outcome = rolled.success ? `The ${foesNamed(monsterIds)} let the party be.` : `The talk goes badly: the ${foesNamed(monsterIds)} turn ${after}.`;
-  return { party: { ...party, rng: rng.state() }, success: rolled.success!, attitude: after, lines: [...rolled.lines, outcome] };
+  return { party: { ...party, rng: rng.state() }, success: rolled.success!, attitude: after, lines: [...rolled.lines, outcome],
+    rolls: rolled.rolls.filter((r) => r.natural !== null).map(({ playerId, success }) => ({ playerId, success })) };
 }

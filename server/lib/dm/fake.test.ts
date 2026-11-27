@@ -17,6 +17,7 @@ test('the fake DM proposes hooks in a rules-engine game: an Athletics check, a P
     { kind: 'check', ability: 'wis', skill: 'perception', dc: 10 },
     { kind: 'check', ability: 'cha', skill: 'persuasion', dc: 15 },
   ]);
+  assert.deepEqual(choices.map((c) => c.reward), ['none', 'discovery', 'social'], 'and tags two for XP');
 });
 
 test('in a dungeon its first choice takes the first exit; before the engine its choices carry no hooks', async () => {
@@ -29,7 +30,7 @@ test('in a dungeon its first choice takes the first exit; before the engine its 
   const { choices: met } = await fakeDungeonMaster.openingScene(ctx({ ...rules, dungeon: { ...dungeon, waiting: { foes: 'Boar ×3', attitude: 'friendly', band: 'low', monsters: [{ name: 'Boar', count: 3, toughness: 'weak' }] } } }));
   assert.deepEqual(met[2].rules, { kind: 'parley' }, 'foes waiting: talk to them');
   const { choices: legacy } = await fakeDungeonMaster.openingScene(ctx(null));
-  assert.ok(legacy.every((c) => c.rules === undefined));
+  assert.ok(legacy.every((c) => c.rules === undefined && c.reward === undefined));
 });
 
 test('the fake DM classifies a written action without inventing a number', () => {

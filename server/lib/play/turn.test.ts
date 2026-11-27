@@ -26,7 +26,7 @@ test('ties go to the choice whose voters rolled highest; then to the first; no l
 
 test('a story choice (no hook) only lets ten minutes pass', () => {
   const s = state();
-  assert.deepEqual(playTurn(s, null, ballots(5, 5)), { ...s, party: { ...s.party, clock: 600 }, lines: [], success: null, fight: null });
+  assert.deepEqual(playTurn(s, null, ballots(5, 5)), { ...s, party: { ...s.party, clock: 600 }, lines: [], success: null, fight: null, rolled: [] });
 });
 
 test('time passes with every turn: a dark place is lit, the light burns, a rest does not burn it, a combat round is 6 seconds', () => {

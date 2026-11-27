@@ -9,6 +9,7 @@ import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 import { meetOnTheRoad, planTrek } from './trek.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
+import type { RulesState } from './turn.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const player = (playerId: string, name: string, sheet?: typeof fighter): GamePlayer => ({
@@ -208,4 +209,65 @@ test('at the quest’s end the living heroes level up as far as their XP reaches
   assert.deepEqual(none.state.party.levelUps, []);
   const fresh = endQuest({ ...story, state: { ...story.state, party } }); // a party with no lines yet
   assert.deepEqual(fresh.state.party.results, [`Bryn reaches level 2 (+${gained} max HP).`]);
+});
+
+const voted = (choices: StoredScene['choices'], votes: StoredScene['votes'], index = 2): StoredScene => ({ ...scene(choices), index, votes });
+const two: PartyState = { version: 1, rng: 3, sheets: { p1: fighter, p2: { ...fighter, name: 'Cleo' } } };
+
+test('the engine step pays XP outside a fight: to each hero who declared, more for a check that came good; the DM and the table hear it', () => {
+  const choices = [storedChoice({ id: 'a', label: 'Climb', detail: '' }, { kind: 'check', ability: 'str', skill: 'athletics', dc: 10 }, null, 'discovery')];
+  const step = engineStep({ party: two, combat: null, dungeon: null }, voted(choices, [{ playerId: 'p1', choiceId: 'a', roll: 18 }]), resolution(['a'], [['p1', 'a', 18]]));
+  const xpLines = step.state.party.results!.filter((l) => l.startsWith('+'));
+  assert.deepEqual(xpLines, ['+5 XP: taking part (Bryn).', '+10 XP: a success (Bryn).', '+10 XP: a discovery (Bryn).'], 'Cleo did not declare');
+  assert.deepEqual(step.resolution.rules!.lines, step.state.party.results);
+  assert.deepEqual([step.state.party.sheets.p1.xp, step.state.party.sheets.p2.xp], [25, 0]);
+  assert.deepEqual(step.state.party.xpAwards!.map((a) => a.playerId), ['p1']);
+});
+
+test('a tag pays only when its dice do not fail; a failed check is a brave failure', () => {
+  const choices = [storedChoice({ id: 'a', label: 'Climb', detail: '' }, { kind: 'check', ability: 'str', skill: 'athletics', dc: 30 }, null, 'discovery')];
+  const step = engineStep({ party: two, combat: null, dungeon: null }, voted(choices, [{ playerId: 'p1', choiceId: 'a', roll: 2 }]), resolution(['a'], [['p1', 'a', 2]]));
+  assert.equal(step.resolution.rules!.success, false);
+  assert.deepEqual(step.state.party.results!.filter((l) => l.startsWith('+')), ['+5 XP: taking part (Bryn).', '+5 XP: a brave failure (Bryn).']);
+});
+
+test('a story choice tagged by the DM pays its tag; a fight tagged a milestone pays nothing of it; a stray tag is dropped', () => {
+  const story = [storedChoice({ id: 'a', label: 'Win them over', detail: '' }, null, null, 'social')];
+  const talk = engineStep({ party: two, combat: null, dungeon: null }, voted(story, [{ playerId: 'p1', choiceId: 'a', roll: 9 }, { playerId: 'p2', choiceId: 'a', roll: 3 }]), resolution(['a'], [['p1', 'a', 9], ['p2', 'a', 3]]));
+  assert.deepEqual(talk.state.party.results, ['+5 XP: taking part (Bryn, Cleo).', '+25 XP: a clever parley (Bryn, Cleo).']);
+  const brawl = [storedChoice({ id: 'a', label: 'Fight', detail: '' }, { kind: 'fight', monsters: ['goblin-warrior'] }, null, 'milestone')];
+  const fought = engineStep({ party: two, combat: null, dungeon: null }, voted(brawl, [{ playerId: 'p1', choiceId: 'a', roll: 9 }]), resolution(['a'], [['p1', 'a', 9]]));
+  assert.deepEqual(fought.state.party.results!.filter((l) => l.startsWith('+')), ['+5 XP: taking part (Bryn).']);
+  assert.equal(storedChoice({ id: 'a', label: '', detail: '' }, null, null, 'loot').reward, undefined);
+  assert.equal('reward' in choiceView(story[0]), false, 'the tag is the engine’s, not shown to the players');
+});
+
+test('a hero whose die the clock threw earns half; a round of a fight earns nothing more than the fight’s own XP', () => {
+  const story = [storedChoice({ id: 'a', label: 'Go on', detail: '' }, null)];
+  const idle = engineStep({ party: two, combat: null, dungeon: null }, voted(story, [{ playerId: 'p1', choiceId: 'a', roll: 9 }, { playerId: 'p2', choiceId: 'a', roll: 3, autoRolled: true }]), resolution(['a'], [['p1', 'a', 9], ['p2', 'a', 3]]));
+  assert.deepEqual(idle.state.party.results, ['+5 XP: taking part (Bryn).', '+2 XP: taking part, halved: their die was left to the clock (Cleo).']);
+  const { party: p, combat } = startFight(two, ['goblin-warrior']);
+  const round = engineStep({ party: p, combat, dungeon: null }, voted([], [{ playerId: 'p1', choiceId: 'c', roll: 10 }]), resolution(['c'], [['p1', 'c', 10]]));
+  assert.ok(!round.state.party.results!.some((l) => l.startsWith('+')), round.state.party.results!.join(' | '));
+  assert.equal(round.state.party.earned!.p1, 0, 'but Bryn took part');
+});
+
+test('new ground in a dungeon: the party enters a room it has not seen', () => {
+  const rules = newRules([player('p1', 'Bryn', fighter)], 'fixed', 7, 6);
+  const atDoor: RulesState = { ...rules, party: (({ trek: _, ...rest }) => rest)(rules.party) };
+  const exit = atDoor.dungeon!.map.nodes[atDoor.dungeon!.at].exits[0].id;
+  const choices = [storedChoice({ id: 'a', label: 'Go on', detail: '' }, { kind: 'move', exit }, atDoor.dungeon)];
+  const step = engineStep(atDoor, voted(choices, [{ playerId: 'p1', choiceId: 'a', roll: 12 }]), resolution(['a'], [['p1', 'a', 12]]));
+  assert.ok(step.state.party.results!.includes('+5 XP: new ground (Bryn).'), step.state.party.results!.join(' | '));
+});
+
+test('at the quest’s end each living hero who took part gets the adventure’s end, and it can carry them to the next level', () => {
+  const ready: PartyState = { ...two, sheets: { p1: { ...fighter, xp: 260 }, p2: { ...fighter, name: 'Cleo', xp: 260 } } };
+  const story = engineStep({ party: ready, combat: null, dungeon: null }, voted([{ id: 'a', label: '', detail: '' }], [{ playerId: 'p1', choiceId: 'a', roll: 9 }]), resolution(['a'], [['p1', 'a', 9]]));
+  const ended = endQuest(story);
+  assert.deepEqual([ended.state.party.sheets.p1.level, ended.state.party.sheets.p1.xp, ended.state.party.sheets.p2.level, ended.state.party.sheets.p2.xp], [2, 315, 1, 260]);
+  const lines = ended.state.party.results!;
+  assert.deepEqual(lines.slice(0, 2), ['+5 XP: taking part (Bryn).', '+50 XP: the adventure’s end (Bryn).']);
+  assert.match(lines[2], /^Bryn reaches level 2 \(\+\d+ max HP\)\.$/);
+  assert.deepEqual(ended.resolution.rules!.lines, lines);
 });

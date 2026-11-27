@@ -133,6 +133,12 @@ export interface DMChoice {
    * where it enters; a missing or bad one makes the choice pure story.
    */
   rules?: RulesHook | Record<string, unknown> | null;
+  /**
+   * What taking the choice would be, for XP (rules-engine games, play/xp.ts): "discovery", "social", "puzzle"
+   * or "milestone"; absent, null or "none" for most choices. The engine sets the amount and pays it only
+   * when the party takes the choice and its dice do not fail.
+   */
+  reward?: string | null;
 }
 
 export interface OpeningScene extends SceneText {

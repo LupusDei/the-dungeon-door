@@ -32,7 +32,9 @@ export interface Ballot { playerId: string; choiceId: ChoiceId; roll: number; mo
 /** A written check, already accepted by the engine. It is this hero's action and not a vote for a choice. */
 export interface FreeformBallot { playerId: string; roll: number; text: string; ruling: CheckRuling }
 export type FightNews = 'started' | FightEnd | null;
-export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews }
+/** A hero's d20 outside a fight this turn, and whether it came good (play/xp.ts). */
+export interface HeroRoll { playerId: string; success: boolean }
+export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews; rolled: HeroRoll[] }
 
 /** The most-voted choice; a tie goes to the choice whose voters rolled highest, then to the first. */
 export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballot[]): ChoiceId | null {
@@ -40,8 +42,8 @@ export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballo
   return leaders.reduce<ChoiceId | null>((top, id) => (top === null || best(id) > best(top) ? id : top), null);
 }
 
-const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null): RulesTurn =>
-  ({ ...s, lines, success, fight });
+const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null, rolled: HeroRoll[] = []): RulesTurn =>
+  ({ ...s, lines, success, fight, rolled });
 
 /** Whoever the harm left at 0 HP is dying, and is settled; whoever it killed may be Revivified on the spot. */
 function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): { party: PartyState; lines: string[] } {
@@ -62,7 +64,8 @@ function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before:
   const rolled = groupRoll(heroes, hook, votesOf(ballots), rng);
   const sheets = { ...s.party.sheets, ...Object.fromEntries(rolled.sheets.map((h) => [h.playerId, h.sheet])) };
   const settled = harmed(s.party, { party: { ...s.party, rng: rng.state(), sheets }, lines: rolled.lines });
-  return done({ ...s, party: settled.party }, [...before, ...settled.lines], rolled.success);
+  const rolls = rolled.rolls.filter((r) => r.natural !== null).map(({ playerId, success }) => ({ playerId, success }));
+  return done({ ...s, party: settled.party }, [...before, ...settled.lines], rolled.success, null, rolls);
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
@@ -183,14 +186,14 @@ function talk(s: RulesState, offered: readonly string[] | null | undefined, ball
   const talked = parley(s.party, monsters, waiting ? waiting.attitude : 'indifferent', votesOf(ballots));
   const after = { ...s, party: talked.party };
   if (!waiting) {
-    if (talked.attitude === 'hostile') return fight(after, monsters, talked.lines);
-    return done(after, talked.lines, talked.success);
+    if (talked.attitude === 'hostile') return { ...fight(after, monsters, talked.lines), rolled: talked.rolls };
+    return done(after, talked.lines, talked.success, null, talked.rolls);
   }
   if (waiting.source === 'wanderers') {
-    return done(withFacing(after, talked.success ? null : { monsters: [...waiting.monsters], attitude: talked.attitude }), talked.lines, talked.success);
+    return done(withFacing(after, talked.success ? null : { monsters: [...waiting.monsters], attitude: talked.attitude }), talked.lines, talked.success, null, talked.rolls);
   }
   const dungeon = talked.success ? clearRoom(s.dungeon!, s.dungeon!.at) : withAttitude(s.dungeon!, talked.attitude);
-  return done({ ...after, dungeon }, talked.lines, talked.success);
+  return done({ ...after, dungeon }, talked.lines, talked.success, null, talked.rolls);
 }
 
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
@@ -303,15 +306,18 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
 };
 
 /** A written check outside a fight: the dice are rolled and logged. There is no creature here to mark. */
-function improvise(s: RulesState, freeforms: readonly FreeformBallot[]): { state: RulesState; lines: string[] } {
-  if (!freeforms.length) return { state: s, lines: [] };
+function improvise(s: RulesState, freeforms: readonly FreeformBallot[]): { state: RulesState; lines: string[]; rolled: HeroRoll[] } {
+  if (!freeforms.length) return { state: s, lines: [], rolled: [] };
   const rng = seededRng(s.party.rng);
+  const rolled: HeroRoll[] = [];
   const lines = freeforms.map((f) => {
     const sheet = s.party.sheets[f.playerId];
     if (!sheet || sheet.dead || sheet.hp <= 0) return `${sheet?.name ?? 'A hero'} is down and does not act.`;
-    return adjudicateCheck(rng, sheet, f.text, f.ruling, f.roll, null).text;
+    const done = adjudicateCheck(rng, sheet, f.text, f.ruling, f.roll, null);
+    rolled.push({ playerId: f.playerId, success: done.success });
+    return done.text;
   });
-  return { state: { ...s, party: { ...s.party, rng: rng.state() } }, lines };
+  return { state: { ...s, party: { ...s.party, rng: rng.state() } }, lines, rolled };
 }
 
 const STRETCH_SECONDS = 2 * 3600;
@@ -353,7 +359,7 @@ function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Bal
   const lit = lightUp(s.party, ambientLight(s)); // a light is lit before anything is tried in the dark
   const ready = improvise({ ...s, party: lit.party }, freeforms);
   const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(ready.state, hook, ballots) : done(ready.state);
-  const played = { ...hooked, lines: [...lit.lines, ...ready.lines, ...hooked.lines] };
+  const played = { ...hooked, lines: [...lit.lines, ...ready.lines, ...hooked.lines], rolled: [...ready.rolled, ...hooked.rolled] };
   if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' || played.dungeon?.facing ? 0 : secondsFor(hook), true);
   return wander(elapse(played, secondsFor(hook)), secondsFor(hook));
 }

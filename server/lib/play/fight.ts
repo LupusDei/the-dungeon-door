@@ -409,7 +409,8 @@ function award(party: PartyState, combat: CombatState, xp: number, headline: str
   const alive = Object.keys(party.sheets).filter((id) => Object.hasOwn(combat.combatants, id) && living(combat.combatants[id]));
   const share = splitXp(xp, alive.length); // the hero who struck the last blow is alive
   const sheets = { ...party.sheets, ...Object.fromEntries(alive.map((id) => [id, awardXp(party.sheets[id], share)])) };
-  return { party: { ...party, sheets }, lines: [xp === 0 ? headline : `${headline} ${xp} XP, ${share} each.`] };
+  const earned = { ...party.earned, ...Object.fromEntries(alive.map((id) => [id, (party.earned?.[id] ?? 0) + share])) };
+  return { party: { ...party, sheets, earned }, lines: [xp === 0 ? headline : `${headline} ${xp} XP, ${share} each.`] };
 }
 
 function endOf(combat: CombatState, broke: Break | null): FightEnd | null {

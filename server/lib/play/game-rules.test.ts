@@ -103,12 +103,18 @@ test('a new game carries the rules: the heroes’ numbers, choices with their di
   d20(15, 2);
   await voteAll(code, players, 2, 'a');
   state = await view(code, host);
-  assert.equal(state.rules!.results.length, 2);
-  assert.match(state.rules!.results[0], /^Hero 1: Athletics 15 \+ \d+ = \d+ vs DC 10, success$/);
-  assert.match(state.rules!.results[1], /^Hero 2: Athletics 2 \+ \d+ = \d+ vs DC 10, (success|failure)$/);
+  const dice = state.rules!.results.filter((l) => !l.startsWith('+'));
+  assert.equal(dice.length, 2);
+  assert.match(dice[0], /^Hero 1: Athletics 15 \+ \d+ = \d+ vs DC 10, success$/);
+  assert.match(dice[1], /^Hero 2: Athletics 2 \+ \d+ = \d+ vs DC 10, (success|failure)$/);
+  assert.ok(state.rules!.results.includes('+5 XP: taking part (Hero 1, Hero 2).'), 'then the XP the scene earned');
+  assert.ok(state.rules!.results.some((l) => /^\+10 XP: a success \(Hero 1(, Hero 2)?\)\.$/.test(l)), state.rules!.results.join(' | '));
   const system = state.messages.filter((m) => m.kind === 'system').map((m) => m.text);
   for (const line of state.rules!.results) assert.ok(system.includes(line), line);
   assert.deepEqual(state.scene!.choices.map((c) => c.rules), ['Athletics check, DC 10', 'Perception check, DC 10', 'Persuasion check, DC 15'], 'the next scene’s hooks too');
+  const stored = (await getStore().getGame(code))!.scenes.at(-1)!.choices;
+  assert.deepEqual(stored.map((c) => c.reward), [undefined, 'discovery', 'social'], 'the DM’s XP tags are kept with the choices');
+  assert.ok(state.scene!.choices.every((c) => !('reward' in c)), 'and not shown to the players');
 });
 
 test('a tie goes to the choice whose voter rolled higher, whatever the DM says', async () => {
@@ -147,7 +153,8 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   assert.match(state.scene!.choices.map((c) => c.label).join(' | '), /^Attack with .+ \| (Attack with|Cast) .+ \| Dodge$/, 'written for the caller’s hero');
   assert.equal(state.rules!.combat!.round, 1);
   assert.equal(state.sceneCount, 6, 'after the road, scene 3 is a round, counted as it is made; the last story scene and the epilogue are still to come');
-  assert.match(state.messages.filter((m) => m.kind === 'system').at(-1)!.text, /^A fight begins: Rat\. Initiative: /);
+  assert.ok(state.messages.some((m) => m.kind === 'system' && /^A fight begins: Rat\. Initiative: /.test(m.text)));
+  const before = state.rules!.party[0].xp;
 
   let index = 3;
   while (state.scene!.combat) {
@@ -161,14 +168,14 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   assert.ok(state.rules!.results.some((l) => /^Victory! 10 XP, 5 each\.$/.test(l)));
   assert.equal(state.sceneCount, index + 2, 'each round was a scene');
   assert.equal(state.status, 'voting', 'the story goes on after the fight');
-  assert.equal(state.rules!.party[0].xp, 5);
+  assert.equal(state.rules!.party[0].xp, before + 5, 'the fight’s XP; its rounds earn no more');
 
   await voteAll(code, players, index, 'b');
   state = await view(code, host);
   assert.equal(state.status, 'ended');
   const { body } = await call<{ characters: Character[] }>(charactersApi.GET, '/api/characters', { player: host });
   const hero = body.characters.find((c) => c.id === characters[0].id)!;
-  assert.equal(hero.sheet.xp, 5, 'the XP went home');
+  assert.equal(hero.sheet.xp, state.rules!.party[0].xp, 'the XP went home');
   assert.equal(hero.sheet.hp, hero.sheet.maxHp, 'rested');
 });
 

@@ -221,6 +221,7 @@ export class MemoryStore implements Store {
       delete vote.move;
       delete vote.die;
       delete vote.revealed;
+      delete vote.autoRolled;
       Object.assign(vote, { choiceId, ...action, ...stepped, ...aside, ...hidden });
     } else scene.votes.push((vote = { playerId, choiceId, roll, ...action, ...stepped, ...aside, ...hidden }));
     game.updatedAt = now();
@@ -241,6 +242,7 @@ export class MemoryStore implements Store {
       delete vote.move;
       delete vote.die;
       delete vote.revealed;
+      delete vote.autoRolled;
       vote.freeform = structuredClone(freeform);
       Object.assign(vote, hidden);
     } else scene.votes.push((vote = { playerId, choiceId: 'a', roll, freeform: structuredClone(freeform), ...hidden }));
@@ -248,12 +250,13 @@ export class MemoryStore implements Store {
     return structuredClone(vote);
   }
 
-  async revealRoll(code: string, index: number, playerId: string): Promise<boolean> {
+  async revealRoll(code: string, index: number, playerId: string, auto = false): Promise<boolean> {
     await tick();
     const scene = this.games.get(code)?.game.scenes.find((s) => s.index === index);
     const vote = scene?.votes.find((v) => v.playerId === playerId);
     if (!vote?.die || vote.revealed !== false) return false;
     vote.revealed = true;
+    if (auto) vote.autoRolled = true;
     return true;
   }
 
