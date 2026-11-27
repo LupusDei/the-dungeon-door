@@ -1,6 +1,16 @@
 import Foundation
 import Observation
 
+/// The server's clock at the moment a game view arrived. `date(at:)` is that clock now.
+struct ServerClock: Equatable {
+    let serverNow: Date
+    let receivedAt: Date
+
+    func date(at local: Date) -> Date {
+        serverNow.addingTimeInterval(local.timeIntervalSince(receivedAt))
+    }
+}
+
 /// The moment the caller's hero gains a level, for the scene to make something of.
 struct LevelUp: Identifiable, Equatable {
     let heroName: String
@@ -43,6 +53,8 @@ final class GameSession {
     var levelUp: LevelUp?
     /// Scenes seen as rounds of a fight, by index. The chronicle doesn't say which entries were.
     private(set) var combatScenes: Set<Int> = []
+    /// The server's clock, anchored when a view arrived, so a countdown follows that clock between polls.
+    private(set) var serverClock: ServerClock?
 
     private var pollTask: Task<Void, Never>?
 
@@ -199,6 +211,9 @@ final class GameSession {
     private func absorb(_ fresh: GameState, countUnread: Bool = true) {
         noteLevel(before: state, after: fresh)
         noteCombat(fresh)
+        if let turn = fresh.turn, let serverNow = ServerTime.date(turn.now) {
+            serverClock = ServerClock(serverNow: serverNow, receivedAt: Date())
+        }
         state = fresh
         append(fresh.messages, countUnread: countUnread)
         merge(fresh.messageUpdates)

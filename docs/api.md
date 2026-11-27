@@ -226,10 +226,15 @@ GameState {
   code: string
   hostId: string
   status: "lobby" | "preparing" | "voting" | "resolving" | "ended"
+                                     // "resolving": the choices are in (or the host advanced) and the
+                                     // dungeon master is writing the next turn. The app shows a loading
+                                     // state until status returns to "voting" or "ended".
   dungeonMaster: string              // catalog dungeonMasters id
   title: string | null               // DM-named adventure title, set when the game starts
   sceneCount: number                 // scenes planned (default 4, including the finale)
   players: [{ playerId, character: Character, isHost: boolean, joinedAt }]
+                                     // the whole party, including heroes who have not chosen yet. Who has
+                                     // acted is `scene.votes` and `scene.freeforms`, not a shorter `players`.
                                      // in a rules game `character.sheet` and `.attacks` are the hero as it
                                      // stands in this game: live HP, level, slots, gear
   scene: Scene | null                // the current scene (null in lobby)
@@ -239,6 +244,16 @@ GameState {
                                      // empty when `since` is omitted, because those lines are in `messages`
   typing: [{ playerId, name }]       // heroes whose players are composing a line, other than the caller
   rules: RulesView | null            // the rules engine's numbers; null for games started before it
+  turn: null | {                     // the choice window, while status is "voting" and the scene is not
+                                     // the finale. Null otherwise (lobby, preparing, resolving, ended).
+                                     // Opens when the scene is stored, which is when voting on it begins.
+                                     // Display only: a vote after `deadline` is still taken, and the scene
+                                     // does not resolve when the window ends. The host can still advance.
+    deadline: string                 // ISO-8601, when the window ends
+    seconds: number                  // the window, 90. A bar drains across it from the scene's start.
+    now: string                      // the server's clock when this view was built, ISO-8601, so the app
+                                     // can count down against the server between polls
+  }
   updatedAt: string
 }
 
@@ -532,6 +547,7 @@ Reaction {
   stepping to a square that puts the hero there. An illegal move is a 400. When every player has voted the scene resolves:
   status `resolving`, the DM weighs all votes and rolls, writes `outcome` on the old scene and the
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
+  `turn` (above) is the choice window the app counts down. It does not gate this endpoint.
   Voting again replaces a written action (below) and keeps the same d20.
 - `POST /api/games/{code}/action` body `{ sceneIndex, text }` → `GameState` with `action`.
   Voting status only. `text` is the player's own action, 1–280 characters ("I kick the brazier onto

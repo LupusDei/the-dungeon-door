@@ -261,6 +261,16 @@ export interface ChronicleEntry {
   roleplay: RoleplayLine[];
 }
 
+/** The choice window while the table is voting. Display only: see play/turn-clock.ts. */
+export interface TurnWindow {
+  /** When the window ends, ISO-8601. */
+  deadline: string;
+  /** The window's length, in seconds. */
+  seconds: number;
+  /** The server's clock when this view was built, ISO-8601. */
+  now: string;
+}
+
 export interface GameState {
   code: string;
   hostId: string;
@@ -279,5 +289,10 @@ export interface GameState {
   typing: TypingNotice[];
   /** The rules engine's numbers; null for games started before it. */
   rules: RulesView | null;
+  /**
+   * Set while status is `voting` on a scene that is not the finale. Null in the lobby, while the
+   * opening is being written, while the next turn is being written (`resolving`), and after the end.
+   */
+  turn: TurnWindow | null;
   updatedAt: string;
 }

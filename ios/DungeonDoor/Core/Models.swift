@@ -1670,11 +1670,59 @@ struct GameState: Codable, Hashable {
     var typing: [TypingNotice] = []
     /// The rules engine's numbers; nil for a game from before it, and on a server without one.
     let rules: RulesView?
+    /// The choice window while the table is voting. Nil on a server from before it, and whenever
+    /// the table is not choosing (lobby, preparing, resolving, ended).
+    let turn: TurnWindow? = nil
     let updatedAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case code, hostId, status, dungeonMaster, title, sceneCount, players, scene
+        case chronicle, messages, messageUpdates, typing, rules, turn, updatedAt
+    }
 
     func player(_ id: String?) -> GamePlayer? { players.first { $0.playerId == id } }
     /// How a hero stands in the rules engine's party.
     func standing(_ id: String?) -> HeroStanding? { rules?.party.first { $0.playerId == id } }
+}
+
+/// How long the party has to choose, and the server's clock when the view was built.
+struct TurnWindow: Codable, Hashable {
+    /// When the window ends, ISO-8601. Display only.
+    let deadline: String
+    /// The window's length, in seconds.
+    let seconds: Int
+    /// The server's clock when this view was built, ISO-8601.
+    let now: String
+
+    private enum CodingKeys: String, CodingKey { case deadline, seconds, now }
+}
+
+extension TurnWindow {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deadline = try c.value(.deadline, or: "")
+        seconds = try c.whole(.seconds)
+        now = try c.value(.now, or: "")
+    }
+}
+
+/// ISO-8601 instants from the server. Fractional seconds are optional.
+enum ServerTime {
+    private static let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let plain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static func date(_ iso: String) -> Date? {
+        fractional.date(from: iso) ?? plain.date(from: iso)
+    }
 }
 
 extension GameState {
@@ -1693,6 +1741,8 @@ extension GameState {
         messageUpdates = try c.value(.messageUpdates, or: [])
         typing = try c.value(.typing, or: [])
         rules = try c.decodeIfPresent(RulesView.self, forKey: .rules)
+        // A missing or unreadable window leaves the scene playable. The bars simply don't count.
+        turn = (try? c.decodeIfPresent(TurnWindow.self, forKey: .turn)) ?? nil
         updatedAt = try c.value(.updatedAt, or: "")
     }
 }

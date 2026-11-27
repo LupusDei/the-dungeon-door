@@ -9,6 +9,7 @@ import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
 import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
+import { turnWindow } from './play/turn-clock.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { checkVote, legalActions } from './play/legal.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
@@ -170,6 +171,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     messageUpdates,
     typing,
     rules: rulesOf(game),
+    turn: turnWindow(game.status, current),
     updatedAt: game.updatedAt,
   };
 }

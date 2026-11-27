@@ -719,37 +719,50 @@ private struct ChoiceCard: View {
     }
 }
 
-/// While the dungeon master weighs the votes (or tells the round of a fight): everyone's d20, laid
-/// out on the table.
+/// While the dungeon master writes the next turn: a turning d20, and the rolls already on the table.
 struct ResolvingOverlay: View {
     let scene: GameScene
     let players: [GamePlayer]
+    /// The play shell covers the chrome. The Story page keeps the overlay inside its own pane.
+    var coversChrome = true
 
     var body: some View {
         ZStack {
-            Palette.ink.opacity(0.82).ignoresSafeArea()
-            VStack(spacing: 22) {
-                Text(scene.combat ? "Steel rings. The round plays out…" : "The dungeon master weighs your fates…")
+            Palette.ink.opacity(0.82)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(edges: coversChrome ? .all : [])
+            VStack(spacing: 18) {
+                TumblingD20(size: 84)
+                Text("The tale unfolds…")
                     .font(.display(22, weight: .bold))
                     .multilineTextAlignment(.center)
-                if scene.votes.count <= 4 {
-                    HStack(alignment: .top, spacing: 18) {
-                        ForEach(scene.votes, id: \.playerId) { fate($0) }
-                    }
-                } else {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 16) {
-                        ForEach(scene.votes, id: \.playerId) { fate($0) }
+                Text(scene.combat ? "The round plays out." : "The dungeon master is writing what happens next.")
+                    .font(.proseSmall.italic())
+                    .foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center)
+                if !scene.votes.isEmpty {
+                    if scene.votes.count <= 4 {
+                        HStack(alignment: .top, spacing: 18) {
+                            ForEach(scene.votes, id: \.playerId) { fate($0) }
+                        }
+                    } else {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 16) {
+                            ForEach(scene.votes, id: \.playerId) { fate($0) }
+                        }
                     }
                 }
-                ProgressView().tint(Palette.gold)
             }
             .padding(28)
+            .frame(maxWidth: 420)
             .background(Palette.ink, in: .rect(cornerRadius: 18))
             .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(Palette.gold.opacity(0.5)) }
             .shadow(color: .black.opacity(0.6), radius: 24)
             .padding(24)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .transition(.opacity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("The tale unfolds")
     }
 
     private func fate(_ vote: Vote) -> some View {

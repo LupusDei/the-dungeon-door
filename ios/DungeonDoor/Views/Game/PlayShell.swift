@@ -79,6 +79,12 @@ struct PlayShell: View {
             tabBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .overlay {
+                    // The Story tab draws this on its own page, and leaves the tab bar free.
+                    if tab != .story, state.status == .resolving, let scene = state.scene {
+                        ResolvingOverlay(scene: scene, players: state.players, coversChrome: false)
+                    }
+                }
             PlayTabBar(tab: $tab, inCombat: inCombat, unread: session.unreadChat)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -94,11 +100,6 @@ struct PlayShell: View {
             }
             .presentationDetents([.medium])
             .presentationBackground(Palette.ink)
-        }
-        .overlay {
-            if state.status == .resolving, let scene = state.scene {
-                ResolvingOverlay(scene: scene, players: state.players)
-            }
         }
         .overlay {
             if let notice = session.levelUp {

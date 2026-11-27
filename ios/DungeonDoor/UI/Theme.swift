@@ -220,6 +220,29 @@ struct D20Badge: View {
     }
 }
 
+/// A d20 turning while the dungeon master writes the next turn. With Reduce Motion it holds still.
+struct TumblingD20: View {
+    var size: CGFloat = 72
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            let lap = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8
+            ZStack {
+                Hexagon().fill(Palette.raised)
+                Hexagon().stroke(Palette.gold, lineWidth: max(1.5, size * 0.028))
+                Text("20")
+                    .font(.system(size: size * 0.32, weight: .bold, design: .serif))
+                    .foregroundStyle(Palette.gold)
+            }
+            .rotationEffect(.degrees(reduceMotion ? 0 : lap * 360))
+            .shadow(color: Palette.gold.opacity(reduceMotion ? 0.25 : 0.45), radius: 10)
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("A die is rolling")
+    }
+}
+
 struct Hexagon: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
