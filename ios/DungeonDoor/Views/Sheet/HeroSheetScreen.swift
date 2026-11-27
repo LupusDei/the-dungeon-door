@@ -9,6 +9,8 @@ struct HeroIdentityHeader: View {
     var portraitSize: CGFloat = 96
     /// Off where the name is already the screen's title.
     var showsName = true
+    /// The hero's standing in a game in progress: its XP is newer than the saved sheet's.
+    var live: HeroStanding? = nil
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -49,7 +51,9 @@ struct HeroIdentityHeader: View {
                 Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
-            if let sheet = character.sheet {
+            if let live {
+                ExperienceBar(level: live.level, xp: live.xp, questXp: live.questXp)
+            } else if let sheet = character.sheet {
                 ExperienceBar(level: sheet.level, xp: sheet.xp)
             }
             if fallen {
@@ -112,6 +116,8 @@ struct HeroIdentityHeader: View {
 struct ExperienceBar: View {
     let level: Int
     let xp: Int
+    /// Earned on the adventure in progress; 0 outside one.
+    var questXp: Int = 0
 
     var body: some View {
         let floor = SRD.xpFloor(of: level)
@@ -138,14 +144,21 @@ struct ExperienceBar: View {
             HPBar(hp: next == nil ? 1 : max(0, xp - floor), maxHp: next.map { max(1, $0 - floor) } ?? 1,
                   tint: Palette.gold, height: 5)
             if let next {
-                Text(xp >= next ? "Ready for level \(level + 1)." : "\(next - xp) XP to level \(level + 1)")
+                Text(xp >= next ? "Ready for level \(level + 1) at the adventure's end." : "\(next - xp) XP to level \(level + 1)")
                     .font(.serif(.caption2))
                     .foregroundStyle(Palette.muted)
             }
+            if questXp > 0 {
+                Text("+\(questXp) XP on this adventure")
+                    .font(.serif(.caption2, weight: .semibold))
+                    .foregroundStyle(Palette.gold)
+                    .monospacedDigit()
+            }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(next.map { "Level \(level), \(xp) of \($0) experience points to level \(level + 1)" }
-                            ?? "Level \(level), the highest. \(xp) experience points")
+        .accessibilityLabel((next.map { "Level \(level), \(xp) of \($0) experience points to level \(level + 1)" }
+                             ?? "Level \(level), the highest. \(xp) experience points")
+                            + (questXp > 0 ? ". \(questXp) earned on this adventure" : ""))
     }
 }
 
@@ -161,7 +174,7 @@ struct HeroSheetScreen: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    HeroIdentityHeader(character: character, portraitSize: 64, showsName: false)
+                    HeroIdentityHeader(character: character, portraitSize: 64, showsName: false, live: live?.standing)
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
                         .padding(.bottom, 14)

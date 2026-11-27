@@ -1349,6 +1349,10 @@ struct HeroStanding: Codable, Hashable, Identifiable {
     let conditions: [CarriedCondition]
     /// The spell the hero holds by concentration, by name ("Bless"); nil for none.
     let concentratingOn: String?
+    /// XP earned on this adventure so far, fights and all.
+    var questXp: Int = 0
+    /// The XP the next level starts at; nil at level 20 or from a server older than that.
+    var nextLevelXp: Int? = nil
 
     var id: String { playerId }
     var isUp: Bool { !down && !dead }
@@ -1394,6 +1398,8 @@ extension HeroStanding {
         resistances = try c.value(.resistances, or: [])
         conditions = try c.value(.conditions, or: [])
         concentratingOn = try c.decodeIfPresent(String.self, forKey: .concentratingOn)
+        questXp = (try? c.whole(.questXp)) ?? 0
+        nextLevelXp = (try? c.decodeIfPresent(Double.self, forKey: .nextLevelXp)).flatMap { $0 }.map { Int($0.rounded()) }
     }
 }
 
@@ -1678,6 +1684,48 @@ struct QuestLevelUp: Codable, Hashable {
     let to: Int
 }
 
+/// One hero's XP outside a fight in the last resolved scene (`rules.xpAwards[]`).
+struct XpAward: Codable, Hashable {
+    struct Reason: Codable, Hashable {
+        /// "took-part", "success", "social", "quest"...
+        let reason: String
+        /// "a clever parley".
+        let label: String
+        let xp: Int
+
+        enum CodingKeys: String, CodingKey {
+            case reason, label, xp
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            reason = try c.value(.reason, or: "")
+            label = try c.value(.label, or: "")
+            xp = try c.whole(.xp)
+        }
+    }
+
+    let playerId: String
+    let name: String
+    let xp: Int
+    /// Their die was left to the clock, so the awards were halved.
+    let idle: Bool
+    let reasons: [Reason]
+
+    enum CodingKeys: String, CodingKey {
+        case playerId, name, xp, idle, reasons
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playerId = try c.value(.playerId, or: "")
+        name = try c.value(.name, or: "")
+        xp = try c.whole(.xp)
+        idle = try c.value(.idle, or: false)
+        reasons = (try? c.decodeIfPresent([Reason].self, forKey: .reasons)) ?? []
+    }
+}
+
 /// The adventure's clock: it starts at 8 in the morning of day 1, and every choice moves it on.
 struct GameClock: Codable, Hashable {
     let seconds: Int
@@ -1734,6 +1782,8 @@ struct RulesView: Codable, Hashable {
     let light: PartyLight?
     /// Who levelled up at the quest's end; empty until then.
     var levelUps: [QuestLevelUp] = []
+    /// XP the last resolved scene paid outside a fight, hero by hero; empty when it paid none.
+    var xpAwards: [XpAward] = []
 }
 
 extension RulesView {
@@ -1746,6 +1796,7 @@ extension RulesView {
         time = try c.decodeIfPresent(GameClock.self, forKey: .time)
         light = try c.decodeIfPresent(PartyLight.self, forKey: .light)
         levelUps = (try? c.decodeIfPresent([QuestLevelUp].self, forKey: .levelUps)) ?? []
+        xpAwards = (try? c.decodeIfPresent([XpAward].self, forKey: .xpAwards)) ?? []
     }
 }
 

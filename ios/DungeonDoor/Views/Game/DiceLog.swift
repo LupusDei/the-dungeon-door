@@ -66,7 +66,10 @@ struct DiceLineStyle: Equatable {
 
         let good: Tone = byHero ? .good : .bad
         let pick: (Tone, String)
-        if has("reaches level") {
+        if text.hasPrefix("+") && has(" xp: ") {
+            // "+25 XP: a clever parley (Bryn)."
+            pick = (.good, "star")
+        } else if has("reaches level") {
             pick = (.headline, "star.fill")
         } else if text.hasPrefix("victory") || has("surrender", "break and flee", "the foes flee") {
             pick = (.headline, "flag.fill")

@@ -347,6 +347,12 @@ extension SceneView {
                         VStack(alignment: .trailing, spacing: 1) {
                             Text("Level \(hero.level)").font(.system(size: 15, weight: .semibold, design: .serif))
                             Text("\(hero.xp) XP").font(.caption).monospacedDigit().foregroundStyle(Palette.muted)
+                            if hero.questXp > 0 && !hero.dead {
+                                Text("+\(hero.questXp) this adventure")
+                                    .font(.caption2)
+                                    .monospacedDigit()
+                                    .foregroundStyle(Palette.gold)
+                            }
                         }
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .semibold))
