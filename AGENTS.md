@@ -56,6 +56,8 @@ and **slagyr-assistant**. For work that comes from any of them (the owner asking
    screen was looked at on the simulator. When `server/lib/dm/` or what the dungeon master is told
    changed, `npm run dm:check` passes too: three real text calls (about five cents) that prove the
    model accepts the schema and writes hooks the engine takes. The fake DM cannot show that.
+   Every behavior change needs a Gherkin scenario in `server/features` (`npm run features` passes) in
+   addition to its unit tests.
 3. **Commit and push** `main` (`git push origin main`, as its own command).
 4. **Migrate and deploy** happen on the push, in GitHub Actions (`.github/workflows/deploy-server.yml`):
    any push to `main` that touches `server/` applies `db/schema.sql` to production, then runs
