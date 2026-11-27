@@ -113,8 +113,21 @@ struct PlayStoryPage: View {
             Text(scene?.title ?? state.title ?? "The door")
                 .font(.display(26, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
+            if let quest = state.rules?.quest { questLine(quest) }
             ScenesToGo(session: session)
         }
+    }
+
+    /// The quest's goal, and where it lies, or that it is done.
+    private func questLine(_ quest: QuestGoal) -> some View {
+        let place = quest.where.map { " — \($0)" } ?? ""
+        return Label(quest.reached ? "Quest done: \(quest.goal)" : "Quest: \(quest.goal)\(place)",
+                     systemImage: quest.reached ? "checkmark.seal" : "scope")
+            .font(.serif(.footnote, weight: .semibold))
+            .foregroundStyle(quest.reached ? Palette.gold : Palette.parchment)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 2)
     }
 
     private var eyebrow: String {

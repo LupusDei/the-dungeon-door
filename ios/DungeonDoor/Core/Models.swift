@@ -1784,6 +1784,19 @@ struct RulesView: Codable, Hashable {
     var levelUps: [QuestLevelUp] = []
     /// XP the last resolved scene paid outside a fight, hero by hero; empty when it paid none.
     var xpAwards: [XpAward] = []
+    /// The adventure's goal. Nil with no set length, and from a server before quests.
+    var quest: QuestGoal? = nil
+}
+
+/// The quest's goal (`rules.quest`): reaching it ends the adventure.
+struct QuestGoal: Codable, Hashable {
+    /// "slay", "recover" or "rescue".
+    let kind: String
+    /// "Slay or drive off the Ogre".
+    let goal: String
+    let reached: Bool
+    /// "in the well room", "deeper in the dungeon", or nil in a tale told.
+    let `where`: String?
 }
 
 extension RulesView {
@@ -1797,6 +1810,7 @@ extension RulesView {
         light = try c.decodeIfPresent(PartyLight.self, forKey: .light)
         levelUps = (try? c.decodeIfPresent([QuestLevelUp].self, forKey: .levelUps)) ?? []
         xpAwards = (try? c.decodeIfPresent([XpAward].self, forKey: .xpAwards)) ?? []
+        quest = try? c.decodeIfPresent(QuestGoal.self, forKey: .quest)
     }
 }
 
@@ -2062,6 +2076,8 @@ struct SceneProgress: Codable, Hashable {
     let scene: Int
     /// Nil with no set length.
     let of: Int?
+    /// True while the quest is open: `of` is only the plan, and the scene may pass it.
+    var about: Bool? = nil
 }
 
 extension GameState {
@@ -2069,7 +2085,7 @@ extension GameState {
     /// A server from before it counts every scene.
     func sceneCounter(_ scene: GameScene) -> String {
         if let p = progress, scene.index == self.scene?.index {
-            let of = p.of.map { " of \($0)" } ?? ""
+            let of = p.of.map { " of \(p.about == true ? "about " : "")\($0)" } ?? ""
             return p.part == "road" ? "On the road \(p.scene)\(of)" : "Scene \(p.scene)\(of)"
         }
         return sceneCount > 0 ? "Scene \(scene.index + 1) of \(sceneCount)" : "Scene \(scene.index + 1)"

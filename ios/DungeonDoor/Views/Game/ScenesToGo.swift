@@ -43,12 +43,17 @@ struct ScenesToGo: View {
     /// The scene being played is the last one with choices.
     private var lastScene: Bool { state.scenesLeft == 0 && state.scene?.isFinale == false }
 
-    /// Only the host, only while the table is choosing, and only where there is no ending in sight.
-    private var canCallEnding: Bool {
-        state.openEnded && session.isHost && state.status == .voting && state.scene?.isFinale == false
+    /// Past the scenes planned with the quest's goal not yet reached: the adventure goes on toward it.
+    private var pastThePlan: Bool {
+        !state.openEnded && state.scenesLeft == nil && state.rules?.quest?.reached == false
     }
 
-    private var symbol: String { state.openEnded ? "infinity" : lastScene ? "flag.checkered" : "hourglass" }
+    /// Only the host, only while the table is choosing, and only where there is no ending in sight.
+    private var canCallEnding: Bool {
+        (state.openEnded || pastThePlan) && session.isHost && state.status == .voting && state.scene?.isFinale == false
+    }
+
+    private var symbol: String { state.openEnded ? "infinity" : lastScene ? "flag.checkered" : pastThePlan ? "scope" : "hourglass" }
 
     private var line: String? {
         guard let scene = state.scene, !scene.isFinale, state.status != .ended else { return nil }
@@ -56,6 +61,7 @@ struct ScenesToGo: View {
             return session.isHost ? "No set length. It goes on until you call the ending."
                                   : "No set length. It goes on until the host calls the ending."
         }
+        if pastThePlan { return "Past the plan. It ends when the goal is reached" }
         guard let left = state.scenesLeft else { return nil }
         switch left {
         case 0: return scene.combat ? "The ending follows this fight" : "The last scene. The ending follows"
