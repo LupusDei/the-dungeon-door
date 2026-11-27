@@ -6,7 +6,6 @@ struct PlayStoryPage: View {
     @Bindable var session: GameSession
     var narrator: Narrator
     var focusOffers: Int
-    var openHero: (String) -> Void
     var onOffer: (TableOffer) -> Void
 
     @State private var freeform = ""
@@ -23,7 +22,7 @@ struct PlayStoryPage: View {
                 VStack(alignment: .leading, spacing: 16) {
                     header
                     if let party = state.rules?.party, !party.isEmpty {
-                        PartyStrip(party: party, players: state.players, me: session.playerId, open: openHero)
+                        PartyStrip(party: party, players: state.players, me: session.playerId)
                     }
                     if state.rules?.time != nil || state.rules?.light != nil {
                         TimeAndLight(clock: state.rules?.time, light: state.rules?.light,
@@ -199,16 +198,7 @@ struct PlayStoryPage: View {
         .padding(.vertical, 6)
         .background(Palette.surface, in: Capsule(style: .circular))
         .overlay { Capsule(style: .circular).strokeBorder(tint.opacity(out ? 0.25 : 0.7), lineWidth: 1) }
-
-        return Group {
-            if combatant.isFoe {
-                row
-            } else {
-                Button { openHero(combatant.id) } label: { row }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Opens their character sheet")
-            }
-        }
+        return row
     }
 
     private func statusWord(_ combatant: Combatant) -> String {

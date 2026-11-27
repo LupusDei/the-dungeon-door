@@ -4,7 +4,6 @@ import SwiftUI
 struct PlayMapPage: View {
     @Bindable var session: GameSession
     var initialTarget: String?
-    var openHero: (String) -> Void
 
     @State private var targetId: String?
     @State private var didApplyTarget = false
@@ -404,11 +403,6 @@ struct PlayMapPage: View {
                     }
                 }
                 .buttonStyle(.plain)
-                if !target.isFoe {
-                    Button("Open sheet") { openHero(target.id) }
-                        .font(.serif(.caption, weight: .semibold))
-                        .foregroundStyle(Palette.gold)
-                }
             }
         }
         .padding(12)

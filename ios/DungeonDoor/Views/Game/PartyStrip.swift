@@ -2,14 +2,15 @@ import SwiftUI
 
 /// How the party stands, under the scene's title: a portrait, level, hit-point bar and armour class
 /// for each hero, from the rules engine's numbers. Three heroes share the width; more than that
-/// scroll sideways. A tap opens that hero's sheet.
+/// scroll sideways. A tap opens that hero's sheet when `open` is set. The tabbed play screen
+/// leaves it unset: the Sheet tab is the sheet.
 struct PartyStrip: View {
     let party: [HeroStanding]
     let players: [GamePlayer]
     /// The caller's player id, so their own hero stands out.
     let me: String
-    /// Opens the sheet of the hero with this player id.
-    var open: (String) -> Void = { _ in }
+    /// Opens the sheet of the hero with this player id, when a caller still wants that tap.
+    var open: ((String) -> Void)? = nil
 
     var body: some View {
         if party.count <= 3 {
@@ -30,14 +31,18 @@ struct PartyStrip: View {
         }
     }
 
-    private func button(_ member: HeroStanding) -> some View {
-        Button {
-            open(member.playerId)
-        } label: {
+    @ViewBuilder private func button(_ member: HeroStanding) -> some View {
+        if let open {
+            Button {
+                open(member.playerId)
+            } label: {
+                cell(member)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens their character sheet")
+        } else {
             cell(member)
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens their character sheet")
     }
 
     private func cell(_ member: HeroStanding) -> some View {

@@ -772,7 +772,8 @@ struct ResolvingOverlay: View {
 struct LevelUpOverlay: View {
     let notice: LevelUp
     let dismiss: () -> Void
-    let showSheet: () -> Void
+    /// Opens a sheet from a screen that has no Sheet tab. The tabbed play screen omits it.
+    var showSheet: (() -> Void)? = nil
     @State private var lit = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -806,7 +807,9 @@ struct LevelUpOverlay: View {
                     .padding(14)
                     .card()
                 }
-                Button("See the sheet", action: showSheet).buttonStyle(.gilded)
+                if let showSheet {
+                    Button("See the sheet", action: showSheet).buttonStyle(.gilded)
+                }
                 Button("Onward", action: dismiss).buttonStyle(.gildedOutline)
             }
             .padding(26)

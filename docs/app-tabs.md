@@ -24,9 +24,10 @@ production screen is the one a live game uses.
 └─────────────────────────────────┘
 ```
 
-Leave, the chronicle and another hero's full sheet stay in the navigation bar. Chat and the
-dungeon map are tabs, so those toolbar buttons are not repeated while playing. The eight-button
-action bar is gone. Common actions are rows in Story's offers and on the Sheet.
+Leave and the chronicle stay in the navigation bar. The character sheet, chat and the dungeon
+map are tabs, so those toolbar buttons are not repeated while playing. The caller's sheet stays
+on the toolbar in the lobby, where there is no Sheet tab. The eight-button action bar is gone.
+Common actions are rows in Story's offers and on the Sheet.
 
 ## The strip and Act
 

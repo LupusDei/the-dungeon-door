@@ -46,7 +46,6 @@ struct PlayShell: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
     var narrator: Narrator
-    var openHero: (String) -> Void
     var hidesNavigation = false
 
     @State private var tab: PlayTab
@@ -55,12 +54,11 @@ struct PlayShell: View {
     @State private var pending: LegalAction?
     @State private var mapTarget: String?
 
-    init(session: GameSession, narrator: Narrator, openHero: @escaping (String) -> Void,
+    init(session: GameSession, narrator: Narrator,
          initialTab: PlayTab = .story, initialPane: PlaySheetPane = .abilities,
          mapTarget: String? = nil, scrollOffers: Bool = false, hidesNavigation: Bool = false) {
         self.session = session
         self.narrator = narrator
-        self.openHero = openHero
         self.hidesNavigation = hidesNavigation
         _tab = State(initialValue: initialTab)
         _pane = State(initialValue: initialPane)
@@ -104,9 +102,6 @@ struct PlayShell: View {
             if let notice = session.levelUp {
                 LevelUpOverlay(notice: notice) {
                     withAnimation(.easeOut(duration: 0.25)) { session.levelUp = nil }
-                } showSheet: {
-                    session.levelUp = nil
-                    openHero(session.playerId)
                 }
             }
         }
@@ -123,11 +118,11 @@ struct PlayShell: View {
         switch tab {
         case .story:
             PlayStoryPage(session: session, narrator: narrator, focusOffers: focusOffers,
-                          openHero: openHero, onOffer: considerOffer)
+                          onOffer: considerOffer)
         case .sheet:
             PlaySheetPage(session: session, pane: $pane, onAction: consider)
         case .map:
-            PlayMapPage(session: session, initialTarget: mapTarget, openHero: openHero)
+            PlayMapPage(session: session, initialTarget: mapTarget)
         case .chat:
             PlayChatPage(session: session)
         }
