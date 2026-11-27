@@ -7,5 +7,6 @@
                    gherclj.band-steps
                    gherclj.party-chat-steps
                    gherclj.app-version-steps
-                   gherclj.choice-window-steps]
+                   gherclj.choice-window-steps
+                   gherclj.noncombat-xp-steps]
  :framework :typescript/node-test}
