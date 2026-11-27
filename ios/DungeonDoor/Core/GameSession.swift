@@ -211,6 +211,11 @@ final class GameSession {
         await run { self.absorb(try await self.api.advance(self.code)) }
     }
 
+    /// Host only: this scene is the last, then the ending.
+    func callEnding() async {
+        await run { self.absorb(try await self.api.callEnding(self.code)) }
+    }
+
     private func run(_ work: @escaping () async throws -> Void) async {
         busy = true
         defer { busy = false }

@@ -332,7 +332,13 @@ GameState {
                                      // state until status returns to "voting" or "ended".
   dungeonMaster: string              // catalog dungeonMasters id
   title: string | null               // DM-named adventure title, set when the game starts
-  sceneCount: number                 // scenes planned (default 4, including the finale)
+  sceneCount: number                 // scenes planned (default 4, including the finale); 0 when the adventure
+                                     // has no set length. A fight's rounds add to it as they are made
+  openEnded: boolean                 // no set length: it goes on until the host calls the ending (POST …/ending)
+  scenesLeft: number | null          // scenes with choices still to come after this one, before the epilogue:
+                                     // 0 on the last such scene and on the epilogue. A fight's rounds do not
+                                     // use them up. Null with no set length, and in the lobby. Absent from a
+                                     // server before it: show nothing
   players: [{ playerId, character: Character, isHost: boolean, joinedAt,
               appVersion: string | null, outdated: boolean }]
                                      // the whole party, including heroes who have not chosen yet. Who has
@@ -658,7 +664,9 @@ Reaction {
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
   Host only. Refused while any seated player is outdated (see App versions): 426 when the caller
   themselves must update, 409 `party_outdated` naming the others when the caller is current. The game
-  stays in the lobby. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
+  stays in the lobby. `sceneCount` 2–8, or `0` for no set length: the adventure then goes on until its host
+  calls the ending (`POST …/ending`) or the party falls, and the dungeon master is told to keep the story open.
+  `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
   map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
   The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
   becomes `voting` when it's ready. Every game opens with two scenes on the road from the tavern
@@ -726,6 +734,11 @@ Reaction {
     and nothing is stored.
 - `POST /api/games/{code}/advance` → `GameState`. Host only: resolve now with the votes that are in
   (for an AFK player). Needs at least one vote or written action. A combat round needs neither.
+- `POST /api/games/{code}/ending` → `GameState`. Host only, while the table is voting: the scene being played
+  becomes the last one and the epilogue follows it (after the fight, if one is on). A `system` line tells the
+  table. This is how an adventure with no set length ends, and it cuts a longer one short. On a scene that is
+  already the last it changes nothing. 403 for anyone but the host; 409 in the lobby, while a scene resolves,
+  and once the game has ended.
 - `POST /api/games/{code}/narration` with `{ sceneIndex, voice? }` → `{ sceneIndex, voice, status, voiceUrl }`.
   The scene read aloud, on demand: nothing is spoken until a player asks. `voice` is a catalog `narrators`
   id; left out, it is `defaultNarrator`. The answer names the narrator it is for.
@@ -929,6 +942,13 @@ preview in the forge; and the kind of game on the start screen. Every new key is
 decoder, so it also runs against a server from before them.
 
 Images may arrive after their text: a scene can be `voting` with `imageUrl: null`; keep polling.
+
+## Scene pictures
+
+Every living hero of the party is painted into every scene's picture, up to six (the largest party), each
+with their portrait as the painter's reference. The dungeon master's `featuredCharacters` (server side only)
+orders them, nearest the viewer first; it does not leave anyone out. The dead are not painted, unless the
+whole party has fallen. The rule is `server/lib/scene-art.ts`.
 
 ## Background work and failures
 

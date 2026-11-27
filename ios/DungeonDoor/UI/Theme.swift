@@ -221,7 +221,7 @@ struct D20Badge: View {
 
     private func badge(_ roll: Int) -> some View {
         let tint = roll == 20 ? Palette.gold : roll == 1 ? Palette.ember : Palette.parchment
-        ZStack {
+        return ZStack {
             Hexagon().fill(Palette.raised)
             Hexagon().stroke(tint, lineWidth: 1.5)
             Text("\(roll)")

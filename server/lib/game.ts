@@ -29,6 +29,8 @@ import { RuleViolation } from './rules/violation.ts';
 import { appVersionOf, isOutdated, partyOutdated } from './app-version.ts';
 import { badRequest, conflict, forbidden, gameCodeOf, HttpError, notFound, requirePlayer } from './http.ts';
 import { OUT_OF_CREDIT, outOfCredit } from './ai-errors.ts';
+import { castBrief, castOf } from './scene-art.ts';
+import { FEWEST_SCENES, hasNoSetLength, MOST_SCENES, NO_SET_LENGTH, scenesLeft } from './length.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
@@ -201,7 +203,9 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     status: game.status,
     dungeonMaster: game.dungeonMaster,
     title: game.title,
-    sceneCount: game.sceneCount,
+    sceneCount: hasNoSetLength(game.sceneCount) ? 0 : game.sceneCount,
+    openEnded: hasNoSetLength(game.sceneCount),
+    scenesLeft: game.status === 'lobby' || game.status === 'preparing' ? null : scenesLeft(game.sceneCount, game.sceneIndex),
     players: game.players.map((p) => playerView(game, p)),
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
@@ -500,16 +504,18 @@ export async function setDungeonMaster(code: string, playerId: string, dungeonMa
 
 /** POST /api/games/{code}/start — lobby → preparing; the DM writes scene 0 in the background. */
 export async function startGame(code: string, playerId: string, sceneCount: unknown, origin: string, dungeon?: unknown): Promise<GameState> {
-  const count = sceneCount === undefined || sceneCount === null ? DEFAULT_SCENE_COUNT : sceneCount;
-  if (typeof count !== 'number' || !Number.isInteger(count) || count < 2 || count > 8) {
-    throw badRequest('sceneCount must be a whole number from 2 to 8');
+  // 0 asks for no set length: the adventure goes on until its host calls the ending (lib/length.ts).
+  const open = sceneCount === 0;
+  const count = open ? MOST_SCENES : sceneCount === undefined || sceneCount === null ? DEFAULT_SCENE_COUNT : sceneCount;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < FEWEST_SCENES || count > MOST_SCENES) {
+    throw badRequest(`sceneCount must be a whole number from ${FEWEST_SCENES} to ${MOST_SCENES}, or 0 for no set length`);
   }
   const mode = dungeonMode(dungeon);
   const game = await loadGame(code);
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
-  const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for
-  const scenes = count + TREK_SCENES; // every game opens with the road from the tavern
+  const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for (the most, with no set length)
+  const scenes = open ? NO_SET_LENGTH : count + TREK_SCENES; // every game opens with the road from the tavern
   const blocking = game.players.filter((p) => isOutdated(p.appVersion ?? null));
   if (blocking.length > 0) throw partyOutdated(blocking.map((p) => p.character.name));
   if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
@@ -826,6 +832,24 @@ export async function throwDie(code: string, playerId: string, sceneIndex: unkno
   return viewGame(code, playerId);
 }
 
+/**
+ * POST /api/games/{code}/ending. Host only: the scene being played becomes the last, and the epilogue
+ * follows it (after the fight, if one is on). This is how an adventure with no set length ends, and it
+ * cuts a longer one short. Calling it again, or on a scene that is already the last, changes nothing.
+ */
+export async function callEnding(code: string, playerId: string): Promise<GameState> {
+  const game = await loadGame(code);
+  const host = requireHost(game, playerId);
+  if (game.status !== 'voting') throw conflict(`can't call the ending: the game is ${game.status}`);
+  const last = game.sceneIndex + 2; // this scene, then the epilogue
+  if (game.sceneCount > last && (await getStore().updateGame(code, { status: 'voting', sceneIndex: game.sceneIndex }, { sceneCount: last }))) {
+    await system(code, game.combat
+      ? `${host.character.name} has called the ending. When this fight is over, the epilogue follows.`
+      : `${host.character.name} has called the ending. This is the last scene; the epilogue follows it.`);
+  }
+  return viewGame(code, playerId);
+}
+
 async function resolveIfAllVoted(code: string, sceneIndex: number, origin: string): Promise<void> {
   const game = await getStore().getGame(code);
   if (!game || game.status !== 'voting' || game.sceneIndex !== sceneIndex || !game.players.length) return;
@@ -906,6 +930,7 @@ async function contextFor(game: Game, sceneIndex: number, rules: RulesState | nu
     history: game.scenes.filter((s) => s.index < sceneIndex).map((s) => pastScene(game, s)),
     sceneIndex,
     sceneCount: game.sceneCount,
+    openEnded: hasNoSetLength(game.sceneCount),
     recentChat: chatLines(messages),
     rules: rules && rulesContext(rules),
   };
@@ -1187,23 +1212,19 @@ async function paintScene(code: string, index: number, text: SceneText, origin: 
     const game = await store.getGame(code);
     if (!game) return;
     const dmArchetype = archetype(game.dungeonMaster);
-    const featuredNames = new Set((text.featuredCharacters ?? []).map((n) => n.toLowerCase()));
-    let featured = game.players.filter((p) => featuredNames.has(p.character.name.toLowerCase()));
-    if (!featured.length) featured = game.players;
-    featured = featured.slice(0, 4);
+    // The whole party, the dungeon master's featured heroes nearest the viewer (lib/scene-art.ts).
+    const cast = castOf(game, text.featuredCharacters);
 
     const images = getImageStore();
     const references: StoredImage[] = [];
-    const castLines: string[] = [];
-    for (const { character: c } of featured) {
+    const portrait: boolean[] = [];
+    for (const { character: c } of cast) {
       const image = c.portraitUrl ? await images.load(c.portraitUrl).catch(() => null) : null;
       if (image) references.push(image);
-      const look = c.appearance || c.description || `a ${nameOf('race', c.race)} ${nameOf('characterClass', c.characterClass)}`;
-      castLines.push(`- ${c.name}${image ? ` (reference portrait ${references.length})` : ''}: ${look}`);
+      portrait.push(image !== null);
     }
-    const cast = castLines.join('\n');
     const prompt = `${SCENE_STYLE} Art direction: ${dmArchetype.artStyle}.\n\nThe scene: ${text.imagePrompt}\n\n` +
-      `The characters who appear:\n${cast}`;
+      castBrief(cast, portrait);
     const image = await renderImage({ prompt, references, aspectRatio: '3:2', seed: `${code}#${index}:${text.title}` });
     const url = await images.save(image, 'scenes', origin);
     await shareSceneImage(code, index, url);

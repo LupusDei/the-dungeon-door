@@ -1905,8 +1905,13 @@ struct GameState: Codable, Hashable {
     let status: GameStatus
     let dungeonMaster: String
     let title: String?
-    /// Scenes planned, finale included. Grows by one for each round of a fight.
+    /// Scenes planned, finale included. Grows by one for each round of a fight. 0 with no set length.
     let sceneCount: Int
+    /// No set length: the adventure goes on until its host calls the ending.
+    var openEnded = false
+    /// Scenes with choices still to come after this one, before the ending: 0 on the last of them.
+    /// Nil with no set length, in the lobby, and on a server from before it.
+    var scenesLeft: Int? = nil
     let players: [GamePlayer]
     let scene: GameScene?
     var chronicle: [ChronicleEntry]?
@@ -1924,7 +1929,7 @@ struct GameState: Codable, Hashable {
     let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
-        case code, hostId, status, dungeonMaster, title, sceneCount, players, scene
+        case code, hostId, status, dungeonMaster, title, sceneCount, openEnded, scenesLeft, players, scene
         case chronicle, messages, messageUpdates, typing, rules, turn, updatedAt
     }
 
@@ -1982,6 +1987,8 @@ extension GameState {
         dungeonMaster = try c.decode(String.self, forKey: .dungeonMaster)
         title = try c.decodeIfPresent(String.self, forKey: .title)
         sceneCount = try c.whole(.sceneCount)
+        openEnded = try c.value(.openEnded, or: false)
+        scenesLeft = try c.optionalWhole(.scenesLeft)
         players = try c.decode([GamePlayer].self, forKey: .players)
         scene = try c.decodeIfPresent(GameScene.self, forKey: .scene)
         chronicle = try c.decodeIfPresent([ChronicleEntry].self, forKey: .chronicle)

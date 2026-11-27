@@ -16,7 +16,7 @@ import SwiftUI
 ///   so the Sheet step shows the preview the server draws up for it.
 /// - `-showMap YES` presents the dungeon map as soon as an open game has one.
 /// - `-lobbyAdventure <none|fixed|explore>` preselects that kind of game in the lobby (a catalog
-///   dungeons id).
+///   dungeons id), and `-lobbyScenes <2…9>` its length (9 is no set length).
 /// - `-sheetTab <abilities|combat|spells|gear|story>` opens every hero sheet on that tab.
 /// - `-sheetRule <name>` opens the rules text of the first spell, class feature, feat, species
 ///   trait or skill on a hero sheet whose name contains that text ("second wind", "burning").
@@ -106,6 +106,7 @@ enum AppConfig {
         return hero
     }
     static var lobbyAdventureArgument: String? { argument("lobbyAdventure") }
+    static var lobbyScenesArgument: Int? { argument("lobbyScenes").flatMap(Int.init).map { min(max($0, 2), 9) } }
     static var showMapArgument: Bool { UserDefaults.standard.bool(forKey: "showMap") }
     static var sheetTabArgument: String? { argument("sheetTab")?.lowercased() }
     static var sheetRuleArgument: String? { argument("sheetRule") }

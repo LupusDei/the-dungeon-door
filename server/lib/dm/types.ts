@@ -103,8 +103,10 @@ export interface DMContext {
   history: PastScene[];
   /** Index of the scene to write now (0 for the opening). */
   sceneIndex: number;
-  /** Total scenes planned, including the finale (the finale is index sceneCount - 1). */
+  /** Total scenes planned, including the finale (the finale is index sceneCount - 1). Meaningless while `openEnded`. */
   sceneCount: number;
+  /** The adventure has no set length: it goes on until the table calls the ending. Absent: a set length. */
+  openEnded?: boolean;
   /** The most recent table talk, oldest first. Players may hint at what they want. */
   recentChat: ChatLine[];
   /** The rules engine's state (after the resolved scene's dice); null for a game from before the engine. */
@@ -117,7 +119,7 @@ export interface SceneText {
   narration: string;
   /** What to paint: one scene, concrete and visual. The engine adds style and the party's looks. */
   imagePrompt: string;
-  /** Which party members (by name) appear in the picture; their portraits become references. */
+  /** The party members (by name) nearest the viewer in the picture. Every living hero is painted (lib/scene-art.ts). */
   featuredCharacters?: string[];
   /** One short in-character line for the chat (optional). */
   quip?: string;

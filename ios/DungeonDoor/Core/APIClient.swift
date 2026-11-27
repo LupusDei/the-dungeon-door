@@ -223,6 +223,11 @@ struct APIClient: Sendable {
         try await send("POST", "api/games/\(code)/advance", body: [String: String]())
     }
 
+    /// Host only: the scene being played becomes the last, and the ending follows it.
+    func callEnding(_ code: String) async throws -> GameState {
+        try await send("POST", "api/games/\(code)/ending", body: [String: String]())
+    }
+
     /// Asks for a scene to be read aloud. The server makes one reading per scene, the first time
     /// anyone asks; while it is "making", the file arrives on the scene itself.
     /// `voice` is a catalog narrators id; nil leaves the choice to the server.

@@ -169,8 +169,8 @@ struct AbilitiesTab: View {
         .padding(.top, 10)
         .frame(maxWidth: .infinity)
         .card()
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(SRD.abilityName(id)), modifier \(SRD.spoken(modifier)), score \(score), saving throw \(SRD.spoken(save))\(proficient ? ", proficient" : "")")
+        .accessibilityElement(children: onAbility == nil ? .ignore : .contain)
+        .accessibilityLabel("\(SRD.abilityName(id)), modifier \(SRD.spoken(modifier)), score \(score), saving throw \(SRD.spoken(save))\(proficient ? ", proficient" : "")")
     }
 
     /// All the skills the sheet (or the reference) knows, by name, each with its ability as a tag.

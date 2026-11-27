@@ -26,10 +26,13 @@ const sceneFields = {
     'feelings or deeds. Whimsical world and item detail is welcome.',
   ),
   imagePrompt: z.string().describe(
-    'A concrete visual description of ONE moment to paint: setting, lighting, action, which characters are ' +
-    'visible and what they are doing. 40–80 words. No text or lettering in the image.',
+    'A concrete visual description of ONE moment to paint: setting, lighting, action, and what the heroes are ' +
+    'doing. The whole party is in the picture, every hero of it (the painter is given each one\'s look), so ' +
+    'frame a moment that has room for them all. 40–80 words. No text or lettering in the image.',
   ),
-  featuredCharacters: z.array(z.string()).describe('Names of party members visible in the picture'),
+  featuredCharacters: z.array(z.string()).describe(
+    'Names of the party members nearest the viewer in the picture. The rest of the party is painted behind them.',
+  ),
   quip: z.string().describe('One short line from you, the DM, for the table chat (max ~25 words). Your voice, never a hero\'s'),
 };
 
@@ -101,7 +104,9 @@ played on phones. ${a.description}
 YOUR VOICE: ${a.voice}
 
 HOW THE GAME WORKS
-- The adventure has ${ctx.sceneCount} scenes: an opening, middle scenes, and a final epilogue scene. Each
+- ${ctx.openEnded
+    ? 'The adventure has no set number of scenes: an opening, then as many scenes as the table plays, until they call the ending, and then a final epilogue scene.'
+    : `The adventure has ${ctx.sceneCount} scenes: an opening, middle scenes, and a final epilogue scene.`} Each
   scene except the epilogue ends with two or three choices that move the plot. Every player votes for one,
   or takes their own action instead (in their own words, or from the character sheet). The server rolls a d20
   for each vote.
@@ -110,7 +115,9 @@ HOW THE GAME WORKS
   a natural 20 is a spectacular success of the action and a natural 1 a memorable mishap of it. Show this in
   the world and in the physical result. Use a hero's name when the engine's results name them.
 - Never narrate the game mechanics: no "vote", "tie", "tie broken", "roll", "d20" or numbers in the story.
-- Build toward a satisfying climax in the second-to-last scene; the epilogue ties up the story with
+- ${ctx.openEnded
+    ? 'Keep the story open: give each scene its own stakes, a turn of events and a reason to go on, and do not wind the story up or bring it to a final climax. You will be asked for the epilogue when the table calls the ending; it'
+    : 'Build toward a satisfying climax in the second-to-last scene; the epilogue'} ties up the story with
   consequences of the choices the party actually made and a closing image. Do not invent the heroes' ending.
 
 STYLE
@@ -207,7 +214,7 @@ async function write<T>(ctx: DMContext, schema: z.ZodType<T>, prompt: string, wa
 export const llmDungeonMaster: DungeonMaster = {
   async openingScene(ctx): Promise<OpeningScene> {
     return write(ctx, OpeningSchema,
-      `${storyPrompt(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (scene 1 of ${ctx.sceneCount}): ` +
+      `${storyPrompt(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (${ctx.openEnded ? 'scene 1; the adventure has no set length' : `scene 1 of ${ctx.sceneCount}`}): ` +
       `a vivid place and an immediate hook, with the party present but not spoken for. End by handing the moment ` +
       `back to the players, then two or three choices that move the plot. ${openingNote(ctx.rules)}` +
       `Your quip welcomes the table, in your own voice.`, true);
@@ -217,8 +224,8 @@ export const llmDungeonMaster: DungeonMaster = {
     return write(ctx, NextSchema,
       `${storyPrompt(ctx, resolution)}\n\nResolve the vote (outcome + chosenChoiceId) as the physical result of the chosen ` +
       `action and how the world reacts. If the turn has IN CHARACTER lines, answer them. Then write scene ` +
-      `${ctx.sceneIndex + 1} of ${ctx.sceneCount}, which follows directly from that outcome, hands the moment back, and ends on two or three new choices that move the plot.` +
-      (ctx.sceneIndex === ctx.sceneCount - 2 ? ' This is the climax: the stakes are at their highest.' : '') +
+      `${ctx.sceneIndex + 1}${ctx.openEnded ? ' (the adventure has no set length, so the story goes on)' : ` of ${ctx.sceneCount}`}, which follows directly from that outcome, hands the moment back, and ends on two or three new choices that move the plot.` +
+      (!ctx.openEnded && ctx.sceneIndex === ctx.sceneCount - 2 ? ' This is the climax: the stakes are at their highest.' : '') +
       ` Your quip reacts in your own voice, never as a hero.`, true);
   },
 
