@@ -489,6 +489,9 @@ Reaction {
   the hero's speed and within double speed is a Dash. `dash: true` spends the action (the choice is
   not taken) and is refused when a normal move already reaches that square. `disengage: true` leaves
   an enemy's reach without opportunity attacks, and is refused when the step leaves no one's reach.
+  A square sent with a move action as `actionId` (what a tap on the app's map sends: the move action
+  that lists the square, and the square) is that one move: the hero ends on the square and takes no
+  other action, and the band the action names is not walked as well.
   The older band move still works: one band before the choice, two when `dash` is true. `engage` names
   who you close with, and is required when `to` is `"engaged"`. On a grid the band is carried out by
   stepping to a square that puts the hero there. An illegal move is a 400. When every player has voted the scene resolves:

@@ -474,7 +474,9 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
       if (e instanceof RuleViolation) return { action: { kind: 'other', text: e.message }, ...here };
       throw e;
     }
-    if (move.dash) return { action: { kind: 'move', ...move }, ...here };
+    // A Dash is the hero's action. So is a square voted with the move action that lists it (a tap on
+    // the app's map sends both): the square is that move, not a step taken before it.
+    if (move.dash || (isSquareMove(move) && vote.actionId?.startsWith('move:'))) return { action: { kind: 'move', ...move }, ...here };
     const stepped = relocate(here.state, id, move);
     if (stepped.combatants[id].status !== 'up') return { action: { kind: 'dodge' }, state: stepped, sheets: here.sheets };
     here = { state: stepped, sheets: here.sheets };

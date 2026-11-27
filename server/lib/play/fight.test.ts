@@ -481,6 +481,16 @@ test('a square move lands on that square, and one past speed is a Dash that spen
   assert.equal(dashed.lines.some((l) => l.startsWith('Bryn attacks')), false, 'Dash spends the action');
 });
 
+test('a square voted with the move action that lists it is one move, to that square', () => {
+  const road = startFight(party({ p1: fighter }), ['goblin-warrior'], 'bright', { band: 'far' });
+  const from = road.combat.combatants.p1.square!;
+  const goal = { x: from.x + 1, y: from.y - 1 };
+  // What a tap on the map sends: the band move that lists the square, and the square.
+  const round = fightRound(road.party, road.combat, { p1: { choiceId: 'c', roll: 10, actionId: 'move:near', move: goal } });
+  assert.deepEqual(round.combat.combatants.p1.square, goal, round.lines.join(' | '));
+  assert.equal(round.lines.filter((l) => l.startsWith('Bryn moves') || l.startsWith('Bryn Dashes')).length, 1, round.lines.join(' | '));
+});
+
 test('a vote carries a move: one band before the action, a Dash instead of it, and leaving melee draws an opportunity attack', () => {
   const { combat, party: p } = startFight(party({ p1: fighter }), ['shrieker-fungus']);
   const stepped = fightRound(p, combat, { p1: { choiceId: 'c', roll: 10, move: { to: 'far' } } });
