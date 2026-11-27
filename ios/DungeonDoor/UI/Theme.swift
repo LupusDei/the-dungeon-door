@@ -143,11 +143,15 @@ extension ButtonStyle where Self == GildedButtonStyle {
 
 /// A character portrait, or their class sigil while there isn't one yet. A painted portrait opens
 /// full screen when tapped; the sigil (no picture yet) does not.
+///
+/// `opensViewer: false` leaves the tap to whatever the portrait sits in: on a tile that opens the
+/// hero's page, the picture is part of the tile, and it is on that page that a tap shows it large.
 struct PortraitView: View {
     let url: URL?
     var symbol: String = "person.fill"
     var size: CGFloat = 64
     var circular = false
+    var opensViewer = true
 
     var body: some View {
         let shape = circular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: size * 0.16))
@@ -167,7 +171,7 @@ struct PortraitView: View {
         .frame(width: size, height: size)
         .clipShape(shape)
         .overlay { shape.stroke(Palette.gold.opacity(0.55), lineWidth: 1) }
-        .generatedImageViewer(url: url, title: "Portrait")
+        .generatedImageViewer(url: opensViewer ? url : nil, title: "Portrait")
     }
 }
 
