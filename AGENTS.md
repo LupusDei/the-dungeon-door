@@ -52,12 +52,12 @@ and **slagyr-assistant**. For work that comes from any of them (the owner asking
 1. **Integrate** it into `main`: review it, merge it, and make the rest of the project agree with it
    (the contract in `docs/api.md`, the server, the app). Anything the engine can now do should be
    reachable in the app.
-2. **Gates.** `npm run typecheck && npm test` pass in `server/`; the app builds; what changed on
-   screen was looked at on the simulator. When `server/lib/dm/` or what the dungeon master is told
+2. **Gates.** `npm run typecheck && npm test && npm run features` pass in `server/`: typecheck, the
+   unit tests and the Gherkin features, with no scenario skipped. Every behavior change comes with a
+   Gherkin scenario in `server/features/` that pins it down, in addition to its unit tests. The app
+   builds; what changed on screen was looked at on the simulator. When `server/lib/dm/` or what the dungeon master is told
    changed, `npm run dm:check` passes too: three real text calls (about five cents) that prove the
    model accepts the schema and writes hooks the engine takes. The fake DM cannot show that.
-   Every behavior change needs a Gherkin scenario in `server/features` (`npm run features` passes) in
-   addition to its unit tests.
 3. **Commit and push** `main` (`git push origin main`, as its own command).
 4. **Migrate and deploy** happen on the push, in GitHub Actions (`.github/workflows/deploy-server.yml`):
    any push to `main` that touches `server/` applies `db/schema.sql` to production, then runs
@@ -69,7 +69,10 @@ and **slagyr-assistant**. For work that comes from any of them (the owner asking
    it (`.github/workflows/testflight.yml`) and tags `testflight/v<version>`; a version already tagged
    is not shipped again. "Run workflow" on that workflow ships without a bump; `cd ios && ./ship.sh
    "What's new"` still ships from the owner's Mac.
-6. **Tests run locally**, not in Actions (step 2), so a push is a release: run the gates first.
+6. **Releases require passing gates.** `.github/workflows/tests.yml` runs typecheck, the unit tests
+   and the Gherkin features on every push to `main` and every pull request; the migrate and deploy
+   job and the TestFlight upload both need it to pass (TestFlight also compiles the app for the
+   simulator first). A red gate stops the release, so run the gates locally (step 2) before pushing.
 7. **Update the quest log**: tasks done with their links, problems found filed as issues for whoever
    owns the code, and the "Latest build" fact.
 
@@ -93,7 +96,7 @@ Server (Node 22+), from `server/`:
 ```bash
 npm install
 npm run typecheck && npm test     # must pass before any server change is done
-npm run features                  # Gherkin acceptance specs; needs Babashka. See the root README.
+npm run features                  # Gherkin acceptance specs, required to release; needs Babashka. See the root README.
 npm run dev                       # http://localhost:3000, fake AI, in-memory store, costs nothing
 npm run bot -- --base http://localhost:3000 --code ABCDEF   # a second player for a game in the lobby
 npm run playtest                  # bots play whole games through the real flow: deaths, fights, anything that broke

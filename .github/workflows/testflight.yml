@@ -7,7 +7,9 @@ name: TestFlight
 # to main. The build number comes from TestFlight's own counter (fastlane's bump_build lane). Use
 # "Run workflow" to ship the current commit without a version bump.
 #
-# Tests are not run here yet; they run locally before pushing (see AGENTS.md, "Gates").
+# Nothing is uploaded unless the release gate passes first: typecheck, the unit tests and the
+# Gherkin features (tests.yml, called below), then a compile of the app for the iOS Simulator
+# before fastlane archives it. Run the same gates locally before pushing (AGENTS.md, "Gates").
 on:
   push:
     branches: [main]
@@ -56,9 +58,15 @@ jobs:
             echo "$VERSION has never been uploaded; shipping it."
           fi
 
+  tests:
+    name: Tests
+    needs: check-version
+    if: needs.check-version.outputs.ship == 'true'
+    uses: ./.github/workflows/tests.yml
+
   deploy:
     name: Build and upload
-    needs: check-version
+    needs: [check-version, tests]
     if: needs.check-version.outputs.ship == 'true'
     # macos-26 has Xcode 26 and the iOS 26 SDK, which App Store Connect requires (older SDKs are
     # rejected with a 409 after a successful build).
@@ -94,6 +102,18 @@ jobs:
         env:
           DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
         run: printf 'DD_APP_KEY = %s\n' "$DD_APP_KEY" > Config/Secrets.xcconfig
+
+      # A plain compile, unsigned, before match and the archive: a Swift error fails here, fast and
+      # readable, instead of deep in fastlane's log.
+      - name: Compile for the iOS Simulator
+        run: |
+          xcodebuild build -quiet \
+            -project DungeonDoor.xcodeproj \
+            -scheme DungeonDoor \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/CompileCheck \
+            CODE_SIGNING_ALLOWED=NO
 
       # Two forms of the same key: the raw .p8 for app_store_connect_api_key, and the JSON form
       # that match and pilot read from APP_STORE_CONNECT_API_KEY_PATH.
