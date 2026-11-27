@@ -85,11 +85,12 @@ final class AppModel {
     }
 
     /// Saves a hero. `backgroundId` is the forge's pick for a new or level-1 hero; nil keeps the
-    /// sheet as it is (or lets the server pick, for a new hero).
-    func save(_ character: Character, backgroundId: String? = nil) async throws -> Character {
+    /// sheet as it is (or lets the server pick, for a new hero). `boost` places the background's
+    /// ability increases.
+    func save(_ character: Character, backgroundId: String? = nil, boost: AbilityBoost? = nil) async throws -> Character {
         var c = character
         c.ownerId = playerId
-        let saved = try await api.save(c, backgroundId: backgroundId)
+        let saved = try await api.save(c, backgroundId: backgroundId, boost: boost)
         if let i = characters.firstIndex(where: { $0.id == saved.id }) {
             characters[i] = saved
         } else {
@@ -102,6 +103,13 @@ final class AppModel {
     func delete(_ character: Character) async throws {
         try await api.delete(characterId: character.id)
         characters.removeAll { $0.id == character.id }
+        persistCharacters()
+    }
+
+    /// Places the background's ability increases on a hero the forge built, once.
+    func assignBonuses(_ hero: Character, boost: AbilityBoost) async throws {
+        let saved = try await api.assignBonuses(characterId: hero.id, boost: boost)
+        if let i = characters.firstIndex(where: { $0.id == saved.id }) { characters[i] = saved }
         persistCharacters()
     }
 

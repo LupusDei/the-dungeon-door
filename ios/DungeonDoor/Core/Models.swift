@@ -288,6 +288,48 @@ extension Spellcasting {
     }
 }
 
+/// Where a background's ability increases go (SRD 5.2): +2 and +1, or +1 to each of its three scores.
+struct AbilityBoost: Codable, Hashable {
+    var kind: String
+    var plusTwo: String?
+    var plusOne: String?
+
+    init(kind: String, plusTwo: String? = nil, plusOne: String? = nil) {
+        self.kind = kind
+        self.plusTwo = plusTwo
+        self.plusOne = plusOne
+    }
+
+    private enum CodingKeys: String, CodingKey { case kind, plusTwo, plusOne }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(String.self, forKey: .kind)
+        plusTwo = try c.decodeIfPresent(String.self, forKey: .plusTwo)
+        plusOne = try c.decodeIfPresent(String.self, forKey: .plusOne)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(kind, forKey: .kind)
+        try c.encodeIfPresent(plusTwo, forKey: .plusTwo)
+        try c.encodeIfPresent(plusOne, forKey: .plusOne)
+    }
+
+    /// A complete placement on this background's abilities.
+    func isValid(for abilities: [String]) -> Bool {
+        switch kind {
+        case "oneOneOne":
+            return Set(abilities).count >= 3
+        case "twoOne":
+            guard let plusTwo, let plusOne, plusTwo != plusOne else { return false }
+            return abilities.contains(plusTwo) && abilities.contains(plusOne)
+        default:
+            return false
+        }
+    }
+}
+
 /// A hero's 5e numbers (SRD 5.2). Built and kept by the server's rules engine; the app only shows it.
 struct CharacterSheet: Codable, Hashable {
     var version: Int
@@ -301,6 +343,8 @@ struct CharacterSheet: Codable, Hashable {
     var size: String
     var speed: Int
     var abilityScores: AbilityScores
+    /// The player's placement of the background's increases. Nil when the forge placed them.
+    var abilityBoost: AbilityBoost? = nil
     var proficiencyBonus: Int
     var maxHp: Int
     var hp: Int
@@ -334,6 +378,14 @@ struct CharacterSheet: Codable, Hashable {
     var revivalPenalty: Int
     var spellcasting: Spellcasting?
 
+    private enum CodingKeys: String, CodingKey {
+        case version, name, level, xp, classId, speciesId, backgroundId, subclassId, size, speed
+        case abilityScores, abilityBoost, proficiencyBonus, maxHp, hp, armorClass, hitDiceSpent, exhaustion
+        case savingThrows, saveBonuses, skills, skillBonuses, passivePerception, otherProficiencies
+        case equipment, gp, pendingChoices, traits, feat, feats, features, resourcesUsed, dead, revivalPenalty
+        case spellcasting
+    }
+
     var hitDiceLeft: Int { max(0, level - hitDiceSpent) }
 }
 
@@ -356,6 +408,7 @@ extension CharacterSheet {
         size = try c.value(.size, or: "")
         speed = try c.whole(.speed, or: 30)
         abilityScores = scores
+        abilityBoost = try c.decodeIfPresent(AbilityBoost.self, forKey: .abilityBoost)
         proficiencyBonus = proficiency
         maxHp = most
         hp = try c.whole(.hp, or: most)
@@ -435,6 +488,8 @@ struct Character: Codable, Hashable, Identifiable {
     var sheet: CharacterSheet?
     /// Server-built and read-only, like the sheet.
     var attacks: [Attack]?
+    /// The forge placed the background's increases, and the scores are still those, so the player may place them once.
+    var bonusesOpen: Bool? = nil
     var createdAt: String
     var updatedAt: String
 
@@ -444,7 +499,7 @@ struct Character: Codable, Hashable, Identifiable {
             id: UUID().uuidString.lowercased(), ownerId: ownerId, name: "",
             race: "", characterClass: "", gender: "", temperament: "", alignment: "",
             backstory: "", description: "", appearance: nil, portraitUrl: nil,
-            sheet: nil, attacks: nil, createdAt: now, updatedAt: now)
+            sheet: nil, attacks: nil, bonusesOpen: nil, createdAt: now, updatedAt: now)
     }
 
     var portraitURL: URL? { portraitUrl.flatMap(URL.init(string:)) }
@@ -465,6 +520,7 @@ struct Character: Codable, Hashable, Identifiable {
 
 /// What the app sends to save a hero or to have its portrait painted: who they are, never the
 /// sheet. `backgroundId` picks the background of a new (or still level-1) hero; nil leaves it be.
+/// `boost` is where the background's ability increases go.
 struct CharacterDraft: Encodable {
     let id: String
     let name: String
@@ -478,8 +534,9 @@ struct CharacterDraft: Encodable {
     let appearance: String?
     let portraitUrl: String?
     let backgroundId: String?
+    let boost: AbilityBoost?
 
-    init(_ hero: Character, backgroundId: String? = nil) {
+    init(_ hero: Character, backgroundId: String? = nil, boost: AbilityBoost? = nil) {
         id = hero.id
         name = hero.name
         race = hero.race
@@ -492,6 +549,7 @@ struct CharacterDraft: Encodable {
         appearance = hero.appearance
         portraitUrl = hero.portraitUrl
         self.backgroundId = backgroundId
+        self.boost = boost
     }
 }
 

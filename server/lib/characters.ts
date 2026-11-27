@@ -2,13 +2,17 @@ import { z } from 'zod';
 import { heroAttacks } from './attacks.ts';
 import { isValid } from './catalog.ts';
 import { badRequest, conflict, forbidden, isUUID, notFound } from './http.ts';
-import { type BuildStyle, buildCharacter, quickChoices } from './rules/character.ts';
+import {
+  ABILITIES, type AbilityScores, type BackgroundBoost, STANDARD_ARRAY, applyBackgroundBoost, assignScores,
+} from './rules/abilities.ts';
+import { type BuildStyle, buildCharacter, quickChoices, rederive } from './rules/character.ts';
 import { asItStands } from './rules/checks.ts';
 import { item } from './rules/items.ts';
 import { revive, TEMPLE_RAISE_DEAD } from './rules/revive.ts';
 import { derivedRng } from './rules/rng.ts';
-import type { CharacterSheet } from './rules/sheet.ts';
+import { AbilityBoostSchema, parseCharacterSheet, type CharacterSheet } from './rules/sheet.ts';
 import { srd } from './rules/srd.ts';
+import { RuleViolation } from './rules/violation.ts';
 import { getStore } from './store/index.ts';
 import type { Character, StoredCharacter } from './types.ts';
 
@@ -16,15 +20,88 @@ import type { Character, StoredCharacter } from './types.ts';
 export const LEGACY_RACES: Readonly<Record<string, string>> = { 'half-orc': 'orc', 'half-elf': 'elf' };
 const currentRace = (race: unknown) => (typeof race === 'string' && Object.hasOwn(LEGACY_RACES, race) ? LEGACY_RACES[race] : race);
 
-interface Build { id: string; name: string; race: string; characterClass: string; backgroundId?: string }
+interface Build { id: string; name: string; race: string; characterClass: string; backgroundId?: string; boost?: BackgroundBoost }
 
 /**
  * A level-1 sheet from the engine, seeded by the character's id, so the same hero always comes out the same.
  * Keep the seed: a hero stored without a sheet is rebuilt from it, the classic way, on every read until it is saved.
+ * `boost` is the player's placement of the background's increases. Left out, the server places +2 and +1.
  */
-export function heroSheet({ id, name, race, characterClass, backgroundId }: Build, style: BuildStyle = 'primary'): CharacterSheet {
+export function heroSheet({ id, name, race, characterClass, backgroundId, boost }: Build, style: BuildStyle = 'primary'): CharacterSheet {
   const rng = derivedRng(0, `hero/${id}`);
-  return buildCharacter(quickChoices(rng, { name, classId: characterClass, speciesId: race, backgroundId }, undefined, style), rng);
+  const choices = quickChoices(rng, { name, classId: characterClass, speciesId: race, backgroundId }, undefined, style);
+  const sheet = buildCharacter({ ...choices, boost: boost ?? choices.boost }, rng);
+  return boost ? parseCharacterSheet({ ...sheet, abilityBoost: boost }) : sheet;
+}
+
+const equalScores = (a: AbilityScores, b: AbilityScores) => ABILITIES.every((ability) => a[ability] === b[ability]);
+
+/** The standard-array scores the forge would have assigned, before and after its own +2/+1. */
+function forgePlacement(id: string, sheet: CharacterSheet, style: BuildStyle): { base: AbilityScores; boosted: AbilityScores } | null {
+  try {
+    const rng = derivedRng(0, `hero/${id}`);
+    const choices = quickChoices(rng, {
+      name: sheet.name, classId: sheet.classId, speciesId: sheet.speciesId, backgroundId: sheet.backgroundId,
+    }, undefined, style);
+    if (choices.abilities.kind !== 'standardArray') return null;
+    const allowed = srd().backgrounds.get(sheet.backgroundId)?.abilities;
+    if (!allowed) return null;
+    const base = assignScores(STANDARD_ARRAY, choices.abilities.order);
+    return { base, boosted: applyBackgroundBoost(base, allowed, choices.boost) };
+  } catch {
+    return null;
+  }
+}
+
+/** The base scores under the forge's automatic placement, when the stored scores are still exactly that. */
+function forgeBase(id: string, sheet: CharacterSheet): AbilityScores | null {
+  const found = (['primary', 'classic'] as const)
+    .map((style) => forgePlacement(id, sheet, style))
+    .filter((place): place is NonNullable<typeof place> => place !== null && equalScores(place.boosted, sheet.abilityScores));
+  if (found.length === 0 || found.some((place) => !equalScores(place.base, found[0].base))) return null;
+  return found[0].base;
+}
+
+/** The player has not placed the increases, and the scores are still the forge's, so they may place them once. */
+export function bonusesAreOpen(id: string, sheet: CharacterSheet): boolean {
+  return sheet.abilityBoost === undefined && forgeBase(id, sheet) !== null;
+}
+
+function withoutBoost(scores: AbilityScores, boost: BackgroundBoost, allowed: readonly (keyof AbilityScores)[]): AbilityScores {
+  const base = { ...scores };
+  if (boost.kind === 'oneOneOne') {
+    for (const ability of allowed) base[ability] -= 1;
+  } else {
+    base[boost.plusTwo] -= 2;
+    base[boost.plusOne] -= 1;
+  }
+  return base;
+}
+
+function sameBoost(a: BackgroundBoost | undefined, b: BackgroundBoost): boolean {
+  if (!a || a.kind !== b.kind) return false;
+  if (a.kind === 'oneOneOne' || b.kind === 'oneOneOne') return true;
+  return a.plusTwo === b.plusTwo && a.plusOne === b.plusOne;
+}
+
+/**
+ * Puts the player's background increases on a sheet. A level-1 hero who already chose can move them.
+ * Anyone else can place them once, and only while the scores are still the forge's automatic ones.
+ */
+export function withChosenBoost(sheet: CharacterSheet, id: string, boost: BackgroundBoost): CharacterSheet {
+  const allowed = srd().backgrounds.get(sheet.backgroundId)?.abilities;
+  if (!allowed) throw badRequest('backgroundId: unknown background');
+  let base: AbilityScores;
+  if (sheet.abilityBoost) {
+    if (sheet.level > 1) throw badRequest('a hero above level 1 keeps the ability bonuses they chose');
+    base = withoutBoost(sheet.abilityScores, sheet.abilityBoost, allowed);
+  } else {
+    const found = forgeBase(id, sheet);
+    if (!found) throw conflict('these scores are no longer the ones the forge assigned, so the bonuses cannot be placed');
+    base = found;
+  }
+  const scores = applyBackgroundBoost(base, allowed, boost);
+  return parseCharacterSheet(rederive({ ...sheet, abilityScores: scores, abilityBoost: boost }));
 }
 
 const FORGE_GIFT = 'potion-of-greater-healing';
@@ -40,23 +117,39 @@ export function upgradeCharacter(stored: StoredCharacter): Character {
   const race = currentRace(stored.race) as string;
   const { sheet: kept = heroSheet({ ...stored, race }, 'classic') } = stored;
   const sheet = asItStands(kept); // a stored passive Perception from before exhaustion counted
-  return { ...stored, race, sheet, attacks: heroAttacks(sheet) };
+  return { ...stored, race, sheet, attacks: heroAttacks(sheet), bonusesOpen: bonusesAreOpen(stored.id, sheet) };
 }
 
 /** What the store keeps of a character: everything but what is worked out on read. */
-export function storable({ attacks: _, ...stored }: Character | (StoredCharacter & { attacks?: unknown })): StoredCharacter {
+export function storable({ attacks: _, bonusesOpen: __, ...stored }: Character | (StoredCharacter & { attacks?: unknown; bonusesOpen?: unknown })): StoredCharacter {
   return stored;
 }
 
 const sameBuild = (sheet: CharacterSheet, b: Build) =>
   sheet.speciesId === b.race && sheet.classId === b.characterClass && (b.backgroundId === undefined || b.backgroundId === sheet.backgroundId);
 
+/** A rules refusal is the player's mistake, told back as a 400. */
+function rulesOrBad<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    if (error instanceof RuleViolation) throw badRequest(error.message);
+    throw error;
+  }
+}
+
 /** Keeps the sheet (renamed) when the build is unchanged; rebuilds it at level 1; refuses to rebuild a levelled hero. */
 function sheetFor(existing: Character | null, build: Build): CharacterSheet {
-  if (!existing) return forgedSheet(build);
-  if (sameBuild(existing.sheet, build)) return { ...existing.sheet, name: build.name };
-  if (existing.sheet.level > 1) throw badRequest('a hero above level 1 cannot change race, class or background');
-  return forgedSheet(build);
+  return rulesOrBad(() => {
+    if (!existing) return forgedSheet(build);
+    if (!sameBuild(existing.sheet, build)) {
+      if (existing.sheet.level > 1) throw badRequest('a hero above level 1 cannot change race, class or background');
+      return forgedSheet(build);
+    }
+    const renamed = { ...existing.sheet, name: build.name };
+    if (!build.boost || sameBoost(renamed.abilityBoost, build.boost)) return renamed;
+    return withChosenBoost(renamed, build.id, build.boost);
+  });
 }
 
 const catalogId = (kind: Parameters<typeof isValid>[0]) =>
@@ -75,17 +168,20 @@ export const CharacterLookInput = z.object({
 });
 
 const heroId = z.string().refine(isUUID, { message: 'id must be a UUID' });
-const backgroundId = z.string().refine((id) => srd().backgrounds.has(id), { message: 'unknown background' }).optional();
+const backgroundId = z.string().refine((id) => srd().backgrounds.has(id), { message: 'unknown background' }).nullish();
+/** Null is the same as leaving it out: the app's encoder writes null for an optional it does not have. */
+const boost = AbilityBoostSchema.nullish();
 
 const CharacterInput = CharacterLookInput.extend({
   id: heroId,
   appearance: z.string().max(2000).nullable().default(null),
   portraitUrl: z.url({ protocol: /^https?$/ }).max(2000).nullable().default(null),
   backgroundId,
+  boost,
 });
 
 /** What a sheet is built from (POST /api/sheet): the same checks as a save. */
-const BuildInput = CharacterLookInput.pick({ name: true, race: true, characterClass: true }).extend({ id: heroId, backgroundId });
+const BuildInput = CharacterLookInput.pick({ name: true, race: true, characterClass: true }).extend({ id: heroId, backgroundId, boost });
 
 /** Formats the first zod issue as a short 400 message, e.g. "race: unknown race". */
 export function zodMessage(error: z.ZodError): string {
@@ -103,7 +199,7 @@ export async function saveCharacter(playerId: string, body: unknown): Promise<Ch
   const existing = stored && upgradeCharacter(stored);
   const now = new Date().toISOString();
   const c = parsed.data;
-  const sheet = sheetFor(existing, c);
+  const sheet = sheetFor(existing, { ...c, backgroundId: c.backgroundId ?? undefined, boost: c.boost ?? undefined });
   return upgradeCharacter(await store.saveCharacter({
     id: c.id,
     ownerId: playerId,
@@ -127,8 +223,24 @@ export async function saveCharacter(playerId: string, body: unknown): Promise<Ch
 export function previewSheet(body: unknown): Pick<Character, 'sheet' | 'attacks'> {
   const parsed = BuildInput.safeParse(body);
   if (!parsed.success) throw badRequest(zodMessage(parsed.error));
-  const sheet = forgedSheet(parsed.data);
+  const { backgroundId: picked, boost: chosen } = parsed.data;
+  const sheet = rulesOrBad(() => forgedSheet({ ...parsed.data, backgroundId: picked ?? undefined, boost: chosen ?? undefined }));
   return { sheet, attacks: heroAttacks(sheet) };
+}
+
+/**
+ * POST /api/characters/ability-boost — the player places the background's increases once, on a hero the
+ * forge built and whose scores are still that placement. The forge's +2/+1 is replaced, not added again.
+ */
+export async function assignAbilityBoost(playerId: string, characterId: unknown, boostBody: unknown): Promise<Character> {
+  const parsed = AbilityBoostSchema.safeParse(boostBody);
+  if (!parsed.success) throw badRequest(`boost: ${zodMessage(parsed.error)}`);
+  const hero = await ownCharacter(playerId, characterId);
+  if (hero.sheet.abilityBoost) throw conflict('the ability bonuses are already chosen');
+  const sheet = rulesOrBad(() => withChosenBoost(hero.sheet, hero.id, parsed.data));
+  const now = new Date().toISOString();
+  await getStore().saveCharacter(storable({ ...hero, sheet, updatedAt: now }));
+  return upgradeCharacter({ ...storable({ ...hero, sheet, updatedAt: now }) });
 }
 
 export async function listCharacters(playerId: string): Promise<Character[]> {

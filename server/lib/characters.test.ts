@@ -7,6 +7,7 @@ import * as charactersApi from '../api/characters.ts';
 import * as sheetApi from '../api/sheet.ts';
 import * as gamesApi from '../api/games.ts';
 import { call, makeCharacter } from './api.fixture.ts';
+import * as boostApi from '../api/character-ability-boost.ts';
 import { heroSheet, upgradeCharacter } from './characters.ts';
 import { srd } from './rules/srd.ts';
 import { getStore, setStore } from './store/index.ts';
@@ -69,6 +70,81 @@ test('the seed is pinned: a hero not yet saved with a sheet keeps the same numbe
   assert.deepEqual(upgradeCharacter(stored as Parameters<typeof upgradeCharacter>[0]).sheet, sheet, 'a stored hero without a sheet reads the classic way');
   const fresh = heroSheet(build);
   assert.equal(Math.max(...Object.values(fresh.abilityScores)), fresh.abilityScores.str, 'a new fighter’s best score is Strength');
+});
+
+const SOLDIER = { kind: 'twoOne' as const, plusTwo: 'con' as const, plusOne: 'str' as const };
+
+test('the player places the background\'s +2 and +1; leaving them out lets the forge place them', async () => {
+  const me = randomUUID();
+  const id = randomUUID();
+  const look = { gender: 'female', temperament: 'brave', alignment: 'true-neutral', backstory: '', description: '' };
+  const build = { id, name: 'Slykat', race: 'human', characterClass: 'fighter', backgroundId: 'soldier', ...look };
+  const preview = await call(sheetApi.POST, '/api/sheet', { player: me, body: { ...build, boost: SOLDIER } });
+  const saved = await put(me, { ...build, boost: SOLDIER });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.deepEqual(saved.body.sheet.abilityBoost, SOLDIER);
+  assert.equal(saved.body.bonusesOpen, false);
+  assert.deepEqual(saved.body.sheet, preview.body.sheet, 'the preview is the hero that gets saved');
+  const auto = await call(sheetApi.POST, '/api/sheet', { player: me, body: build });
+  assert.equal(auto.body.sheet.abilityBoost, undefined, 'no choice: the forge places +2 and +1 and does not record it');
+  assert.equal(saved.body.sheet.abilityScores.con, auto.body.sheet.abilityScores.con + 1, 'the player\'s +2 to Constitution, not the forge\'s +1');
+  assert.equal(saved.body.sheet.abilityScores.str, auto.body.sheet.abilityScores.str - 1);
+  assert.equal(saved.body.sheet.abilityScores.dex, auto.body.sheet.abilityScores.dex);
+  assert.deepEqual(saved.body.sheet.skills, auto.body.sheet.skills, 'the increase does not reshuffle skills');
+  assert.equal(saved.body.sheet.maxHp, auto.body.sheet.maxHp + 1, 'Constitution 15 (+2) becomes 16 (+3)');
+  const spread = { kind: 'oneOneOne' };
+  const again = await put(me, { ...saved.body, backgroundId: 'soldier', boost: spread });
+  assert.equal(again.body.sheet.abilityScores.str, saved.body.sheet.abilityScores.str);
+  assert.equal(again.body.sheet.abilityScores.dex, saved.body.sheet.abilityScores.dex + 1);
+  assert.equal(again.body.sheet.abilityScores.con, saved.body.sheet.abilityScores.con - 1);
+  assert.deepEqual(again.body.sheet.equipment, saved.body.sheet.equipment, 'moving the bonuses keeps the pack');
+  assert.deepEqual(again.body.sheet.abilityBoost, spread);
+});
+
+test('a background increase the rules forbid is refused', async () => {
+  const me = randomUUID();
+  const body = { id: randomUUID(), name: 'Slykat', race: 'human', characterClass: 'fighter', gender: 'female', temperament: 'brave', alignment: 'true-neutral', backgroundId: 'soldier' };
+  const bad = async (boost: unknown) => {
+    const res = await put(me, { ...body, id: randomUUID(), boost });
+    return [res.status, res.body.error];
+  };
+  assert.deepEqual(await bad({ kind: 'twoOne', plusTwo: 'int', plusOne: 'str' }), [400, 'int is not one of this background\'s abilities (str, dex, con)']);
+  assert.deepEqual(await bad({ kind: 'twoOne', plusTwo: 'str', plusOne: 'str' }), [400, 'the +2 and +1 go to two different abilities']);
+  assert.equal((await bad({ kind: 'plusThree' }))[0], 400);
+  const preview = await call(sheetApi.POST, '/api/sheet', { player: me, body: { ...body, boost: { kind: 'twoOne', plusTwo: 'cha', plusOne: 'str' } } });
+  assert.equal(preview.status, 400);
+  assert.match(preview.body.error, /cha is not one of/);
+});
+
+test('a hero the forge built can place the bonuses once, and not after the scores have changed', async () => {
+  const me = randomUUID();
+  const hero = await makeCharacter(me, 'Slykat', { race: 'human', characterClass: 'fighter', backgroundId: 'soldier' });
+  assert.equal(hero.bonusesOpen, true);
+  assert.equal(hero.sheet.abilityBoost, undefined);
+  const place = (body: unknown, who = me) => call<Character & { error?: string }>(boostApi.POST, '/api/characters/ability-boost', { player: who, body });
+  const moved = await place({ characterId: hero.id, boost: SOLDIER });
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  assert.equal(moved.body.bonusesOpen, false);
+  assert.deepEqual(moved.body.sheet.abilityBoost, SOLDIER);
+  assert.equal(moved.body.sheet.abilityScores.con, hero.sheet.abilityScores.con + 1);
+  assert.equal(moved.body.sheet.abilityScores.str, hero.sheet.abilityScores.str - 1);
+  assert.deepEqual(moved.body.sheet.equipment, hero.sheet.equipment);
+  assert.equal(moved.body.sheet.xp, hero.sheet.xp);
+  const twice = await place({ characterId: hero.id, boost: { kind: 'oneOneOne' } });
+  assert.deepEqual([twice.status, twice.body.error], [409, 'the ability bonuses are already chosen']);
+  const other = await makeCharacter(me, 'Pip', { race: 'human', characterClass: 'fighter', backgroundId: 'soldier' });
+  const stored = (await getStore().getCharacter(other.id))!;
+  await getStore().saveCharacter({ ...stored, sheet: { ...stored.sheet!, abilityScores: { ...stored.sheet!.abilityScores, str: stored.sheet!.abilityScores.str + 1 } } });
+  const drifted = await place({ characterId: other.id, boost: SOLDIER });
+  assert.deepEqual([drifted.status, drifted.body.error], [409, 'these scores are no longer the ones the forge assigned, so the bonuses cannot be placed']);
+  const higher = await makeCharacter(me, 'Old', { race: 'human', characterClass: 'fighter', backgroundId: 'soldier' });
+  const kept = (await getStore().getCharacter(higher.id))!;
+  await getStore().saveCharacter({ ...kept, sheet: { ...kept.sheet!, level: 2, xp: 300, hpRolls: [...kept.sheet!.hpRolls, 6] } });
+  const leveled = await place({ characterId: higher.id, boost: { kind: 'oneOneOne' } });
+  assert.equal(leveled.status, 200, 'no improvement yet: the forge\'s scores can still be replaced');
+  assert.equal(leveled.body.sheet.level, 2);
+  assert.equal((await place({ characterId: hero.id, boost: SOLDIER }, randomUUID())).status, 404);
+  assert.equal((await place({ boost: SOLDIER })).status, 400);
 });
 
 test('the player may pick the background; an unknown one is refused', async () => {

@@ -38,6 +38,8 @@ struct CharacterForgeView: View {
         var characterClass: String
         /// The background asked for; nil left the pick to the server.
         var background: String?
+        /// Where its ability increases go. Nil leaves the placement to the server.
+        var boost: AbilityBoost?
     }
 
     @State private var hero: Character
@@ -55,6 +57,8 @@ struct CharacterForgeView: View {
     // hero's own, or a preview); `sheetSubject` says what it was drawn up from.
     /// The background the player picked. Nil until they do: the server picks one for a new hero.
     @State private var background: String?
+    /// Where that background's ability increases go. Nil until the player places them.
+    @State private var boost: AbilityBoost?
     @State private var sheetSubject: SheetSubject?
     @State private var askedSubject: SheetSubject?
     @State private var sheetLoading = false
@@ -67,10 +71,15 @@ struct CharacterForgeView: View {
         _hero = State(initialValue: existing ?? draft ?? Character.blank(ownerId: AppConfig.playerId))
         _step = State(initialValue: step)
         // `-forgeBackground <id>` picks a background as the forge opens (screenshot checks).
-        let asked = (existing?.sheet?.level ?? 1) > 1 ? nil : AppConfig.forgeBackgroundArgument
+        let level = existing?.sheet?.level ?? 1
+        let asked = level > 1 ? nil : AppConfig.forgeBackgroundArgument
+        let sameBackground = asked == nil || asked == existing?.sheet?.backgroundId
         _background = State(initialValue: asked ?? existing?.sheet?.backgroundId)
+        _boost = State(initialValue: level > 1 || !sameBackground ? nil : existing?.sheet?.abilityBoost)
         _sheetSubject = State(initialValue: existing.flatMap { hero in
-            hero.sheet.map { SheetSubject(race: hero.race, characterClass: hero.characterClass, background: $0.backgroundId) }
+            hero.sheet.map {
+                SheetSubject(race: hero.race, characterClass: hero.characterClass, background: $0.backgroundId, boost: $0.abilityBoost)
+            }
         })
         isEditing = existing != nil
         locked = (existing?.sheet?.level ?? 1) > 1
@@ -194,7 +203,7 @@ struct CharacterForgeView: View {
     // MARK: The sheet step
 
     private var subject: SheetSubject {
-        SheetSubject(race: hero.race, characterClass: hero.characterClass, background: background)
+        SheetSubject(race: hero.race, characterClass: hero.characterClass, background: background, boost: boost)
     }
 
     /// The sheet on show, as long as it was drawn up for the hero as they are now. A sheet drawn
@@ -202,8 +211,14 @@ struct CharacterForgeView: View {
     private var currentSheet: CharacterSheet? {
         guard let sheet = hero.sheet, let drawn = sheetSubject,
               drawn.race == hero.race, drawn.characterClass == hero.characterClass,
-              background == nil || background == sheet.backgroundId else { return nil }
+              background == nil || background == sheet.backgroundId,
+              drawn.boost == boost else { return nil }
         return sheet
+    }
+
+    /// The three scores the background on show can raise.
+    private func backgroundAbilities(_ catalog: Catalog) -> [String] {
+        catalog.backgrounds.first { $0.id == shownBackground }?.abilities ?? []
     }
 
     /// The background the picker marks: the tap in flight, the player's pick, or the server's.
@@ -215,7 +230,7 @@ struct CharacterForgeView: View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Background")
-                Text("What they were before the door. It raises three of their ability scores (+2 to one, +1 to another), and brings a feat, two skills and gear.")
+                Text("What they were before the door. It brings a feat, two skills and gear, and raises three ability scores: +2 to one and +1 to another, or +1 to each.")
                     .font(.footnote).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 if locked {
@@ -224,6 +239,16 @@ struct CharacterForgeView: View {
                     OptionGrid(options: catalog.backgrounds,
                                selection: Binding(get: { shownBackground }, set: { chooseBackground($0) }),
                                columns: 1)
+                }
+            }
+            if !locked, !backgroundAbilities(catalog).isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel("Ability bonuses")
+                    Text("Put +2 on one of these and +1 on another, or +1 on each. None can pass 20. The sheet below shows the result.")
+                        .font(.footnote).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    AbilityBonusPicker(abilities: backgroundAbilities(catalog), boost: $boost)
+                        .id(shownBackground)
                 }
             }
             VStack(alignment: .leading, spacing: 12) {
@@ -261,6 +286,10 @@ struct CharacterForgeView: View {
             }
         }
         .onAppear { refreshSheetIfNeeded() }
+        .onChange(of: boost) { _, _ in
+            guard !locked, currentSheet == nil else { return }
+            requestSheet()
+        }
     }
 
     /// Fetches the preview when the step opens, unless the sheet in hand already fits the hero.
@@ -272,8 +301,11 @@ struct CharacterForgeView: View {
 
     private func chooseBackground(_ id: String) {
         guard !locked, id != background else { return }
-        withAnimation(.snappy) { background = id }
-        if currentSheet == nil { requestSheet() }
+        withAnimation(.snappy) {
+            background = id
+            boost = nil
+        }
+        requestSheet()
     }
 
     /// Asks the server for the level-1 sheet this hero would get. Only the latest request may answer.
@@ -292,7 +324,8 @@ struct CharacterForgeView: View {
             do {
                 // The id seeds the build, so this is the very hero a save would make.
                 let preview = try await model.api.sheet(id: hero.id, name: name.isEmpty ? "Hero" : name, race: asked.race,
-                                                        characterClass: asked.characterClass, backgroundId: asked.background)
+                                                        characterClass: asked.characterClass, backgroundId: asked.background,
+                                                        boost: asked.boost)
                 guard ticket == sheetRequests else { return }
                 withAnimation(.snappy) {
                     hero.sheet = preview.sheet
@@ -414,13 +447,22 @@ struct CharacterForgeView: View {
         .background(Palette.ink.opacity(0.95))
     }
 
+    /// A levelled hero just waits for the sheet. A new one places the background's increases first,
+    /// unless this server's catalog doesn't list the three abilities.
+    private var sheetStepComplete: Bool {
+        if locked { return !sheetLoading }
+        let abilities = model.catalog.map { backgroundAbilities($0) } ?? []
+        if abilities.isEmpty { return !sheetLoading }
+        return boost?.isValid(for: abilities) == true && !sheetLoading
+    }
+
     private func isComplete(_ step: Step) -> Bool {
         switch step {
         case .identity: !hero.name.trimmingCharacters(in: .whitespaces).isEmpty && !hero.gender.isEmpty && !hero.race.isEmpty
         case .calling: !hero.characterClass.isEmpty && !hero.temperament.isEmpty && !hero.alignment.isEmpty
         // Wait for the sheet in flight, so the hero that is sealed is the one on screen. A sheet
         // that failed doesn't block the forge: the server makes one when the hero is saved.
-        case .sheet: !sheetLoading
+        case .sheet: sheetStepComplete
         case .story, .portrait: true
         }
     }
@@ -455,7 +497,8 @@ struct CharacterForgeView: View {
         do {
             // The background on show is the one to build on. A levelled hero sends none: its sheet stays.
             let picked = locked || shownBackground.isEmpty ? nil : shownBackground
-            _ = try await model.save(hero, backgroundId: picked)
+            let placed = locked ? nil : boost
+            _ = try await model.save(hero, backgroundId: picked, boost: placed)
             dismiss()
         } catch {
             self.error = "Couldn't save \(hero.name): \(error.localizedDescription)"

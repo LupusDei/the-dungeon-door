@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { RACES } from '../catalog.ts';
 import { abilityModifier } from './abilities.ts';
 import { armorClass, buildCharacter, type CharacterChoices, quickChoices, rederive } from './character.ts';
-import { seededRng } from './rng.ts';
+import { scriptedRng, seededRng } from './rng.ts';
 import { srd } from './srd.ts';
 import { RuleViolation } from './violation.ts';
 
@@ -193,6 +193,23 @@ test('casters must pick the right number of spells from their own list', () => {
   refuses({ cantrips: ['guidance', 'light', 'wish-for-a-pony'] }, /wish-for-a-pony is not a Cleric cantrip/, MIRA);
   refuses({ cantrips: ['light'] }, /Fighter casts no spells/);
   refuses({ prepared: ['bless'] }, /Fighter casts no spells/);
+});
+
+test('the background increase is added after point buy, the standard array and rolled scores', () => {
+  const boost = { kind: 'twoOne' as const, plusTwo: 'str' as const, plusOne: 'dex' as const };
+  const bought = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
+  const raised = { str: 17, dex: 15, con: 13, int: 12, wis: 10, cha: 8 };
+  assert.deepEqual(buildCharacter({ ...BRYN, abilities: { kind: 'pointBuy', scores: bought }, boost }, rng()).abilityScores, raised);
+  assert.deepEqual(buildCharacter({ ...BRYN, abilities: { kind: 'standardArray', order: ['str', 'dex', 'con', 'int', 'wis', 'cha'] }, boost }, rng()).abilityScores, raised);
+  const rolled = buildCharacter({ ...BRYN, abilities: { kind: 'rolled', order: ['str', 'dex', 'con', 'int', 'wis', 'cha'] }, boost }, seededRng(4));
+  const rolls = rolled.abilityRolls!;
+  assert.deepEqual(rolled.abilityScores, { str: rolls[0] + 2, dex: rolls[1] + 1, con: rolls[2], int: rolls[3], wis: rolls[4], cha: rolls[5] });
+  const spread = buildCharacter({ ...BRYN, abilities: { kind: 'pointBuy', scores: bought }, boost: { kind: 'oneOneOne' } }, rng());
+  assert.deepEqual([spread.abilityScores.str, spread.abilityScores.dex, spread.abilityScores.con, spread.abilityScores.int], [16, 15, 14, 12]);
+  const atCap = buildCharacter({
+    ...BRYN, abilities: { kind: 'rolled', order: ['str', 'dex', 'con', 'int', 'wis', 'cha'] }, boost,
+  }, scriptedRng([...Array(4).fill(6), ...Array(20).fill(1)]));
+  assert.deepEqual([atCap.abilityRolls![0], atCap.abilityScores.str], [18, 20], 'an 18 plus the background\'s +2 is 20, the most');
 });
 
 test('a rolled hero records the rolls and is the same for the same seed', () => {

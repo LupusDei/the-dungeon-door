@@ -40,7 +40,8 @@ DM team can add archetypes without an app release.
 ```
 `symbol` is an SF Symbol name; `accent` a hex colour. Unknown ids are rejected by the endpoints below.
 `races`, `classes` and `backgrounds` are exactly the SRD 5.2 (2024) species, classes and backgrounds.
-A background's `abilities` are the three scores it can raise (the builder puts +2 and +1 on two of them).
+A background's `abilities` are the three scores it can raise. The player puts +2 on one and +1 on
+another, or +1 on each (SRD 5.2; no score above 20).
 `dungeons` are the kinds of game a host can start (the `dungeon` of `POST …/start`): `none`, `fixed`
 and `explore`, in the order to show them.
 `narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
@@ -86,6 +87,8 @@ Character {
   portraitUrl: string | null
   sheet: CharacterSheet           // the rules engine's numbers; always set in responses (see below)
   attacks: Attack[]               // what the hero can attack with, worked out from the sheet; always set
+  bonusesOpen: boolean            // the forge placed the background's ability increases, and the scores
+                                  // are still exactly those, so the player may place them once
   createdAt: string; updatedAt: string
 }
 
@@ -107,6 +110,8 @@ CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see ser
   classId: string; speciesId: string; backgroundId: string; subclassId: string | null
   size: string; speed: number     // feet: the hero's own, before exhaustion (rules.party[].speed is what it moves at)
   abilityScores: { str, dex, con, int, wis, cha: number }
+  abilityBoost?: AbilityBoost    // the player's placement of the background's increases; absent when the
+                                  // server placed them (see bonusesOpen)
   proficiencyBonus: number
   maxHp: number; hp: number; armorClass: number
   hitDiceSpent: number            // of one per level; all come back on a Long Rest
@@ -126,7 +131,17 @@ CharacterSheet {                  // SRD 5.2 (2024 rules); server-owned, see ser
   }
   … plus a few bookkeeping fields (abilityRolls, hpRolls, otherProficiencies, pendingChoices)
 }
+
+AbilityBoost {                   // SRD 5.2 background ability increases, after the base scores
+  { kind: "twoOne", plusTwo: "str", plusOne: "dex" }   // +2 and +1, two different abilities of the background
+  | { kind: "oneOneOne" }                               // +1 to each of the background's three abilities
+}
 ```
+
+The increases come from the background, not the species (2024 rules). They are applied after the base
+scores, whichever way those were got. The forge's base scores are the standard array, best-first to the
+class's primary abilities and then Constitution. Point buy and 4d6-drop-lowest take the same increase
+when a sheet is built that way; the app asks only for the increase. No score goes above 20.
 
 The app never sends the sheet or the attacks: the server builds them with the rules engine and keeps
 the sheet. `attacks` lists the hero's weapons (an Unarmed Strike if it carries none), then every cantrip
@@ -138,20 +153,40 @@ are explained by `GET /api/reference`.
   house art style and the character's race/class/etc., generates a portrait, stores it in Blob.
   `note` is an optional tweak ("make the armour darker") applied on top of `previousAppearance`
   for re-rolls. Slow (10–40 s); the app shows a forging animation.
-- `PUT /api/characters` body `Character` plus optional `backgroundId` (ownerId and `sheet` are ignored;
-  ownerId is taken from `x-dd-player`) → `Character`. Upsert by id; only the owner can update.
+- `PUT /api/characters` body `Character` plus optional `backgroundId` and optional `boost` (`AbilityBoost`;
+  ownerId and `sheet` are ignored; ownerId is taken from `x-dd-player`) → `Character`. Upsert by id; only
+  the owner can update. `boost` may be null, which is the same as leaving it out.
   - A new hero gets a level-1 sheet from the engine: its species (`race`), class and background
-    (`backgroundId`, or one picked for it), standard array scores best-first to the class's saving
-    throws, the background's +2/+1, starting gear and spells, plus one Potion of Greater Healing
-    (`potion-of-greater-healing`) that every new hero is forged with (also on a level-1 rebuild and in
-    `POST /api/sheet`; heroes already saved are not given one). The same id always builds the same hero.
+    (`backgroundId`, or one picked for it), standard array scores best-first to the class's primary
+    abilities and then Constitution, then the background's ability increases, starting gear and spells,
+    plus one Potion of Greater Healing (`potion-of-greater-healing`) that every new hero is forged with
+    (also on a level-1 rebuild and in `POST /api/sheet`; heroes already saved are not given one). The
+    same id always builds the same hero. A hero stored before sheets were kept is still rebuilt
+    best-first to the class's saving throws, so those numbers never change.
+  - `boost` is where the player puts the increases: +2 and +1 on two of that background's three
+    abilities, or +1 on all three. It is kept on the sheet as `abilityBoost`. Left out, the server
+    places +2 and +1 itself (on the class's primary abilities where the background allows) and the hero
+    comes back with `bonusesOpen: true`.
   - Saving again keeps the sheet (level, XP, HP…). Renaming renames the sheet. Changing race, class or
-    background rebuilds it, but only at level 1: a levelled hero gets 400.
+    background rebuilds it, but only at level 1: a levelled hero gets 400. Sending a different `boost`
+    at level 1 moves the increases and leaves gear, level and experience; the numbers that follow from
+    the scores (hit points, AC, saves, skills, spell DC) are worked out again. Above level 1, a new
+    `boost` is accepted only while `bonusesOpen` is true.
+  - A choice the rules forbid is 400: an ability the background does not raise, +2 and +1 on the same
+    ability, or a score that would pass 20.
   - Old ids still accepted and mapped: `half-orc` → `orc`, `half-elf` → `elf` (SRD 5.2 has neither).
-- `POST /api/sheet` body `{ id, name, race, characterClass, backgroundId? }` → `{ sheet, attacks }`: the
-  level-1 sheet `PUT /api/characters` would build for that hero, without saving anything. The forge shows
-  it while the player picks a background. Same validation as the save; `id` seeds the build, so the
-  preview is the hero that will be saved.
+- `POST /api/sheet` body `{ id, name, race, characterClass, backgroundId?, boost? }` → `{ sheet, attacks }`:
+  the level-1 sheet `PUT /api/characters` would build for that hero, without saving anything. The forge
+  shows it while the player picks a background and places the increases. Same validation as the save;
+  `id` seeds the build, so the preview is the hero that will be saved.
+- `POST /api/characters/ability-boost` body `{ characterId, boost }` → `Character`. Places the background's
+  increases on a hero whose `bonusesOpen` is true (the forge placed them, and the scores are still exactly
+  that). The player's placement replaces the forge's; gear, level and experience stay, and hit points, AC,
+  saves, skills and spell DC are worked out again. 409 when the bonuses were already chosen, or the scores
+  have since changed (a later Ability Score Improvement, for example). 400 for a boost the rules forbid.
+  404 for someone else's hero. A game already in progress keeps the copy of the sheet it started with and
+  writes that copy home at the end, so this is for between adventures. No new column: `abilityBoost` lives
+  in the character JSON.
 - `GET /api/characters` → `{ characters: Character[] }` (mine, newest first). Heroes saved before the
   rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
   the upgrade is stored the next time the hero is saved.
