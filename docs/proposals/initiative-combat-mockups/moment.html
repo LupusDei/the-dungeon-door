@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="d20" viewBox="0 0 100 100">
+      <polygon points="50,3 93,27 93,73 50,97 7,73 7,27" fill="currentColor" opacity=".25" stroke="currentColor" stroke-width="5"/>
+      <polygon points="50,22 78,68 22,68" fill="none" stroke="currentColor" stroke-width="5"/>
+      <line x1="50" y1="3" x2="50" y2="22" stroke="currentColor" stroke-width="4"/>
+      <line x1="7" y1="27" x2="22" y2="68" stroke="currentColor" stroke-width="4"/>
+      <line x1="93" y1="27" x2="78" y2="68" stroke="currentColor" stroke-width="4"/>
+      <line x1="22" y1="68" x2="50" y2="97" stroke="currentColor" stroke-width="4"/>
+      <line x1="78" y1="68" x2="50" y2="97" stroke="currentColor" stroke-width="4"/>
+    </symbol>
+  </defs>
+</svg>
+<div class="phone">
+  <div class="status"><span>9:42</span><span>●●● 100%</span></div>
+  <div class="nav"><span class="btn">‹ Leave</span><span class="title">The Goblin Warren</span><span class="btn">Chronicle</span></div>
+
+  <div class="hudline"><span>Round <b>3</b> · Mira's turn</span><span>Fight: <b>moderate</b></span></div>
+  <div class="hud">
+    <div class="row">
+      <div class="hero"><img src="../../../ios/DungeonDoor/DemoAssets/demo-bryn.jpg"><div><div class="n">Bryn</div><div class="bar"><i style="width:65%"></i></div><div class="hp">13 / 20 · AC 16</div></div></div>
+      <div class="hero now"><img src="../../../ios/DungeonDoor/DemoAssets/demo-mira.jpg"><div><div class="n">Mira</div><div class="bar"><i style="width:100%"></i></div><div class="hp">10 / 10 · AC 18</div></div></div>
+      <div class="hero next"><img src="../../../ios/DungeonDoor/DemoAssets/demo-pip.jpg"><div><div class="n">Pip (you)</div><div class="bar"><i class="low" style="width:30%"></i></div><div class="hp">3 / 10 · <span class="cond">Poisoned</span></div></div></div>
+    </div>
+    <div class="row">
+      <div class="foe"><div class="n">Goblin 1</div><div class="w">Unhurt</div><div class="gauge"><i style="width:100%"></i></div></div>
+      <div class="foe dead"><div class="n">Goblin 2</div><div class="w">Dead</div><div class="gauge"><i style="width:0%"></i></div></div>
+      <div class="foe flash"><div class="n">Ogre · strong</div><div class="w">Bloodied</div><div class="gauge"><i style="width:41%"></i></div></div>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <div class="divider">Round 3 · Bryn's turn</div>
+    <div class="entry">
+      <div class="who"><img src="../../../ios/DungeonDoor/DemoAssets/demo-bryn.jpg"></div>
+      <div class="body">
+        <div class="head"><b>Bryn · Longsword at the Ogre</b><span class="die crit"><svg class="d20"><use href="#d20"/></svg>20 · crit</span></div>
+        <div class="eng">Critical hit. The Ogre is bloodied.</div>
+        <div class="chips"><span class="chip">Ogre → Bloodied</span></div>
+      </div>
+    </div>
+    <div class="moment">
+      <div class="pic"><div class="ogre"></div><span class="tag">A turn in the fight · boss bloodied</span><span class="cap">The Ogre Roars</span></div>
+      <div class="txt">Bryn's blade opens the brute from hip to ribs. It bellows loud enough to shake dust from the vault, and the last goblin edges toward the tunnel.</div>
+    </div>
+    <div class="entry foeside">
+      <div class="who"><div class="tok">G1</div></div>
+      <div class="body"><div class="eng small">Goblin 1 attacks Pip with Scimitar: 18 vs AC 14, hit, 4 damage.</div>
+        <div class="chips"><span class="chip">Pip 7 → 3 HP</span></div>
+        <div class="shimmer"></div></div>
+    </div>
+    <div class="entry">
+      <div class="who"><img src="../../../ios/DungeonDoor/DemoAssets/demo-pip.jpg"></div>
+      <div class="body"><div class="speech"><span class="q">Pip:</span> “Mira! Little help here?”</div></div>
+    </div>
+    <div class="divider gold">Round 3 · Mira's turn</div>
+  </div>
+
+  <div class="wait">
+    <img src="../../../ios/DungeonDoor/DemoAssets/demo-mira.jpg">
+    <div style="flex:1">
+      <div style="display:flex;justify-content:space-between"><div class="t1">Mira is choosing…</div><div class="clock">0:29</div></div>
+      <div class="clockbar"><i style="width:64%"></i></div>
+      <div class="t2">You're next. Plan in Chat; your actions open on your turn.</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="on"><span class="ic">⚔</span>Fight</div>
+    <div><span class="ic">▤</span>Sheet</div>
+    <div class="dot"><span class="ic">▦</span>Map</div>
+    <div><span class="ic">✉</span>Chat</div>
+  </div>
+</div>
+</body></html>
