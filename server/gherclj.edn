@@ -12,5 +12,6 @@
                    gherclj.ability-bonuses-steps
                    gherclj.adventures-steps
                    gherclj.scene-picture-steps
-                   gherclj.noncombat-xp-steps]
+                   gherclj.noncombat-xp-steps
+                   gherclj.road-count-steps]
  :framework :typescript/node-test}

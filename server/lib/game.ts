@@ -197,6 +197,18 @@ function heroInGame(game: Game, { playerId, character }: GamePlayer): Character 
   return upgradeCharacter({ ...character, sheet: live });
 }
 
+/** How long the adventure is, and where the current scene falls in it, the road counted apart (play/progress.ts). */
+function lengthOf(game: Game, current: StoredScene | null): Pick<GameState, 'sceneCount' | 'openEnded' | 'scenesLeft' | 'progress'> {
+  const open = hasNoSetLength(game.sceneCount);
+  const begun = game.status !== 'lobby' && game.status !== 'preparing';
+  return {
+    sceneCount: open ? 0 : game.sceneCount,
+    openEnded: open,
+    scenesLeft: begun ? scenesLeft(game.sceneCount, game.sceneIndex) : null,
+    progress: current && sceneProgress(game.party, current.index, game.sceneCount),
+  };
+}
+
 export function toState(game: Game, playerId: string, messages: Message[], messageUpdates: Message[] = [], typing: TypingNotice[] = []): GameState {
   const current = game.scenes.find((s) => s.index === game.sceneIndex) ?? null;
   return {
@@ -205,10 +217,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     status: game.status,
     dungeonMaster: game.dungeonMaster,
     title: game.title,
-    sceneCount: hasNoSetLength(game.sceneCount) ? 0 : game.sceneCount,
-    openEnded: hasNoSetLength(game.sceneCount),
-    scenesLeft: game.status === 'lobby' || game.status === 'preparing' ? null : scenesLeft(game.sceneCount, game.sceneIndex),
-    progress: current && sceneProgress(game.party, current.index, game.sceneCount),
+    ...lengthOf(game, current),
     players: game.players.map((p) => playerView(game, p)),
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
