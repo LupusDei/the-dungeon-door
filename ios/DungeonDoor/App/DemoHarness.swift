@@ -445,7 +445,10 @@ enum DemoData {
                 HudFoe(id: "foe-2", name: "Goblin Archer", tier: "hurt", label: "Hurt", status: "up",
                        conditions: [HudCondition(id: "asleep", label: "Asleep", source: "Sleep", ends: sleep)]),
                 HudFoe(id: "foe-3", name: "Goblin Warrior", tier: "unhurt", label: "Unhurt", status: "up", conditions: []),
-            ])
+            ],
+            order: [miraId, "foe-2", "foe-1", brynId, "foe-3", pipId],
+            now: brynId,
+            next: "foe-3")
     }
 
     static func dungeon(waiting: Bool) -> DungeonMap {

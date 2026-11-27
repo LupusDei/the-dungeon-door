@@ -1656,9 +1656,15 @@ extension HudFoe {
 struct CombatHud: Codable, Hashable {
     let party: [HudHero]
     let foes: [HudFoe]
+    /// Every combatant's id in initiative order, heroes and foes together. Empty from older servers.
+    var order: [String] = []
+    /// Whose turn it is. Nil once the fight is over, and from older servers.
+    var now: String? = nil
+    /// Who comes up after them, past anyone who cannot act.
+    var next: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case party, foes
+        case party, foes, order, now, next
     }
 }
 
@@ -1667,6 +1673,9 @@ extension CombatHud {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         party = try c.value(.party, or: [])
         foes = try c.value(.foes, or: [])
+        order = try c.value(.order, or: [])
+        now = try c.decodeIfPresent(String.self, forKey: .now)
+        next = try c.decodeIfPresent(String.self, forKey: .next)
     }
 }
 
