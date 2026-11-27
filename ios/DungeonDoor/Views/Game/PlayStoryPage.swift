@@ -1,11 +1,21 @@
 import SwiftUI
 
+/// What makes a new turn on the story page: the scene, the round of a fight, and the narration.
+/// A poll that only brings votes, chat, typing, or a finished picture does not change it.
+private struct StoryTurn: Equatable {
+    let index: Int
+    let round: Int
+    let narration: String
+}
+
 /// The narrative pane: the scene, what the table offers, a freeform action, and the last dice.
 struct PlayStoryPage: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
     var narrator: Narrator
     var focusOffers: Int
+    /// Offer-focuses the shell has already scrolled to. A later visit must not jump down again.
+    @Binding var offersSeen: Int
     var onOffer: (TableOffer) -> Void
 
     @State private var freeform = ""
@@ -15,6 +25,14 @@ struct PlayStoryPage: View {
     private var scene: GameScene? { state.scene }
     private var inCombat: Bool { scene?.combat == true }
     private var canSend: Bool { PlayTurn.canSend(status: state.status, scene: scene, busy: session.busy) }
+
+    /// Scene, combat round, and narration. Votes, chat, typing, and a picture finishing leave it
+    /// the same, so the story scrolls home once per turn and not on every poll.
+    private var storyTurn: StoryTurn {
+        StoryTurn(index: scene?.index ?? -1,
+                  round: state.rules?.combat?.round ?? 0,
+                  narration: scene?.narration ?? "")
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -52,12 +70,26 @@ struct PlayStoryPage: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity)
+                .id("storyTop")
             }
             .scrollDismissesKeyboard(.interactively)
+            .task(id: storyTurn) {
+                // Runs when the page appears and whenever the turn changes. Appearance covers a
+                // turn that arrived while another tab was showing: this page is built then, already
+                // meant to open on the narration. Choose still wins when it asked for the offers.
+                guard focusOffers <= offersSeen else { return }
+                try? await Task.sleep(for: .milliseconds(50))
+                guard !Task.isCancelled, focusOffers <= offersSeen else { return }
+                withAnimation(.easeInOut(duration: 0.45)) {
+                    proxy.scrollTo("storyTop", anchor: .top)
+                }
+            }
             .task(id: focusOffers) {
-                guard focusOffers > 0 else { return }
+                guard focusOffers > offersSeen else { return }
+                let turn = storyTurn
+                offersSeen = focusOffers
                 try? await Task.sleep(for: .milliseconds(80))
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, storyTurn == turn else { return }
                 withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo("offers", anchor: .top) }
             }
         }

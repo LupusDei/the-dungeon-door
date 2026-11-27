@@ -51,6 +51,8 @@ struct PlayShell: View {
     @State private var tab: PlayTab
     @State private var pane: PlaySheetPane
     @State private var focusOffers: Int
+    /// Offer-focuses already scrolled. Kept here so opening Story again does not jump down.
+    @State private var offersSeen: Int
     @State private var pending: LegalAction?
     @State private var mapTarget: String?
 
@@ -64,6 +66,7 @@ struct PlayShell: View {
         _pane = State(initialValue: initialPane)
         _mapTarget = State(initialValue: mapTarget)
         _focusOffers = State(initialValue: scrollOffers ? 1 : 0)
+        _offersSeen = State(initialValue: 0)
     }
 
     private var state: GameState { session.state }
@@ -118,7 +121,7 @@ struct PlayShell: View {
         switch tab {
         case .story:
             PlayStoryPage(session: session, narrator: narrator, focusOffers: focusOffers,
-                          onOffer: considerOffer)
+                          offersSeen: $offersSeen, onOffer: considerOffer)
         case .sheet:
             PlaySheetPage(session: session, pane: $pane, onAction: consider)
         case .map:
