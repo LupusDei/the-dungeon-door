@@ -41,12 +41,14 @@ call, the app). The rules barely change.
 
 ### Rolling initiative
 
-3. A **"Roll for initiative"** card appears for every player at once, with a d20 showing their
-   bonus ("d20+3"). Each player throws their own die. As in today's `myDie`, the server rolled the
-   face when the fight began and the throw reveals it. Monsters' initiative is shown at once.
-4. The order fills in as the dice land. Unthrown dice are thrown by the server after **15
-   seconds**. Then the first turn begins. Throwing changes nothing in the rules: the order was fixed
-   when the fight began. It is theatre, and players like throwing.
+3. A **"Roll for initiative"** die appears for every player, with their bonus ("d20+3"). As in
+   today's `myDie`, the server rolled the face when the fight began, and a throw reveals it.
+   Monsters' initiative is shown at once.
+4. **The fight does not wait for these throws.** The order was fixed when the fight began, so the
+   first turn starts at once and the HUD shows the order immediately. A hero's number shows when
+   their player throws, or at that hero's first turn, whichever comes first. A first actor who has
+   not thrown simply starts their turn; their number appears with it. The throw is theatre, and
+   players like throwing.
 5. The HUD shows the order as a row of portraits and foe tokens. The current actor is ringed, and a
    small marker shows who is next.
 
@@ -131,7 +133,7 @@ call, the app). The rules barely change.
 
 | What | Proposal |
 | --- | --- |
-| Initiative throw | 15 s, then the server throws |
+| Initiative throw | never waited for: the first turn starts at once, and an unthrown number shows at that hero's first turn |
 | A hero's turn | **45 s** from the turn's start (today a whole round is 90 s for everyone) |
 | Away hero (two missed turns in a row) | 10 s, until that player acts or opens the game again |
 | Classifying a written action | the clock stops while the DM classifies it (2 to 4 s) |
@@ -139,6 +141,24 @@ call, the app). The rules barely change.
 | Engine resolution | well under 100 ms, inside the request that threw the die |
 | DM line | 1 to 3 s after the engine line, asynchronous |
 | Moment picture | 10 to 20 s, asynchronous |
+
+### Turns never wait for other players' input
+
+This is a rule of the design, not a default. **A turn waits only for its own actor, and only until
+that actor's clock runs out.** It never waits for anyone else:
+- no "anyone want to help?" or "react?" pause after an action. Help is declared ahead, on the
+  helper's own turn (section 5);
+- no reaction prompts. Opportunity attacks and anything later that works like them are resolved by
+  the engine from what was declared ahead (question 3);
+- no wait for initiative throws (section 1, step 4), confirmations, or the DM's line or picture;
+- no wait for a classification of someone else's words. Only the actor's own written action stops
+  their own clock while it is classified.
+
+As soon as an action resolves, the next combatant's turn begins in the same request. The only
+pause between turns is the monster beat on screen (1.2 s per entry), and the clock is not running
+during it. A feature pins this: "The next turn begins as soon as an action resolves".
+
+### The clock
 
 **An idle hero takes the Dodge action** when the clock runs out. That is what the engine does
 today for a hero with no vote (`turnAction` in `play/fight.ts`), and it is the kind default: the
@@ -207,7 +227,7 @@ The memory store gets the same: an array per game.
 
 ```ts
 turnStartedAt?: string;   // ISO, when this turn's clock began (the last showAt of the monsters before)
-turnSeconds?: number;     // 45, or 10 for an away hero, or 15 while initiative is being thrown
+turnSeconds?: number;     // 45, or 10 for an away hero
 away?: string[];          // heroes whose players missed two turns in a row
 missed?: Record<string, number>;
 declared?: { actor: string; actionId?: string; choiceId?: ChoiceId; targets?: string[];
@@ -235,7 +255,7 @@ Fight {
     seq: number                   // combat_turn; every turn call names it
     actorId: string
     playerId: string | null       // the hero's player; null for a monster
-    phase: "initiative" | "choosing" | "throwing" | "monsters"
+    phase: "choosing" | "throwing" | "monsters"
     startedAt: string; deadline: string; seconds: number; now: string
     away: boolean
     declared: null | { label: string; formula: string | null }   // what the actor locked in, for everyone
@@ -292,7 +312,7 @@ Three rules for the client, so a per-player feed (section 9) needs no app rewrit
 | Call | What it does |
 | --- | --- |
 | `POST /api/games/{code}/turn` `{ turn, actionId \| choiceId, targets?, move?, text? }` | The current actor's action, with the same body as `/vote` plus `turn` (`fight.turn.seq`). No d20 needed: it resolves now, and the response carries the new entries. A d20 needed: the face is rolled and hidden, `fight.mine.die` is set, and calling again before the throw changes the action and keeps the face. 409 `not_your_turn`, 409 `stale_turn` (the turn moved on), 400 for an illegal action (same messages as `/vote`). |
-| `POST /api/games/{code}/roll` `{ turn }` | Throws the hidden die: the turn resolves at once, then the monsters after it, all in this request. With `turn` it is a fight throw. With `sceneIndex` it is today's throw. The initiative throw is the same call while `phase` is `initiative`. |
+| `POST /api/games/{code}/roll` `{ turn }` | Throws the hidden die: the turn resolves at once, then the monsters after it, all in this request. With `turn` it is a fight throw. With `sceneIndex` it is today's throw. `{ initiative: true }` reveals the caller's initiative; it changes no turn and is refused once that hero's first turn has begun (their number is already shown). |
 | `POST /api/games/{code}/action` `{ turn, text }` | A written action in a fight, on your own turn. The DM classifies, the clock stops meanwhile, then it plays like `/turn`. Off your turn: 409 `not_your_turn`. |
 | `POST /api/games/{code}/speak` `{ text }` | Unchanged for the player. During a fight the line also goes onto the log as `speech`. Anyone, at any time. |
 | `POST /api/games/{code}/advance` | Host only: the current hero Dodges now. (Today it resolves the whole round.) |
@@ -529,25 +549,34 @@ third choice's "Help *name*" only stabilize a dying ally. On anyone else, Help i
 and does nothing (`resolveNamedAction` in `play/legal.ts`). With one combatant acting at a time,
 there is no shared choice for heroes to help each other on.
 
-**In a fight it becomes the SRD 5.2 Help action.** On your turn you spend your action on one of
-three forms:
+**In a fight it becomes the 5e Help action, declared in advance.** Helping happens on the
+helper's own turn and nowhere else. There is no "anyone want to help?" pause after someone acts,
+and no window for other players to chip in (section 2, "Turns never wait"). The helper spends
+their action naming an ally. The ally carries the Advantage until they use it or the helper's next
+turn begins:
 
 | Form | Action id | Target | Effect | Ends |
 | --- | --- | --- | --- | --- |
-| Assist an attack | `help:attack` | a foe **within 5 feet** of the helper (the SRD's distance; a reach weapon does not lengthen it) | the **next attack roll by any ally** against that foe has Advantage | used by that attack, or lapses at the start of the helper's next turn |
+| Assist an attack | `help:attack` | an ally **and** a foe within 5 feet of the helper (the SRD's distance; a reach weapon does not lengthen it) | that ally's **next attack roll against that foe** has Advantage | used by that attack, or lapses at the start of the helper's next turn |
 | Assist a check | `help:check` | an ally, and a skill or tool **the helper is proficient in** | that ally's **next ability check with that skill** has Advantage | used by that check, or lapses at the start of the helper's next turn |
 | Stabilize | `help:stabilize` | a dying ally within 5 feet | a DC 10 Wisdom (Medicine) check, or a Healer's Kit, as today | at once |
 
+Naming the ally is narrower than SRD 5.2, where the attack Help goes to the next attack by *any*
+ally. Micah asked for the Advantage to sit on the ally, and naming one makes the marker, the log and
+the next player's choice unambiguous (open question 14).
+
 `common:help` stays as an alias so today's votes and the Map's buttons keep working. A dying
-target means stabilize, a foe means assist an attack, an ally means assist a check with the
-helper's best-fitting skill.
+target means stabilize. An ally means assist that ally: an attack against the foe in reach they
+are engaged with, or else a check with the helper's best-fitting skill.
 
 **Rules details:**
-- Help needs no d20 from the helper, so it resolves on the tap, and the next turn begins.
-- Each Help is one use. If two heroes Help against the same Ogre, the next two attacks on it each
-  have Advantage. Advantage itself does not stack.
-- An ally's opportunity attack on that foe is an attack roll and uses the Help.
-- A Help is discarded when its foe falls or its ally drops, and when the fight ends. The helper
+- Help needs no d20 from the helper, so it resolves on the tap, and the next turn begins at once.
+  Nobody else is asked anything.
+- Each Help is one use. Two heroes helping Corin against the Ogre give Corin one attack with
+  Advantage (Advantage does not stack) and leave the second Help for Corin's next attack before it
+  lapses. Two Helps for two different allies give each of them one.
+- Corin's opportunity attack on that foe is an attack roll by Corin, and uses the Help.
+- A Help is discarded when its foe falls, when its ally drops, and when the fight ends. The helper
   going down does not cancel it before their next turn.
 - Advantage from Help joins any other source and cancels against Disadvantage, as the engine does
   now (`resolve.ts`). The extra d20 comes from the game's seeded RNG. The player's thrown face is
@@ -558,39 +587,57 @@ helper's best-fitting skill.
 - Monsters do not take the Help action, as they take none of the common actions today.
 
 **How it is chosen:**
-- **Turn panel and Sheet.** "Help" sits among the common actions. `help:attack` lists the foes in
-  reach as `targets`. `help:check` lists one target per ally and skill ("Corin: Athletics"), so the
-  existing `{ id, name }` target shape carries the pair with no new field. On the turn panel the
-  third quick action becomes "Help against the Ogre" when an ally is engaged with a foe in the
-  helper's reach and no friend is dying.
-- **Map.** A foe token within 5 feet gets a **Help** button beside Attack and Cast on its card. An
-  ally token gets Help when `help:check` lists them.
+- **Turn panel and Sheet.** "Help" sits among the common actions. Each target is one pair in the
+  existing `{ id, name }` shape, so no new field is needed: `help:attack` lists "Corin against the
+  Ogre" for each ally and each foe within 5 feet of the helper, and `help:check` lists "Corin:
+  Athletics" for each ally and proficient skill. The turn panel's third quick action becomes "Help
+  Corin against the Ogre" when an ally is engaged with a foe in the helper's reach and no friend is
+  dying.
+- **Map.** An ally token's card gets **Help** when `help:attack` or `help:check` lists them. If the
+  ally could be helped against more than one foe, a second tap picks the foe.
 - **In your own words.** "I wave my torch in the Ogre's face so Corin can hit it" is classified
-  as `help:attack`. The classification returns the target the words name; this fixes, for Help,
-  the TODO in `castAction` that drops named targets. With no target named, the engine picks the
-  foe in reach that the most allies are engaged with, or for a check the ally who is Grappled or
-  Restrained.
+  as `help:attack`. The classification returns the ally and the foe the words name; this fixes, for
+  Help, the TODO in `castAction` that drops named targets. When the words leave one out, the
+  engine picks: the foe in reach that ally is engaged with, or the ally engaged with that foe, or
+  for a check the ally who is Grappled or Restrained.
 
 **How it is shown:**
-- **Log.** The helper's entry: "Bryn distracts the Ogre: the next ally's attack on it has Advantage
-  (until Bryn's next turn)." When it is used, the attacker's die shows "Advantage · Bryn's help" and
-  the line reads "Corin attacks the Ogre with Mace, with Bryn's help: 8 and 16, 16 + 4 = 20 vs AC
-  11, hit." If unused, a small line at the start of Bryn's next turn: "Bryn's help against the Ogre
+- **Log.** The helper's entry: "Bryn distracts the Ogre for Corin: Corin's next attack on it has
+  Advantage (until Bryn's next turn)." When it is used, Corin's die shows "Advantage · Bryn's help"
+  and the line reads "Corin attacks the Ogre with Mace, with Bryn's help: 8 and 16, 16 + 4 = 20 vs
+  AC 11, hit." If unused, a small line at the start of Bryn's next turn: "Bryn's help for Corin
   lapses." The DM's beat gets the same lines, so it can tell the feint.
-- **HUD.** A gold hand marker. On a **foe** it means "the next attack on it has Advantage", and a
-  tap says who is helping. On an **ally** it means "Advantage on their next Athletics check". The
-  marker goes when the Help is used or lapses. A new optional field on each combatant in
-  `rules.combat.combatants` carries it:
-  `helped: [{ by: string; kind: "attack" | "check"; skill: string | null; until: string }]`
-  (`until` names the helper whose next turn ends it). Its `changes` in the log entry add and remove
-  it, so the HUD can flash it. The HUD agent only has to draw the marker.
-- **Turn panel.** On the turn of an ally who can use a Help, their actions say so: "Attack the Ogre
-  with Mace · Advantage (Bryn's help)". The same note goes in that action's `detail`.
+- **HUD.** A gold hand **marker on the ally**: "Advantage vs Ogre · Bryn" or "Advantage on
+  Athletics · Bryn". A tap tells the rest. An attack Help also puts a faint outline on its foe, so the
+  table can see who is open. The marker goes when the Help is used or lapses. A new optional field
+  on each hero in `rules.combat.combatants` carries it:
+  `helped: [{ by: string; kind: "attack" | "check"; against: string | null; skill: string | null }]`
+  (`against` is the foe's id for an attack Help). It ends at the start of `by`'s next turn. The
+  log entry's `changes` add and remove it, so the HUD can flash it. The HUD agent only has to draw
+  the marker.
+- **Turn panel.** On the helped ally's turn their actions say so: "Attack the Ogre with Mace ·
+  Advantage (Bryn's help)". The same note goes in that action's `detail`.
 
-**State.** `CombatState.helps?: { by: string; kind: 'attack' | 'check'; target: string;
-skill?: string }[]` in `games.combat` (no migration). `advance` in `rules/scene.ts` clears the
-helper's entries at the start of their turn, where it already clears `dodging`. The attack and
-check resolvers take the first matching entry and remove it.
+**State.** `CombatState.helps?: { by: string; kind: 'attack' | 'check'; ally: string;
+against?: string; skill?: string }[]` in `games.combat` (no migration). `advance` in
+`rules/scene.ts` clears the helper's entries at the start of their turn, where it already clears
+`dodging`. The attack and check resolvers take the first matching entry for that ally and remove
+it.
+
+**Conditional help (a readied "if Bryn attacks the boss, I distract it").** Evaluated, and **not
+recommended**:
+- In 5e it is the Ready action: the helper names a trigger and a Help, and spends their reaction
+  when the trigger happens. The engine would resolve it by itself when the trigger fires, with no
+  prompt. So it would not break the no-wait rule.
+- But it adds almost nothing. A plain Help already lasts until the helper's next turn, and it
+  already names the ally and the foe. "If Bryn attacks the Ogre before my next turn, she has
+  Advantage" is exactly what declaring Help for Bryn against the Ogre does.
+- The only differences cost more than they give. A readied Help is kept when Bryn does something
+  else, so it could be spent on a later attack. In exchange it needs a trigger picker on the
+  phone, spends the helper's reaction, and lets the attack Help reach a foe that moved into the
+  helper's reach after their turn.
+- Recommendation: plain, named Help only. If readied actions come later (open question 4), their
+  fixed triggers cover attacks and spells, not Help.
 
 **Outside a fight it stays as it is.** Recommended: yes. Out of combat the party still decides
 together, and a party check with proficient companions giving Advantage is how 5.2 treats one
@@ -598,7 +645,8 @@ hero leading with help. Nothing changes in `play/checks.ts`. A later "one hero h
 combat can reuse `help:check` if the out-of-combat flow ever becomes per-hero.
 
 **Rounds mode** gets the same Help, because both modes run the same engine after phase 1. Within a
-round, a Help counts for allies who act after the helper.
+round, a Help counts for an ally who acts after the helper, and otherwise carries into the next round
+until the helper's turn.
 
 ---
 
@@ -624,9 +672,9 @@ Each has a recommended answer. Agreeing with all of them is a fine reply.
    was not thrown is thrown for them and resolves. No action means Dodge. Two misses mean away (10 s
    turns). A player who leaves the game: their hero leaves the order at the end of its turn, as
    leaving gives up the seat today.
-7. **Do players throw initiative themselves?** Recommend **yes**, with a 15 s window. It is
-   theatre (the order is fixed at the fight's start), but it starts the fight with everyone
-   touching a die.
+7. **Do players throw initiative themselves?** Recommend **yes, with no waiting**: the first turn
+   starts at once, and an unthrown number shows at that hero's first turn. It is theatre (the order
+   is fixed at the fight's start), but it starts the fight with everyone touching a die.
 8. **Pictures per fight?** Recommend the opening plus **at most two**, at least two rounds apart,
    only on an engine candidate, and the DM chooses which. Adjustable with `DD_FIGHT_PICTURES`.
 9. **The HUD.** Recommend the HUD stays a pure view of the combatants with an optional
@@ -643,9 +691,10 @@ Each has a recommended answer. Agreeing with all of them is a fine reply.
 13. **Rounds mode.** Recommend keeping it only for old games and old apps, and removing it once no
     open game uses it.
 14. **Help against a foe: for one named ally, or the next ally to attack?** SRD 5.2 gives it to the
-    next attack by *any* ally. Recommend the SRD. The helper can say whom they mean in words or
-    chat, and the HUD marker shows everyone that the foe is open. Naming one ally would need a
-    second target and would waste the Help if that ally chose to do something else.
+    next attack by *any* ally. Recommend **a named ally**, as Micah described: the helper names
+    the ally and the foe, and the marker sits on that ally. The cost is that the Help is lost if
+    that ally does something else before the helper's next turn. That is clear, and it is the
+    player's call.
 15. **Group helping outside combat?** Recommend **keeping it as it is**: the party's check, rolled
     by the best hero with Advantage from proficient companions.
 
@@ -682,11 +731,15 @@ Feature: Initiative combat
     Then Bryn's initiative is shown
     And the order is the one fixed when the fight began
 
-  Scenario: Initiative not thrown in 15 seconds is thrown by the server
+  Scenario: The first turn does not wait for initiative throws
     Given the party engages "Goblin Warrior"
-    When 15 seconds pass with Corin's initiative not thrown
+    And no hero has thrown initiative
+    Then the first turn has begun
+
+  Scenario: An unthrown initiative shows at that hero's first turn
+    Given Corin has not thrown initiative
+    When Corin's first turn begins
     Then Corin's initiative is shown
-    And the first turn begins
 
   Scenario: Heroes go before monsters on a full tie
     Given Bryn and a Goblin Warrior roll the same initiative with the same bonus
@@ -713,6 +766,12 @@ Feature: Initiative combat
     Given it is Bryn's turn
     Then Bryn is offered actions
     And Corin is offered none
+
+  Scenario: The next turn begins as soon as an action resolves
+    Given it is Bryn's turn and Corin acts next
+    When Bryn's attack resolves
+    Then it is Corin's turn
+    And no other player was asked for input
 
   Scenario: Voting is closed in an initiative fight
     Given it is Bryn's turn
@@ -771,47 +830,59 @@ Feature: Initiative combat
 
   # --- Help ----------------------------------------------------------------
 
-  Scenario: Help against a foe in reach gives the next ally's attack on it Advantage
+  Scenario: Help for an ally against a foe in reach gives that ally Advantage
     Given it is Bryn's turn
     And the Ogre is within 5 feet of Bryn
-    When Bryn helps against the Ogre
-    Then the log says Bryn distracts the Ogre
-    And the Ogre is marked as helped by Bryn
+    When Bryn helps Corin against the Ogre
+    Then the log says Bryn distracts the Ogre for Corin
+    And Corin is marked as helped by Bryn against the Ogre
     And it is the next combatant's turn without a throw from Bryn
     When Corin attacks the Ogre
     Then Corin's attack has Advantage from Bryn's help
 
+  Scenario: Helping asks nobody else anything
+    Given it is Bryn's turn
+    When Bryn helps Corin against the Ogre
+    Then no player is asked for input
+    And the next combatant's turn has begun
+
+  Scenario: Help is for the ally it names
+    Given Bryn helped Corin against the Ogre
+    When Mira attacks the Ogre before Corin does
+    Then Mira's attack does not have Advantage
+    And Corin is still marked as helped
+
   Scenario: Help is not offered against a foe beyond 5 feet
     Given the Ogre is 10 feet from Bryn
-    Then "help:attack" does not list the Ogre for Bryn
+    Then "help:attack" offers no help against the Ogre from Bryn
 
   Scenario: A help is used by one attack
-    Given Bryn helped against the Ogre
-    When Corin attacks the Ogre
-    And Mira attacks the Ogre before Bryn's next turn
-    Then Corin's attack has Advantage
-    And Mira's attack does not
-    And the Ogre is no longer marked as helped
+    Given Bryn helped Corin against the Ogre
+    When Corin attacks the Ogre twice before Bryn's next turn
+    Then Corin's first attack has Advantage
+    And Corin's second attack does not
+    And Corin is no longer marked as helped
 
-  Scenario: Two helps give two attacks Advantage
-    Given Bryn and Pip each helped against the Ogre
-    When Corin and then Mira attack the Ogre
-    Then both attacks have Advantage
+  Scenario: Two helps for one ally do not stack
+    Given Bryn and Pip each helped Corin against the Ogre
+    When Corin attacks the Ogre
+    Then Corin's attack has Advantage once
+    And Corin is still marked as helped by Pip
 
   Scenario: An unused help lapses at the start of the helper's next turn
-    Given Bryn helped against the Ogre
-    And nobody attacked the Ogre
+    Given Bryn helped Corin against the Ogre
+    And Corin did not attack the Ogre
     When Bryn's next turn begins
-    Then the log says Bryn's help against the Ogre lapses
-    And the Ogre is no longer marked as helped
+    Then the log says Bryn's help for Corin lapses
+    And Corin is no longer marked as helped
 
   Scenario: A help is discarded when its foe falls
-    Given Bryn helped against Goblin Warrior 1
+    Given Bryn helped Corin against Goblin Warrior 1
     When Goblin Warrior 1 falls to someone else's spell
     Then no help is left on the fight
 
-  Scenario: An ally's opportunity attack uses the help
-    Given Bryn helped against Goblin Warrior 1
+  Scenario: The helped ally's opportunity attack uses the help
+    Given Bryn helped Corin against Goblin Warrior 1
     When Goblin Warrior 1 leaves Corin's reach and Corin's opportunity attack is made
     Then Corin's opportunity attack has Advantage from Bryn's help
 
@@ -832,11 +903,11 @@ Feature: Initiative combat
     When Bryn helps Corin
     Then Bryn makes a DC 10 Medicine check to stabilize Corin
 
-  Scenario: Help in your own words names its foe
+  Scenario: Help in your own words names its ally and foe
     Given it is Bryn's turn
     And the Ogre is within 5 feet of Bryn
     When Bryn writes "I wave my torch in the Ogre's face so Corin can hit it"
-    Then Bryn helps against the Ogre
+    Then Bryn helps Corin against the Ogre
 
   Scenario: Outside a fight companions still help the best hero's check
     Given the party is not in a fight
@@ -1022,13 +1093,13 @@ changes for players until the flag is on. Sizes are rough: **S** is a few hundre
 | Phase | What ships | Gherkin scenarios | Size |
 | --- | --- | --- | --- |
 | **1. One turn at a time in the engine** | `play/initiative.ts`: `takeTurn(party, combat, heroAction \| null)` returns `{ party, combat, entries, candidate, ended }`. It is the body of `fightRound`'s loop with saves, concentration, morale and `lastingOnSheets` run per turn, plus `runMonsters` to the next hero. `fightRound` is rebuilt on it, so rounds mode still passes every existing test. End-of-turn condition saves. Moment candidates. No API change. | "Heroes go before monsters on a full tie", "A condition … end of the hero's own turn", "Foes may break in the middle of a round", "After ten rounds the foes flee" (rounds mode too) | M |
-| **1b. The Help action** | `help:attack`, `help:check`, `help:stabilize` in `play/legal.ts` (`common:help` as the alias), `CombatState.helps` with use and lapse in `rules/scene.ts` and the attack and check resolvers, the `helped` marker on `rules.combat.combatants`, the log lines. It works in rounds mode too, so it ships before the API work. `docs/api.md` first. | the Help block, except "Help in your own words names its foe" (phase 6) | S–M |
+| **1b. The Help action** | `help:attack`, `help:check`, `help:stabilize` in `play/legal.ts` (`common:help` as the alias), `CombatState.helps` with use and lapse in `rules/scene.ts` and the attack and check resolvers, the `helped` marker on `rules.combat.combatants`, the log lines. It works in rounds mode too, so it ships before the API work. `docs/api.md` first. | the Help block, except "Help in your own words names its ally and foe" (phase 6) | S–M |
 | **2. The fight API, engine lines only** | Migration (`combat_mode`, `combat_turn`, `combat_log`), both stores, `status: "fighting"`, `GameState.fight`, `POST /turn`, `/roll` with `turn`, `/advance` as skip, the poll's `logSince`/`logUpdates`, the clock and Dodge on expiry, monster `showAt` pacing, the fight as one scene, the end going to `nextScene` with a fight summary. The perception hooks (section 9): the null
 `audience` column and `perceives` on every read path. Behind `DD_INITIATIVE`. `docs/api.md` first. `npm run playtest` bots learn `/turn`. | Starting a fight, whose turn, a hero's action, monsters, the clock (not away), leaving the fight, polling, rounds mode | L |
 | **3. The app's Fight tab** | `GameSession` reads `fight` and `logSince`. A Fight tab: HUD on top (the other agent's view), the scroll, the turn panel and die, the waiting bar, monster beats by `showAt`, Sheet and Map sending `/turn`. `INITIATIVE_MIN_BUILD`, `MARKETING_VERSION` bump, TestFlight. Needs a Mac: untestable on a cloud agent. | none new (exercises phase 2) | L |
 | **4. The DM's beats** | `narrateBeat` in `dm/types.ts`, `llm.ts`, `fake.ts`. `DD_BEAT_MODEL`. The serial background queue per fight, folding, the 8 s drop. `stripHeroSpeech` on beats. `npm run dm:check` gains the beat. The app shows the shimmer and then the line. | "The engine's line comes before…", "…arrives as an update", "A dungeon master who fails…", "A run of monsters is narrated once" | M |
 | **5. Moments** | Candidates to the DM, `moment` on the beat, the picture budget (`DD_FIGHT_PICTURES`), painting a moment with the party's portraits (`paintScene`'s cast), `pictureUrl`, summary cards, moment pictures in `Adventure.images`. The app's moment card. | the Moments block | M |
-| **6. At the table** | Players throw initiative (15 s). Away (10 s). The "your turn" push (kind `combat`, 4 s hold). Written actions and speech in the log, and Help in your own words (the classifier returns the target the words name: a `dm/` change, so `dm:check`). "Read the fight" (`GET …/fights/{sceneIndex}`). The dying hero throws their own death save. | initiative throws, away, written actions and speech, "Help in your own words names its foe", "A past fight's log can be read whole" | M |
+| **6. At the table** | Players throw initiative (never waited for). Away (10 s). The "your turn" push (kind `combat`, 4 s hold). Written actions and speech in the log, and Help in your own words (the classifier returns the target the words name: a `dm/` change, so `dm:check`). "Read the fight" (`GET …/fights/{sceneIndex}`). The dying hero throws their own death save. | initiative throws, away, written actions and speech, "Help in your own words names its ally and foe", "A past fight's log can be read whole" | M |
 | **7. On by default** | `DD_INITIATIVE=1` in production once a TestFlight build with phase 3 is in testers' hands. Later, rounds mode removed when no open game uses it. | none | S |
 
 Phases 1 and 2 are server-only and can be done by a cloud agent. Phase 3 needs Xcode. Phases 4
