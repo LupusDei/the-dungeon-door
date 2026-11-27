@@ -159,7 +159,21 @@ Character {
   attacks: Attack[]               // what the hero can attack with, worked out from the sheet; always set
   bonusesOpen: boolean            // the forge placed the background's ability increases, and the scores
                                   // are still exactly those, so the player may place them once
+  retiredAt: string | null        // ISO-8601: the player retired the hero (POST /api/characters/retire);
+                                  // null while active. Always set in responses
+  death: Death | null             // how and where the hero fell; null for the living (set when an adventure
+                                  // ends) and for a hero that died before deaths were recorded. While an
+                                  // adventure is still going, a hero that fell in it may already have one:
+                                  // show it only when sheet.dead. Always set in responses
   createdAt: string; updatedAt: string
+}
+
+Death {
+  at: string                      // ISO-8601, when the hero fell
+  adventure: string | null        // the game's title
+  place: string | null            // the scene they fell in ("The Flooded Crypt")
+  cause: string | null            // the engine's line for it ("Bryn dies.", "Starvation: Exhaustion 6, and dies")
+  gameCode: string | null
 }
 
 Attack {
@@ -258,15 +272,32 @@ are explained by `GET /api/reference`.
   placement made in the lobby or mid-adventure waits: the table keeps the forge's scores, and when the
   adventure ends the placement goes onto the sheet it sends home (a rested hero comes home at the new
   maximum HP). No new column: `abilityBoost` lives in the character JSON.
-- `GET /api/characters` → `{ characters: Character[] }` (mine, newest first). Heroes saved before the
-  rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
-  the upgrade is stored the next time the hero is saved.
-- `DELETE /api/characters?id=…` → `{ ok: true }`.
+- `GET /api/characters?status=…` → `{ characters: Character[] }` (mine, newest first). Heroes saved before
+  the rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
+  the upgrade is stored the next time the hero is saved. `status` picks which heroes:
+  - `active`: alive and not retired. The home screen's roster.
+  - `retired`: retired and alive. They can be un-retired.
+  - `dead`: every dead hero (`sheet.dead`), retired or not. The fallen are only looked at (and raised).
+  - `all`: every hero.
+  - left out: every hero not retired, living or dead (what apps from before the Hall of Heroes show).
+  Anything else is 400.
+- `POST /api/characters/retire` body `{ characterId }` → `Character` with `retiredAt` set. The hero leaves
+  the roster but is kept, and can come back. Retiring a retired hero keeps its first `retiredAt`. A retired
+  hero cannot create or join a game (409). 404 for someone else's hero.
+- `POST /api/characters/unretire` body `{ characterId }` → `Character` with `retiredAt: null`: back on the
+  roster. 409 if the hero is not retired, or is dead (the dead are not un-retired; a temple can raise
+  them). 404 for someone else's hero.
+- `DELETE /api/characters?id=…` → `{ ok: true }`. The same as retiring (older apps call it "Retire hero"):
+  nothing deletes a hero for good. 403 for someone else's hero, 404 for one that does not exist.
 - `POST /api/characters/revive` body `{ characterId, payerId? }` → `Character`. A temple's Raise Dead
   between adventures (SRD 5.2: a level-5 spellcasting service, 2,000 gp, plus the 500 gp diamond: 2,500
   gp). The dead hero's own purse pays, or another living hero of the same player (`payerId`). The hero
-  comes back with 1 HP and `revivalPenalty: 4`. 409 if the hero is not dead, the payer is dead, or the
-  payer has less than 2,500 gp (`error` says how much it has); 404 for someone else's hero or purse.
+  comes back with 1 HP and `revivalPenalty: 4`, back on the roster (`retiredAt` and `death` cleared). 409
+  if the hero is not dead, the payer is dead, or the payer has less than 2,500 gp (`error` says how much
+  it has); 404 for someone else's hero or purse.
+- A hero that falls on an adventure gets a `death`: the scene it fell in and the engine's line for it. It
+  comes home dead with it when the adventure ends; one the party raised before the end comes home alive,
+  with `death: null`. No new column: `retiredAt` and `death` live in the character JSON.
 
 ## Rules reference
 

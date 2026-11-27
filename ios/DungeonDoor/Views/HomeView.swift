@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var forging = false
     @State private var newGame = false
     @State private var joining = false
+    @State private var hall = AppConfig.showHallArgument
     @State private var revealed = false
     @State private var director = DragonDirector()
     /// Where the controls begin, so taps down there aren't taken for pokes.
@@ -48,6 +49,7 @@ struct HomeView: View {
                 .frame(maxWidth: 560)
             }
             .overlay(alignment: .topTrailing) { soundToggle }
+            .overlay(alignment: .topLeading) { hallButton }
             // Anywhere above the controls is the dragon. Buttons and hero tiles keep their own taps.
             .contentShape(Rectangle())
             .gesture(SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
@@ -64,6 +66,7 @@ struct HomeView: View {
         .onChange(of: model.didRefresh, initial: true) { _, _ in handleLaunchArguments() }
         .sheet(isPresented: $newGame) { NewGameView() }
         .sheet(isPresented: $joining) { JoinGameView() }
+        .sheet(isPresented: $hall) { HallOfHeroesView() }
         .sheet(item: Binding(get: { model.joinCode.map(DoorCode.init) }, set: { if $0 == nil { model.joinCode = nil } })) {
             JoinGameView(code: $0.code)
         }
@@ -94,7 +97,7 @@ struct HomeView: View {
     private func handleLaunchArguments() {
         guard !launchHandled else { return }
         func hero(named name: String) -> Character? {
-            model.characters.first { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+            model.allHeroes.first { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
         }
         if let name = AppConfig.openHeroArgument {
             guard model.didRefresh else { return }
@@ -214,6 +217,26 @@ struct HomeView: View {
         .padding(.top, 4)
         .opacity(revealed ? 1 : 0)
         .accessibilityLabel(director.soundOn ? "Mute the dragon" : "Unmute the dragon")
+    }
+
+    /// The way to the Hall of Heroes: the retired and the fallen. Only there once someone is in it.
+    @ViewBuilder private var hallButton: some View {
+        if !model.retired.isEmpty || !model.fallen.isEmpty {
+            Button {
+                hall = true
+            } label: {
+                Image(systemName: "building.columns.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.gold)
+                    .frame(width: 38, height: 38)
+                    .glassCard(cornerRadius: 19)
+            }
+            .padding(.leading, 16)
+            .padding(.top, 4)
+            .opacity(revealed ? 1 : 0)
+            .accessibilityLabel("Hall of Heroes")
+            .accessibilityHint("Your retired and fallen heroes")
+        }
     }
 
     @ViewBuilder private var panel: some View {

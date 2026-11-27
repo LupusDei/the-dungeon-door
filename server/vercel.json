@@ -11,6 +11,14 @@
       "destination": "/api/character-revive"
     },
     {
+      "source": "/api/characters/retire",
+      "destination": "/api/character-retire"
+    },
+    {
+      "source": "/api/characters/unretire",
+      "destination": "/api/character-unretire"
+    },
+    {
       "source": "/api/characters/ability-boost",
       "destination": "/api/character-ability-boost"
     },

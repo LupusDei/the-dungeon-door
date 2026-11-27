@@ -10,7 +10,7 @@ struct HeroPicker: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var living: [Character] { model.characters.filter { !$0.isFallen } }
-    private var fallen: [Character] { model.characters.filter(\.isFallen) }
+    private var fallen: [Character] { model.fallen }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

@@ -490,6 +490,10 @@ struct Character: Codable, Hashable, Identifiable {
     var attacks: [Attack]?
     /// The forge placed the background's increases, and the scores are still those, so the player may place them once.
     var bonusesOpen: Bool? = nil
+    /// When the player retired the hero; nil while on the roster.
+    var retiredAt: String? = nil
+    /// How and where the hero fell. Nil for the living, and for a hero that died before deaths were recorded.
+    var death: Death? = nil
     var createdAt: String
     var updatedAt: String
 
@@ -504,8 +508,14 @@ struct Character: Codable, Hashable, Identifiable {
 
     var portraitURL: URL? { portraitUrl.flatMap(URL.init(string:)) }
 
-    /// Died on an adventure: stays on the roster, but cannot go through a door again.
+    /// Died on an adventure: in the Hall of Heroes, and cannot go through a door until raised.
     var isFallen: Bool { sheet?.dead == true }
+
+    /// Retired by the player: in the Hall of Heroes until un-retired. A dead hero counts as fallen first.
+    var isRetired: Bool { retiredAt != nil }
+
+    /// On the home screen's roster: alive and not retired.
+    var isActive: Bool { !isRetired && !isFallen }
 
     /// "Level 2 · HP 20 · AC 16", for rosters. Nil until the hero has a sheet.
     var vitalsLine: String? {
@@ -516,6 +526,48 @@ struct Character: Codable, Hashable, Identifiable {
     var shortVitalsLine: String? {
         sheet.map { "Lv \($0.level) · HP \($0.maxHp) · AC \($0.armorClass)" }
     }
+}
+
+/// How and where a hero fell, as the server recorded it. Every part may be missing.
+struct Death: Codable, Hashable {
+    /// ISO-8601, when the hero fell.
+    var at: String
+    /// The adventure's title.
+    var adventure: String?
+    /// The scene they fell in.
+    var place: String?
+    /// The engine's line for it ("Bryn dies.").
+    var cause: String?
+    var gameCode: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case at, adventure, place, cause, gameCode
+    }
+
+    init(at: String, adventure: String?, place: String?, cause: String?, gameCode: String?) {
+        self.at = at
+        self.adventure = adventure
+        self.place = place
+        self.cause = cause
+        self.gameCode = gameCode
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        func text(_ key: CodingKeys) -> String? {
+            guard let c, let value = try? c.decodeIfPresent(String.self, forKey: key) else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        at = text(.at) ?? ""
+        adventure = text(.adventure)
+        place = text(.place)
+        cause = text(.cause)
+        gameCode = text(.gameCode)
+    }
+
+    /// When, as a date, if the server's stamp reads as one.
+    var date: Date? { ServerTime.date(at) }
 }
 
 /// What the app sends to save a hero or to have its portrait painted: who they are, never the

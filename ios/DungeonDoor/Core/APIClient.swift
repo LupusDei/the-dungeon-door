@@ -41,10 +41,23 @@ struct APIClient: Sendable {
         try await send("GET", "api/reference")
     }
 
-    func myCharacters() async throws -> [Character] {
+    /// `status` is "active", "retired", "dead" or "all"; nil is every hero not retired.
+    func myCharacters(status: String? = nil) async throws -> [Character] {
         struct Wrapper: Decodable { let characters: [Character] }
-        let w: Wrapper = try await send("GET", "api/characters")
+        let w: Wrapper = try await send("GET", "api/characters", query: status.map { ["status": $0] } ?? [:])
         return w.characters
+    }
+
+    /// Off the roster and into the Hall of Heroes; the hero is kept and can come back.
+    func retire(characterId: String) async throws -> Character {
+        struct Body: Encodable { let characterId: String }
+        return try await send("POST", "api/characters/retire", body: Body(characterId: characterId))
+    }
+
+    /// A retired, living hero back on the roster. 409 for the dead.
+    func unretire(characterId: String) async throws -> Character {
+        struct Body: Encodable { let characterId: String }
+        return try await send("POST", "api/characters/unretire", body: Body(characterId: characterId))
     }
 
     /// Upserts a hero. `backgroundId` builds (or, at level 1, rebuilds) the sheet on that background;
@@ -58,11 +71,6 @@ struct APIClient: Sendable {
     func assignBonuses(characterId: String, boost: AbilityBoost) async throws -> Character {
         struct Body: Encodable { let characterId: String; let boost: AbilityBoost }
         return try await send("POST", "api/characters/ability-boost", body: Body(characterId: characterId, boost: boost))
-    }
-
-    func delete(characterId: String) async throws {
-        struct OK: Decodable { let ok: Bool }
-        let _: OK = try await send("DELETE", "api/characters", query: ["id": characterId])
     }
 
     /// A temple's Raise Dead between adventures. The dead hero's own purse pays, or `payerId`'s:

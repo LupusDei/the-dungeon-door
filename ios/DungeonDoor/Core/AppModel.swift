@@ -13,7 +13,12 @@ final class AppModel {
     /// one); everything falls back to ids turned into words.
     private(set) var reference: Reference?
     private var referenceIsFresh = false
+    /// The roster: heroes alive and not retired, as the home screen shows them.
     private(set) var characters: [Character] = []
+    /// The Hall of Heroes: heroes the player retired (alive), who can come back.
+    private(set) var retired: [Character] = []
+    /// The Hall of Heroes: the dead, retired or not.
+    private(set) var fallen: [Character] = []
     var catalogError: String?
     var activeGame: GameSession? { didSet { PushCenter.shared.openGame = activeGame?.code } }
     /// Invitations to parties still gathering, newest first.
@@ -32,7 +37,34 @@ final class AppModel {
         api = APIClient(base: AppConfig.apiBase, playerId: playerId, appKey: AppConfig.appKey)
         catalog = Self.load(Catalog.self, from: "catalog.json")
         reference = Self.load(Reference.self, from: "reference.json")
-        characters = Self.load([Character].self, from: "characters-\(playerId).json") ?? []
+        arrange(Self.load([Character].self, from: "characters-\(playerId).json") ?? [])
+    }
+
+    /// Every hero this player has, wherever they are.
+    var allHeroes: [Character] { characters + retired + fallen }
+
+    /// The latest copy of a hero, on the roster or in the Hall.
+    func hero(id: String) -> Character? { allHeroes.first { $0.id == id } }
+
+    private func arrange(_ heroes: [Character]) {
+        characters = heroes.filter(\.isActive)
+        retired = heroes.filter { $0.isRetired && !$0.isFallen }
+        fallen = heroes.filter(\.isFallen)
+    }
+
+    /// Puts a hero the server sent back where it belongs now: the roster, the retired or the fallen.
+    private func place(_ hero: Character) {
+        func update(_ list: inout [Character], keeps: Bool) {
+            if let i = list.firstIndex(where: { $0.id == hero.id }) {
+                if keeps { list[i] = hero } else { list.remove(at: i) }
+            } else if keeps {
+                list.insert(hero, at: 0)
+            }
+        }
+        update(&characters, keeps: hero.isActive)
+        update(&retired, keeps: hero.isRetired && !hero.isFallen)
+        update(&fallen, keeps: hero.isFallen)
+        persistCharacters()
     }
 
     func refresh() async {
@@ -47,10 +79,10 @@ final class AppModel {
         } catch {
             if catalog == nil { catalogError = error.localizedDescription }
         }
-        if let mine = try? await api.myCharacters() {
+        if let mine = try? await api.myCharacters(status: "all") {
             // Keep any local hero the server hasn't heard of yet (saved while offline).
             let serverIds = Set(mine.map(\.id))
-            characters = mine + characters.filter { !serverIds.contains($0.id) }
+            arrange(mine + characters.filter { !serverIds.contains($0.id) })
             persistCharacters()
         }
         // The reference is static: once per launch is plenty, and the copy on disk does until then.
@@ -91,34 +123,29 @@ final class AppModel {
         var c = character
         c.ownerId = playerId
         let saved = try await api.save(c, backgroundId: backgroundId, boost: boost)
-        if let i = characters.firstIndex(where: { $0.id == saved.id }) {
-            characters[i] = saved
-        } else {
-            characters.insert(saved, at: 0)
-        }
-        persistCharacters()
+        place(saved)
         return saved
     }
 
-    func delete(_ character: Character) async throws {
-        try await api.delete(characterId: character.id)
-        characters.removeAll { $0.id == character.id }
-        persistCharacters()
+    /// Off the roster and into the Hall of Heroes.
+    func retire(_ hero: Character) async throws {
+        place(try await api.retire(characterId: hero.id))
+    }
+
+    /// A retired hero back on the roster. The server refuses the dead.
+    func unretire(_ hero: Character) async throws {
+        place(try await api.unretire(characterId: hero.id))
     }
 
     /// Places the background's ability increases on a hero the forge built, once.
     func assignBonuses(_ hero: Character, boost: AbilityBoost) async throws {
-        let saved = try await api.assignBonuses(characterId: hero.id, boost: boost)
-        if let i = characters.firstIndex(where: { $0.id == saved.id }) { characters[i] = saved }
-        persistCharacters()
+        place(try await api.assignBonuses(characterId: hero.id, boost: boost))
     }
 
     /// Has a temple raise a dead hero, paid from `payer`'s purse (the hero's own, or another of
     /// the player's living heroes).
     func raise(_ hero: Character, paidBy payer: Character) async throws {
-        let raised = try await api.revive(characterId: hero.id, payerId: payer.id == hero.id ? nil : payer.id)
-        if let i = characters.firstIndex(where: { $0.id == raised.id }) { characters[i] = raised }
-        persistCharacters()
+        place(try await api.revive(characterId: hero.id, payerId: payer.id == hero.id ? nil : payer.id))
         // The payer's purse is lighter now: fetch the roster as the server has it.
         await refresh()
     }
@@ -170,7 +197,7 @@ final class AppModel {
     /// Loads fixture catalog and roster, then ignores the network. Screenshot harness only.
     func freezeForDemo(catalog: Catalog, characters: [Character], reference: Reference? = nil) {
         self.catalog = catalog
-        self.characters = characters
+        arrange(characters)
         if let reference { self.reference = reference }
         referenceIsFresh = true
         catalogError = nil
@@ -182,7 +209,7 @@ final class AppModel {
     // MARK: Disk cache
 
     private func persistCharacters() {
-        Self.store(characters, to: "characters-\(playerId).json")
+        Self.store(allHeroes, to: "characters-\(playerId).json")
     }
 
     private static func url(_ name: String) -> URL {
