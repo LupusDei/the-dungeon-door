@@ -40,9 +40,12 @@ afterEach(async () => {
   setDice();
 });
 
+/** A fixed uuid, so a table is the same every run: a hero's sheet is rolled from its character's id (characters.ts). */
+const fixedId = (kind: number, i: number) => `00000000-0000-4000-800${kind}-${String(i + 1).padStart(12, '0')}`;
+
 async function table(n: number, characterClass = 'fighter') {
-  const players = Array.from({ length: n }, () => randomUUID());
-  const characters = await Promise.all(players.map((p, i) => makeCharacter(p, `Hero ${i + 1}`, { race: 'human', characterClass })));
+  const players = Array.from({ length: n }, (_, i) => fixedId(0, i));
+  const characters = await Promise.all(players.map((p, i) => makeCharacter(p, `Hero ${i + 1}`, { id: fixedId(1, i), race: 'human', characterClass })));
   const { body } = await call<GameState>(gamesApi.POST, '/api/games', { player: players[0], body: { characterId: characters[0].id } });
   for (let i = 1; i < n; i++) await call(joinApi.POST, gamePath(body.code, 'join'), { player: players[i], body: { characterId: characters[i].id } });
   return { code: body.code, players, host: players[0], characters };
@@ -332,7 +335,7 @@ test('a dead hero goes to the temple between adventures, comes back with 1 HP an
 
 test('phase 4 in play: the clock, the torch from the pack, a web that holds, Break Free, and what the DM is told', async () => {
   const seen: { ctx: DMContext; resolution?: Resolution }[] = [];
-  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 5 }); // a game whose spider webs on its first turn
+  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 5 }); // a game whose spider webs on its first turn (the table's ids are fixed, so the heroes are too)
   const { code, players, host } = await table(1);
   await start(code, host, { sceneCount: 3, dungeon: 'fixed' });
   await settle();
