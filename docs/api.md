@@ -46,7 +46,7 @@ and `explore`, in the order to show them.
 `narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
 to show them; `defaultNarrator` is the one used when a request names none. New voices need no app release.
 `push` is true when this server sends push notifications (it holds the push key; see docs/push.md). The app
-asks leave to notify only then.
+asks leave to notify only then, the first time it opens.
 
 ## Pushes, companions and invitations
 

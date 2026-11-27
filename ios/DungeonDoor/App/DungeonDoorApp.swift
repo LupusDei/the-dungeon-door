@@ -38,6 +38,9 @@ struct DungeonDoorApp: App {
         PushCenter.shared.start(api: model.api)
         PushCenter.shared.onArrival = { news in if news.isInvite { Task { await model.refreshInvitations() } } }
         await model.refresh()
+        // Leave to notify is asked as soon as the server is known to send pushes, not only once the
+        // player is in a party: an invitation is a push too. Not awaited, so the game opens behind it.
+        if model.catalog?.push == true { Task { await PushCenter.shared.enable() } }
         await model.resumeIfPossible()
         if let news = AppConfig.pushOpenArgument { await model.open(news) }
     }

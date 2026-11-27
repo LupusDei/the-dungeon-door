@@ -441,6 +441,7 @@ struct BattleToken: Identifiable {
         let text = String(letters.prefix(2))
         return text.isEmpty ? "?" : text
     }
+    /// The ring's fill, 0 to 1: a hero's hit points, a foe's fuzzy gauge (`Combatant.gauge`).
     var gauge: CGFloat { CGFloat(combatant.gauge) }
 }
 

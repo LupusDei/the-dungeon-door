@@ -46,7 +46,10 @@ content kept:
 ## Turning it on
 
 Nothing is sent unless the server holds an APNs key. `GET /api/catalog` says so (`push`), and the app asks
-leave to notify only when it is true. Three things make it work, and all three are in place:
+leave to notify only when it is true. It asks the first time it opens (an invitation has to reach a player
+who is in no party yet), and again on entering a game if iOS has not been asked. iOS shows its question
+once; after a "Don't Allow" the lobby's row sends the player to Settings. Three things make it work, and
+all three are in place:
 
 1. **A push key.** An APNs auth key (`.p8`) from the Apple Developer portal (Certificates, Identifiers &
    Profiles, Keys, with "Apple Push Notifications service (APNs)" ticked). One key serves every app of the
