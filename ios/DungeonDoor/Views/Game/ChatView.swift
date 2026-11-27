@@ -55,6 +55,7 @@ struct ChatComposerBar: View {
     /// The sheet covers the screen's own error line, so it shows a failed send here.
     var showsError = false
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -96,19 +97,11 @@ struct ChatComposerBar: View {
                     }
                 }
             }
+            // With large text the voice switch has its own line, so the hero's name is whole and the
+            // field keeps its width.
+            if typeSize >= .xxLarge { voiceSwitch(wide: true) }
             HStack(alignment: .bottom, spacing: 10) {
-                Button { session.speakingInCharacter = !session.speakingInCharacter } label: {
-                    Text(session.speakingInCharacter ? (session.me?.character.name ?? "Hero") : "OOC")
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: 72)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
-                        .background(Palette.raised, in: Capsule())
-                        .foregroundStyle(session.speakingInCharacter ? Palette.gold : Palette.parchment)
-                }
-                .accessibilityLabel(session.speakingInCharacter ? "Speaking as your hero" : "Speaking out of character")
+                if typeSize < .xxLarge { voiceSwitch(wide: false) }
                 TextField(session.speakingInCharacter ? "Speak as \(session.me?.character.name ?? "your hero")…" : "Out of character…",
                           text: $session.draft, axis: .vertical)
                     .font(.prose)
@@ -133,8 +126,29 @@ struct ChatComposerBar: View {
             }
         }
         .padding(12)
-        .background(Palette.ink)
+        // Down to the screen's edge where the bar is the last thing on it, so nothing scrolls into view
+        // under the home indicator. Ignoring the safe area does that while the bar's height is a whole
+        // number of points; with larger text it is not, and the strip under the bar was left bare. The
+        // second background is that strip, drawn outright.
+        .background { Palette.ink.ignoresSafeArea(edges: .bottom) }
+        .background(alignment: .bottom) { Palette.ink.frame(height: 50).offset(y: 50).allowsHitTesting(false) }
         .onChange(of: session.draft) { _, text in session.noteDraft(text) }
+    }
+
+    /// Who the next line is spoken as: the hero, or the player out of character.
+    private func voiceSwitch(wide: Bool) -> some View {
+        Button { session.speakingInCharacter = !session.speakingInCharacter } label: {
+            Text(session.speakingInCharacter ? (session.me?.character.name ?? "Hero") : (wide ? "Out of character" : "OOC"))
+                .font(.caption.weight(.semibold))
+                .lineLimit(wide ? 2 : 1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: wide ? nil : 72)
+                .padding(.horizontal, wide ? 12 : 8)
+                .padding(.vertical, 8)
+                .background(Palette.raised, in: Capsule())
+                .foregroundStyle(session.speakingInCharacter ? Palette.gold : Palette.parchment)
+        }
+        .accessibilityLabel(session.speakingInCharacter ? "Speaking as your hero" : "Speaking out of character")
     }
 
     private var typingLine: String {

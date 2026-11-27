@@ -10,11 +10,20 @@ struct HeroIdentityHeader: View {
     /// Off where the name is already the screen's title.
     var showsName = true
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var fallen: Bool { character.isFallen }
+
+    /// Beside the portrait while the words have room; under it at the largest text sizes, where a
+    /// name squeezed into what the portrait leaves would break in the middle of a word.
+    private var arrangement: AnyLayout {
+        typeSize >= .accessibility3 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                                    : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 14) {
+            arrangement {
                 PortraitView(url: character.portraitURL, symbol: classSymbol, size: portraitSize)
                     .saturation(fallen ? 0 : 1)
                     .opacity(fallen ? 0.7 : 1)

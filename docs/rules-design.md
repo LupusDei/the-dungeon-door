@@ -491,6 +491,9 @@ were at that level (`foeLevels`: n living heroes × the dungeon level).
 
 - *Budget.* The SRD 5.2 XP budget is **halved at levels 1–2** (`temperedBudget`). The 5.2 table is
   swingy there: one bad round kills a hero.
+- *A lone hero.* At levels 1–2 a party of one meets no more than a **moderate** fight: a high room is
+  stocked to the moderate budget (`stockedBudget`). Alone, nobody can get a hero up or stabilize them,
+  and one hit can drop a level-1 wizard. The rating words still use the 5.2 lines (`temperedBudget`).
 - *Fight size.* The number of foes is capped (`foeCap`): half the party (rounded up) at levels 1–2, the
   party's size at 3–4, twice it from level 5, and never more than 8.
 - *Variety.* An encounter has at most two kinds of monster.
@@ -511,7 +514,8 @@ were at that level (`foeLevels`: n living heroes × the dungeon level).
 - *DM suggestions.* The monsters suggested to the DM (`ctx.rules.monsters`) come from the dungeon's
   habitat and fit a moderate fight at its level.
 - *Hero builds.* New heroes put their best scores into their class's primary abilities, then
-  Constitution. Healers prepare Cure Wounds (or Healing Word). Heroes stored without a sheet keep the old
+  Constitution, then the rest where the SRD 5.2 **Standard Array by Class** table puts its higher
+  scores (a wizard: Wisdom, then Dexterity 12; no more Dexterity 8 wizards at AC 9). Healers prepare Cure Wounds (or Healing Word). Heroes stored without a sheet keep the old
   build (`'classic'`), so their numbers stay the same.
 - *Healing in a fight.* When a friend is dying, a healer's Cast casts its healing spell on them.
 

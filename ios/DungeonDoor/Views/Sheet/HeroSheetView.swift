@@ -146,7 +146,17 @@ struct VitalsBar: View {
     var live: LiveHero?
 
     /// Six of these and their gaps must fit for the one-row layout to be chosen.
-    private static let cellWidth: CGFloat = 86
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// The narrowest a cell may get. It grows with the text, so larger text gets fewer cells across
+    /// instead of labels cut short: on a phone three across, then two, then one.
+    private var cellWidth: CGFloat {
+        switch typeSize {
+        case ...DynamicTypeSize.xLarge: 86
+        case .xxLarge, .xxxLarge: 120
+        case .accessibility1, .accessibility2, .accessibility3: 150
+        default: 280
+        }
+    }
     @ScaledMetric(relativeTo: .title3) private var shieldWidth: CGFloat = 36
     @ScaledMetric(relativeTo: .title3) private var shieldHeight: CGFloat = 40
 
@@ -159,6 +169,13 @@ struct VitalsBar: View {
                 HStack(spacing: 8) { hitPoints; armorClass; initiative }
                 HStack(spacing: 8) { speed; proficiency; perception }
             }
+            // Larger text: two across, then one.
+            VStack(spacing: 8) {
+                HStack(spacing: 8) { hitPoints; armorClass }
+                HStack(spacing: 8) { initiative; speed }
+                HStack(spacing: 8) { proficiency; perception }
+            }
+            VStack(spacing: 8) { hitPoints; armorClass; initiative; speed; proficiency; perception }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -172,7 +189,7 @@ struct VitalsBar: View {
         let label = standing ? "Hit Points" : dead ? "Fallen" : "Down"
         return StatCell(label: label,
                         spoken: standing ? "Hit points, \(hp) of \(most)" : "\(label), \(hp) of \(most) hit points",
-                        minWidth: Self.cellWidth, labelTint: standing ? Palette.muted : Palette.ember) {
+                        minWidth: cellWidth, labelTint: standing ? Palette.muted : Palette.ember) {
             VStack(spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(hp)")
@@ -193,7 +210,7 @@ struct VitalsBar: View {
 
     private var armorClass: some View {
         let ac = live?.standing.armorClass ?? sheet.armorClass
-        return StatCell(label: "Armor Class", spoken: "Armor class, \(ac)", minWidth: Self.cellWidth) {
+        return StatCell(label: "Armor Class", spoken: "Armor class, \(ac)", minWidth: cellWidth) {
             ZStack {
                 ShieldShape().fill(Palette.raised)
                 ShieldShape().stroke(Palette.gold, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
@@ -211,7 +228,7 @@ struct VitalsBar: View {
 
     private var initiative: some View {
         let bonus = SRD.modifier(sheet.abilityScores.dex)
-        return StatCell(label: "Initiative", spoken: "Initiative, \(SRD.spoken(bonus))", minWidth: Self.cellWidth) {
+        return StatCell(label: "Initiative", spoken: "Initiative, \(SRD.spoken(bonus))", minWidth: cellWidth) {
             number(SRD.signed(bonus))
         }
     }
@@ -226,7 +243,7 @@ struct VitalsBar: View {
         let feet = live?.standing.speed ?? (dragging ? min(5, tired) : tired)
         let label = dragging ? "Speed, dragging" : feet < sheet.speed ? "Speed, exhausted" : "Speed"
         return StatCell(label: label, spoken: "\(label), \(feet) feet",
-                        minWidth: Self.cellWidth, labelTint: feet < sheet.speed ? Palette.ember : Palette.muted) {
+                        minWidth: cellWidth, labelTint: feet < sheet.speed ? Palette.ember : Palette.muted) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 number("\(feet)")
                 Text("ft").font(.serif(.footnote, weight: .semibold)).foregroundStyle(Palette.muted)
@@ -236,7 +253,7 @@ struct VitalsBar: View {
 
     private var proficiency: some View {
         StatCell(label: "Proficiency", spoken: "Proficiency bonus, \(SRD.spoken(sheet.proficiencyBonus))",
-                 minWidth: Self.cellWidth) {
+                 minWidth: cellWidth) {
             number(SRD.signed(sheet.proficiencyBonus))
         }
     }
@@ -244,7 +261,7 @@ struct VitalsBar: View {
     private var perception: some View {
         let passive = live?.standing.passivePerception ?? sheet.passivePerception
         return StatCell(label: "Passive Perception", spoken: "Passive perception, \(passive)",
-                        minWidth: Self.cellWidth) {
+                        minWidth: cellWidth) {
             number("\(passive)")
         }
     }
@@ -277,14 +294,15 @@ struct StatCell<Value: View>: View {
                 .font(.serif(.caption2, weight: .semibold))
                 .tracking(0.8)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(labelTint)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
-        .frame(minWidth: minWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // The ideal width is the least width, so a row of cells "fits" by that and not by how wide
+        // its labels would run on one line (which at large text is wider than any phone).
+        .frame(minWidth: minWidth, idealWidth: minWidth > 0 ? minWidth : nil, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .card()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)

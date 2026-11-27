@@ -35,6 +35,16 @@ export function temperedBudget(levels: readonly number[], difficulty: Difficulty
   return top(levels) <= GENTLE_UP_TO ? Math.floor(budget / 2) : budget;
 }
 
+/**
+ * What a room's encounter may spend: the tempered budget, except that a lone hero at levels 1–2 meets no
+ * more than a moderate fight (a high one is stocked to the moderate line). Alone, a hero has nobody to get
+ * them up or stabilize them, and one hit can drop a level-1 hero (issue q-mwxtmmia-9b6443).
+ */
+export function stockedBudget(levels: readonly number[], difficulty: Difficulty): number {
+  const lone = levels.length === 1 && top(levels) <= GENTLE_UP_TO;
+  return temperedBudget(levels, lone && difficulty === 'high' ? 'moderate' : difficulty);
+}
+
 /** How many foes an encounter may have: half the party (rounded up) at levels 1–2, the party at 3–4, twice it from 5; never above eight. */
 export function foeCap(partySize: number, level: number): number {
   const cap = level <= GENTLE_UP_TO ? Math.ceil(partySize / 2) : level <= 4 ? partySize : 2 * partySize;
@@ -55,10 +65,10 @@ export function worthwhile(all: Monster[], budget: number, cap: number = MAX_MON
 
 /**
  * Keeps adding monsters that fit what is left of the budget (half the time another of the same kind, so
- * encounters come in groups), up to the cap for the party's size and level. `budget` is the tempered one
+ * encounters come in groups), up to the cap for the party's size and level. `budget` is stockedBudget's
  * for the difficulty unless given (the road's, play/trek.ts roadBudget).
  */
-export function buildEncounter(rng: Rng, levels: readonly number[], difficulty: Difficulty, pool?: readonly string[], budget = temperedBudget(levels, difficulty)): Encounter {
+export function buildEncounter(rng: Rng, levels: readonly number[], difficulty: Difficulty, pool?: readonly string[], budget = stockedBudget(levels, difficulty)): Encounter {
   const cap = foeCap(levels.length, top(levels));
   return { difficulty, ...composeEncounter(rng, budget, worthwhile(candidates(levels, pool), budget, cap), cap) };
 }

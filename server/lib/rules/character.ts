@@ -220,7 +220,7 @@ export interface QuickRequest { name: string; classId?: string; speciesId?: stri
 
 /**
  * How a quick hero is built. `primary` (new heroes): the standard array best-first to the class's primary
- * abilities, then Constitution, then the rest at random; the background's +2 and +1 to those where it
+ * abilities, then Constitution, then the rest as the SRD's Standard Array by Class ranks them; the background's +2 and +1 to those where it
  * allows; a healer prepares its best healing spell. `classic` (heroes stored before Phase 5 without a
  * sheet, so their numbers never change): best-first to the class's saves, boosts and spells at random.
  */
@@ -229,8 +229,29 @@ export type BuildStyle = 'primary' | 'classic';
 const spellsOf = (data: Srd, classId: string, level: number) =>
   [...data.spells.values()].filter((s) => s.level === level && s.classes.includes(classId)).map((s) => s.id);
 
+/**
+ * SRD 5.2 Character Creation, "Standard Array by Class" (Str, Dex, Con, Int, Wis, Cha): where the class puts
+ * its scores. The SRD lets it guide any method; quick heroes place the abilities left after the primary ones
+ * and Constitution by it, highest first, so a wizard has Dexterity 12, not 8.
+ */
+const ARRAY_BY_CLASS: Readonly<Record<string, readonly number[]>> = {
+  barbarian: [15, 13, 14, 10, 12, 8], bard: [8, 14, 12, 13, 10, 15], cleric: [14, 8, 13, 10, 15, 12],
+  druid: [8, 12, 14, 13, 15, 10], fighter: [15, 14, 13, 8, 10, 12], monk: [12, 15, 13, 10, 14, 8],
+  paladin: [15, 10, 13, 8, 12, 14], ranger: [12, 15, 13, 8, 14, 10], rogue: [12, 15, 13, 14, 10, 8],
+  sorcerer: [10, 13, 14, 8, 12, 15], warlock: [8, 14, 13, 12, 10, 15], wizard: [8, 12, 13, 15, 14, 10],
+};
+
+/** The abilities left, as the class's standard array ranks them (a class the table lacks: as drawn). */
+function bySrdArray(classId: string, drawn: readonly Ability[]): Ability[] {
+  const scores = ARRAY_BY_CLASS[classId];
+  if (!scores) return [...drawn];
+  return [...drawn].sort((a, b) => scores[ABILITIES.indexOf(b)] - scores[ABILITIES.indexOf(a)]);
+}
+
 interface Style {
   first: (cls: SrdClass) => Ability[];
+  /** The rest, after `first`, from the order the dice drew them in. */
+  rest: (cls: SrdClass, drawn: readonly Ability[]) => Ability[];
   boost: (rng: Rng, allowed: readonly Ability[], first: readonly Ability[]) => { kind: 'twoOne'; plusTwo: Ability; plusOne: Ability };
   /** Spells prepared first when the class has them, best first (the rest are at random). */
   firstSpells: readonly string[];
@@ -240,8 +261,8 @@ interface Style {
 const FIRST_SPELLS = ['cure-wounds', 'healing-word', 'magic-missile'];
 
 const STYLES: Record<BuildStyle, Style> = {
-  primary: { first: (cls) => [...new Set<Ability>([...cls.primary, 'con'])], boost: boostFor, firstSpells: FIRST_SPELLS },
-  classic: { first: (cls) => cls.saves, boost: (rng, allowed) => boostFor(rng, allowed, []), firstSpells: [] },
+  primary: { first: (cls) => [...new Set<Ability>([...cls.primary, 'con'])], rest: (cls, drawn) => bySrdArray(cls.id, drawn), boost: boostFor, firstSpells: FIRST_SPELLS },
+  classic: { first: (cls) => cls.saves, rest: (_, drawn) => [...drawn], boost: (rng, allowed) => boostFor(rng, allowed, []), firstSpells: [] },
 };
 
 /** A full, legal set of choices, chosen by the rng: "roll me a hero", or an NPC for the DM (see BuildStyle); the gear options are taken. */
@@ -256,7 +277,7 @@ export function quickChoices(rng: Rng, request: QuickRequest, data: Srd = bundle
   return {
     name: request.name, classId: cls.id, speciesId: species.id, backgroundId: background.id,
     size: pick(rng, species.sizes),
-    abilities: { kind: 'standardArray', order: [...first, ...sample(rng, rest, rest.length)] },
+    abilities: { kind: 'standardArray', order: [...first, ...how.rest(cls, sample(rng, rest, rest.length))] },
     boost,
     classChoices: pickClassChoices(rng, cls, background), classEquipment: 0, backgroundEquipment: 0,
     ...pickSpells(rng, cls.id, data, how.firstSpells),
