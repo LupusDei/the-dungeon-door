@@ -287,7 +287,7 @@ are explained by `GET /api/reference`.
   roster. 409 if the hero is not retired, or is dead (the dead are not un-retired; a temple can raise
   them). 404 for someone else's hero.
 - `DELETE /api/characters?id=…` → `{ ok: true }`. The same as retiring (older apps call it "Retire hero"):
-  nothing deletes a hero for good. 404 for a hero that is not yours.
+  nothing deletes a hero for good. 403 for someone else's hero, 404 for one that does not exist.
 - `POST /api/characters/revive` body `{ characterId, payerId? }` → `Character`. A temple's Raise Dead
   between adventures (SRD 5.2: a level-5 spellcasting service, 2,000 gp, plus the 500 gp diamond: 2,500
   gp). The dead hero's own purse pays, or another living hero of the same player (`payerId`). The hero

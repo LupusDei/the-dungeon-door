@@ -141,7 +141,10 @@ test('characters: upsert, list newest first, owner-only update and delete', asyn
 
   assert.equal((await call(charactersApi.DELETE, `/api/characters?id=${b.id}`, { player: other, method: 'DELETE' })).status, 403);
   assert.equal((await call(charactersApi.DELETE, `/api/characters?id=${b.id}`, { player: me, method: 'DELETE' })).status, 200);
-  assert.equal((await call(charactersApi.DELETE, `/api/characters?id=${b.id}`, { player: me, method: 'DELETE' })).status, 404);
+  assert.equal((await call(charactersApi.DELETE, `/api/characters?id=${b.id}`, { player: me, method: 'DELETE' })).status, 200, 'retired, not gone: again is the same');
+  assert.equal((await call(charactersApi.DELETE, `/api/characters?id=${randomUUID()}`, { player: me, method: 'DELETE' })).status, 404);
+  const retired = await call<{ characters: Character[] }>(charactersApi.GET, '/api/characters?status=retired', { player: me });
+  assert.deepEqual(retired.body.characters.map((c) => c.name), ['Borin']);
 });
 
 test('portrait: fake AI returns an appearance and a loadable PNG', async () => {
