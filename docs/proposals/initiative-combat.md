@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS combat_log (
   entry       jsonb NOT NULL,         -- the CombatLogEntry below, less what has its own column
   narration   text,                   -- the DM's line, filled in later
   moment      jsonb,                  -- { reason, title, summary, imageUrl }, filled in later
+  audience    jsonb,                  -- who could perceive it; null is everyone (see "Future", below)
   show_at     timestamptz NOT NULL,
   revised_at  timestamptz,            -- set when narration or moment lands: the poll's logUpdates
   created_at  timestamptz NOT NULL DEFAULT now(),
@@ -199,6 +200,8 @@ CREATE INDEX IF NOT EXISTS combat_log_revised ON combat_log (game_code, revised_
 ```
 
 The memory store gets the same: an array per game.
+
+`audience` is always null for now, and it is never sent to the app. Its shape is in section 9.
 
 `CombatState` (in `rules/scene.ts`, still version 1, every new field optional):
 
@@ -276,6 +279,14 @@ word, never its hit points (docs/api.md, Wounds).
 filled for the current actor, so the Sheet and Map tabs keep their vote code paths. They just send
 to the new endpoint.
 
+Three rules for the client, so a per-player feed (section 9) needs no app rewrite later:
+- `seq` only grows. **It may have gaps**, and the app must not assume entries are contiguous or
+  count them. `logSince` is the highest `seq` seen.
+- `fight` is the caller's fight, built per caller (as `mine` already is). The app never assumes
+  everyone at the table sees the same `fight`.
+- The HUD draws the combatants it is given in `rules.combat.combatants`, and never assumes that is
+  the whole party.
+
 ### Endpoints
 
 | Call | What it does |
@@ -299,6 +310,16 @@ inserts the log rows in one transaction, again only where `combat_turn = turn`. 
 the poll that times the same turn out is settled by whichever commits first. The other gets 409
 `stale_turn` (the app ignores it and shows the poll). The memory store does the same under its
 lock.
+
+### One gate for what a player perceives
+
+Every path that hands log entries, combatants or a moment's picture to a player goes through one
+function, `lib/play/perceive.ts`: `perceives(audience, playerId, game)`. That covers the poll
+(`log` and `logUpdates`), `/turn` and `/roll` responses, the past-fight endpoint, the turn push and
+the HUD's `rules.combat.combatants`. It is the same pattern as `canSee` for whispers. For now it
+returns true for every entry, since `audience` is null. The beat's `recent` lines for the DM are
+picked by the same function, so the DM is never told what the group it narrates for could not
+know.
 
 ### Polling and pushes
 
@@ -818,6 +839,11 @@ Feature: Initiative combat
     When two more entries are written
     Then the next poll carries entries 5 and 6
 
+  Scenario: While the party is together every player perceives every entry
+    Given Bryn's player and Corin's player both poll the fight
+    Then both see the same log entries
+    And no entry carries an audience
+
   Scenario: A game started in rounds mode keeps fighting in rounds
     Given a game in rounds combat mode
     When the party engages "Goblin Warrior"
@@ -835,7 +861,8 @@ changes for players until the flag is on. Sizes are rough: **S** is a few hundre
 | Phase | What ships | Gherkin scenarios | Size |
 | --- | --- | --- | --- |
 | **1. One turn at a time in the engine** | `play/initiative.ts`: `takeTurn(party, combat, heroAction \| null)` returns `{ party, combat, entries, candidate, ended }`. It is the body of `fightRound`'s loop with saves, concentration, morale and `lastingOnSheets` run per turn, plus `runMonsters` to the next hero. `fightRound` is rebuilt on it, so rounds mode still passes every existing test. End-of-turn condition saves. Moment candidates. No API change. | "Heroes go before monsters on a full tie", "A condition … end of the hero's own turn", "Foes may break in the middle of a round", "After ten rounds the foes flee" (rounds mode too) | M |
-| **2. The fight API, engine lines only** | Migration (`combat_mode`, `combat_turn`, `combat_log`), both stores, `status: "fighting"`, `GameState.fight`, `POST /turn`, `/roll` with `turn`, `/advance` as skip, the poll's `logSince`/`logUpdates`, the clock and Dodge on expiry, monster `showAt` pacing, the fight as one scene, the end going to `nextScene` with a fight summary. Behind `DD_INITIATIVE`. `docs/api.md` first. `npm run playtest` bots learn `/turn`. | Starting a fight, whose turn, a hero's action, monsters, the clock (not away), leaving the fight, polling, rounds mode | L |
+| **2. The fight API, engine lines only** | Migration (`combat_mode`, `combat_turn`, `combat_log`), both stores, `status: "fighting"`, `GameState.fight`, `POST /turn`, `/roll` with `turn`, `/advance` as skip, the poll's `logSince`/`logUpdates`, the clock and Dodge on expiry, monster `showAt` pacing, the fight as one scene, the end going to `nextScene` with a fight summary. The perception hooks (section 9): the null
+`audience` column and `perceives` on every read path. Behind `DD_INITIATIVE`. `docs/api.md` first. `npm run playtest` bots learn `/turn`. | Starting a fight, whose turn, a hero's action, monsters, the clock (not away), leaving the fight, polling, rounds mode | L |
 | **3. The app's Fight tab** | `GameSession` reads `fight` and `logSince`. A Fight tab: HUD on top (the other agent's view), the scroll, the turn panel and die, the waiting bar, monster beats by `showAt`, Sheet and Map sending `/turn`. `INITIATIVE_MIN_BUILD`, `MARKETING_VERSION` bump, TestFlight. Needs a Mac: untestable on a cloud agent. | none new (exercises phase 2) | L |
 | **4. The DM's beats** | `narrateBeat` in `dm/types.ts`, `llm.ts`, `fake.ts`. `DD_BEAT_MODEL`. The serial background queue per fight, folding, the 8 s drop. `stripHeroSpeech` on beats. `npm run dm:check` gains the beat. The app shows the shimmer and then the line. | "The engine's line comes before…", "…arrives as an update", "A dungeon master who fails…", "A run of monsters is narrated once" | M |
 | **5. Moments** | Candidates to the DM, `moment` on the beat, the picture budget (`DD_FIGHT_PICTURES`), painting a moment with the party's portraits (`paintScene`'s cast), `pictureUrl`, summary cards, moment pictures in `Adventure.images`. The app's moment card. | the Moments block | M |
@@ -855,3 +882,65 @@ Risks:
   small model, and the folding queue.
 - **The HUD and the scroll fighting for space** on small phones: the HUD's one-row mode,
   question 9.
+
+---
+
+## 9. Future: split parties and per-player views
+
+Not part of any phase above. Micah may later want the party split: a hero kidnapped, or one who
+wanders off. That hero would see other events, get other DM lines and pictures, and have a HUD
+showing only the combatants where they are. The aim now is to leave hooks so that later this is
+new code, not a rewrite.
+
+### The idea
+
+A **group** is a set of heroes in one place. Today there is one, implicitly. Later the engine keeps
+`party.groups: { [groupId]: { at: string; heroes: string[] } }`, and each combatant carries the
+group it stands with. Each log entry gets an `audience`, written by the engine when the entry is
+made:
+
+```ts
+type Audience =
+  | null                                // everyone at the table (all there is today)
+  | { groups: string[] }                // the heroes standing in these groups when it happened
+  | { players: string[] }               // named players only (a vision, a whisper from the DM)
+```
+
+What each player sees is the log filtered by `perceives`. A hero can perceive an entry because
+they were in its group when it was written. Being there later does not count: a hero who rejoins
+does not suddenly see what happened in a room they were not in. Later the same function could
+also weigh senses (a blinded hero only hears the line; an unseen attacker is "something"), still
+without changing the log's shape.
+
+### Hooks to leave in place now (in phase 2, at almost no cost)
+
+| Hook | Why it matters later |
+| --- | --- |
+| `combat_log.audience` jsonb, null for now, never sent to the app | No migration or backfill when groups arrive; old entries read as "everyone". |
+| One `perceives(audience, playerId, game)` on every read path: poll, `/turn` and `/roll` responses, past-fight log, pushes, HUD combatants, the DM's `recent` | Splitting becomes one function body, not a hunt through handlers. |
+| `seq` may have gaps; `logSince` is a high-water mark | A filtered feed is already a valid feed to the app. |
+| `fight` is built per caller | A player in another room can be handed a different fight, or none. |
+| The HUD draws the combatants it is given | It shows only the room's combatants with no change to the app. |
+| `moment` lives on the entry; `fight.pictureUrl` is the newest *perceived* moment | Each group gets its own pictures and summaries. |
+| `combat_log.fight` names the fight; nothing in the API assumes one fight per game | Two groups can fight at once later. |
+| The beat call takes the entries it narrates and their audience | The DM can be asked to narrate for a group, in that group's knowledge. |
+
+The only new rule this puts on phase 2 and 3 code is to call the gate and not assume everyone
+sees the same log. The features pin it with one scenario ("While the party is together every
+player perceives every entry").
+
+### What it would cost later
+
+| Piece | Work | Size |
+| --- | --- | --- |
+| Groups in the engine: who is where, splitting (kidnap, wander off), rejoining | `PartyState.groups`, hooks for "split" and "rejoin", the dungeon's `at` per group | M |
+| Audience on entries, and `perceives` doing real filtering | Engine writes the group with each entry; the gate checks membership at write time | S |
+| More than one fight at once | `games.combat` becomes a map by fight id, `combat_turn` per fight, a clock per fight; the turn and roll endpoints name the fight | M |
+| Per-group DM beats and pictures | One beat queue per fight (already per fight); moments and the picture budget per group. Cost grows with the number of groups that are active | S, plus running cost |
+| **Out of combat: per-group scenes** | Today's scene, vote and choice-window flow is shared by the whole table. Each group would need its own scene, votes and DM call, and a way to cut between them | L–XL, the real cost |
+| The app | A "you are with…" line, a feed for each group the player is in, and a way to read the rest of the table after they rejoin | M |
+| Chat | A group channel next to the whole table; whispers already exist | S |
+
+The combat half is cheap because of the hooks above. The expensive half is outside combat: the
+scene and vote flow assumes one table and one scene, and that is the part to design properly
+if Micah asks for it.
