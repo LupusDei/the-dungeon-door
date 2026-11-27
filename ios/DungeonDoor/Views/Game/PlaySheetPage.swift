@@ -113,6 +113,7 @@ struct PlaySheetPage: View {
                 .fixedSize(horizontal: false, vertical: true)
             TextField("How you do it, if you want…", text: $intent, axis: .vertical)
                 .font(.prose)
+                .returnIsDone($intent)
                 .lineLimit(1...3)
                 .padding(12)
                 .card()

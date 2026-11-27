@@ -146,6 +146,7 @@ struct CharacterForgeView: View {
                     .font(.display(22))
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
+                    .returnIsDone($hero.name)
                     .padding(14)
                     .card()
                     .onChange(of: hero.name) { _, new in if new.count > 40 { hero.name = String(new.prefix(40)) } }
@@ -402,6 +403,7 @@ struct CharacterForgeView: View {
                     SectionLabel("Not quite right?")
                     TextField("Darker armour, an older face, a raven on the shoulder…", text: $tweak, axis: .vertical)
                         .font(.prose)
+                        .returnIsDone($tweak)
                         .padding(12)
                         .card()
                 }

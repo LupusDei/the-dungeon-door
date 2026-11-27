@@ -207,17 +207,14 @@ struct PlayStoryPage: View {
                 TextField("Say or do…", text: $spoken, axis: .vertical)
                     .font(.prose)
                     .lineLimit(1...3)
+                    .returnIsDone($spoken, label: .send, action: speak)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .card()
-                Button {
-                    let text = spoken
-                    spoken = ""
-                    Task { await session.speakInCharacter(text) }
-                } label: {
+                Button(action: speak) {
                     Image(systemName: "quote.bubble.fill").font(.system(size: 28))
                 }
-                .disabled(spoken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.busy || state.status != .voting)
+                .disabled(!canSpeak)
                 .accessibilityLabel("Speak in character")
             }
         }
@@ -331,6 +328,26 @@ struct PlayStoryPage: View {
         }
     }
 
+    private var canSpeak: Bool {
+        !spoken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !session.busy && state.status == .voting
+    }
+
+    private func speak() {
+        guard canSpeak else { return }
+        let text = spoken
+        spoken = ""
+        Task { await session.speakInCharacter(text) }
+    }
+
+    private var canSendFreeform: Bool { canSend && !freeform.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    private func sendFreeform() {
+        guard canSendFreeform else { return }
+        let text = freeform
+        freeform = ""
+        Task { await session.act(inOwnWords: text) }
+    }
+
     private var freeformBox: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("What do you do?")
@@ -341,15 +358,12 @@ struct PlayStoryPage: View {
             TextField("Say what you do…", text: $freeform, axis: .vertical)
                 .font(.prose)
                 .lineLimit(2...4)
+                .returnIsDone($freeform, label: .send, action: sendFreeform)
                 .padding(12)
                 .card()
-            Button("Send this action") {
-                let text = freeform
-                freeform = ""
-                Task { await session.act(inOwnWords: text) }
-            }
+            Button("Send this action", action: sendFreeform)
             .buttonStyle(.gilded)
-            .disabled(!canSend || freeform.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(!canSendFreeform)
             if scene?.myAction == nil, let written = scene?.myFreeform, !written.text.isEmpty {
                 Text("Written: \(written.text)")
                     .font(.serif(.footnote).italic())

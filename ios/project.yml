@@ -73,3 +73,18 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
 
+  # The app driven as a player drives it (keyboard, taps), against a local server: DD_API_BASE,
+  # DD_PLAYER and DD_GAME name the server, the player and the game (passed in as TEST_RUNNER_DD_*).
+  DungeonDoorUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: DungeonDoorUITests
+    dependencies:
+      - target: DungeonDoor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jmm.the-dungeon-door.uitests
+        TEST_TARGET_NAME: DungeonDoor
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic

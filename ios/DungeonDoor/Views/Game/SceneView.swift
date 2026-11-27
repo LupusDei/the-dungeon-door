@@ -168,22 +168,28 @@ struct SceneView: View {
                         TextField("Say or do…", text: $inCharacterDraft, axis: .vertical)
                             .font(.prose)
                             .lineLimit(1...3)
+                            .returnIsDone($inCharacterDraft, label: .send, action: speakInCharacter)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .card()
-                        Button {
-                            let text = inCharacterDraft
-                            inCharacterDraft = ""
-                            Task { await session.speakInCharacter(text) }
-                        } label: {
+                        Button(action: speakInCharacter) {
                             Image(systemName: "quote.bubble.fill").font(.system(size: 28))
                         }
-                        .disabled(inCharacterDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.busy)
+                        .disabled(!canSpeak)
                         .accessibilityLabel("Speak in character")
                     }
                 }
             }
         }
+    }
+
+    private var canSpeak: Bool { !inCharacterDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !session.busy }
+
+    private func speakInCharacter() {
+        guard canSpeak else { return }
+        let text = inCharacterDraft
+        inCharacterDraft = ""
+        Task { await session.speakInCharacter(text) }
     }
 
     @ViewBuilder private func roleplayLines(_ lines: [RoleplayLine]) -> some View {

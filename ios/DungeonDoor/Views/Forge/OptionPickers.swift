@@ -205,6 +205,7 @@ struct ParchmentEditor: View {
                     .font(.prose)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 120)
+                    .returnIsDone($text)
                     .onChange(of: text) { _, new in
                         if new.count > limit { text = String(new.prefix(limit)) }
                     }

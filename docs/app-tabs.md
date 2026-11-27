@@ -129,6 +129,16 @@ The party's thread and the composer live on this tab. A line shows only the reac
 have used, plus a button to add one. System lines and the dungeon master's lines have none.
 Names wrap. The unread count on the tab is lines that arrived while Chat was not showing.
 
+## Return on the keyboard
+
+Return means done, on every field a player types into. The keyboard goes away, and a field
+with something to send sends it, as its button would: the action in your own words, the
+in-character line, the chat line, the door code. Return does nothing a disabled button would
+not do. Fields that only describe (the forge's prompts and portrait tweak, the hero's name,
+how you use a sheet action) just close the keyboard. A multi-line field keeps no newline from
+Return, and lines pasted in are joined with spaces. `Core/ReturnKey.swift` decides;
+`UI/ReturnIsDone.swift` applies it to a field.
+
 ## What the app reads, and what it does not need yet
 
 Every new field is optional. A missing key, a null, or a shape the app cannot read leaves that

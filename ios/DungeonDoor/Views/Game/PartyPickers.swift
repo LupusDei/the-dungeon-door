@@ -236,6 +236,7 @@ struct JoinGameView: View {
                                 .autocorrectionDisabled()
                                 .keyboardType(.asciiCapable)
                                 .focused($codeFocused)
+                                .returnIsDone($code, label: .join) { if canJoin { Task { await join() } } }
                                 .foregroundStyle(.clear)
                                 .tint(.clear)
                                 .opacity(0.02)
@@ -266,7 +267,7 @@ struct JoinGameView: View {
                     if working { ProgressView().tint(Palette.ink) } else { Label("Knock", systemImage: "hand.raised.fill") }
                 }
                 .buttonStyle(.gilded)
-                .disabled(code.count != 6 || heroId == nil || working)
+                .disabled(!canJoin)
                 .padding(20)
                 .background(Palette.ink.opacity(0.95))
             }
@@ -277,6 +278,8 @@ struct JoinGameView: View {
             .onAppear { codeFocused = code.count != 6 }
         }
     }
+
+    private var canJoin: Bool { code.count == 6 && heroId != nil && !working }
 
     private func join() async {
         guard let heroId else { return }

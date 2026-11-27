@@ -133,7 +133,7 @@ struct ChatComposerBar: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .card()
-                    .onSubmit(send)
+                    .returnIsDone($session.draft, label: .send, action: send)
                 if showsThread {
                     Button { session.chatOpen = true } label: {
                         Image(systemName: "bubble.left.and.bubble.right")
@@ -317,6 +317,7 @@ struct ChatComposerBar: View {
     }
 
     private func send() {
+        guard !session.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let text = session.draft
         let voice = session.speakingInCharacter ? "in" : "out"
         let reply = session.replyingTo?.id

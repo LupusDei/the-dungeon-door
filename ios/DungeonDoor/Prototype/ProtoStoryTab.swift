@@ -215,6 +215,7 @@ struct ProtoStoryTab: View {
                 .foregroundStyle(Palette.muted)
             TextField("Say what you do…", text: $freeform, axis: .vertical)
                 .font(.prose)
+                .returnIsDone($freeform)
                 .lineLimit(2...4)
                 .padding(12)
                 .card()
