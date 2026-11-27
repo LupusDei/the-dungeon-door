@@ -71,8 +71,16 @@ enum PlayTurn {
     }
 
     static func roll(scene: GameScene, playerId: String) -> Int? {
-        if let vote = scene.votes.first(where: { $0.playerId == playerId }) { return vote.roll }
+        if let vote = scene.votes.first(where: { $0.playerId == playerId }) { return face(of: vote, in: scene) }
         return scene.myFreeform?.roll
+    }
+
+    /// The d20 to show beside a vote while the table is still choosing. A pick of one of the plot's
+    /// choices shows none: its die only counts if that choice wins and calls for a roll, and the
+    /// result screen is where it lands, with what it was for. An action of the hero's own (an
+    /// attack, a spell, a skill) shows the die they threw.
+    static func face(of vote: Vote, in scene: GameScene) -> Int? {
+        scene.combat || vote.actionId != nil ? vote.roll : nil
     }
 
     /// What a hero has put into this turn: the words for it, and its d20 once the face shows. Nil
@@ -81,7 +89,7 @@ enum PlayTurn {
     static func entry(of playerId: String, in scene: GameScene, me: String) -> (detail: String, roll: Int?)? {
         if let vote = scene.votes.first(where: { $0.playerId == playerId }) {
             let waiting = vote.pending ? (vote.formula.map { " · \($0)" } ?? " · d20") : ""
-            return (words(vote, in: scene) + waiting, vote.roll)
+            return (words(vote, in: scene) + waiting, face(of: vote, in: scene))
         }
         if let written = scene.freeforms.first(where: { $0.playerId == playerId }) {
             let waiting = written.pending ? " · d20" : ""

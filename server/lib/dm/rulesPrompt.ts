@@ -46,7 +46,7 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   engine replaces your three choices with Engage, Run and Parley: still write the scene. Run backs out the
   way the party came (or slips past wanderers); the room stays uncleared, with no loot and no experience.
   Indifferent or Friendly ones wait (the dungeon block says so). Offer a parley, a fight with them, or a way
-  past when they are not Hostile. {"kind":"parley"} is the best talker trying to sway them: success and they
+  past when they are not Hostile. {"kind":"parley"} is the best talker among the heroes who pick it trying to sway them: success and they
   let the party be, failure sours them a step. If they turn Hostile, the party chooses again; they do not
   attack on their own. Outside a dungeon, {"kind":"parley","monsters":["goblin-warrior"]} talks with
   creatures you name, and a failure that turns them Hostile does start the fight.

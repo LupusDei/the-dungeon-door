@@ -16,7 +16,7 @@ export const FlatHook = z.object({
   tool: z.string().describe('check: a tool id such as "thieves-tools" when a tool does the work; "" otherwise'),
   dc: z.number().int().describe('check or save: 5, 10, 15, 20, 25 or 30; 0 for a check against a monster and for other kinds'),
   against: z.string().describe('check: a monster id when the check is against that creature (sneak past, persuade); "" otherwise'),
-  mode: z.enum([NONE, 'group', 'best']).describe('check: "group" (everyone rolls) or "best" (the best hero rolls, the others help); "none" otherwise'),
+  mode: z.enum([NONE, 'group', 'best']).describe('check: "group" (everyone rolls) or "best" (one hero rolls for the party: the best at it among the heroes who pick this choice, and the others who pick it help); "none" otherwise'),
   advantage: z.boolean().describe('check or save: true when circumstances favour the heroes'),
   disadvantage: z.boolean().describe('check or save: true when circumstances hinder the heroes'),
   damage: z.string().describe('save: damage dice on a failure, e.g. "2d6"; "" for none'),

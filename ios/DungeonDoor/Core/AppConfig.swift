@@ -39,6 +39,8 @@ import SwiftUI
 /// - `-hudOpen YES` opens a game being played with the party's heads-up display pulled down into
 ///   its card, and `-hudOpen NO` with it closed to its slim row, whether or not a fight is on
 ///   (without the argument a fight pulls it down and its end puts it away).
+/// - `-turnResult NO` leaves out the card that comes up between turns (who did what, then how
+///   every die landed), for a test of something else on a game whose turn has just resolved.
 /// - `-dd.pushOn NO` starts with the player's notification switch off, so iOS is not asked for leave.
 /// - `-pushOpen <kind>:<CODE>` acts as if a notification of that kind ("turn", "combat", "chat",
 ///   "invite") about that game had been tapped.
@@ -130,6 +132,11 @@ enum AppConfig {
     static var wheelAimArgument: String? { argument("wheelAim") }
     static var playTabArgument: PlayTab? { argument("playTab").flatMap { PlayTab(rawValue: $0.lowercased()) } }
     static var playPaneArgument: PlaySheetPane? { argument("playPane").flatMap { PlaySheetPane(rawValue: $0.lowercased()) } }
+    /// False with `-turnResult NO`: the card between turns is left out (tests of other things).
+    static var showsTurnResult: Bool {
+        UserDefaults.standard.object(forKey: "turnResult") == nil || UserDefaults.standard.bool(forKey: "turnResult")
+    }
+
     static var hudOpenArgument: Bool? {
         UserDefaults.standard.object(forKey: "hudOpen") == nil ? nil : UserDefaults.standard.bool(forKey: "hudOpen")
     }

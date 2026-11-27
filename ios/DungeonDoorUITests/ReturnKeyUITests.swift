@@ -11,7 +11,8 @@ final class ReturnKeyUITests: XCTestCase {
             throw XCTSkip("needs a local game: DD_PLAYER and DD_GAME")
         }
         app = XCUIApplication()
-        app.launchArguments = ["-apiBase", env["DD_API_BASE"] ?? "http://localhost:3000", "-playerId", player, "-openGame", game]
+        app.launchArguments = ["-apiBase", env["DD_API_BASE"] ?? "http://localhost:3000", "-playerId", player, "-openGame", game,
+                               "-turnResult", "NO"]  // the card between turns stays out of the keyboard's way
         app.launch()
     }
 

@@ -1,9 +1,12 @@
 /**
  * Checks and saving throws outside combat (SRD 5.2). In a group check every hero rolls, with their
- * vote's d20 when they voted, and the party succeeds if at least half do; in "best" mode the hero with the
- * best bonus rolls and anyone proficient in the skill or tool Helps (Advantage). A natural 20 or 1 is not
- * automatic. A check against a monster takes its DC from the monster (5.2 has no contests). Tools,
- * Expertise, Advantage, Disadvantage and Exhaustion come from lib/rules/checks.ts.
+ * vote's d20 when they voted, and the party succeeds if at least half do. In "best" mode one hero rolls,
+ * and a hero proficient in the skill or tool Helps (Advantage): the check is made by those who picked the
+ * choice it belongs to (`backers`), the one of them with the best bonus rolling and the others of them
+ * helping. With nobody standing who picked it, the hero with the best bonus in the whole party rolls and
+ * anyone may Help. A natural 20 or 1 is not automatic. A check against a monster takes its DC from the
+ * monster (5.2 has no contests). Tools, Expertise, Advantage, Disadvantage and Exhaustion come from
+ * lib/rules/checks.ts.
  */
 import { abilityCheck, checkBonus, dcAgainst, hasTool } from '../rules/checks.ts';
 import { parseDice, rollDice } from '../rules/dice.ts';
@@ -26,14 +29,37 @@ export interface Roll {
   natural: number | null; dice: number[]; mode: Mode; bonus: number; total: number | null; success: boolean;
   /** The check needed sight and the hero could not see: an automatic failure (5.2 Blinded). */
   blind?: true;
+  /** The table rolled this d20 for the hero: it was not the d20 of their vote. False for a hero who rolled nothing. */
+  fresh: boolean;
 }
-export interface GroupRoll { rolls: Roll[]; success: boolean; sheets: Hero[]; lines: string[] }
+/** helpers: the names of the heroes whose Help gave the roller Advantage ("best" mode); empty otherwise. */
+export interface GroupRoll { rolls: Roll[]; success: boolean; sheets: Hero[]; lines: string[]; helpers: string[] }
+
+/**
+ * One d20 the engine rolled for a hero outside a fight, in numbers (play/result.ts): for the party's choice
+ * (a check, a save, a parley, a trap) or for the hero's own written action.
+ */
+export interface TurnCheck {
+  for: 'choice' | 'own';
+  playerId: string;
+  /** "Persuasion", "Dexterity save", "Thieves' Tools": the roll as the dice log names it. */
+  name: string;
+  natural: number; dice: number[]; mode: Mode; bonus: number; total: number; dc: number; success: boolean;
+  fresh: boolean;
+  helpers: string[];
+  /** What a success did beyond passing ("Improvised damage 2 slashing"), or null. */
+  detail: string | null;
+  /** The words the player wrote, for their own action; null for the party's choice. */
+  text: string | null;
+  /** The engine line this roll produced, exactly as it is in the turn's lines. */
+  line: string;
+}
 
 export const signed = (n: number) => (n < 0 ? `- ${-n}` : `+ ${n}`);
 const standing = (h: Hero) => h.sheet.hp > 0;
 
 /** The DC: the DM's, or the monster's when the check is against one. */
-function dcOf(hook: RollHook): number {
+export function dcOf(hook: RollHook): number {
   if (hook.kind === 'save') return hook.dc;
   return typeof hook.dc === 'number' ? hook.dc : dcAgainst(monster(hook.against!), hook);
 }
@@ -51,13 +77,13 @@ function d20For(hero: Hero, hook: RollHook, natural: number, rng: Rng, helped: b
   return { ...rollD20(rng, bonus, mode, natural), bonus, mode };
 }
 
-function rollFor(hero: Hero, hook: RollHook, vote: number, rng: Rng, helped = false): Roll {
+function rollFor(hero: Hero, hook: RollHook, vote: Thrown, rng: Rng, helped = false): Roll {
   if (cannotSee(hero, hook)) return { ...downRoll(hero), blind: true };
-  const { natural, rolls, total, bonus, mode } = d20For(hero, hook, vote, rng, helped);
-  return { playerId: hero.playerId, name: hero.sheet.name, natural, dice: rolls, mode, bonus, total, success: total >= dcOf(hook) };
+  const { natural, rolls, total, bonus, mode } = d20For(hero, hook, vote.natural, rng, helped);
+  return { playerId: hero.playerId, name: hero.sheet.name, natural, dice: rolls, mode, bonus, total, success: total >= dcOf(hook), fresh: vote.fresh };
 }
 
-const downRoll = (h: Hero): Roll => ({ playerId: h.playerId, name: h.sheet.name, natural: null, dice: [], mode: 'normal', bonus: 0, total: null, success: false });
+const downRoll = (h: Hero): Roll => ({ playerId: h.playerId, name: h.sheet.name, natural: null, dice: [], mode: 'normal', bonus: 0, total: null, success: false, fresh: false });
 
 /** "14 (Advantage over 3)". */
 function diceText(roll: Roll): string {
@@ -67,10 +93,24 @@ function diceText(roll: Roll): string {
   return `${roll.natural} (${roll.mode === 'advantage' ? 'Advantage' : 'Disadvantage'} over ${dropped})`;
 }
 
-function lineOf(roll: Roll, hook: RollHook): string {
+/** The roll's line in the dice log, under the name the log gives the check ("Athletics", "Dexterity save"). */
+function rollLine(roll: Roll, name: string, dc: number): string {
   if (roll.blind) return `${roll.name} cannot see and fails`;
   if (roll.natural === null) return `${roll.name} is down and fails`;
-  return `${roll.name}: ${rollName(hook)} ${diceText(roll)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dcOf(hook)}, ${roll.success ? 'success' : 'failure'}`;
+  return `${roll.name}: ${name} ${diceText(roll)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dc}, ${roll.success ? 'success' : 'failure'}`;
+}
+
+const lineOf = (roll: Roll, hook: RollHook): string => rollLine(roll, rollName(hook), dcOf(hook));
+
+/** "Ash helps: Advantage", "Ash, Cleo help: Advantage". */
+export const helpLine = (names: readonly string[]): string => `${names.join(', ')} ${names.length > 1 ? 'help' : 'helps'}: Advantage`;
+
+/** The d20s of a group roll as checks for the party's choice: one for each hero who rolled (the down and the blind rolled nothing). */
+export function checksOf(rolled: Pick<GroupRoll, 'rolls' | 'helpers'>, name: string, dc: number): TurnCheck[] {
+  return rolled.rolls.flatMap((r): TurnCheck[] => (r.natural === null || r.total === null ? [] : [{
+    for: 'choice', playerId: r.playerId, name, natural: r.natural, dice: [...r.dice], mode: r.mode, bonus: r.bonus, total: r.total, dc,
+    success: r.success, fresh: r.fresh, helpers: [...rolled.helpers], detail: null, text: null, line: rollLine(r, name, dc),
+  }]));
 }
 
 /** Damage from a save: rolled once; a failure takes it all, a success half. */
@@ -84,7 +124,10 @@ function applyDamage(heroes: Hero[], rolls: Roll[], hook: RollHook, rng: Rng): {
   return { sheets, line: `Damage ${damage}${hook.damageType ? ` ${hook.damageType}` : ''}: ${taken.join(', ')}` };
 }
 
-const voteOf = (votes: Readonly<Record<string, number>>, hero: Hero, rng: Rng) => (Object.hasOwn(votes, hero.playerId) ? votes[hero.playerId] : rng.die(20));
+/** A hero's d20: the one they threw with their vote, or a fresh one the table rolls for them. */
+interface Thrown { natural: number; fresh: boolean }
+const voteOf = (votes: Readonly<Record<string, number>>, hero: Hero, rng: Rng): Thrown =>
+  (Object.hasOwn(votes, hero.playerId) ? { natural: votes[hero.playerId], fresh: false } : { natural: rng.die(20), fresh: true });
 
 /** A failed save brings the hook's condition: for its minutes, or until a long rest. */
 function afflict(heroes: Hero[], rolls: Roll[], hook: RollHook): Hero[] {
@@ -97,23 +140,33 @@ function afflict(heroes: Hero[], rolls: Roll[], hook: RollHook): Hero[] {
 const canHelp = (hero: Hero, hook: Extract<RollHook, { kind: 'check' }>) =>
   (!!hook.skill && hero.sheet.skills.includes(hook.skill)) || (!!hook.tool && hasTool(hero.sheet, hook.tool));
 
-function bestRoll(heroes: Hero[], hook: Extract<RollHook, { kind: 'check' }>, votes: Readonly<Record<string, number>>, rng: Rng): GroupRoll {
+/**
+ * One hero rolls for the party. Those standing who picked the choice (`backers`) make the check: the best
+ * bonus among them rolls (one who can see, if any of them can) and the others of them Help. With no backer
+ * standing, the whole standing party is the pool.
+ */
+function bestRoll(heroes: Hero[], hook: Extract<RollHook, { kind: 'check' }>, votes: Readonly<Record<string, number>>, rng: Rng, backers: readonly string[]): GroupRoll {
   const up = heroes.filter(standing);
-  if (up.length === 0) return { rolls: heroes.map(downRoll), success: false, sheets: heroes, lines: heroes.map((h) => `${h.sheet.name} is down and fails`) };
-  const seeing = up.filter((h) => !cannotSee(h, hook));
-  const roller = (seeing.length ? seeing : up).reduce((best, h) => (checkBonus(h.sheet, hook).bonus > checkBonus(best.sheet, hook).bonus ? h : best));
-  const helpers = up.filter((h) => h !== roller && canHelp(h, hook));
+  if (up.length === 0) return { rolls: heroes.map(downRoll), success: false, sheets: heroes, lines: heroes.map((h) => `${h.sheet.name} is down and fails`), helpers: [] };
+  const backing = up.filter((h) => backers.includes(h.playerId));
+  const pool = backing.length ? backing : up;
+  const seeing = pool.filter((h) => !cannotSee(h, hook));
+  const roller = (seeing.length ? seeing : pool).reduce((best, h) => (checkBonus(h.sheet, hook).bonus > checkBonus(best.sheet, hook).bonus ? h : best));
+  const helpers = pool.filter((h) => h !== roller && canHelp(h, hook)).map((h) => h.sheet.name);
   const roll = rollFor(roller, hook, voteOf(votes, roller, rng), rng, helpers.length > 0);
-  const help = helpers.length ? [`${helpers.map((h) => h.sheet.name).join(', ')} ${helpers.length > 1 ? 'help' : 'helps'}: Advantage`] : [];
-  return { rolls: [roll], success: roll.success, sheets: heroes, lines: [...help, lineOf(roll, hook)] };
+  const help = helpers.length ? [helpLine(helpers)] : [];
+  return { rolls: [roll], success: roll.success, sheets: heroes, lines: [...help, lineOf(roll, hook)], helpers };
 }
 
-/** The heroes make the check or save: with `votes[playerId]` as the d20, or a fresh one from `rng`. */
-export function groupRoll(heroes: Hero[], hook: RollHook, votes: Readonly<Record<string, number>>, rng: Rng): GroupRoll {
-  if (hook.kind === 'check' && hook.mode === 'best') return bestRoll(heroes, hook, votes, rng);
+/**
+ * The heroes make the check or save: with `votes[playerId]` as the d20, or a fresh one from `rng`.
+ * `backers` are the players who picked the choice this roll is for; they matter only in "best" mode.
+ */
+export function groupRoll(heroes: Hero[], hook: RollHook, votes: Readonly<Record<string, number>>, rng: Rng, backers: readonly string[] = []): GroupRoll {
+  if (hook.kind === 'check' && hook.mode === 'best') return bestRoll(heroes, hook, votes, rng, backers);
   const rolls = heroes.map((h): Roll => (standing(h) ? rollFor(h, hook, voteOf(votes, h, rng), rng) : downRoll(h)));
   const damaged = applyDamage(heroes, rolls, hook, rng);
   const { sheets, line } = { ...damaged, sheets: afflict(damaged.sheets, rolls, hook) };
   const successes = rolls.filter((r) => r.success).length;
-  return { rolls, success: successes * 2 >= heroes.length, sheets, lines: [...rolls.map((r) => lineOf(r, hook)), ...(line ? [line] : [])] };
+  return { rolls, success: successes * 2 >= heroes.length, sheets, lines: [...rolls.map((r) => lineOf(r, hook)), ...(line ? [line] : [])], helpers: [] };
 }

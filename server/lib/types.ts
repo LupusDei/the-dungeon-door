@@ -2,6 +2,7 @@
 import type { AttackView } from './attacks.ts';
 import type { RulesHook } from './play/hooks.ts';
 import type { SceneProgress } from './play/progress.ts';
+import type { TurnResult } from './play/result.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { RulesView } from './play/view.ts';
 import type { Move } from './rules/bands.ts';
@@ -54,6 +55,9 @@ export type StoredCharacter = Omit<Character, 'sheet' | 'attacks' | 'bonusesOpen
   retiredAt?: string | null;
   death?: Death | null;
 };
+
+/** A resolved turn in numbers, and one of its d20s (play/result.ts; docs/api.md, TurnResult). */
+export type { TurnResult, TurnRoll } from './play/result.ts';
 
 export type GameStatus = 'lobby' | 'preparing' | 'voting' | 'resolving' | 'ended';
 export type ChoiceId = 'a' | 'b' | 'c';
@@ -163,6 +167,11 @@ export interface StoredScene {
   chosenChoiceId: ChoiceId | null;
   /** In-character lines this turn, oldest first. Absent on scenes from before players could speak in character. */
   roleplay?: RoleplayLine[];
+  /**
+   * How the turn came out, in numbers: stored when the engine has played it, before the DM writes `outcome`.
+   * Null until then, in a game without the engine, and when the engine failed. Absent on scenes from before it.
+   */
+  result?: TurnResult | null;
   createdAt: string;
 }
 
@@ -300,6 +309,11 @@ export interface SceneView {
   /** The caller's written check, or null. */
   myFreeform: { text: string; roll: number | null; pending?: boolean } | null;
   outcome: string | null;
+  /**
+   * How the turn came out, in numbers: there as soon as the engine has played it, while the DM is still
+   * writing `outcome`. Null while the table is choosing, for the epilogue, and in a game without the engine.
+   */
+  result: TurnResult | null;
   /** In-character lines this turn, oldest first. Empty when nobody has spoken. */
   roleplay: RoleplayLine[];
 }
@@ -313,6 +327,8 @@ export interface ChronicleEntry {
   voiceUrl: string | null;
   choiceLabel: string;
   outcome: string;
+  /** That turn's result, as on its scene; null for a scene resolved before results, or without the engine. */
+  result: TurnResult | null;
   /** A combat round: every hero took their own action, so `choiceLabel` is empty. */
   combat: boolean;
   /** What the heroes said and did in character that turn. */

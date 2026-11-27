@@ -15,5 +15,6 @@
                    gherclj.noncombat-xp-steps
                    gherclj.road-count-steps
                    gherclj.quest-steps
-                   gherclj.combat-hud-steps]
+                   gherclj.combat-hud-steps
+                   gherclj.turn-result-steps]
  :framework :typescript/node-test}

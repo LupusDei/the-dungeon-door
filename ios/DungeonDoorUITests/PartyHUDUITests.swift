@@ -19,7 +19,7 @@ final class PartyHUDUITests: XCTestCase {
         }
         app = XCUIApplication()
         app.launchArguments = ["-apiBase", env["DD_API_BASE"] ?? "http://localhost:3000", "-playerId", player,
-                               "-openGame", game, "-dd.soundOn", "NO"] + arguments
+                               "-openGame", game, "-dd.soundOn", "NO", "-turnResult", "NO"] + arguments
         app.launch()
     }
 

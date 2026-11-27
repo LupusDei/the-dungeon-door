@@ -1,6 +1,6 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
 
 export interface NewGame {
   code: string;
@@ -52,7 +52,7 @@ export interface NewMessage {
 }
 
 /** A scene as written by the DM: everything but its votes, its in-character lines, and its resolution. */
-export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices' | 'roleplay'>;
+export type SceneDraftRecord = Omit<StoredScene, 'votes' | 'outcome' | 'chosenChoiceId' | 'createdAt' | 'voices' | 'roleplay' | 'result'>;
 
 /**
  * Persistence for characters, games and chat. Two implementations: Postgres (`postgres.ts`, when
@@ -99,6 +99,11 @@ export interface Store {
   /** Sets the scene's reading in that voice; null gives the claim back so the next request tries again. */
   setSceneVoice(code: string, index: number, voice: string, voiceUrl: string | null): Promise<void>;
   setSceneOutcome(code: string, index: number, outcome: string, chosenChoiceId: ChoiceId | null): Promise<void>;
+  /**
+   * Sets how the scene's turn came out, in numbers (play/result.ts): stored when the engine has played the
+   * turn, before the DM writes the outcome. Null clears it (no engine, or the engine failed).
+   */
+  setSceneResult(code: string, index: number, result: TurnResult | null): Promise<void>;
   /**
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its
    * original roll. `named` is the legal action the vote names; null is a choice letter, and clears one.

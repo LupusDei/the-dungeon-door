@@ -1215,6 +1215,9 @@ struct GameScene: Codable, Hashable {
     var myAction: MyAction? = nil
     /// The d20 still to throw. Nil once thrown, or when this action needs no throw.
     var myDie: PlayerDie? = nil
+    /// How the turn came out, in numbers: there as soon as everyone has acted and the engine has
+    /// rolled, while the dungeon master is still writing. Nil until then and on an older server.
+    var result: TurnResult? = nil
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -1261,6 +1264,7 @@ extension GameScene {
         myFreeform = try? c.decode(FreeformTurn.self, forKey: .myFreeform)
         myAction = try? c.decode(MyAction.self, forKey: .myAction)
         myDie = try? c.decode(PlayerDie.self, forKey: .myDie)
+        result = try? c.decode(TurnResult.self, forKey: .result)
     }
 }
 
@@ -1962,6 +1966,8 @@ struct ChronicleEntry: Codable, Hashable, Identifiable {
     let outcome: String
     /// What the heroes said and did in character that turn.
     var roleplay: [RoleplayLine] = []
+    /// That turn's result. The last entry's is the turn just played.
+    var result: TurnResult? = nil
     var id: Int { index }
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -1981,6 +1987,7 @@ extension ChronicleEntry {
         choiceLabel = try c.value(.choiceLabel, or: "")
         outcome = try c.value(.outcome, or: "")
         roleplay = try c.value(.roleplay, or: [])
+        result = try? c.decode(TurnResult.self, forKey: .result)
     }
 }
 

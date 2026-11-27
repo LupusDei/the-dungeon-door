@@ -1,5 +1,5 @@
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
+import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
 import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
@@ -139,7 +139,7 @@ export class MemoryStore implements Store {
       if (existing.narration !== scene.narration) this.forgetVoices(code, existing); // new words need new readings
       Object.assign(existing, structuredClone(scene));
     } else {
-      game.scenes.push({ ...structuredClone(scene), voices: {}, roleplay: [], votes: [], outcome: null, chosenChoiceId: null, createdAt: now() });
+      game.scenes.push({ ...structuredClone(scene), voices: {}, roleplay: [], votes: [], outcome: null, chosenChoiceId: null, result: null, createdAt: now() });
       game.scenes.sort((a, b) => a.index - b.index);
     }
     game.updatedAt = now();
@@ -188,6 +188,15 @@ export class MemoryStore implements Store {
     if (!game || !scene) return;
     scene.outcome = outcome;
     scene.chosenChoiceId = chosenChoiceId;
+    game.updatedAt = now();
+  }
+
+  async setSceneResult(code: string, index: number, result: TurnResult | null) {
+    await tick();
+    const game = this.games.get(code)?.game;
+    const scene = game?.scenes.find((s) => s.index === index);
+    if (!game || !scene) return;
+    scene.result = result === null ? null : structuredClone(result);
     game.updatedAt = now();
   }
 

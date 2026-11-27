@@ -26,7 +26,7 @@ test('ties go to the choice whose voters rolled highest; then to the first; no l
 
 test('a story choice (no hook) only lets ten minutes pass', () => {
   const s = state();
-  assert.deepEqual(playTurn(s, null, ballots(5, 5)), { ...s, party: { ...s.party, clock: 600 }, lines: [], success: null, fight: null, rolled: [] });
+  assert.deepEqual(playTurn(s, null, ballots(5, 5)), { ...s, party: { ...s.party, clock: 600 }, lines: [], success: null, fight: null, rolled: [], checks: [] });
 });
 
 test('time passes with every turn: a dark place is lit, the light burns, a rest does not burn it, a combat round is 6 seconds', () => {
@@ -498,4 +498,50 @@ test('a fight on the road: XP as any fight, the stretch\u2019s treasure for the 
     assert.equal(Object.values(t.party.sheets).reduce((gp, s) => gp + s.gp, 0), before + 40);
     assert.ok(Object.values(t.party.sheets).every((s) => s.xp > 0));
   }
+});
+
+const talker = { ...rogue, name: 'Cleo', skills: [...rogue.skills, 'persuasion'], skillBonuses: { ...rogue.skillBonuses, persuasion: 6 } };
+
+test('the party\'s check is rolled by those who picked it: the turn keeps each d20 in numbers, with the line it wrote', () => {
+  const hook = { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 10, mode: 'best' as const };
+  const s = state({ party: party({ p1: fighter, p2: talker }) });
+  const picked = playTurn(s, hook, ballots(17, 3), [], ['p1']);
+  assert.deepEqual(picked.checks.map((c) => [c.for, c.playerId, c.name, c.natural, c.dc, c.fresh, c.helpers, c.text]), [['choice', 'p1', 'Persuasion', 17, 10, false, [], null]], 'Bryn picked it and showed a 17: her die decides, not the better talker\'s');
+  assert.deepEqual(picked.lines.filter((l) => l.includes('Persuasion')), [picked.checks[0].line]);
+  assert.equal(picked.checks[0].line, `Bryn: Persuasion 17 + ${picked.checks[0].bonus} = ${picked.checks[0].total} vs DC 10, success`);
+  assert.deepEqual(playTurn(s, hook, ballots(17, 3)).checks.map((c) => [c.playerId, c.dice[0], c.helpers]), [['p2', 3, ['Bryn']]], 'with no backers given, the best talker rolls and anyone who knows how helps');
+  const parley = playTurn(s, { kind: 'parley', monsters: ['goblin-warrior'] }, ballots(17, 3), [], ['p1']);
+  assert.deepEqual(parley.checks.map((c) => [c.for, c.playerId, c.name, c.natural, c.dc, c.fresh]), [['choice', 'p1', 'Persuasion', 17, 15, false]], 'a parley is the same check');
+  assert.deepEqual(parley.rolled, [{ playerId: 'p1', success: parley.checks[0].success }], 'and XP still goes by who rolled');
+  const group = playTurn(s, { kind: 'save', ability: 'dex', dc: 10 }, [{ playerId: 'p1', choiceId: 'a', roll: 12 }], [], ['p1']);
+  assert.deepEqual(group.checks.map((c) => [c.playerId, c.name, c.fresh]), [['p1', 'Dexterity save', false], ['p2', 'Dexterity save', true]], 'a save is everyone\'s: the table rolls for a hero who picked nothing');
+  assert.deepEqual(group.checks.map((c) => c.line), group.lines.filter((l) => l.includes('Dexterity save')));
+});
+
+test('a written action is its hero\'s own check on the turn: the words, the numbers and what a success did', () => {
+  const kick = { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', tier: 'easy' as const, effect: { category: 'damage' as const, severity: 'light' as const, damageType: 'bludgeoning' } };
+  const written = [{ playerId: 'p2', roll: 18, text: 'I kick the brazier over', ruling: kick }];
+  const t = playTurn(state(), { kind: 'check', ability: 'str', skill: 'athletics', dc: 5 }, [{ playerId: 'p1', choiceId: 'a', roll: 15 }], written, ['p1']);
+  const [own, ...rest] = t.checks;
+  assert.deepEqual([own.for, own.playerId, own.name, own.natural, own.dc, own.success, own.fresh, own.text], ['own', 'p2', 'Athletics', 18, 10, true, false, 'I kick the brazier over']);
+  assert.match(own.detail!, /^Improvised damage \d bludgeoning$/);
+  assert.equal(own.line, t.lines[0], 'her own action is told first');
+  assert.equal(own.line.endsWith(`success. ${own.detail}.`), true);
+  assert.deepEqual(rest.map((c) => [c.for, c.playerId, c.natural, c.fresh]), [['choice', 'p1', 15, false], ['choice', 'p2', rest[1].natural, true]], 'the party\'s check still has her roll, with a die of the table\'s');
+  const down = playTurn(state({ party: party({ p1: fighter, p2: { ...rogue, hp: 0 } }) }), null, [], written);
+  assert.deepEqual([down.checks, down.lines[0]], [[], 'Cleo is down and does not act.']);
+});
+
+test('a trap\'s saves are d20s of the turn too; a fight\'s are not', () => {
+  const d = startDungeon('fixed', 3, [1, 1], 4);
+  const r4 = d.map.nodes.r4;
+  const trapped: DungeonState = { ...d, map: { ...d.map, nodes: { ...d.map.nodes, 'r0-r4': { ...d.map.nodes['r0-r4'], contents: null }, r4: { ...r4, contents: { ...r4.contents!, trap: 'poisoned-needle', treasure: null } } } } };
+  const dull = (sheet: CharacterSheet) => ({ ...sheet, skillBonuses: { ...sheet.skillBonuses, perception: -5, investigation: -5 } });
+  const sprung = playTurn({ ...state({ dungeon: trapped }), party: party({ p1: dull(fighter), p2: dull(rogue) }) }, { kind: 'move', exit: 'r4' }, ballots(11, 4), [], ['p1', 'p2']);
+  assert.ok(sprung.lines.some((l) => l.startsWith('Nobody notices the ')), sprung.lines.join(' | '));
+  assert.ok(sprung.checks.length > 0);
+  for (const c of sprung.checks) assert.ok(sprung.lines.includes(c.line), c.line);
+  assert.deepEqual(sprung.checks.map((c) => [c.for, / save$/.test(c.name), c.fresh]), sprung.checks.map(() => ['choice', true, false]));
+  const fight = startFight(party(), ['goblin-warrior']);
+  assert.deepEqual(playTurn(state({ combat: fight.combat, party: fight.party }), null, ballots(10, 10)).checks, []);
 });

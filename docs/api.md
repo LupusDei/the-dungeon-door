@@ -435,6 +435,12 @@ Scene {
   myFreeform: { text, roll: number | null, pending?: boolean } | null
                                      // the caller's written check. `roll` is null until they throw. Absent on older servers
   outcome: string | null             // set once resolved: the DM's summary of what the party chose
+  result: TurnResult | null          // how the turn came out, in numbers: set as soon as everyone has acted and
+                                     // the engine has rolled, while status is still "resolving" and before the DM
+                                     // has written `outcome`. Null until then (always while status is "voting",
+                                     // so a turn the DM fumbled and the table votes on again shows no old dice),
+                                     // for the epilogue, in a game without the rules engine, and for a turn the
+                                     // engine failed on. Absent from a server before it
   roleplay: [{ playerId: string; characterName: string; text: string }]
                                      // in-character lines and deeds this turn, oldest first. No roll.
                                      // Empty until someone speaks. Omitted by servers from before this.
@@ -467,12 +473,78 @@ LegalAction {
   reason: string | null              // why not, when available is false; null when it can be taken
 }
 
+TurnResult {                         // one resolved turn, for the app's result screen (lib/play/result.ts).
+                                     // The d20s that decided it are here, each under the hero it was rolled for:
+                                     // the party's choice (its check, save, parley or trap), a hero's own written
+                                     // action, and in a fight a hero's weapon attacks. Any other d20 (a spell or a
+                                     // written action in a fight, a death save, breaking free, shaking off a
+                                     // condition) is not a roll here: it stays a line, in `lines` and `notes`
+  sceneIndex: number
+  combat: boolean                    // a combat round: each hero took their own action and `choice` is null
+  choice: null | {                   // the plot choice the party went with. Null in a combat round, and when
+                                     // nobody picked one (every hero wrote their own action)
+    id: "a" | "b" | "c"; label: string
+    rules: string | null             // "Persuasion check, DC 10, one hero with help", as on the choice
+    backers: string[]                // the player ids who picked it, in the order they voted. Where one hero
+                                     // rolls for the party (a check for "one hero with help", a parley), it is
+                                     // the one of these best at it, and only these Help
+    tally: { a: number; b: number; c: number }   // picks per choice; a written action is not a pick
+    tie: null | { between: ("a" | "b" | "c")[]; playerId: string; roll: number }
+                                     // the picks were level: the choice whose backer threw the highest d20 won;
+                                     // `playerId` threw it and `roll` is its face
+    success: boolean | null          // its check, save or parley: passed or failed. Null for any other choice
+                                     // (a story choice, a fight, a rest, a way on and what it springs)
+  }
+  heroes: [{                         // everyone at the table, in joining order
+    playerId: string; name: string
+    did: "choice" | "own" | "action" | "nothing" | "down"
+                                     // "choice": picked a plot choice (`choiceId`, `label`). "own": wrote their own
+                                     // action, or used a skill or ability (`label`, and `text` if they wrote any).
+                                     // "action": a combat action (`label`: "Attack with Shortbow"; for a written
+                                     // action, the check's name, with `text`). "nothing": did not act (in a
+                                     // fight the engine has them Dodge). "down": at 0 hit points or dead when the
+                                     // turn began; in a fight, could not act. Outside a fight a fallen hero's
+                                     // player still has a say, so "down" may come with `choiceId` and `label`
+    choiceId?: "a" | "b" | "c"       // the plot choice they picked; never in a combat round
+    label?: string                   // the choice's label, the combat action, or the check's name ("Perception")
+    text?: string                    // the words they wrote, when they wrote any
+    byClock: boolean                 // their d20 was left to the clock (the server threw it; their XP is halved)
+    rolls: TurnRoll[]                // the d20s rolled for this hero this turn, in the order rolled; often empty
+    lines: string[]                  // the engine's own lines that begin with this hero's name, dice lines
+                                     // included (and their "Opportunity Attack: …" lines)
+  }]
+  notes: string[]                    // what else the turn did, in the engine's words: every line of `rules.results`
+                                     // that is not one of the scene's "+N XP" lines, nor a dice line already
+                                     // given as one of a hero's `rolls` ("The Wolf, Giant Rat let the party
+                                     // be.", "A fight begins: …", a foe's attack, "Hero 2 dodges.")
+}
+TurnRoll {
+  for: "choice" | "own" | "attack"   // the party's choice, the hero's own action, or a weapon attack in a fight
+  name: string                       // "Persuasion", "Dexterity save", "Stealth", "Shortbow"
+  natural: number                    // the face that counted
+  dice: number[]                     // both faces under Advantage or Disadvantage; else the one. An attack has
+                                     // only the face that counted
+  mode: "normal" | "advantage" | "disadvantage"   // an attack is always "normal": its line does not say
+  bonus: number; total: number
+  against: { kind: "dc" | "ac"; value: number }
+  success: boolean                   // an attack: a hit or a critical hit
+  fresh: boolean                     // true when the table rolled this die for the hero: a group check or a save
+                                     // when they picked no choice (they wrote their own action, or did not act),
+                                     // an extra attack, an opportunity attack. False when it is the d20 of their
+                                     // own pick or action (whichever choice they picked, for a group check or save)
+  helpers: string[]                  // names of the heroes whose Help gave Advantage; usually empty
+  detail: string | null              // what a success did beyond passing: "Improvised damage 2 slashing",
+                                     // "critical hit"
+}
+
 ChronicleEntry {
   index: number; title: string; imageUrl: string | null
   voices: { [narratorId]: string }   // the readings of that scene that were made
   voiceUrl: string | null            // the default narrator's, as on a scene
   choiceLabel: string                // the label of the most-voted choice (ties: the DM's pick); "" for a combat round
   outcome: string                    // what happened, as the DM resolved it
+  result: TurnResult | null          // that turn's result, as on its scene: the last entry's is the turn just
+                                     // played. Null for a scene resolved before results, or without the engine
   combat: boolean                    // a combat round: every hero took their own action
   roleplay: [{ playerId: string; characterName: string; text: string }]
                                      // what the heroes said and did in character that turn. Omitted by older servers.
@@ -834,14 +906,18 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   (or a fresh one if they didn't vote) plus their own bonus. In 5.2 a natural 20 or 1 is not automatic on
   a check or save. The party succeeds if at least half the heroes do (5.2 group check). A failed save
   can deal damage. A check against a creature (sneaking past it, persuading it) takes its DC from the
-  monster: its passive score, or the Influence DC (15 or its INT, whichever is higher). In "one hero with
-  help" checks the best hero rolls and the others give Advantage (5.2 Help).
+  monster: its passive score, or the Influence DC (15 or its INT, whichever is higher). A "one hero with
+  help" check is made by the heroes who picked that choice: the one of them best at it rolls, with the d20
+  of their own pick, and the others of them trained in it give Advantage (5.2 Help). A hero who picked
+  another choice, or wrote their own action, has no part in it. Only when nobody standing picked it does
+  the best hero of the whole party roll, with anyone helping. How it came out, die by die, is
+  `scene.result` (TurnResult).
 - **More choices.** Buying, selling and drinking a potion ("Buy Potion of Healing ×2", "Sell Gemstone",
   "Drink a Potion of Healing"; SRD prices, gear sells at half, gems and jewellery at full value); a trap
   ("Risk a trap": an SRD 5.2 example trap, found with passive scores, disarmed with thieves' tools, or
   sprung); a hazard ("Hazard: Falling (30 feet)"); "Parley" or "Parley with Goblin Warrior" (the best
-  talker tries to sway them); "Raise the dead" (a temple: every dead hero is raised while the party's gold
-  lasts).
+  talker among those who picked it tries to sway them); "Raise the dead" (a temple: every dead hero is
+  raised while the party's gold lasts).
 - **Time and light.** The engine keeps a clock (`rules.time`) and the party's light (`rules.light`). Where
   the place is not bright, the standing hero with the best light lights it (the Light cantrip, a lantern or
   lamp with oil, a torch, a candle), and the next when it burns out. A dungeon's entrance is dim, most

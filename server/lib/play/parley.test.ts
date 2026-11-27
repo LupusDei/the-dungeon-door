@@ -18,7 +18,7 @@ test('attitude: 2d6, 2–5 Hostile, 6–9 Indifferent, 10–12 Friendly; undead,
   assert.equal(rollAttitude(scriptedRng([6, 6]), ['flesh-golem']).attitude, 'hostile');
 });
 
-test('a parley: the best talker makes a Persuasion check against the shrewdest foe (DC max(15, INT)), the others helping', () => {
+test('a parley, with nobody named as having picked it: the best talker makes a Persuasion check against the shrewdest foe (DC max(15, INT)), the others helping', () => {
   const won = parley(party(), ['goblin-warrior', 'goblin-boss'], 'indifferent', { p1: 20, p2: 20 });
   assert.equal(won.success, true);
   assert.match(won.lines[0], /^Lyra: Persuasion 20/);
@@ -43,4 +43,15 @@ test('Friendly foes give Advantage, Hostile ones Disadvantage; the dead do not t
 test('the DC comes from the foe hardest to sway', () => {
   const sage = parley(party(), ['goblin-warrior', 'mage'], 'indifferent', { p1: 10, p2: 10 });
   assert.match(sage.lines[0], /vs DC 17,/, 'a mage has INT 17');
+});
+
+test('the one who picked the parley talks, with their own d20, whoever else is the better talker; the roll comes back whole', () => {
+  const talked = parley(party(), ['goblin-warrior'], 'indifferent', { p1: 17 }, ['p1']);
+  assert.match(talked.lines[0], /^Bryn: Persuasion 17 /, 'Lyra is the better talker, but she did not pick it');
+  assert.deepEqual([talked.name, talked.dc, talked.helpers], ['Persuasion', 15, []]);
+  assert.deepEqual(talked.rolls.map((r) => [r.playerId, r.natural, r.dice, r.fresh]), [['p1', 17, [17], false]]);
+  const both = parley(party(), ['goblin-warrior'], 'indifferent', { p1: 17, p2: 9 }, ['p1', 'p2']);
+  assert.match(both.lines.at(-2)!, /^Lyra: Persuasion /, 'both picked it: the better talker speaks');
+  const nobody = parley(party(), ['goblin-warrior'], 'indifferent', { p1: 17, p2: 9 });
+  assert.deepEqual(nobody.lines, both.lines, 'with no backers given, the best talker in the party speaks');
 });

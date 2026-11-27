@@ -143,6 +143,21 @@ test('kicking the brazier is a check: the engine sets the DC and the damage, in 
   assert.ok(round.combat.combatants['foe-1'].hp < foe.hp);
 });
 
+test('a written check comes back in numbers too, with what a success did; its line is unchanged', () => {
+  const outside = adjudicateCheck(scriptedRng([3, 4]), strong, 'I kick the brazier onto the goblins', kick, 15, null);
+  const { text, foe, ...numbers } = outside;
+  assert.deepEqual(numbers, { success: true, name: 'Athletics', natural: 15, dice: [15], mode: 'normal', bonus: 5, total: 20, dc: 15, detail: 'Improvised damage 7 bludgeoning' });
+  assert.equal(text, 'Bryn ("I kick the brazier onto the goblins"): Athletics 15 + 5 = 20 vs DC 15, success. Improvised damage 7 bludgeoning.');
+  assert.equal(foe, null);
+  const miss = adjudicateCheck(scriptedRng([]), strong, 'I kick the brazier onto the goblins', kick, 4, null);
+  assert.deepEqual([miss.success, miss.natural, miss.total, miss.detail], [false, 4, 9, null], 'a failure did nothing more');
+  const plain = adjudicateCheck(scriptedRng([]), strong, 'I listen at the door', { kind: 'check', ability: 'wis', skill: null, tier: 'easy', effect: { category: 'none' } }, 12, null);
+  assert.deepEqual([plain.name, plain.dc, plain.success, plain.detail], ['Wisdom', 10, true, null], 'an ability check goes by the ability; no effect, no detail');
+  const struck = adjudicateCheck(scriptedRng([3, 4]), strong, 'I kick the brazier onto the goblins', kick, 15, fight(strong).combat.combatants['foe-1']);
+  assert.equal(struck.detail, 'Goblin Warrior takes bludgeoning damage');
+  assert.equal(struck.text.endsWith(`success. ${struck.detail}.`), true);
+});
+
 test('a written condition is a save at the same DC; the foe is prone only on a failure', () => {
   const started = fight(strong);
   const foe = { ...started.combat.combatants['foe-1'], saveBonuses: { ...started.combat.combatants['foe-1'].saveBonuses, dex: 0 } };

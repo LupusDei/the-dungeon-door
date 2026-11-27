@@ -53,6 +53,8 @@ struct PlayShell: View {
     @State private var focusOffers: Int
     /// Offer-focuses already scrolled. Kept here so opening Story again does not jump down.
     @State private var offersSeen: Int
+    /// The latest turn whose result the player has sent away (TurnOutcome.swift).
+    @State private var turnSeen: Int
     @State private var pending: LegalAction?
     @State private var pendingIntent = ""
     @State private var mapTarget: String?
@@ -68,10 +70,18 @@ struct PlayShell: View {
         _mapTarget = State(initialValue: mapTarget)
         _focusOffers = State(initialValue: scrollOffers ? 1 : 0)
         _offersSeen = State(initialValue: 0)
+        _turnSeen = State(initialValue: TurnOutcomeOverlay.seenTurn(in: session.code))
     }
 
     private var state: GameState { session.state }
     private var inCombat: Bool { state.scene?.combat == true }
+
+    /// Puts the turn just played back on the table (Story's "How the last turn went").
+    private func showLastTurn() {
+        guard let last = state.chronicle?.last, last.result != nil else { return }
+        TurnOutcomeOverlay.forget(turn: last.index, in: session.code)
+        turnSeen = last.index - 1
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,15 +91,14 @@ struct PlayShell: View {
             tabBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .overlay {
-                    // The Story tab draws this on its own page, and leaves the tab bar free.
-                    if tab != .story, state.status == .resolving, let scene = state.scene {
-                        ResolvingOverlay(scene: scene, players: state.players, coversChrome: false)
-                    }
-                }
             PlayTabBar(tab: $tab, inCombat: inCombat, unread: session.unreadChat)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Between turns: who did what while the dice fall, then how every die landed and what it
+        // changed. Over every tab, and there until the player sends it away.
+        .overlay {
+            if AppConfig.showsTurnResult { TurnOutcomeOverlay(session: session, seen: $turnSeen) }
+        }
         .toolbar(hidesNavigation ? .hidden : .automatic, for: .navigationBar)
         .onAppear { session.setChatVisible(tab == .chat) }
         .onChange(of: tab) { _, new in session.setChatVisible(new == .chat) }
@@ -129,7 +138,8 @@ struct PlayShell: View {
         switch tab {
         case .story:
             PlayStoryPage(session: session, narrator: narrator, focusOffers: focusOffers,
-                          offersSeen: $offersSeen, openMap: { withAnimation(.snappy) { tab = .map } })
+                          offersSeen: $offersSeen, openMap: { withAnimation(.snappy) { tab = .map } },
+                          showLastTurn: showLastTurn)
         case .sheet:
             PlaySheetPage(session: session, pane: $pane, onStory: focusStory) { action, intent in
                 consider(action, intent: intent)
@@ -192,12 +202,40 @@ struct PlayActBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if let chosen, let scene {
+            if let die = scene?.myDie, canSend {
+                // A die in the hand is the one thing left to do: one tap from any tab.
+                Image(systemName: "dice.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Palette.gold)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Throw your d20").font(.serif(.subheadline, weight: .bold))
+                    Text("\(die.purpose) · \(die.formula). Left to the clock, it earns half the XP.")
+                        .font(.serif(.caption2))
+                        .foregroundStyle(Palette.muted)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    Task { await session.throwDie() }
+                } label: {
+                    Text("Throw")
+                        .font(.serif(.caption, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Palette.gold, in: Capsule())
+                        .foregroundStyle(Palette.ink)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Throw your d20 for \(die.purpose)")
+            } else if let chosen, let scene {
                 if let roll = PlayTurn.roll(scene: scene, playerId: session.playerId) {
                     D20Badge(roll: roll, size: 32)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Voted").font(.system(size: 10, weight: .semibold, design: .serif)).foregroundStyle(Palette.muted)
+                    Text("Chosen").font(.serif(.caption2, weight: .semibold)).foregroundStyle(Palette.muted)
                     Text(chosen)
                         .font(.serif(.subheadline, weight: .bold))
                         .lineLimit(1)
@@ -247,7 +285,7 @@ struct PlayActBar: View {
         if session.state.status == .resolving { return "The table is resolving." }
         if session.state.status != .voting { return "Waiting for the next scene." }
         if scene?.combat == true { return "Attack, cast, move, or another action." }
-        return "A scene offer, or write in your own words."
+        return "Pick one of the choices, or write your own."
     }
 }
 

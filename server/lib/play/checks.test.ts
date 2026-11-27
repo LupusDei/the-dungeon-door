@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { scriptedRng } from '../rules/rng.ts';
 import { SAMPLE } from '../rules/sheet.fixture.ts';
-import { groupRoll } from './checks.ts';
+import { checksOf, dcOf, groupRoll, helpLine } from './checks.ts';
 import { startDungeon } from './delve.ts';
 import { hookLabel, parseHook } from './hooks.ts';
 import { wayLabel } from './ways.ts';
@@ -123,7 +123,7 @@ test('a tool check adds proficiency for a tool the hero knows; with the skill to
   assert.equal(skilled.lines[0], "Vex: Stealth with Thieves' Tools 17 (Advantage over 2) + 5 = 22 vs DC 15, success");
 });
 
-test('"best" mode: the hero with the best bonus rolls; a hero proficient in the skill helps (Advantage)', () => {
+test('"best" mode, with nobody named as having picked it: the hero with the best bonus rolls; a hero proficient in the skill helps (Advantage)', () => {
   const hook = { kind: 'check' as const, ability: 'dex' as const, skill: 'stealth', dc: 15, mode: 'best' as const };
   const result = groupRoll([bryn, cleo, vex], hook, { p1: 19, p3: 8 }, scriptedRng([]));
   assert.deepEqual(result.rolls.map((r) => [r.name, r.dice]), [['Vex', [8]]], 'nobody else is proficient in Stealth: no help');
@@ -134,6 +134,63 @@ test('"best" mode: the hero with the best bonus rolls; a hero proficient in the 
   const down = { ...bryn, sheet: { ...SAMPLE, hp: 0 } };
   assert.deepEqual(groupRoll([down, cleo], { ...hook, ability: 'str', skill: 'athletics' }, { p2: 20 }, scriptedRng([])).rolls.map((r) => r.name), ['Cleo'], 'a hero who is down neither rolls nor helps');
   assert.deepEqual(groupRoll([down], { ...hook, ability: 'str', skill: 'athletics' }, {}, scriptedRng([])).lines, ['Bryn is down and fails']);
+});
+
+const ash = { ...bryn, playerId: 'p4', sheet: { ...SAMPLE, name: 'Ash' } };
+const stealth = { kind: 'check' as const, ability: 'dex' as const, skill: 'stealth', dc: 15, mode: 'best' as const };
+const athletics = { ...stealth, ability: 'str' as const, skill: 'athletics' };
+
+test('"best" mode: those who picked the choice roll its check; the best of them, with their own d20, whoever else is better at it', () => {
+  const result = groupRoll([bryn, cleo, vex], stealth, { p1: 19, p3: 8 }, scriptedRng([]), ['p1']);
+  assert.deepEqual(result.rolls.map((r) => [r.name, r.natural, r.dice, r.fresh]), [['Bryn', 19, [19], false]], 'Vex is the better sneak, but Bryn picked it');
+  assert.deepEqual(result.lines, ['Bryn: Stealth 19 + 2 = 21 vs DC 15, success']);
+  const two = groupRoll([bryn, cleo, vex], stealth, { p1: 19, p2: 4, p3: 8 }, scriptedRng([]), ['p2', 'p3']);
+  assert.deepEqual(two.rolls.map((r) => [r.name, r.natural]), [['Vex', 8]], 'of two who picked it, the better rolls');
+  const written = groupRoll([bryn, vex], stealth, { p1: 19 }, scriptedRng([6]), ['p1']);
+  assert.deepEqual(written.rolls.map((r) => [r.name, r.natural]), [['Bryn', 19]], 'a hero busy with her own action rolls no hidden die for it');
+});
+
+test('"best" mode: with nobody standing who picked it, the best of the whole party rolls, as before', () => {
+  const down = { ...bryn, sheet: { ...SAMPLE, hp: 0 } };
+  const fallen = groupRoll([down, cleo, vex], stealth, { p1: 19, p3: 8 }, scriptedRng([]), ['p1']);
+  assert.deepEqual(fallen.rolls.map((r) => [r.name, r.natural, r.fresh]), [['Vex', 8, false]], 'the one who picked it is down');
+  const gone = groupRoll([bryn, cleo, vex], stealth, { p1: 19 }, scriptedRng([11]), ['p9']);
+  assert.deepEqual(gone.rolls.map((r) => [r.name, r.natural, r.fresh]), [['Vex', 11, true]], 'the one who picked it is not in the party: Vex rolls a die of the table\'s');
+  assert.deepEqual(groupRoll([bryn, cleo, vex], stealth, { p1: 19, p3: 8 }, scriptedRng([])).rolls.map((r) => r.name), ['Vex'], 'no backers given');
+});
+
+test('"best" mode: only those who picked the choice Help, and the roll names them', () => {
+  const alone = groupRoll([cleo, bryn, ash], athletics, { p1: 12, p2: 3, p4: 9 }, scriptedRng([]), ['p1', 'p2']);
+  assert.deepEqual([alone.rolls.map((r) => [r.name, r.dice, r.mode]), alone.helpers, alone.lines],
+    [[['Bryn', [12], 'normal']], [], ['Bryn: Athletics 12 + 5 = 17 vs DC 15, success']], 'Ash knows Athletics but did not pick it; Cleo picked it but does not know it');
+  const helped = groupRoll([cleo, bryn, ash], athletics, { p1: 4, p2: 3, p4: 9 }, scriptedRng([13]), ['p1', 'p4']);
+  assert.deepEqual(helped.rolls.map((r) => [r.name, r.dice, r.mode, r.fresh]), [['Bryn', [4, 13], 'advantage', false]]);
+  assert.deepEqual([helped.helpers, helped.lines], [['Ash'], ['Ash helps: Advantage', 'Bryn: Athletics 13 (Advantage over 4) + 5 = 18 vs DC 15, success']]);
+  const blind = groupRoll([{ ...bryn, sight: 'none' as const }, { ...ash, sight: 'clear' as const }], { ...athletics, ability: 'wis', skill: 'perception', dc: 10 }, { p1: 15, p4: 9 }, scriptedRng([5]), ['p1', 'p4']);
+  assert.equal(blind.rolls[0].name, 'Ash', 'of those who picked it, one who can see does the looking');
+});
+
+test('a group check and a save are everyone\'s, whoever picked the choice; a die the table rolls is marked fresh', () => {
+  const hook = { kind: 'check' as const, ability: 'str' as const, skill: 'athletics', dc: 12 };
+  const check = groupRoll([bryn, cleo], hook, { p1: 14 }, scriptedRng([7]), ['p1']);
+  assert.deepEqual(check.rolls.map((r) => [r.name, r.natural, r.fresh]), [['Bryn', 14, false], ['Cleo', 7, true]]);
+  assert.deepEqual(check.helpers, []);
+  const save = groupRoll([bryn, cleo, { playerId: 'p3', sheet: { ...SAMPLE, name: 'Dax', hp: 0 } }], { kind: 'save', ability: 'dex', dc: 13 }, { p2: 3 }, scriptedRng([16]), ['p2']);
+  assert.deepEqual(save.rolls.map((r) => [r.name, r.natural, r.fresh]), [['Bryn', 16, true], ['Cleo', 3, false], ['Dax', null, false]]);
+});
+
+test('a group roll as checks: one for each d20, with the line it wrote; the down and the blind rolled nothing', () => {
+  const hook = { kind: 'save' as const, ability: 'dex' as const, dc: 13 };
+  const rolled = groupRoll([bryn, { playerId: 'p3', sheet: { ...SAMPLE, name: 'Dax', hp: 0 } }], hook, { p1: 12 }, scriptedRng([]));
+  assert.deepEqual(checksOf(rolled, 'Dexterity save', dcOf(hook)), [{
+    for: 'choice', playerId: 'p1', name: 'Dexterity save', natural: 12, dice: [12], mode: 'normal', bonus: 2, total: 14, dc: 13, success: true,
+    fresh: false, helpers: [], detail: null, text: null, line: 'Bryn: Dexterity save 12 + 2 = 14 vs DC 13, success',
+  }]);
+  const helped = groupRoll([bryn, ash], athletics, { p1: 4, p4: 9 }, scriptedRng([13]), ['p1', 'p4']);
+  assert.deepEqual(checksOf(helped, 'Athletics', dcOf(athletics)).map((c) => [c.playerId, c.dice, c.mode, c.helpers, c.line]),
+    [['p1', [4, 13], 'advantage', ['Ash'], helped.lines[1]]]);
+  assert.equal(helpLine(helped.helpers), helped.lines[0]);
+  assert.equal(dcOf({ kind: 'check', ability: 'dex', skill: 'stealth', against: 'goblin-warrior' }), 9, 'a monster\'s passive score');
 });
 
 test('a check against a monster takes its DC from the monster (passive score or Influence)', () => {

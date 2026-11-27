@@ -18,6 +18,8 @@ struct PlayStoryPage: View {
     @Binding var offersSeen: Int
     /// A move that is made on the map: the shell shows it.
     var openMap: () -> Void = {}
+    /// Puts the result of the turn just played back on the table.
+    var showLastTurn: () -> Void = {}
 
     @State private var freeform = ""
     @State private var spoken = ""
@@ -56,26 +58,26 @@ struct PlayStoryPage: View {
                         NarratorBar(scene: scene, session: session, narrator: narrator)
                     }
                     narration
-                    speakBox
-                    if inCombat, let combat = state.rules?.combat {
-                        initiative(combat)
-                    }
                     if !inCombat, let waiting = state.rules?.dungeon?.waiting {
                         WaitingFoesNotice(waiting: waiting)
                     }
-                    // Where the Act bar's Choose and Change bring the player: the die to throw when one is
-                    // waiting, and the box to say what they do. (The mark sat on the die alone, so before a
-                    // turn was declared Choose had nowhere to scroll to.)
-                    VStack(alignment: .leading, spacing: 16) {
-                        declaredDie
-                        quickActions
-                        freeformBox
+                    // Where the Act bar's Choose and Change bring the player: the die to throw when
+                    // one is waiting, the turn's choices, and under them the box to say it their way.
+                    if scene?.isFinale != true {
+                        VStack(alignment: .leading, spacing: 16) {
+                            declaredDie
+                            choicesList
+                            quickActions
+                            freeformBox
+                        }
+                        .id("offers")
+                        speakBox
                     }
-                    .id("offers")
                     if let scene {
                         ChoiceWaitPanel(session: session, scene: scene)
                     }
                     if scene?.isFinale == true { finale }
+                    lastTurn
                     dice
                     ErrorLine(text: session.error)
                     Color.clear.frame(height: 28)
@@ -87,11 +89,6 @@ struct PlayStoryPage: View {
                 .id("storyTop")
             }
             .scrollDismissesKeyboard(.interactively)
-            .overlay {
-                if state.status == .resolving, let scene = state.scene {
-                    ResolvingOverlay(scene: scene, players: state.players, coversChrome: false)
-                }
-            }
             // The quick-action wheel lays over the page, in the space its buttons report their places in.
             .overlay { wheelOverlay }
             .coordinateSpace(.named(ActionWheel.space))
@@ -220,62 +217,106 @@ struct PlayStoryPage: View {
         }
     }
 
-    private func initiative(_ combat: Combat) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                SectionLabel("Initiative")
-                Spacer()
-                if let band = combat.band {
-                    Text("\(band) fight")
-                        .font(.system(size: 11, weight: .semibold, design: .serif))
-                        .foregroundStyle(Palette.ember)
+    /// The turn's choices. In a fight a hero with no spell is offered the same blow twice (as
+    /// Attack and as Cast): it is listed once.
+    private var offers: [TableOffer] {
+        var seen = Set<String>()
+        return (scene.map { TableOffer.list(in: $0) } ?? []).filter { seen.insert("\($0.label)|\($0.detail)").inserted }
+    }
+
+    /// What the table offers this turn: the plot's choices outside a fight, the hero's plain moves
+    /// in one. A tap picks; another tap changes the pick until the turn resolves.
+    @ViewBuilder private var choicesList: some View {
+        let rows = offers
+        if !rows.isEmpty, scene?.canAct == true {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("What do you do?")
+                Text(inCombat
+                     ? "Your action this round. For a particular weapon, spell or item, use the wheels under these."
+                     : "Pick one. The party goes with the choice most heroes pick, and where it calls for a roll, those who picked it make it.")
+                    .font(.serif(.caption))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, offer in
+                    choiceButton(offer, index: index)
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(Array(combat.combatants.enumerated()), id: \.element.id) { index, combatant in
-                        chip(combatant, place: index + 1)
+        }
+    }
+
+    private func choiceButton(_ offer: TableOffer, index: Int) -> some View {
+        let picked = scene.map { offer.isChosen(in: $0, playerId: session.playerId) } ?? false
+        return Button {
+            guard let choice = offer.choice else { return }
+            Task { await session.vote(choice) }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Text(ChoiceLetter.at(index))
+                    .font(.serif(.headline, weight: .bold))
+                    .foregroundStyle(picked ? Palette.ink : Palette.gold)
+                    .frame(width: 30, height: 30)
+                    .background(picked ? Palette.gold : Palette.raised, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(offer.label)
+                        .font(.serif(.body, weight: .semibold))
+                        .foregroundStyle(Palette.parchment)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !offer.detail.isEmpty {
+                        Text(offer.detail)
+                            .font(.serif(.footnote))
+                            .foregroundStyle(Palette.muted)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let note = offer.note, !note.isEmpty {
+                        Label(note, systemImage: Self.rolls(note) ? "dice" : "arrow.turn.down.right")
+                            .font(.serif(.caption, weight: .semibold))
+                            .foregroundStyle(Palette.gold.opacity(0.9))
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if picked {
+                        Label("Your pick", systemImage: "checkmark.circle.fill")
+                            .font(.serif(.caption, weight: .bold))
+                            .foregroundStyle(Palette.verdigris)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .scrollClipDisabled()
+            .padding(12)
+            .background(Palette.surface, in: .rect(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(picked ? Palette.gold : Palette.gold.opacity(0.25), lineWidth: picked ? 1.5 : 1)
+            }
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+        .opacity(canSend || picked ? 1 : 0.6)
+        .accessibilityLabel([offer.label, offer.detail, offer.note ?? "", picked ? "your pick" : ""]
+            .filter { !$0.isEmpty }.joined(separator: ". "))
+        .accessibilityHint(picked ? "" : "Picks this")
+        .accessibilityIdentifier("choice-\(offer.choice?.id ?? offer.id)")
     }
 
-    private func chip(_ combatant: Combatant, place: Int) -> some View {
-        let out = !combatant.isUp
-        let tint = combatant.isFoe ? Palette.ember : Palette.verdigris
-        let row = HStack(spacing: 5) {
-            Text("\(place)")
-                .font(.system(size: 10, weight: .bold, design: .serif))
-                .foregroundStyle(Palette.muted)
-            Text(combatant.name)
-                .font(.system(size: 12, weight: .semibold, design: .serif))
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(out ? Palette.muted : combatant.id == session.playerId ? Palette.gold : Palette.parchment)
-            if let position = combatant.position, !out {
-                Text(position)
-                    .font(.system(size: 10, design: .serif))
-                    .foregroundStyle(position == "engaged" ? Palette.parchment.opacity(0.9) : Palette.muted)
-            }
-            Text(out ? statusWord(combatant) : combatant.wound ?? "\(combatant.hp)")
-                .font(.system(size: 11, design: .serif))
-                .monospacedDigit()
-                .foregroundStyle(out ? Palette.ember : Palette.muted)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Palette.surface, in: Capsule(style: .circular))
-        .overlay { Capsule(style: .circular).strokeBorder(tint.opacity(out ? 0.25 : 0.7), lineWidth: 1) }
-        return row
+    /// A choice's rules line names a roll ("Stealth check, DC 10", "DEX save") or just says what
+    /// happens ("Fight: Wolf", "Go on").
+    private static func rolls(_ note: String) -> Bool {
+        let words = note.lowercased()
+        return words.contains("check") || words.contains("save") || words.contains("parley")
     }
 
-    private func statusWord(_ combatant: Combatant) -> String {
-        switch combatant.status {
-        case "dead": combatant.isFoe ? "Slain" : "Dead"
-        case "dying": "Dying"
-        case "stable": "Stable"
-        default: SRD.name(combatant.status)
+    /// The way back to the result of the turn just played, for whoever sent it away too soon.
+    @ViewBuilder private var lastTurn: some View {
+        if let last = state.chronicle?.last, last.result != nil, state.status != .resolving {
+            Button(action: showLastTurn) {
+                Label("How the last turn went", systemImage: "dice")
+                    .font(.serif(.footnote, weight: .semibold))
+            }
+            .buttonStyle(.gildedOutline)
         }
     }
 
@@ -350,8 +391,10 @@ struct PlayStoryPage: View {
 
     private var freeformBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("What do you do?")
-            Text("Say it in your own words. Name a skill if you are using one. Or pick an attack, spell, item, skill, or ability on your sheet and add how you use it.")
+            SectionLabel(offers.isEmpty ? "What do you do?" : "Or in your own words")
+            Text(inCombat
+                 ? "Say what you do instead, and name a skill if you are using one. The dungeon master judges it and you roll for it."
+                 : "Say it your way: the dungeon master judges it and you roll for it. It is your own action, beside the party's pick, so it does not decide which way the party goes.")
                 .font(.serif(.caption))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)

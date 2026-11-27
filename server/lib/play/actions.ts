@@ -224,7 +224,20 @@ function effectOf(row: Record<string, unknown>): ImprovisedEffect | null {
   return null;
 }
 
-export interface Adjudicated { text: string; foe: Combatant | null; success: boolean }
+/**
+ * A written check, rolled. `text` is its line in the dice log. The numbers of its d20 are kept beside it
+ * (play/result.ts): the check as the log names it, the face that counted, both dice under Advantage or
+ * Disadvantage, the bonus, the total and the DC. `detail` is what a success did beyond passing ("Improvised
+ * damage 2 slashing", "Goblin takes bludgeoning damage"); null when it did nothing more, and on a failure.
+ */
+export interface Adjudicated {
+  text: string; foe: Combatant | null; success: boolean;
+  name: string; natural: number; dice: number[]; mode: Mode; bonus: number; total: number; dc: number;
+  detail: string | null;
+}
+
+/** What the effect of a successful check did: the creature after it, and the words that follow the roll in the log. */
+interface Effected { foe: Combatant | null; detail: string }
 
 const quoted = (text: string) => text.replaceAll('"', "'");
 
@@ -235,7 +248,7 @@ function faces(natural: number, rolls: number[], mode: Mode): string {
 }
 
 /** The check named the way the dice log names every other one: "Athletics", "Strength". */
-function checkName(ruling: CheckRuling): string {
+export function checkName(ruling: Pick<CheckRuling, 'ability' | 'skill'>): string {
   return ruling.skill ? titleCase(ruling.skill) : ABILITY_NAMES[ruling.ability];
 }
 
@@ -247,30 +260,32 @@ function checkName(ruling: CheckRuling): string {
 export function adjudicateCheck(rng: Rng, sheet: CharacterSheet, text: string, ruling: CheckRuling, natural: number, foe: Combatant | null): Adjudicated {
   const dc = DC_BY_TIER[ruling.tier];
   const roll = abilityCheck(rng, sheet, { ability: ruling.ability, skill: ruling.skill }, { natural });
-  const head = `${sheet.name} ("${quoted(text)}"): ${checkName(ruling)} ${faces(roll.natural, roll.rolls, roll.mode)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dc}, ${roll.total >= dc ? 'success' : 'failure'}`;
+  const name = checkName(ruling);
+  const head = `${sheet.name} ("${quoted(text)}"): ${name} ${faces(roll.natural, roll.rolls, roll.mode)} ${signed(roll.bonus)} = ${roll.total} vs DC ${dc}, ${roll.total >= dc ? 'success' : 'failure'}`;
   const success = roll.total >= dc;
-  if (!success || ruling.effect.category === 'none') return { text: `${head}.`, foe, success };
-  if (ruling.effect.category === 'damage') return { ...strike(rng, head, ruling.effect, foe), success };
-  return { ...afflict(rng, head, ruling.effect, dc, foe), success };
+  const numbers = { success, name, natural: roll.natural, dice: [...roll.rolls], mode: roll.mode, bonus: roll.bonus, total: roll.total, dc };
+  if (!success || ruling.effect.category === 'none') return { text: `${head}.`, foe, detail: null, ...numbers };
+  const done = ruling.effect.category === 'damage' ? strike(rng, ruling.effect, foe) : afflict(rng, ruling.effect, dc, foe);
+  return { text: `${head}. ${done.detail}.`, foe: done.foe, detail: done.detail, ...numbers };
 }
 
-function strike(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'damage' }>, foe: Combatant | null): Omit<Adjudicated, 'success'> {
+function strike(rng: Rng, effect: Extract<ImprovisedEffect, { category: 'damage' }>, foe: Combatant | null): Effected {
   const rolled = rollDice(rng, parseDice(DAMAGE_BY_SEVERITY[effect.severity])).total;
-  if (!foe) return { text: `${head}. Improvised damage ${rolled} ${effect.damageType}.`, foe: null };
+  if (!foe) return { detail: `Improvised damage ${rolled} ${effect.damageType}`, foe: null };
   const taken = damageAfterDefenses(foe, rolled, effect.damageType);
   const told = taken > 0 ? `takes ${effect.damageType} damage` : 'is unharmed'; // a foe's hit points are hidden (rules/wounds.ts)
-  return { text: `${head}. ${foe.name} ${told}.`, foe: takeDamage(foe, taken, false) };
+  return { detail: `${foe.name} ${told}`, foe: takeDamage(foe, taken, false) };
 }
 
-function afflict(rng: Rng, head: string, effect: Extract<ImprovisedEffect, { category: 'condition' }>, dc: number, foe: Combatant | null): Omit<Adjudicated, 'success'> {
+function afflict(rng: Rng, effect: Extract<ImprovisedEffect, { category: 'condition' }>, dc: number, foe: Combatant | null): Effected {
   const name = titleCase(effect.condition);
-  if (!foe) return { text: `${head}. A ${ABILITY_NAMES[effect.save]} save against DC ${dc} would leave them ${name}.`, foe: null };
+  if (!foe) return { detail: `A ${ABILITY_NAMES[effect.save]} save against DC ${dc} would leave them ${name}`, foe: null };
   const save = savingThrow(rng, foe, effect.save, dc, {});
   const told = save.roll
     ? `${foe.name}: ${ABILITY_NAMES[effect.save]} save ${save.roll.natural} ${signed(foe.saveBonuses[effect.save])} = ${save.roll.total} vs DC ${dc}, ${save.success ? 'success' : 'failure'}`
     : `${foe.name} automatically fails the ${ABILITY_NAMES[effect.save]} save`;
-  if (save.success) return { text: `${head}. ${told}.`, foe };
+  if (save.success) return { detail: told, foe };
   const next = addCondition(foe, effect.condition);
   const landed = next.conditions.length > foe.conditions.length;
-  return { text: `${head}. ${told}: ${landed ? name : 'unaffected'}.`, foe: next };
+  return { detail: `${told}: ${landed ? name : 'unaffected'}`, foe: next };
 }

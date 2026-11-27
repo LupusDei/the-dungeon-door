@@ -63,6 +63,27 @@ test('memory store: a game keeps its rules state (party sheets, combat, dungeon)
   assert.equal((await store.getGame('ABCDEF'))!.party!.rng, 7, 'a copy, not the stored object');
 });
 
+test('memory store: a scene keeps its turn\'s result: none on a new scene, kept when the scene is rewritten, cleared with null', async () => {
+  const store = new MemoryStore();
+  const host = { playerId: 'p1', character: character('c1', 'p1'), joinedAt: new Date().toISOString() };
+  await store.createGame({ code: 'ABCDEF', hostId: 'p1', dungeonMaster: 'bard', sceneCount: 4, host });
+  const scene = { index: 0, title: 't', narration: 'n', imagePrompt: '', imageUrl: null, choices: [], isFinale: false };
+  await store.saveScene('ABCDEF', scene);
+  assert.equal((await store.getGame('ABCDEF'))!.scenes[0].result, null);
+  const result = { sceneIndex: 0, combat: false, choice: null, heroes: [{ playerId: 'p1', name: 'c1', did: 'nothing' as const, byClock: false, rolls: [], lines: [] }], notes: ['The road leads on.'] };
+  await store.setSceneResult('ABCDEF', 0, result);
+  result.notes.push('changed after it was stored');
+  assert.deepEqual((await store.getGame('ABCDEF'))!.scenes[0].result!.notes, ['The road leads on.'], 'a copy, not the object handed in');
+  await store.saveScene('ABCDEF', { ...scene, title: 'rewritten' });
+  const kept = (await store.getGame('ABCDEF'))!.scenes[0];
+  assert.deepEqual([kept.title, kept.result!.heroes.length], ['rewritten', 1]);
+  await store.setSceneResult('ABCDEF', 0, null);
+  assert.equal((await store.getGame('ABCDEF'))!.scenes[0].result, null);
+  await store.setSceneResult('ABCDEF', 7, result);
+  await store.setSceneResult('NOSUCH', 0, result);
+  assert.equal((await store.getGame('ABCDEF'))!.scenes.length, 1, 'a scene or a game that is not there is left alone');
+});
+
 test('postgres: the compare-and-set UPDATE names columns, keeps JSON state as JSON, and skips undefined fields', () => {
   const party = { version: 1 as const, rng: 7, sheets: {} };
   const { text, params } = gameUpdate('ABCDEF', { status: 'resolving', sceneIndex: 2 }, { status: 'voting', sceneIndex: 3, party, combat: null, title: undefined });

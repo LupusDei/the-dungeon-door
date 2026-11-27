@@ -90,7 +90,7 @@ test('springing a dungeon hazard: noticed, the party goes around; otherwise it s
 
 test('an id that is neither trap nor hazard springs nothing', () => {
   const p = party(bryn);
-  assert.deepEqual(springTrap(p, 'lava', 1, {}), { party: p, lines: [], success: true });
+  assert.deepEqual(springTrap(p, 'lava', 1, {}), { party: p, lines: [], success: true, checks: [] });
 });
 
 test('what the party sees by: dim light costs passive Perception 5 (Disadvantage); in darkness only darkvision spots anything', () => {

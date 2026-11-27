@@ -1,6 +1,6 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import type { Move } from '../rules/bands.ts';
-import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, Reaction, RoleplayLine, StoredScene, TypingNotice, Vote } from '../types.ts';
+import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, Reaction, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
 import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 type Row = Record<string, any>;
@@ -162,6 +162,7 @@ export class PostgresStore implements Store {
       outcome: s.outcome,
       chosenChoiceId: s.chosen_choice_id as ChoiceId | null,
       roleplay: Array.isArray(s.roleplay) ? s.roleplay as RoleplayLine[] : [],
+      result: s.result && typeof s.result === 'object' ? s.result as TurnResult : null,
       createdAt: iso(s.created_at),
     }));
     return gameRow(row, players, scenes);
@@ -270,6 +271,14 @@ export class PostgresStore implements Store {
       `WITH s AS (UPDATE scenes SET outcome = $3, chosen_choice_id = $4 WHERE game_code = $1 AND idx = $2 RETURNING game_code)
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
       [code, index, outcome, chosenChoiceId],
+    );
+  }
+
+  async setSceneResult(code: string, index: number, result: TurnResult | null) {
+    await this.q(
+      `WITH s AS (UPDATE scenes SET result = $3::jsonb WHERE game_code = $1 AND idx = $2 RETURNING game_code)
+       UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM s)`,
+      [code, index, result === null ? null : JSON.stringify(result)],
     );
   }
 

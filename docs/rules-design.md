@@ -305,7 +305,8 @@ All SRD 5.2 unless marked **original** (our own rules, CC0, for what 5.2 leaves 
   Perception and Insight. 5.2 has no contests: a check against a creature uses its passive score (Stealth
   and Sleight of Hand against passive Perception, Perception and Investigation against 10 + Stealth,
   Insight against 10 + Deception) or the Influence DC, max(15, INT). Help: a proficient helper gives
-  Advantage (`mode: "best"`). Group checks: half must succeed.
+  Advantage (`mode: "best"`; who rolls and who helps: "Who rolls for the party" below). Group checks: half
+  must succeed.
 - **Goods** (`rules/items.ts`, `rules/inventory.ts`, `play/trade.ts`). SRD items and prices, starting
   gear, coins as gold, carrying capacity by size (Str × 7.5 Tiny, × 15 Small or Medium, × 30 Large, × 60 Huge, × 120 Gargantuan; over it
   Speed is 5 ft, up to twice it the hero can drag), buying at SRD prices, selling gear at half and treasure
@@ -321,8 +322,9 @@ All SRD 5.2 unless marked **original** (our own rules, CC0, for what 5.2 leaves 
   **They do not attack at once.** Hostile foes bar the way, and the party votes Engage, Run or Parley.
   Run, before initiative, backs out the way the party came; the room stays uncleared, with no loot and no
   XP. Wanderers who are Hostile wait for the same choice, and Run slips past them. A parley is a
-  Persuasion check (the Influence DC of the foe hardest to sway, the best talker with Help; Advantage if
-  Friendly, Disadvantage if Hostile). Success clears the room without its treasure (wanderers simply let
+  Persuasion check (the Influence DC of the foe hardest to sway, the best talker among those who picked
+  it, with Help from the others of them; Advantage if Friendly, Disadvantage if Hostile). Success clears
+  the room without its treasure (wanderers simply let
   the party be). Failure worsens the attitude a step. A band that turns Hostile bars the way for the same
   vote. Outside a dungeon, a parley the DM names starts Indifferent, and a failure that turns them Hostile
   does start the fight: there is nowhere to back out to.
@@ -800,6 +802,47 @@ end (`fight.ts`). The round says so: "Cleo casts Sleep: Goblin Warrior fails the
 Sleep." A creature immune to Exhaustion does not sleep ("is unaffected"). Not modelled yet: waking a
 sleeper with an action, Hideous Laughter's save when hurt, Blindness/Deafness's Deafened, upcasting for more
 targets, and holds on heroes (monsters' conditions on heroes are the riders and powers above).
+
+## Who rolls for the party, and the turn's result
+
+**Original.** In a real game the table could not tell which dice had decided a scene. One hero picked
+Parley and showed a 17; the engine passed her over for the party's best talker, who had been busy with an
+action of her own, and rolled a hidden 6 for her. The scene was lost on a die nobody saw.
+
+**The party's check is rolled by those who picked it.** The heroes whose players picked the winning
+choice are its backers (`play/table.ts` hands them to `playTurn`). Where one hero rolls for the party, a
+check in `mode: "best"` or a parley, the roller is the backer with the best bonus, one who can see if the
+check needs sight, and the d20 is the one that backer threw with their pick. Only the other backers Help.
+A hero who picked another choice, or wrote their own action, has no part in it: their die was spent on
+what they chose. If no backer is standing, the rule falls back to what it was: the best bonus in the
+whole standing party, anyone trained helping, with the roller's own d20 if they picked a choice and a
+fresh one if not. A group check and a save are unchanged: they happen to everyone, so everyone rolls, with
+the d20 of their pick, or a fresh one for a hero who picked nothing. A trap's disarm check is the party's
+too, not a pick, and keeps the old rule. The engine's lines read as they always did; only who appears in
+them changed.
+
+**The turn's result** (`play/result.ts`, `TurnResult` in docs/api.md). The dice log is lines of text, and
+the app could only print them. Now each resolved turn also carries its result in numbers: the choice the
+party went with, who backed it, the tally, and on a tie which backer's d20 broke it; then every player at
+the table as a hero, with what they did (picked a choice, wrote their own action, took a combat action,
+did nothing, or was down) and each d20 rolled for them: the face, both dice under Advantage, the bonus,
+the total, what it was against, whether it passed, who helped, and whether it was their own d20 or one
+the table rolled for them. What is left of the engine's lines is `notes`.
+
+Outside a fight the numbers come straight from the engine: `playTurn` returns `checks`, one for each d20
+of the choice's check, save, parley or trap and of each written action (`play/actions.ts` gives a written
+check's numbers beside its line). In a fight the round is run by `rules/scene.ts`, so a hero's weapon
+attacks are read back from the lines `play/fight.ts` writes, with one pattern (`ATTACK_LINE`) that a test
+holds against real rounds; such a roll has the face that counted but not the die dropped under Advantage.
+A d20 that is neither (a spell or a written action in a fight, a death save, breaking free) is not a roll
+in the result: its line is under its hero and in the notes. Nothing is rolled to build a result, so
+resolving the same scene twice gives the same one.
+
+The result is stored on the scene (`scenes.result`) as soon as the engine has played the turn, before the
+dungeon master is asked for the outcome, which takes many seconds: the app polls, finds `scene.result`
+while the status is still `resolving`, and shows the table its dice while the DM writes. It stays on the
+scene's chronicle entry afterwards. A game without the engine has none, nor does a turn the engine failed
+on. If the DM fails and the votes reopen, the result is hidden until the turn is resolved again.
 
 ## For the app (the game layer on top)
 

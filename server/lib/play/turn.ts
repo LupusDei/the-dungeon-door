@@ -10,13 +10,13 @@ import { sightOf } from '../rules/light.ts';
 import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId, StoredChoice } from '../types.ts';
 import { adjudicateCheck, type CheckRuling } from './actions.ts';
-import { groupRoll } from './checks.ts';
+import { checksOf, dcOf, groupRoll, type TurnCheck } from './checks.ts';
 import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, foesMet, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
 import { provisions } from './provisions.ts';
 import { afterHarm } from './dying.ts';
 import { fightRound, startFight, type FightEnd } from './fight.ts';
-import { foesNamed, type RollHook, type RulesHook } from './hooks.ts';
+import { foesNamed, type RollHook, rollName, type RulesHook } from './hooks.ts';
 import { parley, rollAttitude } from './parley.ts';
 import { confrontGoal, goalFound, questAfter } from './quest.ts';
 import { partyRest } from './rest.ts';
@@ -35,7 +35,13 @@ export interface FreeformBallot { playerId: string; roll: number; text: string; 
 export type FightNews = 'started' | FightEnd | null;
 /** A hero's d20 outside a fight this turn, and whether it came good (play/xp.ts). */
 export interface HeroRoll { playerId: string; success: boolean }
-export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews; rolled: HeroRoll[] }
+export type { TurnCheck } from './checks.ts';
+/**
+ * checks: each d20 the engine rolled for a hero outside a fight this turn, in numbers and in the order
+ * rolled: for the party's choice (its check, save, parley or trap) and for a hero's own written action.
+ * Each has the line it produced, so play/result.ts can tell the dice lines from the rest.
+ */
+export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews; rolled: HeroRoll[]; checks: TurnCheck[] }
 
 /** The most-voted choice; a tie goes to the choice whose voters rolled highest, then to the first. */
 export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballot[]): ChoiceId | null {
@@ -43,8 +49,8 @@ export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballo
   return leaders.reduce<ChoiceId | null>((top, id) => (top === null || best(id) > best(top) ? id : top), null);
 }
 
-const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null, rolled: HeroRoll[] = []): RulesTurn =>
-  ({ ...s, lines, success, fight, rolled });
+const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null, rolled: HeroRoll[] = [], checks: TurnCheck[] = []): RulesTurn =>
+  ({ ...s, lines, success, fight, rolled, checks });
 
 /** Whoever the harm left at 0 HP is dying, and is settled; whoever it killed may be Revivified on the spot. */
 function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): { party: PartyState; lines: string[] } {
@@ -58,15 +64,16 @@ const votesOf = (ballots: readonly Ballot[]) => Object.fromEntries(ballots.map((
 const foesFor = (s: RulesState) => foeLevels(s.party, s.dungeon);
 const poolOf = (s: RulesState) => habitatOf(s.party, s.dungeon);
 
-function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], before: string[] = []): RulesTurn {
+/** The choice's check or save. `backers` picked the choice: in "best" mode one of them rolls (play/checks.ts). */
+function roll(s: RulesState, hook: RollHook, ballots: readonly Ballot[], backers: readonly string[], before: string[] = []): RulesTurn {
   const rng = seededRng(s.party.rng);
   const light = lightLevel(s);
   const heroes = Object.entries(s.party.sheets).filter(([, sheet]) => !sheet.dead).map(([playerId, sheet]) => ({ playerId, sheet, sight: sightOf(sheet, light) }));
-  const rolled = groupRoll(heroes, hook, votesOf(ballots), rng);
+  const rolled = groupRoll(heroes, hook, votesOf(ballots), rng, backers);
   const sheets = { ...s.party.sheets, ...Object.fromEntries(rolled.sheets.map((h) => [h.playerId, h.sheet])) };
   const settled = harmed(s.party, { party: { ...s.party, rng: rng.state(), sheets }, lines: rolled.lines });
   const rolls = rolled.rolls.filter((r) => r.natural !== null).map(({ playerId, success }) => ({ playerId, success }));
-  return done({ ...s, party: settled.party }, [...before, ...settled.lines], rolled.success, null, rolls);
+  return done({ ...s, party: settled.party }, [...before, ...settled.lines], rolled.success, null, rolls, checksOf(rolled, rollName(hook), dcOf(hook)));
 }
 
 function fight(s: RulesState, monsterIds: readonly string[], before: string[] = []): RulesTurn {
@@ -109,7 +116,7 @@ function trap(s: RulesState, id: string, ballots: readonly Ballot[], before: str
   const sprung = springTrap(s.party, id, partyLevel(foesFor(s)), votesOf(ballots), lightLevel(s));
   const settled = harmed(s.party, sprung);
   const after = { ...s, party: settled.party };
-  return done(sprung.success ? after : loud(after), [...before, ...settled.lines], sprung.success);
+  return done(sprung.success ? after : loud(after), [...before, ...settled.lines], sprung.success, null, [], sprung.checks);
 }
 
 /** Foes met in a room: Hostile ones bar the way; the others watch and wait (their attitude is kept for the room). */
@@ -153,7 +160,7 @@ export function confrontationChoices(s: RulesState): StoredChoice[] | null {
   return [
     { id: 'a', label: 'Engage', detail: 'Stand and fight them.', hook: { kind: 'engage', monsters: [...waiting.monsters] } },
     { id: 'b', label: 'Run', detail: run, hook: { kind: 'run' } },
-    { id: 'c', label: 'Parley', detail: 'The best talker tries to sway them.', hook: { kind: 'parley' } },
+    { id: 'c', label: 'Parley', detail: 'The best talker among those who pick this tries to sway them.', hook: { kind: 'parley' } },
   ];
 }
 
@@ -179,22 +186,27 @@ function backOut(s: RulesState, dungeon: DungeonState): RulesTurn {
   return done({ ...s, dungeon: moved.dungeon }, [`The party backs out into ${moved.node.name}.`]);
 }
 
-/** The party parleys with the foes waiting here, or with those the DM names (Indifferent). */
-function talk(s: RulesState, offered: readonly string[] | null | undefined, ballots: readonly Ballot[]): RulesTurn {
+/**
+ * The party parleys with the foes waiting here, or with those the DM names (Indifferent). `backers` picked
+ * the parley: the best talker among them speaks for the party (play/parley.ts).
+ */
+function talk(s: RulesState, offered: readonly string[] | null | undefined, ballots: readonly Ballot[], backers: readonly string[]): RulesTurn {
   const waiting = metHere(s);
   const monsters = waiting ? waiting.monsters : offered;
   if (!monsters || monsters.length === 0) return done(s, ['There is no one here to talk to.']);
-  const talked = parley(s.party, monsters, waiting ? waiting.attitude : 'indifferent', votesOf(ballots));
+  const talked = parley(s.party, monsters, waiting ? waiting.attitude : 'indifferent', votesOf(ballots), backers);
   const after = { ...s, party: talked.party };
+  const rolls = talked.rolls.map(({ playerId, success }) => ({ playerId, success }));
+  const checks = checksOf(talked, talked.name, talked.dc);
   if (!waiting) {
-    if (talked.attitude === 'hostile') return { ...fight(after, monsters, talked.lines), rolled: talked.rolls };
-    return done(after, talked.lines, talked.success, null, talked.rolls);
+    if (talked.attitude === 'hostile') return { ...fight(after, monsters, talked.lines), rolled: rolls, checks };
+    return done(after, talked.lines, talked.success, null, rolls, checks);
   }
   if (waiting.source === 'wanderers') {
-    return done(withFacing(after, talked.success ? null : { monsters: [...waiting.monsters], attitude: talked.attitude }), talked.lines, talked.success, null, talked.rolls);
+    return done(withFacing(after, talked.success ? null : { monsters: [...waiting.monsters], attitude: talked.attitude }), talked.lines, talked.success, null, rolls, checks);
   }
   const dungeon = talked.success ? clearRoom(s.dungeon!, s.dungeon!.at) : withAttitude(s.dungeon!, talked.attitude);
-  return done({ ...after, dungeon }, talked.lines, talked.success, null, talked.rolls);
+  return done({ ...after, dungeon }, talked.lines, talked.success, null, rolls, checks);
 }
 
 function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTurn {
@@ -247,8 +259,9 @@ function through(s: RulesState, moved: Moved, exit: string, ballots: readonly Ba
   const after: RulesState = { ...trapped, party: timed.party, dungeon: clearRoom(trapped.dungeon!, moved.node.id) };
   const spoor = onTheWay(after, moved.node.contents?.special === 'spoor');
   const sofar = [...trapped.lines, ...timed.lines];
-  if (spoor.came) return { ...meetWanderers(done(spoor.state, sofar), spoor.came), success: trapped.success };
-  return { ...arrive(spoor.state, enter(spoor.state.dungeon!, exit)!, ballots, sofar), success: trapped.success };
+  if (spoor.came) return { ...meetWanderers(done(spoor.state, sofar), spoor.came), success: trapped.success, checks: trapped.checks };
+  const arrived = arrive(spoor.state, enter(spoor.state.dungeon!, exit)!, ballots, sofar);
+  return { ...arrived, success: trapped.success, checks: [...trapped.checks, ...arrived.checks] };
 }
 
 /** A check in the corridor itself, 2 in 6 where there is spoor (wandering.ts). */
@@ -297,9 +310,10 @@ function rest(s: RulesState, kind: 'short' | 'long'): RulesTurn {
 
 const traded = (s: RulesState, t: Pick<Traded, 'party' | 'lines'>) => done({ ...s, party: t.party }, t.lines);
 
-const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook, { kind: K }>, ballots: readonly Ballot[]) => RulesTurn } = {
-  check: (s, hook, ballots) => roll(s, hook, ballots),
-  save: (s, hook, ballots) => roll(s, hook, ballots),
+/** What each hook does. `backers` are the players who picked the choice the hook belongs to. */
+const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook, { kind: K }>, ballots: readonly Ballot[], backers: readonly string[]) => RulesTurn } = {
+  check: (s, hook, ballots, backers) => roll(s, hook, ballots, backers),
+  save: (s, hook, ballots, backers) => roll(s, hook, ballots, backers),
   fight: (s, hook) => fight(s, capFight(hook.monsters, foesFor(s))),
   engage: (s, hook) => engage(s, hook.monsters),
   run: (s) => run(s),
@@ -310,24 +324,26 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   use: (s, hook) => traded(s, usePotion(s.party, hook.item)),
   trap: (s, hook, ballots) => trap(s, hook.trap, ballots),
   hazard: (s, { kind: _, hazard, ...amount }) => traded(s, harmed(s.party, partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec))),
-  parley: (s, hook, ballots) => talk(s, hook.monsters, ballots),
+  parley: (s, hook, ballots, backers) => talk(s, hook.monsters, ballots, backers),
   revive: (s) => traded(s, raiseTheDead(s.party)),
   goal: (s) => confrontGoal(s),
 };
 
 /** A written check outside a fight: the dice are rolled and logged. There is no creature here to mark. */
-function improvise(s: RulesState, freeforms: readonly FreeformBallot[]): { state: RulesState; lines: string[]; rolled: HeroRoll[] } {
-  if (!freeforms.length) return { state: s, lines: [], rolled: [] };
+function improvise(s: RulesState, freeforms: readonly FreeformBallot[]): { state: RulesState; lines: string[]; rolled: HeroRoll[]; checks: TurnCheck[] } {
+  if (!freeforms.length) return { state: s, lines: [], rolled: [], checks: [] };
   const rng = seededRng(s.party.rng);
   const rolled: HeroRoll[] = [];
+  const checks: TurnCheck[] = [];
   const lines = freeforms.map((f) => {
     const sheet = s.party.sheets[f.playerId];
     if (!sheet || sheet.dead || sheet.hp <= 0) return `${sheet?.name ?? 'A hero'} is down and does not act.`;
-    const done = adjudicateCheck(rng, sheet, f.text, f.ruling, f.roll, null);
-    rolled.push({ playerId: f.playerId, success: done.success });
-    return done.text;
+    const { text: line, foe: _, ...roll } = adjudicateCheck(rng, sheet, f.text, f.ruling, f.roll, null);
+    rolled.push({ playerId: f.playerId, success: roll.success });
+    checks.push({ for: 'own', playerId: f.playerId, ...roll, fresh: false, helpers: [], text: f.text, line });
+    return line;
   });
-  return { state: { ...s, party: { ...s.party, rng: rng.state() } }, lines, rolled };
+  return { state: { ...s, party: { ...s.party, rng: rng.state() } }, lines, rolled, checks };
 }
 
 const STRETCH_SECONDS = 2 * 3600;
@@ -341,7 +357,7 @@ function alongTheRoad(t: RulesTurn): RulesTurn {
   if (!trek || t.combat || t.fight === 'defeat') return t;
   if (trek.facing?.attitude !== 'hostile') return goOn(t, trek);
   const attacked = fight({ ...t, ...withFacing(t, null) }, trek.facing.monsters, [...t.lines, 'They will not let the party pass: they attack.']);
-  return { ...attacked, success: t.success };
+  return { ...attacked, success: t.success, checks: t.checks };
 }
 
 const ARRIVED: Readonly<Record<RoadEnd, string>> = { door: 'The party reaches the dungeon door.', tale: 'The road ends where the tale begins.' };
@@ -359,17 +375,20 @@ function goOn(t: RulesTurn, trek: Trek): RulesTurn {
   return { ...t, party: met.party, lines: [...lines, ...met.lines] };
 }
 
-/** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
-export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[] = []): RulesTurn {
-  return withDeathTimes(clockOf(s.party), questAfter(alongTheRoad(turnPlayed(s, hook, ballots, freeforms))));
+/**
+ * A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll).
+ * `backers` are the players who picked that choice: where one hero rolls for the party, it is one of them.
+ */
+export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[] = [], backers: readonly string[] = []): RulesTurn {
+  return withDeathTimes(clockOf(s.party), questAfter(alongTheRoad(turnPlayed(s, hook, ballots, freeforms, backers))));
 }
 
-function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {
+function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[], backers: readonly string[]): RulesTurn {
   if (s.combat) return wander(elapse(combatRound(s, s.combat, ballots, freeforms), ROUND_SECONDS), ROUND_SECONDS);
   const lit = lightUp(s.party, ambientLight(s)); // a light is lit before anything is tried in the dark
   const ready = improvise({ ...s, party: lit.party }, freeforms);
-  const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[]) => RulesTurn)(ready.state, hook, ballots) : done(ready.state);
-  const played = { ...hooked, lines: [...lit.lines, ...ready.lines, ...hooked.lines], rolled: [...ready.rolled, ...hooked.rolled] };
+  const hooked = hook ? (HOOKS[hook.kind] as (s: RulesState, h: RulesHook, b: readonly Ballot[], backers: readonly string[]) => RulesTurn)(ready.state, hook, ballots, backers) : done(ready.state);
+  const played = { ...hooked, lines: [...lit.lines, ...ready.lines, ...hooked.lines], rolled: [...ready.rolled, ...hooked.rolled], checks: [...ready.checks, ...hooked.checks] };
   if (hook?.kind === 'rest') return elapse(played, played.fight === 'started' || played.dungeon?.facing ? 0 : secondsFor(hook), true);
   return wander(elapse(played, secondsFor(hook)), secondsFor(hook));
 }

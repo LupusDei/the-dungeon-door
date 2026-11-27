@@ -13,14 +13,17 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
 import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } from '../types.ts';
 import { isPersonalCheck } from './actions.ts';
-import { dungeonLevel, partyLevel, startDungeon } from './delve.ts';
+import { dungeonLevel, foeLevels, partyLevel, startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook, type RulesHook } from './hooks.ts';
+import { legalActions } from './legal.ts';
+import { type TurnResult, turnResult } from './result.ts';
 import type { DungeonState, LevelUp, PartyState } from './state.ts';
 import { meetOnTheRoad, planTrek, type Trek } from './trek.ts';
 import { overtime, planQuest, questClosed } from './quest.ts';
 import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState, type RulesTurn } from './turn.ts';
 import { type Deeds, questXp, sceneXp, type XpEvent, xpTag } from './xp.ts';
+import { canAct, yourChoices } from './your-turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
 export type DungeonMode = (typeof DUNGEON_MODES)[number];
@@ -98,6 +101,8 @@ export interface EngineStep {
   fight: FightNews;
   /** The resolved scene was a combat round. */
   round: boolean;
+  /** The turn in numbers, for the app's result screen (play/result.ts); null when the engine did not play it. */
+  result: TurnResult | null;
 }
 
 /** Written checks stored on the scene's votes. A corrupt one is dropped rather than thrown. */
@@ -109,8 +114,45 @@ function freeformsOf(scene: StoredScene): FreeformBallot[] {
   });
 }
 
-/** Resolves a scene through the engine: a combat round, or the chosen choice's hook (ties to the higher roll). */
-export function engineStep(state: RulesState, scene: StoredScene, resolution: Resolution): EngineStep {
+/** A combat round: what each hero who voted is doing, as their own list of actions names it ("Attack with Shortbow"). */
+function actionLabels(state: RulesState, scene: StoredScene): Record<string, string> {
+  const { combat, party } = state;
+  if (!combat) return {};
+  return Object.fromEntries(scene.votes.flatMap((v): [string, string][] => {
+    if (!canAct(combat, v.playerId) || !Object.hasOwn(party.sheets, v.playerId)) return [];
+    const sheet = party.sheets[v.playerId];
+    const actions = legalActions({ combat, sheet, playerId: v.playerId, choices: yourChoices(combat, sheet, v.playerId), canAct: true });
+    const named = v.actionId ? actions.find((a) => a.id === v.actionId) : undefined;
+    const label = named?.label ?? actions.find((a) => a.id === `choice:${v.choiceId}`)?.label;
+    return label ? [[v.playerId, label]] : [];
+  }));
+}
+
+/** The players in joining order; with none given, the heroes the engine holds. */
+function tableOf(state: RulesState, players: readonly GamePlayer[] | undefined): { playerId: string; name: string }[] {
+  if (players) return players.map((p) => ({ playerId: p.playerId, name: p.character.name }));
+  return Object.entries(state.party.sheets).map(([playerId, sheet]) => ({ playerId, name: sheet.name }));
+}
+
+/**
+ * The turn's result for the app. It is for show: a fault in building it is logged and leaves the result
+ * null; the turn itself stands.
+ */
+function resultOf(build: () => TurnResult): TurnResult | null {
+  try {
+    return build();
+  } catch (error) {
+    console.error('the turn\'s result could not be built:', error);
+    return null;
+  }
+}
+
+/**
+ * Resolves a scene through the engine: a combat round, or the chosen choice's hook (ties to the higher roll).
+ * Those who picked the chosen choice are its backers: where one hero rolls for the party, it is one of them
+ * (play/checks.ts). `players` is the table in joining order, for the turn's result (play/result.ts).
+ */
+export function engineStep(state: RulesState, scene: StoredScene, resolution: Resolution, players?: readonly GamePlayer[]): EngineStep {
   const ballots = resolution.votes.map(({ playerId, choiceId, roll }) => {
     const stored = scene.votes.find((v) => v.playerId === playerId);
     return {
@@ -122,9 +164,15 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
   const chosen = pickChoice(resolution.leaders, ballots);
   const inFight = state.combat !== null;
   const choice = inFight ? undefined : scene.choices.find((c) => c.id === chosen);
-  const turn = playTurn(state, choice?.hook || null, ballots, freeformsOf(scene));
+  const backers = choice ? ballots.filter((b) => b.choiceId === choice.id).map((b) => b.playerId) : [];
+  const turn = playTurn(state, choice?.hook || null, ballots, freeformsOf(scene), backers);
   const xp = sceneXp(turn.party, deedsOf(state, turn, scene, inFight ? null : choice ?? null, inFight));
   const lines = [...turn.lines, ...xp.lines];
+  const result = resultOf(() => turnResult({
+    scene, players: tableOf(state, players), before: state, picks: ballots, tally: resolution.tally, leaders: resolution.leaders,
+    chosen: inFight ? null : chosen, rules: choice ? choiceView(choice, foeLevels(state.party, state.dungeon)).rules : null,
+    turn, actions: actionLabels(state, scene),
+  }));
   return {
     state: { party: { ...xp.party, results: lines }, combat: turn.combat, dungeon: turn.dungeon },
     resolution: {
@@ -134,6 +182,7 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
     },
     fight: turn.fight,
     round: inFight,
+    result,
   };
 }
 

@@ -54,36 +54,62 @@ A fight pulls the card down by itself, since that is where the foes are, and its
 away. The player can close it during a fight and it stays closed. Nobody is on the screen twice:
 the card replaces the row, and there is no second strip under the Act bar.
 
-Act is one chip. Choose jumps to Story and scrolls to the offers. After a vote or a written
-action, the chip shows the d20 and what was chosen, and Change jumps back to the offers. A new
-choice replaces the old one until the scene resolves.
+Act is one chip. Choose jumps to Story and scrolls to the choices. After a pick or a written
+action, the chip shows what was chosen, and Change jumps back to the choices. A new choice
+replaces the old one until the scene resolves. A pick of one of the plot's choices shows no die
+(its d20 counts only if that choice wins and calls for a roll); an action of the hero's own shows
+the die they threw. While a d20 is in the player's hand (`scene.myDie`) the chip is that die and
+nothing else: "Throw your d20", what it is for, and a Throw button, on every tab.
 
 ## Story
 
-The scene title, the party (names wrap), the clock and the light, the scene painting (a tap
-opens the existing full-screen viewer), Listen, the dungeon master's narration, and what the
-heroes have said in character.
+The scene title, the clock and the light, the scene painting (a tap opens the existing
+full-screen viewer), Listen, the dungeon master's narration, and what the heroes have said in
+character. Then, in this order:
 
-Under that, two different boxes:
-
+- **What do you do?** The scene's choices as cards (`scene.choices`): label, what it risks, and
+  the rules line ("Stealth check, DC 10, with Advantage", "Fight: Wolf, Giant Rat"). A tap picks
+  one (`POST /vote`); another tap changes the pick. The party goes with the choice most heroes
+  pick. In a fight the cards are the hero's plain moves (Attack, Cast, a third that fits the
+  moment), and the two quick-action wheels sit under them for a particular weapon, spell or item.
+- **Or in your own words** is `POST /action`. The dungeon master judges it and the player rolls
+  for it. The page says plainly that it is the hero's own action beside the party's pick, and
+  does not decide which way the party goes.
+- **Your die**, when `scene.myDie` is set, is a d20 the player taps or flicks (or throws from the
+  Act chip). The face is the one the server rolled when they declared. If they have not thrown
+  when the choice window ends, the server throws it and their XP for the turn is halved.
 - **In character** is `POST /speak`. No roll. The line joins the scene's roleplay.
-- **What do you do?** is `POST /action`. There is no menu of narrator options. The player writes
-  the action, and may name a skill. A known deed becomes that action; a check asks for a throw.
-- **Your die**, when `scene.myDie` is set, is a d20 the player taps or flicks. The face is the one
-  the server rolled when they declared. The choice-window clock is the deadline: if they have not
-  thrown when it ends, the next poll reveals the face.
-- **The table** is each hero beside their portrait: the action once they declare it, then the roll
-  once it is thrown. A bar drains across `turn` for anyone still choosing.
+- **The table** lists every hero at once: portrait, name, and whether they have chosen or are
+  still waiting, with a bar that drains across `turn` (90 seconds from when the scene was stored,
+  counted against `turn.now`). A hero who has chosen shows a check and a full bar. The window is
+  display only: nothing resolves at zero, and the host can still proceed early.
 
-Under the offers, the Story page lists every hero at once: portrait, name, and whether they
-have chosen or are still waiting. It does not wait for a vote to arrive before drawing them.
-Each waiting hero has a bar that drains across `turn` (90 seconds from when the scene was
-stored, counted against `turn.now`). A hero who has chosen shows a check and a full bar. The
-window is display only: nothing resolves at zero, and the host can still proceed early.
+The scene's choices left this page for a while (players wrote every action instead). A game
+played that way showed the cost: nobody could tell what steered the scene, so they are back.
 
-Once the choices are in and `status` is `resolving`, the Story page covers itself with a
-turning d20 and "The tale unfolds…" until the next scene is up. The dice of the last resolved
-scene are at the bottom. The finale offers the way back to the tavern.
+## Between turns: the result
+
+Once everyone has acted and `status` is `resolving`, a card covers every tab
+(`Views/Game/TurnOutcome.swift`). First it lists every hero and what they did, under a turning
+d20. As soon as the engine has rolled (`scene.result`, a `TurnResult`: it arrives while the
+dungeon master is still writing) it becomes the result:
+
+- what the party chose and how that was settled ("Fardock picked it; 2 acted on their own", or
+  whose d20 broke a tie), its rules line, and Succeeded or Failed once its dice are in;
+- a row for every hero, always: who rolled for the party's choice first, then the rest. Under
+  each, what they did, and each of their d20s: it turns, lands on its face, and shows the sum
+  against the number to beat and the verdict as a word and a mark (Succeeded, Failed, Hit,
+  Missed). A die the table rolled for a hero says so; a die left to the clock says it cost half
+  the XP. A hero who did not act, or could not, is still there and says that;
+- what the turn changed, in the engine's own lines, and the dungeon master's telling once it is
+  written.
+
+Every die on it is one the engine used, under the hero it was rolled for. The card stays until
+the player sends it away ("On with the story", there once the next scene is written); a tap lands
+any dice still in the air. Each device remembers the last turn it has seen, so the card comes up
+once per turn. "How the last turn went", at the foot of the Story page, brings it back. The dice
+lines of the last resolved scene are still at the bottom of the page. The finale offers the way
+back to the tavern.
 
 ## Sheet
 

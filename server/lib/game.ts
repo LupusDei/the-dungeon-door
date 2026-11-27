@@ -38,7 +38,7 @@ import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
-import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type LegalAction, type Mention, type Message, type RoleplayLine, type SceneView, type StoredChoice, type StoredScene, type TypingNotice, type Vote } from './types.ts';
+import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type LegalAction, type Mention, type Message, type RoleplayLine, type SceneView, type StoredChoice, type StoredScene, type TurnResult, type TypingNotice, type Vote } from './types.ts';
 
 export const MAX_PLAYERS = 6;
 export const DEFAULT_SCENE_COUNT = 4;
@@ -139,6 +139,14 @@ function freeformsFor(current: StoredScene): SceneView['freeforms'] {
   });
 }
 
+/**
+ * The turn's result shows once the engine has played it: while the DM writes, and ever after. It never shows
+ * while the table is choosing: a turn the DM fumbled is voted on again, and its old dice are put away
+ * (dmFumbled), but until they are, this keeps them off the screen.
+ */
+const resultFor = (game: Game, current: StoredScene): TurnResult | null =>
+  (game.status === 'voting' && current.outcome === null ? null : current.result ?? null);
+
 function sceneView(game: Game, current: StoredScene, playerId: string): SceneView {
   const mine = choosing(current.votes).find((v) => v.playerId === playerId);
   const mineCheck = current.votes.find((v) => v.playerId === playerId && isPersonalCheck(v));
@@ -165,6 +173,7 @@ function sceneView(game: Game, current: StoredScene, playerId: string): SceneVie
     freeforms: freeformsFor(current),
     myFreeform: mineWritten,
     outcome: current.outcome,
+    result: resultFor(game, current),
     roleplay: current.roleplay ?? [],
   };
 }
@@ -237,6 +246,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
           // In a round each hero took their own action: there is no one choice the party made.
           choiceLabel: combat ? '' : (s.choices.find((c) => c.id === s.chosenChoiceId)?.label ?? ''),
           outcome: s.outcome as string,
+          result: s.result ?? null,
           combat,
           roleplay: s.roleplay ?? [],
         };
@@ -1038,6 +1048,8 @@ interface Plan {
   patch: GamePatch;
   /** The engine's dice lines, posted to the chat. */
   lines: string[];
+  /** The turn in numbers, for the app's result screen; null without the engine, and when the engine threw. */
+  result: TurnResult | null;
   /** The next scene is a later round of a fight already under way: it carries the fight's picture instead of a new one. */
   sharesPicture: boolean;
 }
@@ -1057,12 +1069,13 @@ function withoutTheEngine(state: RulesState, resolution: Resolution, error: unkn
     resolution: { ...resolution, leaders: chosen ? [chosen] : [], rules: { chosen, lines, success: null, fight: null } },
     fight: null,
     round: inFight,
+    result: null,
   };
 }
 
-function safeStep(state: RulesState, scene: StoredScene, resolution: Resolution): EngineStep {
+function safeStep(state: RulesState, scene: StoredScene, resolution: Resolution, players: readonly GamePlayer[]): EngineStep {
   try {
-    return engineStep(state, scene, resolution);
+    return engineStep(state, scene, resolution, players);
   } catch (error) {
     return withoutTheEngine(state, resolution, error);
   }
@@ -1072,14 +1085,14 @@ function planOf(game: Game, scene: StoredScene): Plan {
   const resolution = resolutionOf(game, scene);
   const next = scene.index + 1;
   const state = rulesStateOf(game);
-  if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [], sharesPicture: false };
-  const stepped = safeStep(state, scene, resolution);
+  if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [], result: null, sharesPicture: false };
+  const stepped = safeStep(state, scene, resolution, game.players);
   const played = { ...stepped, state: { ...stepped.state, party: markRoadEnd(state.party, stepped.state.party, next) } };
   const { isFinale, sceneCount } = endingOf(played, next, game.sceneCount);
   const step = isFinale ? endQuest(played) : played; // the heroes level up for the epilogue
   const { party } = step.state;
   const sharesPicture = step.round && step.state.combat !== null;
-  return { resolution: step.resolution, next, isFinale, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, sharesPicture };
+  return { resolution: step.resolution, next, isFinale, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, result: step.result, sharesPicture };
 }
 
 /**
@@ -1161,12 +1174,26 @@ async function recordFalls(game: Game, scene: StoredScene, after: PartyState, li
   }
 }
 
+/**
+ * The turn's result is stored as soon as the engine has played it, which is many seconds before the DM's
+ * outcome. It is for show: a store that cannot keep it is logged and the turn goes on, so the table is never
+ * left resolving for the sake of it.
+ */
+async function keepResult(code: string, sceneIndex: number, result: TurnResult | null): Promise<void> {
+  try {
+    await getStore().setSceneResult(code, sceneIndex, result);
+  } catch (error) {
+    console.error(`storing the result of ${code}#${sceneIndex} failed:`, error);
+  }
+}
+
 async function resolveScene(code: string, sceneIndex: number, origin: string): Promise<void> {
   const store = getStore();
   const game = await store.getGame(code);
   const scene = game?.scenes.find((s) => s.index === sceneIndex);
   if (!game || !scene || game.status !== 'resolving' || game.sceneIndex !== sceneIndex) return;
   const plan = planOf(game, scene);
+  await keepResult(code, sceneIndex, plan.result); // before the DM is asked: the table reads its dice while the DM writes
   let draft;
   try {
     draft = await writeNext(game, scene, plan);
@@ -1214,6 +1241,7 @@ async function catchUpPicture(code: string, from: number, to: number): Promise<v
 async function dmFumbled(code: string, sceneIndex: number, error: unknown): Promise<void> {
   console.error(`DM failed to resolve ${code}#${sceneIndex}:`, error);
   if (await getStore().updateGame(code, { status: 'resolving', sceneIndex }, { status: 'voting' })) {
+    await keepResult(code, sceneIndex, null); // the turn will be played again, and the votes may change first
     await system(code, outOfCredit(error)
       ? `The dungeon master could not go on. ${OUT_OF_CREDIT} Your votes are kept; the host can advance once that is done.`
       : `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);

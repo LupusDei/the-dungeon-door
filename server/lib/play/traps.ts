@@ -16,11 +16,12 @@ import { type HazardSpec, sufferHazard } from '../rules/hazards.ts';
 import type { Rng } from '../rules/rng.ts';
 import { seededRng } from '../rules/rng.ts';
 import { type DamagePart, type Trap, isTrap, trapAt } from '../rules/traps.ts';
-import { groupRoll, type Hero } from './checks.ts';
-import { ABILITY_NAMES, titleCase } from './hooks.ts';
+import { checksOf, dcOf, groupRoll, type Hero, type TurnCheck } from './checks.ts';
+import { ABILITY_NAMES, type RollHook, rollName, titleCase } from './hooks.ts';
 import type { PartyState } from './state.ts';
 
-export interface Sprung { party: PartyState; lines: string[]; success: boolean }
+/** checks: the d20s the heroes rolled against it (its saves, a try at disarming it), for the turn's result (play/result.ts). */
+export interface Sprung { party: PartyState; lines: string[]; success: boolean; checks: TurnCheck[] }
 type Votes = Readonly<Record<string, number>>;
 type Detect = Trap['detect'];
 
@@ -91,15 +92,17 @@ function afflicted(heroes: Hero[], saved: (i: number) => boolean, trap: Trap): H
 }
 
 /** The trap goes off on these heroes: their saves, the damage, and any condition on a failure. */
-function trigger(party: PartyState, trap: Trap, targets: readonly Hero[], votes: Votes, rng: Rng): { party: PartyState; lines: string[] } {
-  const saves = trap.save ? groupRoll([...targets], { kind: 'save', ability: trap.save.ability, dc: trap.save.dc }, votes, rng) : null;
+function trigger(party: PartyState, trap: Trap, targets: readonly Hero[], votes: Votes, rng: Rng): { party: PartyState; lines: string[]; checks: TurnCheck[] } {
+  const hook: RollHook | null = trap.save ? { kind: 'save', ability: trap.save.ability, dc: trap.save.dc } : null;
+  const saves = hook ? groupRoll([...targets], hook, votes, rng) : null;
   const saved = (i: number) => (saves ? saves.rolls[i].success : false);
   const onSave = trap.halfOnSave ? 0.5 : 0;
   const hurtHeroes = damageAll(rng, trap, targets.map((hero, i) => ({ hero, share: saved(i) ? onSave : 1 })));
   const failed = targets.filter((_, i) => !saved(i)).map((h) => h.sheet.name);
   const condition = trap.condition && failed.length ? [conditionLine(trap, failed)] : [];
   hurtHeroes.heroes = afflicted(hurtHeroes.heroes, saved, trap);
-  return { party: withSheets(party, hurtHeroes.heroes, rng), lines: [...(saves ? saves.lines : []), ...hurtHeroes.lines, ...condition] };
+  const checks = hook && saves ? checksOf(saves, rollName(hook), dcOf(hook)) : [];
+  return { party: withSheets(party, hurtHeroes.heroes, rng), lines: [...(saves ? saves.lines : []), ...hurtHeroes.lines, ...condition], checks };
 }
 
 function conditionLine(trap: Trap, names: readonly string[]): string {
@@ -112,21 +115,23 @@ const targetsOf = (party: PartyState, trap: Trap) => (trap.targets === 'one' ? s
 
 function disarm(party: PartyState, trap: Trap, votes: Votes, rng: Rng, before: string[]): Sprung {
   const d = trap.disarm!;
-  const attempt = groupRoll(standing(party), { kind: 'check', ability: d.ability, skill: d.skill, tool: 'thieves-tools', dc: d.dc, mode: 'best' }, votes, rng);
+  const hook: RollHook = { kind: 'check', ability: d.ability, skill: d.skill, tool: 'thieves-tools', dc: d.dc, mode: 'best' };
+  const attempt = groupRoll(standing(party), hook, votes, rng);
+  const tried = checksOf(attempt, rollName(hook), dcOf(hook));
   const lines = [...before, ...attempt.lines];
-  if (attempt.success) return { party: { ...party, rng: rng.state() }, lines: [...lines, `The ${trap.name} is disarmed.`], success: true };
+  if (attempt.success) return { party: { ...party, rng: rng.state() }, lines: [...lines, `The ${trap.name} is disarmed.`], success: true, checks: tried };
   const who = standing(party).filter((h) => h.playerId === attempt.rolls[0].playerId);
   const sprung = trigger(party, trap, who, {}, rng);
-  return { party: sprung.party, lines: [...lines, `The ${trap.name} goes off.`, ...sprung.lines], success: false };
+  return { party: sprung.party, lines: [...lines, `The ${trap.name} goes off.`, ...sprung.lines], success: false, checks: [...tried, ...sprung.checks] };
 }
 
 function springSrdTrap(party: PartyState, trap: Trap, votes: Votes, light: LightLevel): Sprung {
   const rng = seededRng(party.rng);
   const seen = spotter(party, trap.detect, light);
   if (seen && trap.disarm) return disarm(party, trap, votes, rng, [spotLine(seen.hero, seen.score, trap.detect, `a ${trap.name}`)]);
-  if (seen) return { party, lines: [`${spotLine(seen.hero, seen.score, trap.detect, `a ${trap.name}`)} ${trap.avoid}`], success: true };
+  if (seen) return { party, lines: [`${spotLine(seen.hero, seen.score, trap.detect, `a ${trap.name}`)} ${trap.avoid}`], success: true, checks: [] };
   const sprung = trigger(party, trap, targetsOf(party, trap), votes, rng);
-  return { party: sprung.party, lines: [`Nobody notices the ${trap.name}.`, ...sprung.lines], success: false };
+  return { party: sprung.party, lines: [`Nobody notices the ${trap.name}.`, ...sprung.lines], success: false, checks: sprung.checks };
 }
 
 /** A hazard befalls every living hero. */
@@ -154,14 +159,14 @@ export const dungeonHazard = (id: string, level: number): DungeonHazard | null =
 
 function springHazard(party: PartyState, h: DungeonHazard, light: LightLevel): Sprung {
   const seen = spotter(party, h.detect, light);
-  if (seen) return { party, lines: [`${spotLine(seen.hero, seen.score, h.detect!, h.what)} The party finds a way around it.`], success: true };
+  if (seen) return { party, lines: [`${spotLine(seen.hero, seen.score, h.detect!, h.what)} The party finds a way around it.`], success: true, checks: [] };
   const struck = partyHazard(party, h.spec);
-  return { party: struck.party, lines: [`The party meets ${h.what}.`, ...struck.lines], success: false };
+  return { party: struck.party, lines: [`The party meets ${h.what}.`, ...struck.lines], success: false, checks: [] };
 }
 
 /** A trap or hazard the party runs into (a dungeon room's, or the DM's), at the party's level. */
 export function springTrap(party: PartyState, id: string, level: number, votes: Votes, light: LightLevel = 'bright'): Sprung {
   if (isTrap(id)) return springSrdTrap(party, trapAt(id, level), votes, light);
   const hazard = dungeonHazard(id, level);
-  return hazard ? springHazard(party, hazard, light) : { party, lines: [], success: true };
+  return hazard ? springHazard(party, hazard, light) : { party, lines: [], success: true, checks: [] };
 }

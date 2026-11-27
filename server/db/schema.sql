@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS scenes (
 -- In-character lines for the turn (no roll): what the players said and did, oldest first.
 ALTER TABLE scenes ADD COLUMN IF NOT EXISTS roleplay jsonb NOT NULL DEFAULT '[]';
 
+-- How the scene's turn came out, in numbers (lib/play/result.ts, a TurnResult): the choice and who picked it,
+-- what each hero did, and each d20. Written when the engine has played the turn, before the DM writes the
+-- outcome. Null until then, in a game without the engine, and on scenes resolved before this.
+ALTER TABLE scenes ADD COLUMN IF NOT EXISTS result jsonb;
+
 -- The narrators' readings of scenes (lib/voice.ts, lib/game.ts requestNarration): one audio file per scene
 -- per narrator, made when a player first asks for it. A row with no url is the claim of whoever is making it
 -- (started_at); a failed try clears started_at so the next request can claim it again.
