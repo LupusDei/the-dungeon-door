@@ -12,6 +12,7 @@ import { rollD20 } from './resolve.ts';
 import type { Rng } from './rng.ts';
 import { type CharacterSheet, MAX_EXHAUSTION } from './sheet.ts';
 import { srd } from './srd.ts';
+import { counted } from './counted.ts';
 
 export type HazardSpec =
   | { kind: 'falling'; feet: number }
@@ -55,7 +56,7 @@ function burn(rng: Rng, s: CharacterSheet): Suffered {
 function suffocate(s: CharacterSheet, minutes: number): Suffered {
   const rounds = Math.ceil(Math.round((minutes - breathMinutes(s)) * ROUNDS_PER_MINUTE * 1000) / 1000);
   if (rounds <= 0) return { sheet: s, line: `${s.name} holds their breath long enough` };
-  const what = `${s.name} runs out of breath and suffocates for ${rounds} ${rounds === 1 ? 'round' : 'rounds'}`;
+  const what = `${s.name} runs out of breath and suffocates for ${counted(rounds, 'round')}`;
   if (s.exhaustion + rounds < MAX_EXHAUSTION) return { sheet: s, line: `${what}, then recovers on breathing again` };
   return exhausted(s, rounds, what);
 }
@@ -84,7 +85,7 @@ function hourlySaves(rng: Rng, s: CharacterSheet, kind: 'extreme-cold' | 'extrem
     const dc = heat ? 5 + hour : 10;
     if (rollD20(rng, sheet.saveBonuses.con + d20Modifier(sheet), mode).total < dc) { failed++; sheet = gainExhaustion(sheet); }
   }
-  const what = `${s.name} endures ${hours} ${hours === 1 ? 'hour' : 'hours'} of ${kind.replace('-', ' ')}`;
+  const what = `${s.name} endures ${counted(hours, 'hour')} of ${kind.replace('-', ' ')}`;
   if (failed === 0) return { sheet, line: `${what} and fails no Constitution save` };
   return exhausted(s, failed, `${what} and fails ${failed} Constitution ${failed === 1 ? 'save' : 'saves'}`);
 }
@@ -97,7 +98,7 @@ function dehydrate(s: CharacterSheet): Suffered {
 function starve(s: CharacterSheet, days: number): Suffered {
   if (has(s, 'rations')) return { sheet: s, line: `${s.name} has food enough` };
   const levels = days - Math.max(1, 3 + conMod(s)) + 1;
-  return levels > 0 ? exhausted(s, levels, `${s.name} goes ${days} days without food`) : { sheet: s, line: `${s.name} goes hungry but holds up` };
+  return levels > 0 ? exhausted(s, levels, `${s.name} goes ${counted(days, 'day')} without food`) : { sheet: s, line: `${s.name} goes hungry but holds up` };
 }
 
 const HAZARDS: { [K in HazardKind]: (rng: Rng, s: CharacterSheet, spec: Extract<HazardSpec, { kind: K }>) => Suffered } = {

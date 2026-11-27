@@ -14,6 +14,7 @@ import type { Attitude } from './parley.ts';
 import type { DungeonState, PartyState } from './state.ts';
 import { itemIdOf, stow } from './trade.ts';
 import { ROAD_MONSTERS } from './trek.ts';
+import { counted } from '../rules/counted.ts';
 
 /** Short adventures get small maps. */
 export const mapSize = (sceneCount: number): MapSize => (sceneCount <= 4 ? 'short' : sceneCount <= 6 ? 'standard' : 'delve');
@@ -116,7 +117,6 @@ export const withAttitude = (dungeon: DungeonState, attitude: Attitude): Dungeon
   ({ ...dungeon, attitudes: { ...dungeon.attitudes, [dungeon.at]: attitude } });
 
 const SP_PER_GP = 10;
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** Coins are shared out in whole gold among the living (the odd pieces to the first of them); gems, jewellery and the magic item go to whoever has room. The dead take nothing. */
 export function claimTreasure(party: PartyState, treasure: Treasure): { party: PartyState; lines: string[] } {
@@ -129,8 +129,8 @@ export function claimTreasure(party: PartyState, treasure: Treasure): { party: P
   const sheets = { ...party.sheets, ...Object.fromEntries(ids.map((id) => [id, { ...party.sheets[id], gp: gold(id) }])) };
   const more = over.length ? `, and 1 more to ${over.map((id) => party.sheets[id].name).join(' and ')}` : '';
   const extras = [
-    treasure.gems ? plural(treasure.gems, 'gem', 'gems') : '',
-    treasure.jewellery ? plural(treasure.jewellery, 'piece of jewellery', 'pieces of jewellery') : '',
+    treasure.gems ? counted(treasure.gems, 'gem') : '',
+    treasure.jewellery ? counted(treasure.jewellery, 'piece of jewellery', 'pieces of jewellery') : '',
     treasure.magicItem,
   ].filter((x) => x);
   const magic = treasure.magicItem ? itemIdOf(treasure.magicItem) : null;

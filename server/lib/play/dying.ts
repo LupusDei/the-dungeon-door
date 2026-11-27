@@ -12,6 +12,7 @@ import { seededRng } from '../rules/rng.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { groupRoll, type Hero } from './checks.ts';
 import type { CombatState, PartyState } from './state.ts';
+import { counted } from '../rules/counted.ts';
 
 export interface Settled { party: PartyState; lines: string[] }
 
@@ -56,7 +57,7 @@ export function outcome(rng: Rng, c: Combatant, sheet: CharacterSheet): { sheet:
   if (c.status === 'dead') return { sheet: { ...sheet, dead: true }, line: `${sheet.name} dies.` };
   if (c.status === 'up') return { sheet: { ...sheet, hp: 1 }, line: `${sheet.name} is back on their feet.` };
   const hours = rng.die(4);
-  return { sheet: { ...sheet, hp: 1 }, line: `${sheet.name} wakes with 1 HP after ${hours} ${hours === 1 ? 'hour' : 'hours'}.` };
+  return { sheet: { ...sheet, hp: 1 }, line: `${sheet.name} wakes with 1 HP after ${counted(hours, 'hour')}.` };
 }
 
 /** Settles these fallen heroes (dying or stable combatants), with the standing heroes as friends. */

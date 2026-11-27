@@ -55,6 +55,7 @@ test('dehydration and malnutrition: Exhaustion for a hero with no water or food'
   const starving = (days: number) => sufferHazard(scriptedRng([]), bryn, { kind: 'malnutrition', days }).sheet.exhaustion;
   assert.deepEqual([starving(4), starving(5), starving(7)], [0, 1, 3], 'CON +2: 5 days before the first level');
   assert.equal(sufferHazard(scriptedRng([]), { ...bryn, abilityScores: { ...bryn.abilityScores, con: 3 } }, { kind: 'malnutrition', days: 1 }).sheet.exhaustion, 1, 'at least 1 day');
+  assert.equal(sufferHazard(scriptedRng([]), { ...bryn, abilityScores: { ...bryn.abilityScores, con: 3 } }, { kind: 'malnutrition', days: 1 }).line, 'Bryn goes 1 day without food: Exhaustion 1');
   assert.equal(sufferHazard(scriptedRng([]), addItem(bryn, 'rations'), { kind: 'malnutrition', days: 30 }).line, 'Bryn has food enough');
   assert.equal(sufferHazard(scriptedRng([]), bryn, { kind: 'malnutrition', days: 2 }).line, 'Bryn goes hungry but holds up');
 });

@@ -86,6 +86,7 @@ test('Arcane Recovery: once per Long Rest, spent slots totalling half the wizard
   assert.deepEqual([recovered.spellcasting!.expended.slice(0, 2), recovered.resourcesUsed], [[2, 0], { 'arcane-recovery': 1 }]);
   assert.deepEqual(arcaneRecovery(wizard, [1, 1]).spellcasting!.expended.slice(0, 2), [0, 1]);
   assert.throws(() => arcaneRecovery(wizard, [2, 1]), violation(/Arcane Recovery restores at most 2 levels of slots/));
+  assert.throws(() => arcaneRecovery(spend(hero('wizard', 2), [1, 1]), [1, 1]), violation(/Arcane Recovery restores at most 1 level of slots/));
   assert.throws(() => arcaneRecovery(recovered, [1]), violation(/Hero has no Arcane Recovery left/));
   assert.throws(() => arcaneRecovery(hero('wizard', 4), [1]), violation(/Hero has no spent level-1 slot to recover/));
   assert.throws(() => arcaneRecovery({ ...wizard, level: 12 }, [6]), violation(/no slot above level 5/));

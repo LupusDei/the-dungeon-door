@@ -21,6 +21,7 @@ import type { DungeonState } from './state.ts';
 import { clockOf, lightLevel } from './time.ts';
 import type { RoadEnd, TrekEvent } from './trek.ts';
 import type { RulesState } from './turn.ts';
+import { counted } from '../rules/counted.ts';
 
 export interface RatedFoe { name: string; count: number; toughness: Toughness }
 export interface Waiting { foes: string; attitude: Attitude; band: FightBand; monsters: RatedFoe[] }
@@ -110,7 +111,7 @@ export interface HeroView {
 }
 
 const WHEN: { [K in TimedCondition['until']['kind']]: (u: Extract<TimedCondition['until'], { kind: K }>) => string } = {
-  time: (u) => (u.left >= 3600 ? `${Math.ceil(u.left / 360) / 10} hours` : `${Math.ceil(u.left / 60)} minutes`),
+  time: (u) => (u.left >= 3600 ? counted(Math.ceil(u.left / 360) / 10, 'hour') : counted(Math.ceil(u.left / 60), 'minute')),
   'long-rest': () => 'until a long rest',
   save: (u) => `DC ${u.dc} ${u.ability.toUpperCase()} save to end`,
   escape: (u) => `DC ${u.dc} ${u.skill.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')} to break free`,
@@ -270,7 +271,7 @@ export function suitableMonsters(levels: readonly number[], pool?: readonly stri
 function lightLine(s: RulesState): string {
   const lit = litView(s);
   const own = s.party.lit ? 'bright' : lightLevel(s);
-  return `${own}; ${lit ? `the party's light: ${lit.holder}'s ${lit.name} (${lit.minutesLeft} minutes left)` : 'no light carried'}`;
+  return `${own}; ${lit ? `the party's light: ${lit.holder}'s ${lit.name} (${counted(lit.minutesLeft, 'minute')} left)` : 'no light carried'}`;
 }
 
 /** The area a way leads to, named with the corridor it goes by. */

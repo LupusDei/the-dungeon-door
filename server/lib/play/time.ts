@@ -10,6 +10,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import type { RulesHook } from './hooks.ts';
 import type { PartyState } from './state.ts';
 import type { RulesState } from './turn.ts';
+import { counted } from '../rules/counted.ts';
 
 export interface Lit { source: LightSource; holder: string; left: number }
 export interface Timed { party: PartyState; lines: string[] }
@@ -40,7 +41,7 @@ function wearOff(party: PartyState, seconds: number): Timed {
   return { party: { ...party, sheets }, lines };
 }
 
-const hours = (seconds: number) => `${seconds / HOUR} hour${seconds === HOUR ? '' : 's'}`;
+const hours = (seconds: number) => counted(seconds / HOUR, 'hour');
 const verb = (source: LightSource) => (source === 'light-spell' ? 'casts' : 'lights a');
 
 /** Where it is not bright and nothing burns, the standing hero with the best light lights it. */

@@ -11,6 +11,7 @@ import type { Rng } from './rng.ts';
 import { type CharacterSheet, MAX_EXHAUSTION } from './sheet.ts';
 import { type Srd, srd as bundledSrd } from './srd.ts';
 import { require } from './violation.ts';
+import { counted } from './counted.ts';
 
 type Spellcasting = NonNullable<CharacterSheet['spellcasting']>;
 
@@ -86,7 +87,7 @@ export function arcaneRecovery(sheet: CharacterSheet, slotLevels: readonly numbe
   require(slotLevels.length > 0, 'recover at least one slot');
   require(slotLevels.every((l) => l <= ARCANE_RECOVERY_MAX_SLOT), `Arcane Recovery restores no slot above level ${ARCANE_RECOVERY_MAX_SLOT}`);
   const budget = Math.ceil(sheet.level / 2);
-  require(slotLevels.reduce((a, b) => a + b, 0) <= budget, `Arcane Recovery restores at most ${budget} levels of slots`);
+  require(slotLevels.reduce((a, b) => a + b, 0) <= budget, `Arcane Recovery restores at most ${counted(budget, 'level')} of slots`);
   return regainSlots(useResource(sheet, 'arcane-recovery', 1, data), slotLevels);
 }
 

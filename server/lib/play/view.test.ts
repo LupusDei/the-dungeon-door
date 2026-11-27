@@ -66,6 +66,8 @@ test('the DM’s view: the party’s state, the fight, the area and its exits, a
   assert.deepEqual([ctx.party[0].sees, ctx.time, ctx.light], ['dim', 'Day 1, 08:00', 'dim; no light carried']);
   const lit = rulesContext({ party: { ...party, lit: { source: 'lamp', holder: 'p2', left: 600 } }, combat: null, dungeon: d });
   assert.equal(lit.light, "bright; the party's light: Cleo's Lamp (10 minutes left)");
+  const guttering = rulesContext({ party: { ...party, lit: { source: 'lamp', holder: 'p2', left: 45 } }, combat: null, dungeon: d });
+  assert.equal(guttering.light, "bright; the party's light: Cleo's Lamp (1 minute left)");
   assert.match(ctx.party[1].items, / ×\d/, 'stacks show their count');
   assert.equal(rulesContext({ party: { ...party, sheets: { p1: { ...wizard, equipment: [{ id: 'plate-armor', name: 'Plate Armor', count: 3 }] } } }, combat: null, dungeon: null }).party[0].dragging, true);
   const goblin = ctx.combat!.combatants.find((c) => c.name === 'Goblin Warrior');
@@ -119,10 +121,12 @@ test('conditions show with how they end, in the API and to the DM', () => {
     { condition: 'frightened' as const, until: { kind: 'long-rest' as const } },
     { condition: 'paralyzed' as const, until: { kind: 'save' as const, ability: 'con' as const, dc: 12 } },
     { condition: 'restrained' as const, until: { kind: 'escape' as const, ability: 'str' as const, skill: 'sleight-of-hand', dc: 10 } },
+    { condition: 'blinded' as const, until: { kind: 'time' as const, left: 3600 } },
+    { condition: 'deafened' as const, until: { kind: 'time' as const, left: 30 } },
   ] };
   const s = { party: { ...party, sheets: { p1: carried } }, combat: null, dungeon: null };
-  assert.deepEqual(rulesView(s, []).party[0].conditions.map((c) => c.ends), ['40 minutes', '1.5 hours', 'until a long rest', 'DC 12 CON save to end', 'DC 10 Sleight Of Hand to break free']);
-  assert.equal(rulesContext(s).party[0].conditions, 'poisoned (40 minutes), poisoned (1.5 hours), frightened (until a long rest), paralyzed (DC 12 CON save to end), restrained (DC 10 Sleight Of Hand to break free)');
+  assert.deepEqual(rulesView(s, []).party[0].conditions.map((c) => c.ends), ['40 minutes', '1.5 hours', 'until a long rest', 'DC 12 CON save to end', 'DC 10 Sleight Of Hand to break free', '1 hour', '1 minute'], 'one hour, one minute');
+  assert.equal(rulesContext(s).party[0].conditions, 'poisoned (40 minutes), poisoned (1.5 hours), frightened (until a long rest), paralyzed (DC 12 CON save to end), restrained (DC 10 Sleight Of Hand to break free), blinded (1 hour), deafened (1 minute)');
 });
 
 test('the dungeon level and where it went deeper, to the app and the DM', () => {
