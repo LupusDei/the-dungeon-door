@@ -22,6 +22,9 @@ enum QuickActions {
     static func list(_ kind: WheelKind, in scene: GameScene) -> [LegalAction] {
         let wanted: Set<String> = kind == .actions ? ["attack", "common", "move", "item"] : ["spell", "feature"]
         var actions = scene.actions.filter { wanted.contains($0.kind) }
+        // Outside a fight the server lists every fighting action as unavailable ("Not in a fight").
+        // A wheel of them all in grey tells the player nothing, so they are left off it.
+        if !scene.combat { actions.removeAll { !$0.available && $0.reason == notInAFight } }
         // The bare "Attack" is the weapons already on the wheel.
         if kind == .actions, actions.contains(where: { $0.kind == "attack" }) {
             actions.removeAll { $0.kind == "common" && $0.id.lowercased().hasSuffix(":attack") }
@@ -36,6 +39,14 @@ enum QuickActions {
             let (l, r) = (rank(left.element), rank(right.element))
             return l != r ? l < r : left.offset < right.offset
         }.map(\.element)
+    }
+
+    /// The server's reason for an action that only a fight allows (server/lib/play/legal.ts).
+    private static let notInAFight = "Not in a fight"
+
+    /// True when either wheel holds something this hero can do now: then the buttons are worth showing.
+    static func worthShowing(in scene: GameScene) -> Bool {
+        list(.actions, in: scene).contains(where: \.available) || list(.powers, in: scene).contains(where: \.available)
     }
 
     private static func rank(_ action: LegalAction) -> Int {
@@ -100,9 +111,9 @@ enum QuickActions {
 
     static func name(_ kind: WheelKind, in scene: GameScene) -> String {
         guard kind == .powers else { return "Actions" }
-        let powers = list(.powers, in: scene)
-        let spells = powers.contains { $0.kind == "spell" }
-        let abilities = powers.contains { $0.kind == "feature" }
+        // By what the hero has, not by what is on the wheel just now.
+        let spells = scene.actions.contains { $0.kind == "spell" }
+        let abilities = scene.actions.contains { $0.kind == "feature" }
         return spells && abilities ? "Spells & abilities" : spells ? "Spells" : "Abilities"
     }
 }

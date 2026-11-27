@@ -292,8 +292,9 @@ struct PlayStoryPage: View {
     }
 
     /// The two wheels of quick actions, right above the box: the same turn, without the typing.
+    /// They show when a wheel holds something the hero can do, which is to say in a fight.
     @ViewBuilder private var quickActions: some View {
-        if let scene, !scene.isFinale, scene.canAct, !scene.actions.isEmpty {
+        if let scene, !scene.isFinale, scene.canAct, QuickActions.worthShowing(in: scene) {
             QuickActionBar(scene: scene, enabled: canSend) { kind, frame in
                 wheelOrigin = CGPoint(x: frame.midX, y: frame.midY)
                 wheel = kind
