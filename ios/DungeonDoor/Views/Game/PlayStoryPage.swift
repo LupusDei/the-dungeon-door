@@ -57,8 +57,14 @@ struct PlayStoryPage: View {
                     if !inCombat, let waiting = state.rules?.dungeon?.waiting {
                         WaitingFoesNotice(waiting: waiting)
                     }
-                    declaredDie
-                    freeformBox
+                    // Where the Act bar's Choose and Change bring the player: the die to throw when one is
+                    // waiting, and the box to say what they do. (The mark sat on the die alone, so before a
+                    // turn was declared Choose had nowhere to scroll to.)
+                    VStack(alignment: .leading, spacing: 16) {
+                        declaredDie
+                        freeformBox
+                    }
+                    .id("offers")
                     if let scene {
                         ChoiceWaitPanel(session: session, scene: scene)
                     }
@@ -255,7 +261,6 @@ struct PlayStoryPage: View {
             ThrowDie(die: die) {
                 Task { await session.throwDie() }
             }
-            .id("offers")
         }
     }
 

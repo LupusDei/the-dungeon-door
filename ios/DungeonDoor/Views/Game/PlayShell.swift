@@ -263,7 +263,7 @@ struct PlayTopStrip: View {
             }
             Text(line)
                 .font(.system(size: 11, weight: .semibold, design: .serif))
-                .foregroundStyle(line == "Your turn" ? Palette.gold : Palette.muted)
+                .foregroundStyle(line == "Your turn" || line == "Throw your die" ? Palette.gold : Palette.muted)
                 .multilineTextAlignment(.trailing)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
@@ -277,6 +277,8 @@ struct PlayTopStrip: View {
         guard let scene = session.state.scene else { return "Holding" }
         if !scene.canAct { return "You are down" }
         if PlayTurn.chosenLine(scene: scene, playerId: session.playerId) != nil {
+            // Declared, with the d20 still in hand: the table is waiting on this player, not the others.
+            if scene.myDie != nil, session.state.status == .voting { return "Throw your die" }
             var acted = Set(scene.votes.map(\.playerId))
             for turn in scene.freeforms {
                 if let playerId = turn.playerId { acted.insert(playerId) }
