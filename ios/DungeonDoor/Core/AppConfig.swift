@@ -25,7 +25,8 @@ import SwiftUI
 /// - `-showChronicle YES` presents the story so far as soon as an open game has one.
 /// - `-newGame YES` opens the "A New Adventure" sheet (the hero picker) from the home screen.
 /// - `-scrollTo <choices|combat|bottom>` scrolls an open scene down to its choices, its fight or
-///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end.
+///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end, and
+///   a number from 0 to 1 (`-scrollTo 0.3`) opens the page that far down.
 /// - `-playTab <story|sheet|map|chat>` opens a game being played on that tab; `-playPane
 ///   <abilities|saves|attacks|spells|items|features>` opens its Sheet tab on that pane; and
 ///   `-scrollTo choices` opens Story scrolled to what the table offers.
@@ -98,7 +99,11 @@ enum AppConfig {
     static var playPaneArgument: PlaySheetPane? { argument("playPane").flatMap { PlaySheetPane(rawValue: $0.lowercased()) } }
     static var pushOpenArgument: PushNews? { argument("pushOpen").flatMap(PushNews.init(argument:)) }
     /// Where a page's scroll view starts: the top, unless `-scrollTo bottom` asks for the end.
-    static var launchScrollAnchor: UnitPoint { scrollToArgument == "bottom" ? .bottom : .top }
+    static var launchScrollAnchor: UnitPoint {
+        // `-scrollTo 0.3` opens a scrolling page that far down it (0 is the top, 1 the bottom).
+        if let part = scrollToArgument.flatMap(Double.init), (0...1).contains(part) { return UnitPoint(x: 0.5, y: part) }
+        return scrollToArgument == "bottom" ? .bottom : .top
+    }
 
     static var dragonAutoPokeArgument: Int { UserDefaults.standard.integer(forKey: "dragonAutoPoke") }
     static var dragonPokeEveryArgument: Double? { seconds("dragonPokeEvery") }
