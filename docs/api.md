@@ -254,9 +254,10 @@ are explained by `GET /api/reference`.
   that). The player's placement replaces the forge's; gear, level and experience stay, and hit points, AC,
   saves, skills and spell DC are worked out again. 409 when the bonuses were already chosen, or the scores
   have since changed (a later Ability Score Improvement, for example). 400 for a boost the rules forbid.
-  404 for someone else's hero. A game already in progress keeps the copy of the sheet it started with and
-  writes that copy home at the end, so this is for between adventures. No new column: `abilityBoost` lives
-  in the character JSON.
+  404 for someone else's hero. A table plays the copy of the sheet the hero was seated with, so a
+  placement made in the lobby or mid-adventure waits: the table keeps the forge's scores, and when the
+  adventure ends the placement goes onto the sheet it sends home (a rested hero comes home at the new
+  maximum HP). No new column: `abilityBoost` lives in the character JSON.
 - `GET /api/characters` → `{ characters: Character[] }` (mine, newest first). Heroes saved before the
   rules engine come back upgraded on read (half-orc → orc, half-elf → elf, a sheet built as above);
   the upgrade is stored the next time the hero is saved.

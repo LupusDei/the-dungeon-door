@@ -8,7 +8,7 @@ import * as sheetApi from '../api/sheet.ts';
 import * as gamesApi from '../api/games.ts';
 import { call, makeCharacter } from './api.fixture.ts';
 import * as boostApi from '../api/character-ability-boost.ts';
-import { heroSheet, upgradeCharacter } from './characters.ts';
+import { heroSheet, homecoming, upgradeCharacter } from './characters.ts';
 import { srd } from './rules/srd.ts';
 import { getStore, setStore } from './store/index.ts';
 import { MemoryStore } from './store/memory.ts';
@@ -145,6 +145,23 @@ test('a hero the forge built can place the bonuses once, and not after the score
   assert.equal(leveled.body.sheet.level, 2);
   assert.equal((await place({ characterId: hero.id, boost: SOLDIER }, randomUUID())).status, 404);
   assert.equal((await place({ boost: SOLDIER })).status, 400);
+});
+
+test('a sheet coming home from a table keeps the bonuses the player placed while the hero was seated', async () => {
+  const me = randomUUID();
+  const hero = await makeCharacter(me, 'Slykat', { race: 'human', characterClass: 'fighter', backgroundId: 'soldier' });
+  const seated = { ...hero.sheet, xp: 50, hp: hero.sheet.maxHp, gp: hero.sheet.gp + 7 };
+  const placed = await call<Character>(boostApi.POST, '/api/characters/ability-boost', { player: me, body: { characterId: hero.id, boost: SOLDIER } });
+  const back = homecoming(hero.id, placed.body.sheet, seated);
+  assert.deepEqual(back.abilityBoost, SOLDIER);
+  assert.deepEqual(back.abilityScores, placed.body.sheet.abilityScores);
+  assert.deepEqual([back.xp, back.gp], [50, seated.gp], 'what the adventure brought home stays');
+  assert.equal(back.maxHp, seated.maxHp + 1, 'Constitution 15 (+2) becomes 16 (+3)');
+  assert.equal(back.hp, back.maxHp, 'a rested hero comes home at the new maximum');
+  assert.equal(homecoming(hero.id, hero.sheet, seated), seated, 'nothing placed at home: the table\'s sheet as it is');
+  assert.equal(homecoming(hero.id, placed.body.sheet, back), back, 'already carries that placement');
+  const drifted = { ...seated, abilityScores: { ...seated.abilityScores, str: seated.abilityScores.str + 1 } };
+  assert.equal(homecoming(hero.id, placed.body.sheet, drifted), drifted, 'scores the table changed are not undone');
 });
 
 test('the player may pick the background; an unknown one is refused', async () => {
