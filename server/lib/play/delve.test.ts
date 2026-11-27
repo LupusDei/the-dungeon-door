@@ -58,6 +58,8 @@ test('treasure: the coins are shared out in whole gold among the living; gems, j
   assert.deepEqual(rich.sheets.p2.equipment.slice(1).map((e) => [e.id, e.count]), [['gemstone', 2], ['jewellery', 1]]);
   assert.deepEqual(claimTreasure(party, { sp: 0, gp: 0, gems: 0, jewellery: 0, magicItem: 'Spoon of Destiny' }).lines, ['Treasure: 0 gp in coin (0 each), Spoon of Destiny.'], 'an item the SRD does not list is only named');
   assert.deepEqual(claimTreasure(party, { sp: 0, gp: 4, gems: 0, jewellery: 0, magicItem: null }).lines, ['Treasure: 4 gp in coin (2 each).']);
+  const gone = { ...party, sheets: { p3: party.sheets.p3 } };
+  assert.deepEqual(claimTreasure(gone, { sp: 0, gp: 5, gems: 1, jewellery: 0, magicItem: null }), { party: gone, lines: [] }, 'the dead take no treasure');
   const odd = claimTreasure(party, { sp: 0, gp: 5, gems: 0, jewellery: 0, magicItem: null });
   assert.deepEqual(odd.lines, ['Treasure: 5 gp in coin (2 each, and 1 more to Bryn).']);
   assert.deepEqual([odd.party.sheets.p1.gp, odd.party.sheets.p2.gp], [4, 2]);

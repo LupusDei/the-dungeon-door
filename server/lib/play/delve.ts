@@ -118,10 +118,11 @@ export const withAttitude = (dungeon: DungeonState, attitude: Attitude): Dungeon
 const SP_PER_GP = 10;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** Coins are shared out in whole gold among the living (the odd pieces to the first of them); gems, jewellery and the magic item go to whoever has room. */
+/** Coins are shared out in whole gold among the living (the odd pieces to the first of them); gems, jewellery and the magic item go to whoever has room. The dead take nothing. */
 export function claimTreasure(party: PartyState, treasure: Treasure): { party: PartyState; lines: string[] } {
   const coin = Math.floor(treasure.gp + treasure.sp / SP_PER_GP);
   const ids = Object.keys(party.sheets).filter((id) => !party.sheets[id].dead);
+  if (ids.length === 0) return { party, lines: [] }; // nobody is left to take it
   const share = Math.floor(coin / ids.length);
   const over = ids.slice(0, coin - share * ids.length);
   const gold = (id: string) => party.sheets[id].gp + share + (over.includes(id) ? 1 : 0);

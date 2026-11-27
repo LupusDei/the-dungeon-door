@@ -270,6 +270,33 @@ test('a hero killed outside a fight may be Revivified on the spot; the revive ho
   assert.match(temple.lines[0], /^Mira casts Raise Dead on Bryn/);
 });
 
+/** A lone hero on their last hit point, blind to traps, moving into r4 (by way of r0-r4) where treasure lies: the trap is in `where`. */
+function lastLegs(where: 'room' | 'corridor'): RulesState {
+  const d = startDungeon('fixed', 3, [1], 4);
+  const [r4, c] = [d.map.nodes.r4, d.map.nodes['r0-r4']];
+  const treasure = { gp: 60, sp: 0, gems: 2, jewellery: 0, magicItem: null };
+  const nodes = {
+    ...d.map.nodes,
+    'r0-r4': { ...c, contents: { ...c.contents!, kind: 'empty' as const, special: null, trap: where === 'corridor' ? c.contents!.trap : null } },
+    r4: { ...r4, contents: { ...r4.contents!, kind: 'empty' as const, encounter: null, trap: where === 'room' ? 'pits' : null, treasure } },
+  };
+  const hero = { ...fighter, hp: 1, maxHp: 1, skillBonuses: { ...fighter.skillBonuses, investigation: -5, perception: -5 } };
+  return { party: { version: 1, rng: 1, sheets: { p1: hero } }, combat: null, dungeon: { ...d, map: { ...d.map, nodes } } };
+}
+
+test('a trap that kills the last hero standing ends the move: nobody takes the treasure, nobody walks on', () => {
+  const alone = [{ playerId: 'p1', choiceId: 'a' as const, roll: 1 }];
+  const room = playTurn(lastLegs('room'), { kind: 'move', exit: 'r4' }, alone);
+  assert.equal(room.party.sheets.p1.dead, true, room.lines.join(' | '));
+  assert.equal(room.lines.some((l) => l.startsWith('Treasure')), false, 'the dead take nothing');
+  assert.equal(room.party.sheets.p1.gp, fighter.gp);
+  assert.equal(room.dungeon!.cleared.includes('r4'), false, 'its treasure still lies there');
+  const corridor = playTurn(lastLegs('corridor'), { kind: 'move', exit: 'r4' }, alone);
+  assert.equal(corridor.party.sheets.p1.dead, true, corridor.lines.join(' | '));
+  assert.equal(corridor.dungeon!.at, 'r0-r4', 'the dead go no further');
+  assert.equal(corridor.lines.some((l) => l.startsWith('The party enters') || l.startsWith('Treasure')), false, corridor.lines.join(' | '));
+});
+
 test('a corridor is passed through on the way to the room: its trap springs, ten more minutes pass, it is on the map', () => {
   const d = startDungeon('fixed', 3, [1, 1], 4);
   assert.equal(d.map.nodes['r0-r4'].name, 'Winding passage');

@@ -70,6 +70,9 @@ function fight(s: RulesState, monsterIds: readonly string[], before: string[] = 
   return done({ ...s, party: started.party, combat: started.combat }, [...before, ...started.lines], null, 'started');
 }
 
+/** Nobody is left alive: a trap on the way killed the last of them, so nobody takes treasure or walks on. */
+const wiped = (s: RulesState) => Object.values(s.party.sheets).every((h) => h.dead);
+
 /** The room the party is in is dealt with: its treasure is taken and it is cleared. */
 function clearHere(s: RulesState, lines: string[]): { state: RulesState; lines: string[] } {
   const dungeon = s.dungeon;
@@ -209,6 +212,7 @@ function arrive(s: RulesState, moved: Moved, ballots: readonly Ballot[], before:
   const found = arrival(moved.dungeon, moved.node);
   if (found.fight) return meet(here, found.fight, lines);
   const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
+  if (wiped(trapped)) return trapped;
   const cleared = clearHere(trapped, trapped.lines);
   return { ...trapped, ...cleared.state, lines: cleared.lines };
 }
@@ -226,6 +230,7 @@ function through(s: RulesState, moved: Moved, exit: string, ballots: readonly Ba
   const lines = [`The party goes by way of a ${moved.node.name.toLowerCase()}.`, ...lit.lines];
   const found = arrival(moved.dungeon, moved.node);
   const trapped = found.trap ? trap(here, found.trap, ballots, lines) : done(here, lines);
+  if (wiped(trapped)) return trapped;
   const timed = passTime(trapped.party, CORRIDOR_SECONDS, ambientLight(trapped));
   const after: RulesState = { ...trapped, party: timed.party, dungeon: clearRoom(trapped.dungeon!, moved.node.id) };
   const spoor = onTheWay(after, moved.node.contents?.special === 'spoor');

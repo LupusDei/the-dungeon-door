@@ -31,8 +31,9 @@ function attempt<T>(act: () => T): T | null {
   }
 }
 
-/** Each item goes to the living hero with the most room left (the first on a tie). */
+/** Each item goes to the living hero with the most room left (the first on a tie); with nobody alive, it stays where it lies. */
 export function stow(party: PartyState, ids: readonly string[]): Traded {
+  if (living(party).length === 0) return { party, lines: [] };
   const taken: Record<string, string[]> = {};
   const left: string[] = [];
   const after = ids.reduce((p, id) => {
@@ -54,7 +55,9 @@ function summary(ids: readonly string[]): string {
 function buyOne(p: PartyState, id: string): Traded {
   const { name, cost } = item(id);
   if (cost === 0) return { party: p, lines: [`${name} is not for sale.`] };
-  const richest = living(p).reduce((best, h) => (p.sheets[h].gp > p.sheets[best].gp ? h : best));
+  const alive = living(p);
+  if (alive.length === 0) return { party: p, lines: [`Nobody is left to buy ${name}.`] };
+  const richest = alive.reduce((best, h) => (p.sheets[h].gp > p.sheets[best].gp ? h : best));
   const sheet = attempt(() => buy(p.sheets[richest], id));
   if (!sheet) return { party: p, lines: [`Nobody can afford ${name} (${cost} GP).`] };
   return { party: withSheet(p, richest, sheet), lines: [`${sheet.name} buys ${name} for ${cost} GP.`] };

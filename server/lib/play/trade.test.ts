@@ -25,6 +25,12 @@ test('what nobody can carry is left behind', () => {
   assert.equal(after.sheets.p1.equipment.length + after.sheets.p2.equipment.length, 1);
 });
 
+test('with nobody left alive, nothing is stowed and nothing bought', () => {
+  const gone = party({ dead: true }, { dead: true });
+  assert.deepEqual(stow(gone, ['gemstone']), { party: gone, lines: [] });
+  assert.deepEqual(buyItems(gone, ['potion-of-healing']), { party: gone, lines: ['Nobody is left to buy Potion of Healing.'] });
+});
+
 test('a magic item named in a treasure hoard is found by name or id', () => {
   assert.equal(itemIdOf('Bag of Holding'), 'bag-of-holding');
   assert.equal(itemIdOf('bag-of-holding'), 'bag-of-holding');
