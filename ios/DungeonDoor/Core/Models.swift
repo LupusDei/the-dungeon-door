@@ -1725,7 +1725,7 @@ struct GameState: Codable, Hashable {
     let rules: RulesView?
     /// The choice window while the table is voting. Nil on a server from before it, and whenever
     /// the table is not choosing (lobby, preparing, resolving, ended).
-    let turn: TurnWindow? = nil
+    var turn: TurnWindow? = nil
     let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
