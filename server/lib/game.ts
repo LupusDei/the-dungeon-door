@@ -23,6 +23,7 @@ import { ensureGrid } from './rules/scene.ts';
 import { RuleViolation } from './rules/violation.ts';
 import { appVersionOf, isOutdated, partyOutdated } from './app-version.ts';
 import { badRequest, conflict, forbidden, gameCodeOf, HttpError, notFound, requirePlayer } from './http.ts';
+import { OUT_OF_CREDIT, outOfCredit } from './ai-errors.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
@@ -782,7 +783,9 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   } catch (error) {
     console.error(`DM failed to open ${code}:`, error);
     if (await store.updateGame(code, { status: 'preparing' }, { status: 'lobby' })) {
-      await system(code, `The dungeon master lost their notes and couldn't begin. The host can press start to try again.`);
+      await system(code, outOfCredit(error)
+        ? `The dungeon master could not begin. ${OUT_OF_CREDIT} Starting again will not work until then; the party can stay at the door.`
+        : `The dungeon master lost their notes and couldn't begin. The host can press start to try again.`);
     }
     return;
   }
@@ -958,7 +961,9 @@ async function catchUpPicture(code: string, from: number, to: number): Promise<v
 async function dmFumbled(code: string, sceneIndex: number, error: unknown): Promise<void> {
   console.error(`DM failed to resolve ${code}#${sceneIndex}:`, error);
   if (await getStore().updateGame(code, { status: 'resolving', sceneIndex }, { status: 'voting' })) {
-    await system(code, `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);
+    await system(code, outOfCredit(error)
+      ? `The dungeon master could not go on. ${OUT_OF_CREDIT} Your votes are kept; the host can advance once that is done.`
+      : `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);
   }
 }
 

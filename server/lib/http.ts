@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { OUT_OF_CREDIT, outOfCredit } from './ai-errors.ts';
 
 /** An error the API turns into `{ error }` with this status (see docs/api.md). `code` is added when set. */
 export class HttpError extends Error {
@@ -27,6 +28,9 @@ export async function handle(fn: () => Promise<Response | unknown>): Promise<Res
       return Response.json(body, { status: error.status });
     }
     console.error(error);
+    // An AI call made inside the request (a portrait, a reading aloud) and the account is out of
+    // credit: say so, since nothing the player does can mend it.
+    if (outOfCredit(error)) return Response.json({ error: OUT_OF_CREDIT }, { status: 503 });
     return Response.json({ error: 'internal error' }, { status: 500 });
   }
 }

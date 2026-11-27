@@ -18,6 +18,11 @@ Errors are `{ "error": "message" }` with 400 (bad input), 401 (missing/wrong key
 426 (this install is too old to play). A 426 also carries `"code": "update_required"`. An old build
 does not read `code`; it already shows `error` as the message of a failed action. The game poll
 stays 200 so that build does not turn the lobby into "Reconnecting…".
+503 with a message to show the player means the account that pays for the AI is out of credit: a
+portrait or a reading cannot be made until its owner tops it up, and asking again will not help.
+The dungeon master's own work happens after the request has answered, so a game that cannot open or
+go on for that reason says so in a `system` message instead (and goes back to the lobby, or reopens
+the votes).
 
 ## App versions
 
