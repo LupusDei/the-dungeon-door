@@ -8,7 +8,9 @@ name: Deploy server
 # It runs before the deploy, so new code never meets an old schema. A migration that drops or
 # rewrites data still needs the owner's word (AGENTS.md) and does not belong in schema.sql.
 #
-# Tests are not run here yet; they run locally before pushing (see AGENTS.md, "Gates").
+# Nothing is migrated or deployed unless the release gate passes first: typecheck, the unit tests
+# and the Gherkin features (tests.yml, called below). Run the same gates locally before pushing
+# (AGENTS.md, "Gates").
 on:
   push:
     branches: [main]
@@ -23,8 +25,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/tests.yml
+
   deploy:
     name: Migrate and deploy
+    needs: tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,6 +43,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check the Vercel token is set
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::The VERCEL_TOKEN repository secret is missing or empty, so nothing was migrated or deployed. Set it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
