@@ -33,6 +33,9 @@ import SwiftUI
 /// - `-playTab <story|sheet|map|chat>` opens a game being played on that tab; `-playPane
 ///   <abilities|saves|attacks|spells|items|features>` opens its Sheet tab on that pane; and
 ///   `-scrollTo choices` opens Story scrolled to what the table offers.
+/// - `-wheel <actions|powers>` opens that quick-action wheel on the Story tab as soon as the scene
+///   has actions; `-wheelTurn <n>` shows it turned n slots on; `-wheelAim <text>` shows the targets
+///   of the first action whose label contains that text.
 /// - `-dd.pushOn NO` starts with the player's notification switch off, so iOS is not asked for leave.
 /// - `-pushOpen <kind>:<CODE>` acts as if a notification of that kind ("turn", "combat", "chat",
 ///   "invite") about that game had been tapped.
@@ -119,6 +122,9 @@ enum AppConfig {
     static var newGameArgument: Bool { UserDefaults.standard.bool(forKey: "newGame") }
     static var showHallArgument: Bool { UserDefaults.standard.bool(forKey: "showHall") }
     static var scrollToArgument: String? { argument("scrollTo")?.lowercased() }
+    static var wheelArgument: WheelKind? { argument("wheel").flatMap { WheelKind(rawValue: $0.lowercased()) } }
+    static var wheelTurnArgument: Int? { argument("wheelTurn").flatMap(Int.init) }
+    static var wheelAimArgument: String? { argument("wheelAim") }
     static var playTabArgument: PlayTab? { argument("playTab").flatMap { PlayTab(rawValue: $0.lowercased()) } }
     static var playPaneArgument: PlaySheetPane? { argument("playPane").flatMap { PlaySheetPane(rawValue: $0.lowercased()) } }
     static var pushOpenArgument: PushNews? { argument("pushOpen").flatMap(PushNews.init(argument:)) }

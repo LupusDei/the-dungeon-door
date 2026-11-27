@@ -133,7 +133,7 @@ struct PlayShell: View {
         switch tab {
         case .story:
             PlayStoryPage(session: session, narrator: narrator, focusOffers: focusOffers,
-                          offersSeen: $offersSeen)
+                          offersSeen: $offersSeen, openMap: { withAnimation(.snappy) { tab = .map } })
         case .sheet:
             PlaySheetPage(session: session, pane: $pane, onStory: focusStory) { action, intent in
                 consider(action, intent: intent)

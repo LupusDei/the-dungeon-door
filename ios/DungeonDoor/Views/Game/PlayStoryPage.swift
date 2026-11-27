@@ -16,14 +16,23 @@ struct PlayStoryPage: View {
     var focusOffers: Int
     /// Offer-focuses the shell has already scrolled to. A later visit must not jump down again.
     @Binding var offersSeen: Int
+    /// A move that is made on the map: the shell shows it.
+    var openMap: () -> Void = {}
 
     @State private var freeform = ""
     @State private var spoken = ""
+    /// The quick-action wheel that is open, and where the button that opened it sits.
+    @State private var wheel: WheelKind?
+    @State private var wheelOrigin = CGPoint.zero
+    @State private var wheelLaunched = false
 
     private var state: GameState { session.state }
     private var scene: GameScene? { state.scene }
     private var inCombat: Bool { scene?.combat == true }
     private var canSend: Bool { PlayTurn.canSend(status: state.status, scene: scene, busy: session.busy) }
+    /// The table is choosing and this hero has a say: a wheel may be open. (Not `canSend`: a request
+    /// of the player's own in flight must not shut it.)
+    private var choosing: Bool { PlayTurn.canSend(status: state.status, scene: scene, busy: false) }
 
     /// Scene, combat round, and narration. Votes, chat, typing, and a picture finishing leave it
     /// the same, so the story scrolls home once per turn and not on every poll.
@@ -62,6 +71,7 @@ struct PlayStoryPage: View {
                     // turn was declared Choose had nowhere to scroll to.)
                     VStack(alignment: .leading, spacing: 16) {
                         declaredDie
+                        quickActions
                         freeformBox
                     }
                     .id("offers")
@@ -85,6 +95,13 @@ struct PlayStoryPage: View {
                     ResolvingOverlay(scene: scene, players: state.players, coversChrome: false)
                 }
             }
+            // The quick-action wheel lays over the page, in the space its buttons report their places in.
+            .overlay { wheelOverlay }
+            .coordinateSpace(.named(ActionWheel.space))
+            .animation(.easeOut(duration: 0.18), value: wheel)
+            // A wheel belongs to the turn it was opened in.
+            .onChange(of: storyTurn) { wheel = nil }
+            .onChange(of: choosing) { _, still in if !still { wheel = nil } }
             .task(id: storyTurn) {
                 // Runs when the page appears and whenever the turn changes. Appearance covers a
                 // turn that arrived while another tab was showing: this page is built then, already
@@ -274,6 +291,45 @@ struct PlayStoryPage: View {
             ThrowDie(die: die) {
                 Task { await session.throwDie() }
             }
+        }
+    }
+
+    /// The two wheels of quick actions, right above the box: the same turn, without the typing.
+    @ViewBuilder private var quickActions: some View {
+        if let scene, !scene.isFinale, scene.canAct, !scene.actions.isEmpty {
+            QuickActionBar(scene: scene, enabled: canSend) { kind, frame in
+                wheelOrigin = CGPoint(x: frame.midX, y: frame.midY)
+                wheel = kind
+            }
+            .onGeometryChange(for: CGPoint.self) { proxy in
+                let frame = proxy.frame(in: .named(ActionWheel.space))
+                return CGPoint(x: frame.midX, y: frame.midY)
+            } action: { middle in
+                // `-wheel <kind>`: open it without a tap, once the bar has a place on the page.
+                guard !wheelLaunched, let asked = AppConfig.wheelArgument, canSend else { return }
+                wheelLaunched = true
+                wheelOrigin = CGPoint(x: asked == .actions ? middle.x * 0.5 : middle.x * 1.5, y: middle.y)
+                wheel = asked
+            }
+        }
+    }
+
+    /// The wheel, over the page. Declaring from it sends the words in the box with the action.
+    @ViewBuilder private var wheelOverlay: some View {
+        if let kind = wheel, let scene, choosing {
+            ActionWheel(kind: kind, title: QuickActions.name(kind, in: scene), actions: QuickActions.list(kind, in: scene),
+                        origin: wheelOrigin) { action, targets in
+                let words = freeform
+                freeform = ""
+                wheel = nil
+                Task { await session.vote(actionId: action.id, targets: targets, intent: words) }
+            } openMap: { _ in
+                wheel = nil
+                openMap()
+            } close: {
+                wheel = nil
+            }
+            .transition(.opacity)
         }
     }
 
