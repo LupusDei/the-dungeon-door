@@ -122,8 +122,8 @@ final class AppModel {
         UserDefaults.standard.set(state.code, forKey: "dd.lastGame")
         session.start()
         invitations.removeAll { $0.code == state.code }
-        // In a party there is something to be called back for: this is when leave to notify is asked,
-        // on a server that sends pushes.
+        // Leave to notify is asked at launch (DungeonDoorApp). Asked again here for a player who
+        // opened the app before the server sent pushes; it is a no-op once iOS has an answer.
         if catalog?.push == true { Task { await PushCenter.shared.enable() } }
     }
 

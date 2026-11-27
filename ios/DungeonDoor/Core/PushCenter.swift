@@ -85,9 +85,20 @@ final class PushCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Asks iOS for leave the first time there is a reason to (the player has joined a party), and
-    /// registers the device whenever leave is already given.
+    /// Asks iOS for leave the first time the app opens on a server that sends pushes (an invitation
+    /// has to be able to reach a player who is in no party yet), and registers the device whenever
+    /// leave is already given. Safe to call again: a second call waits for the first one's answer.
     func enable() async {
+        if let asking { return await asking.value }
+        let task = Task { await ask() }
+        asking = task
+        await task.value
+        asking = nil
+    }
+
+    private var asking: Task<Void, Never>?
+
+    private func ask() async {
         guard wanted else { return }
         await refreshLeave()
         if leave == .notAsked {
