@@ -426,7 +426,26 @@ enum DemoData {
                       position: "near"),
             Combatant(id: pipId, name: "Pip Underbough", side: "party", hp: 15, maxHp: 15, status: "up", conditions: [],
                       position: "near"),
-        ], band: "moderate")
+        ], band: "moderate", hud: hud)
+    }
+
+    static var hud: CombatHud {
+        let sleep = "Ends with any damage or the caster losing concentration"
+        return CombatHud(
+            party: [
+                HudHero(id: miraId, name: "Mira Thal", hp: 9, maxHp: 12, status: "up",
+                        conditions: [HudCondition(id: "concentrating", label: "Concentrating", source: "Sleep", ends: nil)]),
+                HudHero(id: brynId, name: "Bryn Stonehand", hp: 5, maxHp: 20, status: "up",
+                        conditions: [HudCondition(id: "poisoned", label: "Poisoned", source: nil, ends: "10 minutes")]),
+                HudHero(id: pipId, name: "Pip Underbough", hp: 15, maxHp: 15, status: "up",
+                        conditions: [HudCondition(id: "dodging", label: "Dodging", source: nil, ends: "Until its next turn")]),
+            ],
+            foes: [
+                HudFoe(id: "foe-1", name: "Goblin Warrior", tier: "bloodied", label: "Bloodied", status: "up", conditions: []),
+                HudFoe(id: "foe-2", name: "Goblin Archer", tier: "hurt", label: "Hurt", status: "up",
+                       conditions: [HudCondition(id: "asleep", label: "Asleep", source: "Sleep", ends: sleep)]),
+                HudFoe(id: "foe-3", name: "Goblin Warrior", tier: "unhurt", label: "Unhurt", status: "up", conditions: []),
+            ])
     }
 
     static func dungeon(waiting: Bool) -> DungeonMap {

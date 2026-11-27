@@ -1531,6 +1531,12 @@ struct Combat: Codable, Hashable {
     let combatants: [Combatant]
     /// "low", "moderate", "high" or "deadly": the fight against this party. Nil from an older server.
     var band: String? = nil
+    /// The fight at a glance: heroes' hit points, foes' tiers, what holds each. Nil from an older server.
+    var hud: CombatHud? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case round, combatants, band, hud
+    }
 
     func combatant(_ id: String?) -> Combatant? { combatants.first { $0.id == id } }
 }
@@ -1541,6 +1547,126 @@ extension Combat {
         round = try c.whole(.round, or: 1)
         combatants = try c.value(.combatants, or: [])
         band = try c.decodeIfPresent(String.self, forKey: .band)
+        hud = try? c.decodeIfPresent(CombatHud.self, forKey: .hud)
+    }
+}
+
+/// One thing on a combatant in the HUD: an SRD condition id ("prone", "paralyzed"), or "asleep",
+/// "concentrating", "dodging".
+struct HudCondition: Codable, Hashable, Identifiable {
+    let id: String
+    let label: String
+    /// The spell behind it ("Sleep"); for "concentrating", the spell held. Nil for none.
+    var source: String? = nil
+    /// How it ends, when the server knows: "10 minutes", "Ends with any damage or the caster losing concentration".
+    var ends: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, source, ends
+    }
+}
+
+extension HudCondition {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let conditionId = try c.decode(String.self, forKey: .id)
+        id = conditionId
+        label = try c.value(.label, or: SRD.name(conditionId))
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        ends = try c.decodeIfPresent(String.self, forKey: .ends)
+    }
+}
+
+/// A hero in the HUD, with their exact hit points.
+struct HudHero: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    let hp: Int
+    let maxHp: Int
+    /// "up", "dying", "stable" or "dead".
+    let status: String
+    let conditions: [HudCondition]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, hp, maxHp, status, conditions
+    }
+
+    var isUp: Bool { status == "up" }
+}
+
+extension HudHero {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let heroId = try c.decode(String.self, forKey: .id)
+        let points = try c.whole(.hp)
+        id = heroId
+        name = try c.value(.name, or: heroId)
+        hp = points
+        maxHp = try c.whole(.maxHp, or: max(points, 1))
+        status = try c.value(.status, or: points > 0 ? "up" : "stable")
+        conditions = try c.value(.conditions, or: [])
+    }
+}
+
+/// A foe in the HUD: how hurt it looks, never its hit points (the server does not send them).
+struct HudFoe: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    /// "unhurt", "hurt", "bloodied", "near-death" or "down".
+    let tier: String
+    /// "Unhurt", "Hurt", "Bloodied", "Near death"; "Dead" once slain.
+    let label: String
+    let status: String
+    let conditions: [HudCondition]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, tier, label, status, conditions
+    }
+
+    var isDead: Bool { status == "dead" }
+    /// Pips out of `HudFoe.pips` for the tier: four unhurt, none down. A tier the app doesn't know shows two.
+    var pipsLit: Int {
+        switch tier {
+        case "unhurt": 4
+        case "hurt": 3
+        case "bloodied": 2
+        case "near-death": 1
+        case "down": 0
+        default: 2
+        }
+    }
+    static let pips = 4
+}
+
+extension HudFoe {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let foeId = try c.decode(String.self, forKey: .id)
+        let foeTier = try c.value(.tier, or: "hurt")
+        id = foeId
+        name = try c.value(.name, or: foeId)
+        tier = foeTier
+        status = try c.value(.status, or: "up")
+        label = try c.value(.label, or: SRD.name(foeTier))
+        conditions = try c.value(.conditions, or: [])
+    }
+}
+
+/// Both sides of a fight at a glance, each in initiative order.
+struct CombatHud: Codable, Hashable {
+    let party: [HudHero]
+    let foes: [HudFoe]
+
+    enum CodingKeys: String, CodingKey {
+        case party, foes
+    }
+}
+
+extension CombatHud {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        party = try c.value(.party, or: [])
+        foes = try c.value(.foes, or: [])
     }
 }
 

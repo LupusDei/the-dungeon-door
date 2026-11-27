@@ -77,6 +77,10 @@ struct PlayShell: View {
         VStack(spacing: 0) {
             PlayTopStrip(session: session)
             PlayActBar(session: session, choose: focusStory)
+            if inCombat, let hud = state.rules?.combat?.hud {
+                Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
+                CombatHUD(hud: hud, me: session.playerId)
+            }
             Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
             tabBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
