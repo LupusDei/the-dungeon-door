@@ -12,6 +12,7 @@ delete process.env.DD_FAKE_DELAY_MS;
 import * as actionApi from '../../api/game-action.ts';
 import * as joinApi from '../../api/game-join.ts';
 import * as startApi from '../../api/game-start.ts';
+import * as rollApi from '../../api/game-roll.ts';
 import * as voteApi from '../../api/game-vote.ts';
 import * as gameApi from '../../api/game.ts';
 import * as gamesApi from '../../api/games.ts';
@@ -58,15 +59,21 @@ test('kicking the brazier is a check in the dice log, and it does not pick the p
     actionApi.POST, gamePath(code, 'action'), { player: host, body: { sceneIndex: 0, text: 'I kick the brazier onto the goblins' } },
   );
   assert.equal(acted.status, 200);
-  assert.deepEqual([acted.body.action.spent, acted.body.action.ruling, acted.body.action.roll, acted.body.action.choiceId], [true, 'check', 15, null]);
-  assert.deepEqual(acted.body.scene!.freeforms, [{ playerId: host, text: 'I kick the brazier onto the goblins', roll: 15 }]);
+  assert.deepEqual([acted.body.action.spent, acted.body.action.ruling, acted.body.action.roll, acted.body.action.choiceId], [true, 'check', null, null]);
+  assert.equal(acted.body.scene!.myDie?.formula.startsWith('d20'), true);
+  assert.equal(JSON.stringify(acted.body.scene!.myDie).includes('15'), false, 'the face stays on the server');
+  assert.deepEqual(acted.body.scene!.freeforms, [{ playerId: host, text: 'I kick the brazier onto the goblins', roll: null, pending: true }]);
   assert.equal(acted.body.scene!.myFreeform?.text, 'I kick the brazier onto the goblins');
   assert.equal(acted.body.scene!.myAction, null);
   assert.ok(acted.body.scene!.actions.some((a) => a.id === 'choice:a'), 'the legal actions stay on the scene');
   assert.equal(acted.body.scene!.myVote, null);
   assert.equal(acted.body.scene!.votes.length, 0, 'a written check is not a vote for a choice');
 
-  await call(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 0, choiceId: 'c' } });
+  const waiting = await call<GameState>(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 0, choiceId: 'c' } });
+  assert.equal(waiting.body.status, 'voting', 'the scene waits for the throw');
+  const thrown = await call<GameState>(rollApi.POST, gamePath(code, 'roll'), { player: host, body: { sceneIndex: 0 } });
+  assert.equal(thrown.body.scene?.myDie, null);
+  assert.equal(thrown.body.scene?.myFreeform?.roll, 15, 'the throw reveals the roll from when they declared');
   await settle();
   const state = await view(code, host);
   assert.equal(state.scene!.index, 1);
@@ -92,6 +99,38 @@ test('an impossible action does not spend the turn, and a bad classification fal
   );
   assert.equal(again.body.action.ruling, 'known');
   assert.equal(again.body.action.choiceId, 'a', 'the words map onto today\'s first choice');
+});
+
+test('a skill from the sheet is a check, and words beside a plot choice stay with that vote', async () => {
+  d20(11, 4);
+  const { code, host, players } = await table(2);
+  const opened = await view(code, host);
+  const scene = opened.scene!;
+  assert.ok(scene.actions.some((a) => a.kind === 'attack'));
+  assert.equal(scene.actions.find((a) => a.id === 'skill:athletics')?.available, true);
+  assert.equal(scene.actions.find((a) => a.id === 'ability:str')?.available, true);
+
+  const climbed = await call<GameState>(voteApi.POST, gamePath(code, 'vote'), {
+    player: host, body: { sceneIndex: 0, actionId: 'skill:athletics', text: 'I scale the chapel wall' },
+  });
+  assert.equal(climbed.status, 200);
+  assert.equal(climbed.body.scene!.myAction?.id, 'skill:athletics');
+  assert.equal(climbed.body.scene!.myAction?.intent, 'I scale the chapel wall');
+  assert.equal(climbed.body.scene!.myVote, null);
+  assert.equal(climbed.body.scene!.votes.length, 0, 'a skill check does not vote for a plot choice');
+  assert.equal(climbed.body.scene!.myFreeform?.text, 'I scale the chapel wall');
+
+  assert.equal(climbed.body.scene!.myDie?.purpose, 'Athletics');
+  assert.equal(climbed.body.scene!.myFreeform?.roll, null);
+  await call(voteApi.POST, gamePath(code, 'vote'), {
+    player: players[1], body: { sceneIndex: 0, choiceId: 'a', text: 'We go quietly' },
+  });
+  await call(rollApi.POST, gamePath(code, 'roll'), { player: host, body: { sceneIndex: 0 } });
+  await settle();
+  const done = await view(code, host);
+  assert.equal(done.chronicle[0].choiceLabel, 'Charge straight in', 'the skill did not pick the choice');
+  assert.match(done.rules!.results.join('\n'), /I scale the chapel wall/);
+  assert.match(done.rules!.results.join('\n'), /Athletics/);
 });
 
 test('a classification the engine cannot read does not spend the turn', async () => {

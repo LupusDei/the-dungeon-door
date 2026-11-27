@@ -217,6 +217,9 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.ok(state.title);
   assert.equal(state.scene?.index, 0);
   assert.deepEqual(state.scene?.choices.map((c) => c.id), ['a', 'b', 'c']);
+  assert.ok(state.scene!.actions.some((a) => a.kind === 'attack'), 'weapons stay on the sheet list');
+  assert.ok(state.scene!.actions.some((a) => a.id === 'skill:athletics' && a.available));
+  assert.equal(state.scene?.myDie, null);
   assert.ok(state.scene?.actions.some((a) => a.id === 'choice:a' && a.kind === 'choice' && a.available));
   assert.ok(state.scene?.imageUrl, 'scene art painted');
   assert.equal(state.scene?.isFinale, false);
@@ -244,7 +247,7 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.equal(state.scene?.myVote, 'a');
   assert.deepEqual(state.scene?.myAction, { id: 'choice:a', targets: [] });
   const roll = state.scene!.votes[0].roll;
-  assert.ok(roll >= 1 && roll <= 20);
+  assert.ok(roll !== null && roll >= 1 && roll <= 20);
   state = (await call<GameState>(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 0, actionId: 'choice:b' } })).body;
   assert.equal(state.scene?.myVote, 'b');
   assert.deepEqual(state.scene?.myAction, { id: 'choice:b', targets: [] });
@@ -266,7 +269,7 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.equal(state.chronicle[0].index, 0);
   assert.ok(state.chronicle[0].outcome);
   assert.equal(started.body.scene, null);
-  assert.equal(state.chronicle[0].choiceLabel, 'Look for another way', 'most-voted choice (b)');
+  assert.equal(state.chronicle[0].choiceLabel, 'Find a quieter way', 'most-voted choice (b)');
 
   // Host advances with only some votes in (an AFK player). Non-hosts can't.
   await call(voteApi.POST, gamePath(code, 'vote'), { player: p2, body: { sceneIndex: 1, choiceId: 'c' } });
@@ -414,7 +417,7 @@ test('in a game from before the rules engine, ties are broken by the DM pick, bu
   await call(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 0, choiceId: 'b' } });
   await settle();
   let state = await view(code, host);
-  assert.equal(state.chronicle[0].choiceLabel, 'Look for another way', 'tie a/b → DM picked b');
+  assert.equal(state.chronicle[0].choiceLabel, 'Find a quieter way', 'tie a/b → DM picked b');
 
   await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: 1, choiceId: 'c' } });
   await call(voteApi.POST, gamePath(code, 'vote'), { player: players[1], body: { sceneIndex: 1, choiceId: 'c' } });

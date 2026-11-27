@@ -12,6 +12,7 @@ import { longRest } from '../rules/rests.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { currentTraps } from '../rules/traps.ts';
 import type { Choice, ChoiceView, Game, GamePlayer, StoredChoice, StoredScene } from '../types.ts';
+import { isPersonalCheck } from './actions.ts';
 import { dungeonLevel, partyLevel, startDungeon } from './delve.ts';
 import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook } from './hooks.ts';
@@ -92,7 +93,11 @@ export interface EngineStep {
 
 /** Written checks stored on the scene's votes. A corrupt one is dropped rather than thrown. */
 function freeformsOf(scene: StoredScene): FreeformBallot[] {
-  return scene.votes.flatMap((v) => (v.freeform?.ruling.kind === 'check' ? [{ playerId: v.playerId, roll: v.roll, text: v.freeform.text, ruling: v.freeform.ruling }] : []));
+  return scene.votes.flatMap((v) => {
+    const ruling = v.freeform?.ruling;
+    if (!ruling || ruling.kind !== 'check' || !isPersonalCheck(v)) return [];
+    return [{ playerId: v.playerId, roll: v.roll, text: v.freeform!.text, ruling }];
+  });
 }
 
 /** Resolves a scene through the engine: a combat round, or the chosen choice's hook (ties to the higher roll). */

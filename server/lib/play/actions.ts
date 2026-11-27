@@ -112,8 +112,31 @@ export function choiceFor(action: string): ChoiceId | null {
   }
   if (action.startsWith('attack:') || action === 'common:attack') return 'a';
   if (action.startsWith('spell:')) return 'b';
-  if (action.startsWith('common:') || action.startsWith('item:') || action.startsWith('feature:')) return 'c';
+  if (action.startsWith('common:') || action.startsWith('item:') || action.startsWith('feature:') || action.startsWith('skill:') || action.startsWith('ability:')) return 'c';
   return null;
+}
+
+/**
+ * A check the player took instead of a plot choice: a written action, or a skill picked from the sheet.
+ * Words added to a spell or an attack are not one of these (they have no ruling).
+ */
+export function isPersonalCheck(vote: { actionId?: string; freeform?: { ruling?: { kind?: string } } | null }): boolean {
+  const sheetCheck = !vote.actionId || vote.actionId.startsWith('skill:') || vote.actionId.startsWith('ability:');
+  return vote.freeform?.ruling?.kind === 'check' && sheetCheck;
+}
+
+/** A skill chosen from the sheet: a medium check, DC 15, and no extra effect. The words say what is attempted. */
+export function rulingForSkill(sheet: CharacterSheet, skillId: string): CheckRuling | null {
+  const ability = srd().skills.get(skillId);
+  if (!ability) return null;
+  if (!sheet.skills.includes(skillId) && !Object.hasOwn(sheet.skillBonuses, skillId)) return null;
+  return { kind: 'check', ability, skill: skillId, tier: 'medium', effect: { category: 'none' } };
+}
+
+/** An ability chosen from the sheet: a medium check, no skill. */
+export function rulingForAbility(ability: string): CheckRuling | null {
+  if (!(ABILITIES as readonly string[]).includes(ability)) return null;
+  return { kind: 'check', ability: ability as Ability, skill: null, tier: 'medium', effect: { category: 'none' } };
 }
 
 export type ImprovisedEffect =

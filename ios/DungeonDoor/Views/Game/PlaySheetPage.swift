@@ -5,9 +5,11 @@ struct PlaySheetPage: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
     @Binding var pane: PlaySheetPane
-    var onAction: (LegalAction) -> Void
+    var onStory: () -> Void = {}
+    var onAction: (LegalAction, String) -> Void
 
     @State private var detail: RuleDetail?
+    @State private var intent = ""
 
     private var character: Character? { session.me?.character }
     private var sheet: CharacterSheet? { character?.sheet }
@@ -21,22 +23,36 @@ struct PlaySheetPage: View {
             Rectangle().fill(Palette.gold.opacity(0.15)).frame(height: 1)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                intentField
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 Group {
                     if let sheet, let character {
                         switch pane {
                         case .abilities:
-                            AbilitiesTab(sheet: sheet, live: live, rules: book, open: { detail = $0 })
+                            AbilitiesTab(sheet: sheet, live: live, rules: book, open: { detail = $0 },
+                                         onSkill: { id in
+                                             guard let action = actions.first(where: { $0.id == "skill:\(id)" }) else { return }
+                                             take(action)
+                                         },
+                                         readySkills: Set(actions.filter { $0.kind == "skill" && $0.available }.map { String($0.id.dropFirst("skill:".count)) }),
+                                         chosenSkill: session.state.scene?.myAction?.id.hasPrefix("skill:") == true
+                                            ? String(session.state.scene!.myAction!.id.dropFirst("skill:".count)) : nil,
+                                         onAbility: { id in
+                                             guard let action = actions.first(where: { $0.id == "ability:\(id)" }) else { return }
+                                             take(action)
+                                         })
                         case .saves:
                             PlaySavesPane(sheet: sheet, live: live, combatant: session.state.rules?.combat?.combatant(session.playerId), rules: book)
                         case .attacks:
-                            PlayAttacksPane(attacks: character.attacks ?? [], actions: actions, onAction: onAction)
+                            PlayAttacksPane(attacks: character.attacks ?? [], actions: actions, onAction: take)
                         case .spells:
-                            PlaySpellsPane(sheet: sheet, live: live, actions: actions, rules: book, onAction: onAction)
+                            PlaySpellsPane(sheet: sheet, live: live, actions: actions, rules: book, onAction: take)
                         case .items:
-                            PlayItemsPane(sheet: sheet, live: live, attacks: character.attacks ?? [], actions: actions, onAction: onAction)
+                            PlayItemsPane(sheet: sheet, live: live, attacks: character.attacks ?? [], actions: actions, onAction: take)
                         case .features:
                             PlayFeaturesPane(sheet: sheet, live: live, actions: actions, rules: book,
-                                             open: { detail = $0 }, onAction: onAction)
+                                             open: { detail = $0 }, onAction: take)
                         }
                     } else {
                         Text("This hero has no sheet yet.")
@@ -80,6 +96,33 @@ struct PlaySheetPage: View {
             .padding(.vertical, 10)
         }
         .background(Palette.ink)
+    }
+
+    private var intentField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel("This turn")
+                Spacer()
+                Button("Back to the story") { onStory() }
+                    .font(.serif(.caption, weight: .semibold))
+                    .foregroundStyle(Palette.gold)
+            }
+            Text("Pick an attack, spell, item, or skill as your action. Add words if you want. The story choices stay on Story.")
+                .font(.serif(.caption))
+                .foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("How you do it, if you want…", text: $intent, axis: .vertical)
+                .font(.prose)
+                .lineLimit(1...3)
+                .padding(12)
+                .card()
+        }
+    }
+
+    private func take(_ action: LegalAction) {
+        let words = intent.trimmingCharacters(in: .whitespacesAndNewlines)
+        intent = ""
+        onAction(action, words)
     }
 }
 
@@ -215,7 +258,7 @@ private struct PlayAttacksPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Weapons and spells")
-            Text("A tap votes this attack, when the table is offering it.")
+            Text("A tap makes this your action this turn. Movement with squares is on the map.")
                 .font(.serif(.caption))
                 .foregroundStyle(Palette.muted)
             if attacks.isEmpty && actions.filter({ $0.kind == "attack" }).isEmpty {
@@ -226,7 +269,7 @@ private struct PlayAttacksPane: View {
             ForEach(Array(attacks.enumerated()), id: \.offset) { _, attack in
                 attackCard(attack)
             }
-            let commons = actions.filter { $0.kind == "common" }
+            let commons = actions.filter { $0.kind == "common" || ($0.kind == "move" && $0.squares.isEmpty) }
             if !commons.isEmpty {
                 SectionLabel("Actions")
                 ForEach(commons) { action in

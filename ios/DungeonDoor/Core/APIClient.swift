@@ -171,17 +171,18 @@ struct APIClient: Sendable {
     }
 
     /// Votes a letter, an action from `scene.actions`, or both. `move` is a band and/or a square.
-    /// Targets are omitted when the action needs none.
-    func vote(_ code: String, sceneIndex: Int, choiceId: String?, actionId: String?, targets: [String], move: VoteMove?) async throws -> GameState {
+    /// Targets are omitted when the action needs none. `text` is intent beside the action, or what a skill attempts.
+    func vote(_ code: String, sceneIndex: Int, choiceId: String?, actionId: String?, targets: [String], move: VoteMove?, text: String? = nil) async throws -> GameState {
         struct Body: Encodable {
             let sceneIndex: Int
             let choiceId: String?
             let actionId: String?
             let targets: [String]
             let move: VoteMove?
+            let text: String?
 
             enum CodingKeys: String, CodingKey {
-                case sceneIndex, choiceId, actionId, targets, move
+                case sceneIndex, choiceId, actionId, targets, move, text
             }
 
             func encode(to encoder: Encoder) throws {
@@ -191,10 +192,17 @@ struct APIClient: Sendable {
                 try c.encodeIfPresent(actionId, forKey: .actionId)
                 if !targets.isEmpty { try c.encode(targets, forKey: .targets) }
                 if let move, move.isSendable { try c.encode(move, forKey: .move) }
+                if let text, !text.isEmpty { try c.encode(text, forKey: .text) }
             }
         }
         return try await send("POST", "api/games/\(code)/vote",
-                              body: Body(sceneIndex: sceneIndex, choiceId: choiceId, actionId: actionId, targets: targets, move: move))
+                              body: Body(sceneIndex: sceneIndex, choiceId: choiceId, actionId: actionId, targets: targets, move: move, text: text))
+    }
+
+    /// Reveals the d20 the server rolled when the caller declared. The face is not chosen here.
+    func roll(_ code: String, sceneIndex: Int) async throws -> GameState {
+        struct Body: Encodable { let sceneIndex: Int }
+        return try await send("POST", "api/games/\(code)/roll", body: Body(sceneIndex: sceneIndex))
     }
 
     /// What the player does, in their own words. The dungeon master classifies it; the engine keeps the numbers.

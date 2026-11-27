@@ -54,6 +54,7 @@ struct PlayShell: View {
     /// Offer-focuses already scrolled. Kept here so opening Story again does not jump down.
     @State private var offersSeen: Int
     @State private var pending: LegalAction?
+    @State private var pendingIntent = ""
     @State private var mapTarget: String?
 
     init(session: GameSession, narrator: Narrator,
@@ -88,10 +89,16 @@ struct PlayShell: View {
         .onChange(of: tab) { _, new in session.setChatVisible(new == .chat) }
         .sheet(item: $pending) { action in
             TargetPicker(action: action) { targets in
+                let words = pendingIntent
                 pending = nil
-                Task { await session.vote(actionId: action.id, targets: targets) }
+                pendingIntent = ""
+                Task {
+                    await session.vote(actionId: action.id, targets: targets, intent: words)
+                    focusStory()
+                }
             } cancel: {
                 pending = nil
+                pendingIntent = ""
             }
             .presentationDetents([.medium])
             .presentationBackground(Palette.ink)
@@ -123,7 +130,9 @@ struct PlayShell: View {
             PlayStoryPage(session: session, narrator: narrator, focusOffers: focusOffers,
                           offersSeen: $offersSeen, onOffer: considerOffer)
         case .sheet:
-            PlaySheetPage(session: session, pane: $pane, onAction: consider)
+            PlaySheetPage(session: session, pane: $pane, onStory: focusStory) { action, intent in
+                consider(action, intent: intent)
+            }
         case .map:
             PlayMapPage(session: session, initialTarget: mapTarget)
         case .chat:
@@ -145,7 +154,8 @@ struct PlayShell: View {
     }
 
     /// Sends the action, asks who it names, or opens the map when the move is a square.
-    private func consider(_ action: LegalAction) {
+    /// After a vote, Story is showing again.
+    private func consider(_ action: LegalAction, intent: String = "") {
         if action.kind == "move", !action.squares.isEmpty {
             withAnimation(.snappy) { tab = .map }
             return
@@ -153,17 +163,22 @@ struct PlayShell: View {
         guard action.available, PlayTurn.canSend(status: state.status, scene: state.scene, busy: session.busy) else { return }
         if action.picks == "one" && action.targets.count > 1 {
             pending = action
+            pendingIntent = intent
             return
         }
         if action.picks == "many" && action.targets.count > 1 {
             pending = action
+            pendingIntent = intent
             return
         }
         var targets: [String] = []
         if action.targets.count == 1, action.picks == "one" || action.picks == "many" {
             targets = [action.targets[0].id]
         }
-        Task { await session.vote(actionId: action.id, targets: targets) }
+        Task {
+            await session.vote(actionId: action.id, targets: targets, intent: intent)
+            focusStory()
+        }
     }
 }
 

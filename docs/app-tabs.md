@@ -49,14 +49,13 @@ heroes have said in character.
 Under that, two different boxes:
 
 - **In character** is `POST /speak`. No roll. The line joins the scene's roleplay.
-- **The table offers** is `scene.actions` for this hero, including `kind: "move"`. A tap votes
-  that `actionId`. An action that needs one target among several asks who. An action the hero
-  cannot take stays in the list, grey, with the server's reason, after the ones they can take
-  (outside a fight that puts the scene's choices first, above the combat actions). A move that lists squares
-  opens the Map. When the server sent no `actions` (a game from before that list), the three
-  `choices` are the offers and a tap still votes the letter.
-- **In your own words** is `POST /action`. The dungeon master classifies it. A known deed
-  becomes the vote; a check shows here as the written line.
+- **What do you do?** is `POST /action`. There is no menu of narrator options. The player writes
+  the action, and may name a skill. A known deed becomes that action; a check asks for a throw.
+- **Your die**, when `scene.myDie` is set, is a d20 the player taps or flicks. The face is the one
+  the server rolled when they declared. The choice-window clock is the deadline: if they have not
+  thrown when it ends, the next poll reveals the face.
+- **The table** is each hero beside their portrait: the action once they declare it, then the roll
+  once it is thrown. A bar drains across `turn` for anyone still choosing.
 
 Votes already in, who the table is waiting on, and the host's "resolve now" sit under the
 offers. The dice of the last resolved scene are at the bottom. The finale offers the way back
@@ -66,7 +65,10 @@ to the tavern.
 
 A sideways row of chips: Abilities & Skills, Saves, Attacks, Spells, Items, Features.
 
-Abilities and skills are the sheet the hero page already uses. Saves adds the six saving
+Abilities and skills are the sheet the hero page already uses. Each skill has **This turn**, which
+votes that `skill:` action (a medium check) and jumps back to Story. A line above the panes,
+"How you do it", is sent as `text` with any sheet action, so a spell and a few words go together.
+**Back to the story** jumps to the offers without voting. Saves adds the six saving
 throws, the conditions the hero carries, and the death-save track. The track is six open marks:
 the server does not say how many have landed, and the caption says Standing, Down, Dying,
 Stable or Fallen.
@@ -96,7 +98,7 @@ During a fight the tab is a room of 5-foot squares.
   the gold squares, and a tap votes that action with `move: {x, y}`. A square listed by both a
   step and a Dash (`move:dash`) sends the step. A Dash square sends `dash: true`. A disengage
   sends `disengage: true`. Until the server lists squares, the gold wash is this hero's
-  `speedFeet` and a tap does not vote; the band moves stay in Story's offers.
+  `speedFeet` and a tap does not vote; a move with no squares is on the sheet, not in Story's offers.
 - Tapping a token draws a dashed line and a card: distance in feet (5 times the squares, and a
   diagonal counts as one), in reach or out of it, and Attack / Cast for the legal action that
   names that token. Those buttons vote the action with that target.
@@ -128,8 +130,11 @@ one value empty. The rest of the game still loads, including against today's ser
 
 | Field | Used for |
 | --- | --- |
-| `scene.actions[]` | Offers, the sheet's taps, the map's Attack / Cast / move. Already on the server. |
-| `scene.actions[].squares` | Gold squares. A `move` with none is voted from Story as that action id. |
+| `scene.offers[]` | The Story page: at most three plot choices, or a few tactical lines in a fight. |
+| `scene.actions[]` | The sheet's taps and the map's Attack / Cast / move. Not the Story list. |
+| `scene.actions[]` kind `skill` | A skill used as this turn's action. Id `skill:<id>`. |
+| `scene.actions[].squares` | Gold squares. A `move` with none is voted from the sheet. |
+| vote `text` | Words beside an action, or what a skill is attempting. |
 | `scene.actions[].rangeFeet` `{normal, long}` | Range on the attack card and the target card. |
 | `scene.actions[].reachFeet` | Melee reach, in feet. |
 | `scene.battlefield` `{width, height, squareFeet, walls, cover?}` | The room, in squares. `squareFeet` is 5. `walls` and `cover` are squares `{x, y}`. |

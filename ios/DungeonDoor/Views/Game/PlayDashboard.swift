@@ -526,7 +526,8 @@ private struct DashboardScenePanel: View {
         if let rule = scene.choices.first(where: { $0.id == vote.choiceId })?.rules, RuleTag.isRoll(rule) {
             return "Your roll for the \(rule.prefix(1).lowercased() + rule.dropFirst()), plus your hero's own bonus."
         }
-        switch vote.roll {
+        guard let roll = vote.roll else { return "The die has not been thrown." }
+        switch roll {
         case 20: return "A natural 20! Fortune bends toward you."
         case 1: return "A natural 1. Something will go wrong."
         case 15...19: return "A strong roll."

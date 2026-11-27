@@ -58,9 +58,11 @@ struct PlayStoryPage: View {
                     if !inCombat, let waiting = state.rules?.dungeon?.waiting {
                         WaitingFoesNotice(waiting: waiting)
                     }
-                    offers
+                    declaredDie
                     freeformBox
-                    votes
+                    if let scene {
+                        ChoiceWaitPanel(session: session, scene: scene)
+                    }
                     if scene?.isFinale == true { finale }
                     dice
                     ErrorLine(text: session.error)
@@ -242,26 +244,14 @@ struct PlayStoryPage: View {
         }
     }
 
-    private var offers: some View {
-        let rows = scene.map { TableOffer.list(in: $0) } ?? []
-        return VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(inCombat ? "Your action this round" : "The table offers")
-            Text(inCombat
-                 ? "A blow, a spell, a move, or another action. You can change it until the round resolves."
-                 : "What the party does together. You can also write your own, below.")
-                .font(.serif(.caption))
-                .foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            if rows.isEmpty {
-                Text("Nothing is on offer yet.")
-                    .font(.serif(.footnote).italic())
-                    .foregroundStyle(Palette.muted)
+    /// The d20 the server is holding. A tap or a flick throws it; the face is the server's.
+    @ViewBuilder private var declaredDie: some View {
+        if let die = scene?.myDie, canSend {
+            ThrowDie(die: die) {
+                Task { await session.throwDie() }
             }
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, offer in
-                offerButton(offer, index: index)
-            }
+            .id("offers")
         }
-        .id("offers")
     }
 
     private func offerButton(_ offer: TableOffer, index: Int) -> some View {
@@ -316,8 +306,8 @@ struct PlayStoryPage: View {
 
     private var freeformBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("In your own words")
-            Text("Say what you do. If it matches something on your sheet, it becomes that action.")
+            SectionLabel("What do you do?")
+            Text("Say it in your own words. Name a skill if you are using one. Or pick an attack, spell, item, skill, or ability on your sheet and add how you use it.")
                 .font(.serif(.caption))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -333,7 +323,7 @@ struct PlayStoryPage: View {
             }
             .buttonStyle(.gilded)
             .disabled(!canSend || freeform.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if let written = scene?.myFreeform, !written.text.isEmpty {
+            if scene?.myAction == nil, let written = scene?.myFreeform, !written.text.isEmpty {
                 Text("Written: \(written.text)")
                     .font(.serif(.footnote).italic())
                     .foregroundStyle(Palette.gold)
@@ -393,10 +383,16 @@ struct PlayStoryPage: View {
     }
 
     private func voteWords(_ vote: Vote, scene: GameScene) -> String {
-        if let label = vote.label, !label.isEmpty { return label }
-        if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
-        if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
-        return "Voted"
+        let base: String = {
+            if let label = vote.label, !label.isEmpty { return label }
+            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
+            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
+            return "Voted"
+        }()
+        if let intent = vote.intent, !intent.isEmpty, intent.compare(base, options: .caseInsensitive) != .orderedSame {
+            return "\(base) — \(intent)"
+        }
+        return base
     }
 
     @ViewBuilder private func waiting(_ scene: GameScene) -> some View {
@@ -463,5 +459,51 @@ struct PlayStoryPage: View {
             let title = inCombat ? (round.map { $0 > 1 ? "Round \($0 - 1)" : "How it began" } ?? "The dice") : "The dice"
             DiceLog(lines: lines, heroes: heroes, title: title)
         }
+    }
+}
+
+/// A d20 the player throws. The tumble is local; the number is the one the server rolled when they declared.
+struct ThrowDie: View {
+    let die: PlayerDie
+    var throwIt: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var tumbling = false
+    @State private var drag = CGSize.zero
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Your die")
+            Text("\(die.purpose). \(die.formula). Tap or flick it.")
+                .font(.serif(.caption))
+                .foregroundStyle(Palette.muted)
+            HStack {
+                Spacer()
+                TumblingD20(size: 88)
+                    .rotationEffect(.degrees(tumbling && !reduceMotion ? 360 : Double(drag.width)))
+                    .offset(drag)
+                    .gesture(flick)
+                    .onTapGesture { launch() }
+                    .accessibilityLabel("Throw \(die.formula) for \(die.purpose)")
+                    .accessibilityAddTraits(.isButton)
+                Spacer()
+            }
+        }
+        .id("die")
+    }
+
+    private var flick: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { drag = $0.translation }
+            .onEnded { value in
+                drag = .zero
+                let flick = hypot(value.predictedEndTranslation.width, value.predictedEndTranslation.height)
+                if flick > 48 { launch() }
+            }
+    }
+
+    private func launch() {
+        guard !tumbling else { return }
+        tumbling = true
+        throwIt()
     }
 }

@@ -101,6 +101,10 @@ ALTER TABLE votes ADD COLUMN IF NOT EXISTS targets jsonb;
 -- The choice_id of such a row is ignored. Added without rewriting existing votes.
 ALTER TABLE votes ADD COLUMN IF NOT EXISTS freeform jsonb;
 ALTER TABLE votes ADD COLUMN IF NOT EXISTS move jsonb;
+-- A d20 the player throws (play/dice.ts). `die` is the formula; `revealed` stays false until they
+-- throw or the choice window ends. Existing votes are already revealed. Needs `npm run migrate`.
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS die jsonb;
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS revealed boolean DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS messages (
   game_code      text NOT NULL REFERENCES games (code) ON DELETE CASCADE,

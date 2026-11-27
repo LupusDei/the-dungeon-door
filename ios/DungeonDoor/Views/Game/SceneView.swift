@@ -245,7 +245,7 @@ struct SceneView: View {
                         .scaleEffect(revealedRoll == nil ? 1 : 1.08)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Your d20").font(.display(16))
-                        Text(rollNote(vote.roll, rule: rule))
+                        Text(vote.roll.map { rollNote($0, rule: rule) } ?? "The die has not been thrown.")
                             .font(.footnote.italic())
                             .foregroundStyle(Palette.muted)
                             .fixedSize(horizontal: false, vertical: true)

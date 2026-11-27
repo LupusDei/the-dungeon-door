@@ -1,6 +1,16 @@
 import Foundation
 import Observation
 
+/// The server's clock at the moment a game view arrived. `date(at:)` is that clock now.
+struct ServerClock: Equatable {
+    let serverNow: Date
+    let receivedAt: Date
+
+    func date(at local: Date) -> Date {
+        serverNow.addingTimeInterval(local.timeIntervalSince(receivedAt))
+    }
+}
+
 /// The moment the caller's hero gains a level, for the scene to make something of.
 struct LevelUp: Identifiable, Equatable {
     let heroName: String
@@ -49,6 +59,8 @@ final class GameSession {
     var levelUp: LevelUp?
     /// Scenes seen as rounds of a fight, by index. The chronicle doesn't say which entries were.
     private(set) var combatScenes: Set<Int> = []
+    /// The server's clock, anchored when a view arrived, so a countdown follows that clock between polls.
+    private(set) var serverClock: ServerClock?
 
     private var pollTask: Task<Void, Never>?
 
@@ -162,14 +174,23 @@ final class GameSession {
     }
 
     /// Votes an id from `scene.actions`. `targets` are that action's target ids. `square` is a move's
-    /// destination. `dash` and `disengage` are the optional flags on that square.
-    func vote(actionId: String, targets: [String] = [], square: GridPoint? = nil, dash: Bool = false, disengage: Bool = false) async {
+    /// destination. `dash` and `disengage` are the optional flags on that square. `intent` is words
+    /// sent with the action (how a spell is cast, or what a skill is attempting).
+    func vote(actionId: String, targets: [String] = [], square: GridPoint? = nil, dash: Bool = false, disengage: Bool = false, intent: String = "") async {
         guard let scene = state.scene else { return }
         let move = square.map { VoteMove(dash: dash ? true : nil, disengage: disengage ? true : nil, x: $0.x, y: $0.y) }
+        let words = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         await run {
             self.absorb(try await self.api.vote(self.code, sceneIndex: scene.index, choiceId: nil,
-                                                actionId: actionId, targets: targets, move: move))
+                                                actionId: actionId, targets: targets, move: move,
+                                                text: words.isEmpty ? nil : String(words.prefix(280))))
         }
+    }
+
+    /// Throws the d20 the server is holding. The number was rolled when this hero declared.
+    func throwDie() async {
+        guard let scene = state.scene else { return }
+        await run { self.absorb(try await self.api.roll(self.code, sceneIndex: scene.index)) }
     }
 
     /// The player's own action, 1–280 characters. A known deed becomes a vote; a check is a written roll.
@@ -206,6 +227,9 @@ final class GameSession {
     private func absorb(_ fresh: GameState, countUnread: Bool = true) {
         noteLevel(before: state, after: fresh)
         noteCombat(fresh)
+        if let turn = fresh.turn, let serverNow = ServerTime.date(turn.now) {
+            serverClock = ServerClock(serverNow: serverNow, receivedAt: Date())
+        }
         state = fresh
         append(fresh.messages, countUnread: countUnread)
         merge(fresh.messageUpdates)

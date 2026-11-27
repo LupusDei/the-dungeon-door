@@ -10,15 +10,15 @@ import type { ActionRequest, DMChoice, DMContext, RulesContext, DungeonMaster, F
 const PLACES = ['a drowned chapel', 'a goblin market under the bridge', 'the clockwork library', 'a frozen lighthouse', 'the hollow hill', 'a ship of bones', 'the moonlit orchard', 'a collapsed dwarven forge'];
 
 /**
- * In a rules-engine game: go on (in a dungeon) or force the way, look around, talk (a parley with foes
- * waiting in the room). It never picks a fight itself (tests that want one register a DM that does), so a fake game keeps the length it was given.
+ * In a rules-engine game: press on (in a dungeon) or force the way, take a quieter path, talk (a parley with
+ * foes waiting in the room). It never picks a fight itself (tests that want one register a DM that does), so a fake game keeps the length it was given.
  */
 const STORY_HOOKS = [
   { kind: 'check' as const, ability: 'wis' as const, skill: 'perception', dc: 10 },
   { kind: 'check' as const, ability: 'cha' as const, skill: 'persuasion', dc: 15 },
 ];
 
-/** On the road: hike on, look around, and trade with a vendor or talk to the foes met. */
+/** On the road: press on, take a quieter path, and trade with a vendor or talk to the foes met. */
 function roadHooks(t: NonNullable<RulesContext['trek']>) {
   const third = t.waiting ? { kind: 'parley' as const } : t.wares.length ? { kind: 'buy' as const, items: [t.wares[0].id] } : STORY_HOOKS[1];
   return [{ kind: 'check' as const, ability: 'wis' as const, skill: 'survival', dc: 10 }, STORY_HOOKS[0], third];
@@ -43,7 +43,7 @@ function placeHooks(rules: RulesContext) {
 function choicesFor(place: string, ctx: DMContext): DMChoice[] {
   const choices: DMChoice[] = [
     { label: 'Charge straight in', detail: `Burst into ${place} before anything inside can prepare.` },
-    { label: 'Look for another way', detail: `Circle ${place} in search of a hidden entrance.` },
+    { label: 'Find a quieter way', detail: `Take the side of ${place} that is not watched.` },
     { label: 'Parley first', detail: `Call out and see who — or what — answers from ${place}.` },
   ];
   if (!ctx.rules) return choices;
@@ -79,7 +79,8 @@ export function classifyFreeform(request: ActionRequest): Record<string, string>
   if (/^impossible\b|fly to the moon/i.test(lower)) return { ...empty, kind: 'impossible', narration: 'That cannot be done.' };
   const byId = request.actions.find((id) => lower === id || lower.startsWith(`${id} `) || lower === `i ${id}`);
   if (byId) return { ...empty, kind: 'known', action: byId };
-  const byLabel = request.choices.find((c) => c.label.length > 0 && lower.includes(c.label.toLowerCase()));
+  const byLabel = [...request.choices].sort((a, b) => b.label.length - a.label.length)
+    .find((c) => c.label.length > 0 && lower.includes(c.label.toLowerCase()));
   if (byLabel && request.actions.includes(byLabel.id)) return { ...empty, kind: 'known', action: byLabel.id };
   if (/kick|brazier|shove|hurl|smash|throw/.test(lower)) {
     return { ...empty, kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'damage', severity: 'moderate', damageType: 'bludgeoning' };

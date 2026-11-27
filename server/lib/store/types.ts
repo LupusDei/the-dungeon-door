@@ -102,14 +102,17 @@ export interface Store {
   /**
    * Records or changes a vote — only while the game is voting on scene `index`. A changed vote keeps its
    * original roll. `named` is the legal action the vote names; null is a choice letter, and clears one.
-   * Returns the stored vote, or null when the game isn't voting on that scene.
+   * `note` is kept on the same row: a skill check (text and ruling) or intent beside the action (text only).
+   * Null clears a previous note. Returns the stored vote, or null when the game isn't voting on that scene.
    */
-  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named?: { actionId: string; targets: string[] } | null, move?: Move | null): Promise<Vote | null>;
+  castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named?: { actionId: string; targets: string[] } | null, move?: Move | null, note?: Vote['freeform'] | null, die?: Vote['die'] | null): Promise<Vote | null>;
   /**
    * Records a written check on this player's vote — only while the game is voting on scene `index`.
    * The first d20 is kept, as with a changed vote. Returns the stored vote, or null when voting has closed.
    */
-  setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>): Promise<Vote | null>;
+  setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>, die?: Vote['die'] | null): Promise<Vote | null>;
+  /** Shows the stored d20. False when there is no hidden die for that player. */
+  revealRoll(code: string, index: number, playerId: string): Promise<boolean>;
   /**
    * Appends an in-character line to the scene, only while the game is voting on it and the turn holds
    * fewer than 20. Returns the turn's lines, or null when the scene is not open.

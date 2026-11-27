@@ -648,8 +648,8 @@ extension Choice {
 struct Vote: Codable, Hashable {
     let playerId: String
     let choiceId: String
-    /// The d20 the server rolled with the vote. In a fight it is the hero's attack roll.
-    let roll: Int
+    /// The d20. Nil while the player has not thrown, and on a server that hid it.
+    var roll: Int?
     /// In a round of a fight: what that hero is doing, in their own choice's words ("Cast Fire
     /// Bolt", "Break Free", "Help Ilsa"). The same id means different things for different heroes.
     var label: String? = nil
@@ -659,9 +659,17 @@ struct Vote: Codable, Hashable {
     var targets: [String] = []
     /// A move taken with the vote: a range band, a square, or both.
     var move: VoteMove? = nil
+    /// Words the player added beside a named action. Nil on a plain vote and on an older server.
+    var intent: String? = nil
+    /// True while the face is still hidden.
+    var pending: Bool = false
+    /// "d20+5" while a throw is asked for.
+    var formula: String?
+    /// Natural plus modifier, once the die is shown.
+    var total: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case playerId, choiceId, roll, label, actionId, targets, move
+        case playerId, choiceId, roll, label, actionId, targets, move, intent, pending, formula, total
     }
 }
 
@@ -670,11 +678,15 @@ extension Vote {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         playerId = try c.decode(String.self, forKey: .playerId)
         choiceId = try c.value(.choiceId, or: "")
-        roll = try c.whole(.roll)
+        roll = try c.optionalWhole(.roll)
         label = try c.decodeIfPresent(String.self, forKey: .label)
         actionId = try c.decodeIfPresent(String.self, forKey: .actionId)
         targets = try c.value(.targets, or: [])
         move = try? c.decode(VoteMove.self, forKey: .move)
+        intent = try c.decodeIfPresent(String.self, forKey: .intent).flatMap { $0.isEmpty ? nil : $0 }
+        pending = (try? c.decode(Bool.self, forKey: .pending)) ?? false
+        formula = try c.decodeIfPresent(String.self, forKey: .formula)
+        total = try c.optionalWhole(.total)
     }
 }
 
@@ -968,41 +980,48 @@ struct Battlefield: Codable, Hashable {
 struct MyAction: Codable, Hashable {
     let id: String
     var targets: [String] = []
+    /// Words sent with the action. Nil when the vote was the action alone.
+    var intent: String? = nil
 
-    init(id: String, targets: [String] = []) {
+    init(id: String, targets: [String] = [], intent: String? = nil) {
         self.id = id
         self.targets = targets
+        self.intent = intent
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.value(.id, or: "")
         targets = try c.value(.targets, or: [])
+        intent = try c.decodeIfPresent(String.self, forKey: .intent).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private enum CodingKeys: String, CodingKey { case id, targets }
+    private enum CodingKeys: String, CodingKey { case id, targets, intent }
 }
 
 /// A turn the player wrote in their own words (`scene.myFreeform`, `scene.freeforms`).
 struct FreeformTurn: Codable, Hashable {
     var playerId: String? = nil
     let text: String
-    let roll: Int
+    var roll: Int?
+    var pending: Bool = false
 
-    init(playerId: String? = nil, text: String, roll: Int) {
+    init(playerId: String? = nil, text: String, roll: Int? = nil, pending: Bool = false) {
         self.playerId = playerId
         self.text = text
         self.roll = roll
+        self.pending = pending
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         playerId = try c.decodeIfPresent(String.self, forKey: .playerId)
         text = try c.value(.text, or: "")
-        roll = try c.whole(.roll)
+        roll = try c.optionalWhole(.roll)
+        pending = (try? c.decode(Bool.self, forKey: .pending)) ?? false
     }
 
-    private enum CodingKeys: String, CodingKey { case playerId, text, roll }
+    private enum CodingKeys: String, CodingKey { case playerId, text, roll, pending }
 }
 
 /// A line or a deed a player gave in character. No roll.
@@ -1021,8 +1040,11 @@ struct GameScene: Codable, Hashable {
     var voices: [String: String] = [:]
     /// The default narrator's reading; all a server from before the voice picker sends.
     var voiceUrl: String? = nil
-    /// Three, or none for the epilogue. In a fight they are written for the caller's own hero.
+    /// Two or three, or none for the epilogue. In a fight they are written for the caller's own hero.
     let choices: [Choice]
+    /// The Story list: a few plot choices, or a few tactical lines in a fight. Empty on a server
+    /// from before it, in which case Story shows `choices`.
+    var offers: [Choice] = []
     /// A round of a fight: each vote is that player's own hero's action.
     let combat: Bool
     /// False when the caller's hero is down or dead: nothing to choose, and the round doesn't wait.
@@ -1043,6 +1065,8 @@ struct GameScene: Codable, Hashable {
     var myFreeform: FreeformTurn? = nil
     /// The caller's vote as an action. Nil until they vote, and nil for a written check.
     var myAction: MyAction? = nil
+    /// The d20 still to throw. Nil once thrown, or when this action needs no throw.
+    var myDie: PlayerDie? = nil
 
     var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
@@ -1074,6 +1098,7 @@ extension GameScene {
         voices = try c.value(.voices, or: [:])
         voiceUrl = try c.decodeIfPresent(String.self, forKey: .voiceUrl)
         choices = try c.value(.choices, or: [])
+        offers = (try? c.decode([Choice].self, forKey: .offers)) ?? []
         combat = try c.value(.combat, or: false)
         canAct = try c.value(.canAct, or: true)
         isFinale = try c.value(.isFinale, or: false)
@@ -1087,6 +1112,27 @@ extension GameScene {
         freeforms = (try? c.decode([FreeformTurn].self, forKey: .freeforms)) ?? []
         myFreeform = try? c.decode(FreeformTurn.self, forKey: .myFreeform)
         myAction = try? c.decode(MyAction.self, forKey: .myAction)
+        myDie = try? c.decode(PlayerDie.self, forKey: .myDie)
+    }
+}
+
+/// The d20 the server is holding until the player throws it. The face is not in here.
+struct PlayerDie: Codable, Hashable {
+    let sides: Int
+    let modifier: Int
+    let formula: String
+    let purpose: String
+
+    private enum CodingKeys: String, CodingKey { case sides, modifier, formula, purpose }
+}
+
+extension PlayerDie {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sides = try c.whole(.sides, or: 20)
+        modifier = try c.whole(.modifier)
+        formula = try c.value(.formula, or: "d20")
+        purpose = try c.value(.purpose, or: "")
     }
 }
 
@@ -1723,6 +1769,9 @@ struct GameState: Codable, Hashable {
     var typing: [TypingNotice] = []
     /// The rules engine's numbers; nil for a game from before it, and on a server without one.
     let rules: RulesView?
+    /// The choice window while voting. A `var`, not a `let` with a default: a let that already
+    /// has a value cannot be assigned again in `init(from:)`.
+    var turn: TurnWindow? = nil
     let updatedAt: String
 
     func player(_ id: String?) -> GamePlayer? { players.first { $0.playerId == id } }
@@ -1746,7 +1795,48 @@ extension GameState {
         messageUpdates = try c.value(.messageUpdates, or: [])
         typing = try c.value(.typing, or: [])
         rules = try c.decodeIfPresent(RulesView.self, forKey: .rules)
+        turn = try? c.decode(TurnWindow.self, forKey: .turn)
         updatedAt = try c.value(.updatedAt, or: "")
+    }
+}
+
+/// How long the party has to choose, and the server's clock when the view was built.
+struct TurnWindow: Codable, Hashable {
+    /// When the window ends, ISO-8601. Display only.
+    let deadline: String
+    /// The window's length, in seconds.
+    let seconds: Int
+    /// The server's clock when this view was built, ISO-8601.
+    let now: String
+
+    private enum CodingKeys: String, CodingKey { case deadline, seconds, now }
+}
+
+extension TurnWindow {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deadline = try c.value(.deadline, or: "")
+        seconds = try c.whole(.seconds)
+        now = try c.value(.now, or: "")
+    }
+}
+
+/// ISO-8601 instants from the server. Fractional seconds are optional.
+enum ServerTime {
+    private static let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let plain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static func date(_ iso: String) -> Date? {
+        fractional.date(from: iso) ?? plain.date(from: iso)
     }
 }
 

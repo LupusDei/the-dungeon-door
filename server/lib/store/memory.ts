@@ -203,7 +203,7 @@ export class MemoryStore implements Store {
     return scene.roleplay.map((entry) => structuredClone(entry));
   }
 
-  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null, move?: Move | null) {
+  async castVote(code: string, index: number, playerId: string, choiceId: ChoiceId, roll: number, named: { actionId: string; targets: string[] } | null = null, move?: Move | null, note?: Vote['freeform'] | null, die?: Vote['die'] | null) {
     await tick();
     const game = this.games.get(code)?.game;
     if (!game || game.status !== 'voting' || game.sceneIndex !== index) return null;
@@ -211,33 +211,50 @@ export class MemoryStore implements Store {
     if (!scene) return null;
     const action = named ? { actionId: named.actionId, ...(named.targets.length ? { targets: [...named.targets] } : {}) } : {};
     const stepped = move ? { move } : {};
+    const aside = note?.text ? { freeform: structuredClone(note) } : {};
+    const hidden = die ? { die: structuredClone(die), revealed: false as const } : {};
     let vote = scene.votes.find((v) => v.playerId === playerId);
     if (vote) {
       delete vote.actionId;
       delete vote.targets;
       delete vote.freeform;
       delete vote.move;
-      Object.assign(vote, { choiceId, ...action, ...stepped });
-    } else scene.votes.push((vote = { playerId, choiceId, roll, ...action, ...stepped }));
+      delete vote.die;
+      delete vote.revealed;
+      Object.assign(vote, { choiceId, ...action, ...stepped, ...aside, ...hidden });
+    } else scene.votes.push((vote = { playerId, choiceId, roll, ...action, ...stepped, ...aside, ...hidden }));
     game.updatedAt = now();
     return { ...vote };
   }
 
-  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>) {
+  async setFreeform(code: string, index: number, playerId: string, roll: number, freeform: NonNullable<Vote['freeform']>, die?: Vote['die'] | null) {
     await tick();
     const game = this.games.get(code)?.game;
     if (!game || game.status !== 'voting' || game.sceneIndex !== index) return null;
     const scene = game.scenes.find((s) => s.index === index);
     if (!scene) return null;
+    const hidden = die ? { die: structuredClone(die), revealed: false as const } : {};
     let vote: Vote | undefined = scene.votes.find((v) => v.playerId === playerId);
     if (vote) {
       delete vote.actionId;
       delete vote.targets;
       delete vote.move;
+      delete vote.die;
+      delete vote.revealed;
       vote.freeform = structuredClone(freeform);
-    } else scene.votes.push((vote = { playerId, choiceId: 'a', roll, freeform: structuredClone(freeform) }));
+      Object.assign(vote, hidden);
+    } else scene.votes.push((vote = { playerId, choiceId: 'a', roll, freeform: structuredClone(freeform), ...hidden }));
     game.updatedAt = now();
     return structuredClone(vote);
+  }
+
+  async revealRoll(code: string, index: number, playerId: string): Promise<boolean> {
+    await tick();
+    const scene = this.games.get(code)?.game.scenes.find((s) => s.index === index);
+    const vote = scene?.votes.find((v) => v.playerId === playerId);
+    if (!vote?.die || vote.revealed !== false) return false;
+    vote.revealed = true;
+    return true;
   }
 
   async addMessage(code: string, message: NewMessage) {
