@@ -6,7 +6,7 @@
 import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import { type Hold, holdsOn } from '../rules/holds.ts';
-import type { CombatState } from '../rules/scene.ts';
+import { canAct, type CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { srd } from '../rules/srd.ts';
 import { counted } from '../rules/counted.ts';
@@ -39,7 +39,12 @@ export interface HudCondition {
 export interface HudHero { id: string; name: string; hp: number; maxHp: number; status: Combatant['status']; conditions: HudCondition[] }
 /** No hp or maxHp: a foe's hit points are hidden. */
 export interface HudFoe { id: string; name: string; tier: Tier; label: string; status: Combatant['status']; conditions: HudCondition[] }
-export interface CombatHud { party: HudHero[]; foes: HudFoe[] }
+/**
+ * Both sides in initiative order, and the turn order itself: everyone's id in one list, who acts now
+ * (`combat.turn`) and who comes up after them, passing over anyone who cannot act. Null once the
+ * fight is over.
+ */
+export interface CombatHud { party: HudHero[]; foes: HudFoe[]; order: string[]; now: string | null; next: string | null }
 
 const titled = (s: string) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
@@ -92,6 +97,7 @@ function conditionsOn(c: Combatant, sheet: CharacterSheet | undefined, combat: C
 export function combatHud(combat: CombatState, sheets: Readonly<Record<string, CharacterSheet>>): CombatHud {
   const ordered = combat.order.map((id) => combat.combatants[id]);
   return {
+    ...turns(combat),
     party: ordered.filter((c) => c.side === 'party').map((c) => ({
       id: c.id, name: c.name, hp: c.hp, maxHp: c.maxHp, status: c.status, conditions: conditionsOn(c, sheets[c.id], combat),
     })),
@@ -100,4 +106,13 @@ export function combatHud(combat: CombatState, sheets: Readonly<Record<string, C
       return { id: c.id, name: c.name, tier, label: c.status === 'dead' ? 'Dead' : TIER_LABELS[tier], status: c.status, conditions: conditionsOn(c, undefined, combat) };
     }),
   };
+}
+
+function turns(combat: CombatState): Pick<CombatHud, 'order' | 'now' | 'next'> {
+  const order = combat.order.filter((id) => combat.combatants[id]);
+  const now = combat.outcome === 'ongoing' ? combat.order[combat.turn] ?? null : null;
+  if (!now) return { order, now: null, next: null };
+  const after = [...combat.order.slice(combat.turn + 1), ...combat.order.slice(0, combat.turn + 1)];
+  const next = after.find((id) => combat.combatants[id] && canAct(combat.combatants[id])) ?? null;
+  return { order, now, next };
 }

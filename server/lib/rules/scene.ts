@@ -81,7 +81,8 @@ export function orderByInitiative(rolls: readonly { id: string; roll: number; bo
 }
 
 const CANNOT_ACT = ['incapacitated', 'paralyzed', 'petrified', 'stunned', 'unconscious'];
-const canAct = (c: Combatant) => c.status === 'up' && !c.conditions.some((x) => CANNOT_ACT.includes(x));
+/** Whether a combatant takes a turn when it comes up: standing, and nothing holding it. */
+export const canAct = (c: Combatant) => c.status === 'up' && !c.conditions.some((x) => CANNOT_ACT.includes(x));
 
 export const currentActor = (state: CombatState): string => state.order[state.turn];
 

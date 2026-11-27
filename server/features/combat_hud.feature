@@ -80,3 +80,37 @@ Feature: The combat HUD
     When the foe is down to half of its hit points
     Then no game state sent to a player holds a foe's hit points
     And every player's HUD shows the "Ogre" as "Bloodied"
+
+  # --- Turn order -------------------------------------------------------------
+  # The HUD lays everyone out in one row in initiative order, heroes and foes
+  # together, rings the one whose turn it is, and marks who is up after them.
+
+  Scenario: The HUD lists heroes and foes in one turn order
+    Given Bryn and Cleo fight a "Goblin Warrior" with 20 hit points
+    And the turn order is "Cleo, Goblin Warrior, Bryn"
+    Then the HUD's turn order is "Cleo, Goblin Warrior, Bryn"
+
+  Scenario: The HUD marks who acts now and who is next
+    Given Bryn and Cleo fight a "Goblin Warrior" with 20 hit points
+    And the turn order is "Cleo, Goblin Warrior, Bryn"
+    And it is the turn of "Goblin Warrior"
+    Then the HUD shows "Goblin Warrior" acting now and "Bryn" next
+
+  Scenario: After the last in the order, the first is next
+    Given Bryn and Cleo fight a "Goblin Warrior" with 20 hit points
+    And the turn order is "Cleo, Goblin Warrior, Bryn"
+    And it is the turn of "Bryn"
+    Then the HUD shows "Bryn" acting now and "Cleo" next
+
+  Scenario: Next passes over a sleeper, who will not act
+    Given Bryn and Cleo fight a "Goblin Warrior" with 20 hit points
+    And the turn order is "Cleo, Goblin Warrior, Bryn"
+    And it is the turn of "Cleo"
+    And the foe "Goblin Warrior" is held asleep by Cleo's Sleep
+    Then the HUD shows "Cleo" acting now and "Bryn" next
+
+  Scenario: Once the fight is won no one is acting
+    Given Bryn and Cleo fight a "Goblin Warrior" with 20 hit points
+    When the foe "Goblin Warrior" is slain
+    And the fight is won
+    Then the HUD shows no one acting

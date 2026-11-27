@@ -773,6 +773,12 @@ Each combatant's conditions come with the spell behind them and how they end: wh
 (`Combatant.conditions`, a hero's timed ones from its sheet), a spell's hold (below), a hero's
 concentration, and the Dodge.
 
+**The turn order.** The app draws the HUD as one row of rings in initiative order, heroes and foes
+together, so the HUD also carries `order` (every id), `now` (whose turn it is: `combat.turn`) and `next`
+(the first after them, wrapping round, who can act: standing and not incapacitated, paralyzed,
+petrified, stunned or unconscious, the same test the turn loop uses in `scene.ts`). A sleeper or a dying
+hero is passed over; once the fight is over both are null.
+
 **Spells that hold a foe** (`rules/holds.ts`). A hero's Sleep, Hold Person, Hideous Laughter,
 Blindness/Deafness or Hypnotic Pattern is a real action in a fight (`spell:<id>`, at the foes it can take
 hold of). Each target saves; on a failure the spell puts a `Hold` on the combatant: the conditions it

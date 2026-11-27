@@ -13,6 +13,7 @@ import { type CombatVotes, fightRound, startFight } from '../lib/play/fight.ts';
 import type { HudCondition } from '../lib/play/hud.ts';
 import type { PartyState } from '../lib/play/state.ts';
 import { rulesView } from '../lib/play/view.ts';
+import { hold } from '../lib/rules/holds.ts';
 import { monsters } from '../lib/rules/monsters.ts';
 import type { CombatState } from '../lib/rules/scene.ts';
 import type { CharacterSheet } from '../lib/rules/sheet.ts';
@@ -141,6 +142,39 @@ export class CombatHudSteps {
     this.table = { ...this.table, monster: monsterId(name) };
   }
 
+  turnOrder(order: string): void {
+    const ids = this.ids(order);
+    assert.deepEqual([...ids].sort(), [...this.fight().order].sort(), 'name everyone in the fight');
+    this.combat = { ...this.fight(), order: ids, turn: 0, initiative: Object.fromEntries(ids.map((id, i) => [id, 20 - i])) };
+  }
+
+  turnOf(name: string): void {
+    this.combat = { ...this.fight(), turn: this.fight().order.indexOf(this.combatantId(name)) };
+  }
+
+  foeHeldAsleep(name: string): void {
+    const foe = this.foe(name);
+    this.combat = { ...this.fight(), combatants: { ...this.fight().combatants, [foe.id]: hold(foe, 'sleep', this.heroId('Cleo'), 13, 'wis') } };
+  }
+
+  fightWon(): void {
+    this.combat = { ...this.fight(), outcome: 'victory' };
+  }
+
+  hudTurnOrder(order: string): void {
+    assert.deepEqual(this.view().hud.order, this.ids(order));
+  }
+
+  nowAndNext(now: string, next: string): void {
+    const hud = this.view().hud;
+    assert.deepEqual([hud.now, hud.next], [this.combatantId(now), this.combatantId(next)]);
+  }
+
+  noOneActing(): void {
+    const hud = this.view().hud;
+    assert.deepEqual([hud.now, hud.next], [null, null]);
+  }
+
   foeDownToShare(share: string): void {
     this.table = { ...this.table, share: { half: 0.5, 'a quarter': 0.25 }[share] ?? 1 };
   }
@@ -213,6 +247,16 @@ export class CombatHudSteps {
   private setFoe(name: string, change: Partial<CombatState['combatants'][string]>): void {
     const foe = this.foe(name);
     this.combat = { ...this.fight(), combatants: { ...this.fight().combatants, [foe.id]: { ...foe, ...change } } };
+  }
+
+  private ids(order: string): string[] {
+    return order.split(',').map((name) => this.combatantId(name.trim()));
+  }
+
+  private combatantId(name: string): string {
+    const c = Object.values(this.fight().combatants).find((x) => x.name === name);
+    assert.ok(c, `no one called ${name} in the fight`);
+    return c.id;
   }
 
   private heroId(name: string): string {

@@ -129,3 +129,24 @@ test('Sleep is offered as an action at the foes it can reach, and needs a target
   const sleep = actions.find((a) => a.id === 'spell:sleep')!;
   assert.deepEqual([sleep.reason, sleep.targets.map((t) => t.id), sleep.detail], [null, ['foe-1'], 'Wisdom save DC 13 or Incapacitated. Uses a level 1 slot (2 left).']);
 });
+
+test('the HUD’s turn order: everyone in initiative order, who acts now, and who is next past anyone who cannot act', () => {
+  const { combat } = startFight(party, ['goblin-warrior']);
+  const order = ['p2', 'foe-1', 'p1'];
+  const at = (turn: number, c: CombatState = combat) => combatHud({ ...c, order, turn }, party.sheets);
+  assert.deepEqual(at(0).order, order);
+  assert.deepEqual([at(1).now, at(1).next], ['foe-1', 'p1']);
+  assert.deepEqual([at(2).now, at(2).next], ['p1', 'p2']);
+  const asleep = { ...combat, combatants: { ...combat.combatants, 'foe-1': hold(combat.combatants['foe-1'], 'sleep', 'p2', 13, 'wis') } };
+  assert.deepEqual([at(0, asleep).now, at(0, asleep).next], ['p2', 'p1']);
+  const fallen = { ...combat, combatants: { ...combat.combatants, p1: { ...combat.combatants.p1, hp: 0, status: 'dying' as const } } };
+  assert.deepEqual([at(1, fallen).now, at(1, fallen).next], ['foe-1', 'p2'], 'a dying hero makes death saves, not a turn');
+  assert.deepEqual([at(0, { ...combat, outcome: 'victory' }).now, at(0, { ...combat, outcome: 'victory' }).next], [null, null]);
+});
+
+test('a lone combatant who can act is next after itself', () => {
+  const { combat } = startFight({ ...party, sheets: { p1: fighter } }, ['goblin-warrior']);
+  const dead = { ...combat, order: ['p1', 'foe-1'], turn: 0, combatants: { ...combat.combatants, 'foe-1': { ...combat.combatants['foe-1'], hp: 0, status: 'dead' as const } } };
+  const hud = combatHud(dead, { p1: fighter });
+  assert.deepEqual([hud.now, hud.next], ['p1', 'p1']);
+});
