@@ -14,7 +14,7 @@ import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { checkVote, legalActions } from './play/legal.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { getDungeonMaster } from './dm/registry.ts';
-import { chatLines, oneEmoji, parseMentions, quoteOf, replyIdOf, TYPING_MS, voiceOf } from './chat.ts';
+import { canSee, chatLines, interpretChat, oneEmoji, parseMentions, quoteOf, replyIdOf, TYPING_MS, voiceOf } from './chat.ts';
 import { hasStolenHeroSpeech, keptWords, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
 import { pushChat, pushForget, pushSceneReady, pushSeen } from './push/notify.ts';
 import type { DMChoice, DMContext, NextScene, OpeningScene, PartyMember, PastScene, Resolution, ResolvedTurn, SceneText, VoteRecord } from './dm/types.ts';
@@ -22,12 +22,14 @@ import { parseMove, validateMove } from './rules/bands.ts';
 import { paceOf } from './rules/inventory.ts';
 import { ensureGrid } from './rules/scene.ts';
 import { RuleViolation } from './rules/violation.ts';
-import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
+import { appVersionOf, isOutdated, partyOutdated } from './app-version.ts';
+import { badRequest, conflict, forbidden, gameCodeOf, HttpError, notFound, requirePlayer } from './http.ts';
+import { OUT_OF_CREDIT, outOfCredit } from './ai-errors.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
 import type { GamePatch, NewMessage } from './store/types.ts';
-import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type LegalAction, type Message, type RoleplayLine, type SceneView, type StoredChoice, type StoredScene, type TypingNotice } from './types.ts';
+import { CHOICE_IDS, type Character, type ChoiceId, type Game, type GamePlayer, type GameState, type LegalAction, type Mention, type Message, type RoleplayLine, type SceneView, type StoredChoice, type StoredScene, type TypingNotice } from './types.ts';
 
 export const MAX_PLAYERS = 6;
 export const DEFAULT_SCENE_COUNT = 4;
@@ -133,6 +135,18 @@ function rulesOf(game: Game): RulesView | null {
 const wasRound = (scene: StoredScene): boolean =>
   scene.choices.length === COMBAT_CHOICES.length && scene.choices.every((c, i) => c.label === COMBAT_CHOICES[i].label && !c.hook);
 
+function playerView(game: Game, p: GamePlayer) {
+  const appVersion = p.appVersion ?? null;
+  return {
+    playerId: p.playerId,
+    character: heroInGame(game, p),
+    isHost: p.playerId === game.hostId,
+    joinedAt: p.joinedAt,
+    appVersion,
+    outdated: isOutdated(appVersion),
+  };
+}
+
 /** The player's character as it stands in this game: its live sheet once the rules engine holds one. */
 function heroInGame(game: Game, { playerId, character }: GamePlayer): Character {
   const live = game.party && Object.hasOwn(game.party.sheets, playerId) ? game.party.sheets[playerId] : character.sheet;
@@ -148,7 +162,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     dungeonMaster: game.dungeonMaster,
     title: game.title,
     sceneCount: game.sceneCount,
-    players: game.players.map((p) => ({ playerId: p.playerId, character: heroInGame(game, p), isHost: p.playerId === game.hostId, joinedAt: p.joinedAt })),
+    players: game.players.map((p) => playerView(game, p)),
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
       .filter((s) => s.outcome !== null)
@@ -215,7 +229,23 @@ export async function viewGame(code: string, playerId: string, since?: number): 
   ]);
   member(game, playerId);
   pushSeen(game, playerId); // they are looking: nothing about this game need be pushed to them
-  return toState(game, playerId, messages, messageUpdates, typing.filter((notice) => notice.playerId !== playerId));
+  // A whisper is omitted here, on the poll and on every other view. The store still holds it.
+  const visible = (list: Message[]) => list.filter((message) => canSee(message, playerId));
+  return toState(game, playerId, visible(messages), visible(messageUpdates), typing.filter((notice) => notice.playerId !== playerId));
+}
+
+/** Writes the version on this request onto the player's seat, when they are already in the game. */
+export async function notePlayerAppVersion(code: string, playerId: string, appVersion: string | null): Promise<void> {
+  await getStore().noteAppVersion(code, playerId, appVersion);
+}
+
+/** The caller, and the version their app sent, recorded against the game in the URL. */
+export async function rememberPlayer(request: Request): Promise<{ playerId: string; code: string; appVersion: string | null }> {
+  const playerId = requirePlayer(request);
+  const code = gameCodeOf(request);
+  const appVersion = appVersionOf(request);
+  await notePlayerAppVersion(code, playerId, appVersion);
+  return { playerId, code, appVersion };
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -229,13 +259,13 @@ async function livingCharacter(playerId: string, characterId: unknown): Promise<
 }
 
 /** POST /api/games */
-export async function createGame(playerId: string, characterId: unknown, dungeonMaster: unknown): Promise<GameState> {
+export async function createGame(playerId: string, characterId: unknown, dungeonMaster: unknown, appVersion: string | null = null): Promise<GameState> {
   if (dungeonMaster !== undefined && dungeonMaster !== null && !isValid('dungeonMaster', dungeonMaster)) {
     throw badRequest('unknown dungeonMaster');
   }
   const character = await livingCharacter(playerId, characterId);
   const store = getStore();
-  const host: GamePlayer = { playerId, character: storable(character), joinedAt: new Date().toISOString() };
+  const host: GamePlayer = { playerId, character: storable(character), joinedAt: new Date().toISOString(), appVersion };
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = newCode();
     const created = await store.createGame({
@@ -254,20 +284,24 @@ export async function createGame(playerId: string, characterId: unknown, dungeon
 }
 
 /** POST /api/games/{code}/join */
-export async function joinGame(code: string, playerId: string, characterId: unknown): Promise<GameState> {
+export async function joinGame(code: string, playerId: string, characterId: unknown, appVersion: string | null = null): Promise<GameState> {
   const character = await livingCharacter(playerId, characterId);
   const game = await loadGame(code);
   const existing = game.players.find((p) => p.playerId === playerId);
   if (game.status !== 'lobby') {
     // Re-joining a game you're already in (e.g. after an app restart) just returns it.
-    if (existing) return viewGame(code, playerId);
+    if (existing) {
+      await notePlayerAppVersion(code, playerId, appVersion);
+      return viewGame(code, playerId);
+    }
     throw conflict('this adventure has already begun');
   }
   if (!existing && game.players.length >= MAX_PLAYERS) throw conflict(`the party is full (${MAX_PLAYERS} players)`);
   if (existing?.character.id === character.id && existing.character.updatedAt === character.updatedAt) {
+    await notePlayerAppVersion(code, playerId, appVersion);
     return viewGame(code, playerId);
   }
-  const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString() }, MAX_PLAYERS);
+  const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString(), appVersion }, MAX_PLAYERS);
   if (!joined) throw conflict('could not join: the game started or the party is full');
   await getStore().removeInvite(code, playerId);
   if (!existing) await system(code, `${character.name} joined the party.`);
@@ -294,8 +328,23 @@ export async function leaveGame(code: string, playerId: string, origin: string):
   if (game.status === 'voting' && remaining.length) await resolveIfAllVoted(code, game.sceneIndex, origin);
 }
 
+/** The players who heard a whisper, other than the one now answering it, so the answer stays private. */
+function whisperAudience(quoted: Message, party: { playerId: string; name: string }[], senderId: string): Mention[] {
+  const out: Mention[] = [];
+  const seen = new Set<string>();
+  const add = (id: string | null, name: string, target: Mention['target']) => {
+    if (!id || id === senderId || seen.has(id)) return;
+    seen.add(id);
+    const known = party.find((person) => person.playerId === id);
+    out.push({ playerId: id, name: known?.name || name, target });
+  };
+  for (const target of quoted.whisperTo ?? []) add(target.playerId, target.name, target.target);
+  add(quoted.playerId, quoted.characterName ?? '', 'hero');
+  return out;
+}
+
 /** POST /api/games/{code}/messages */
-export async function postMessage(code: string, playerId: string, text: unknown, options: { voice?: unknown; replyTo?: unknown } = {}): Promise<Message> {
+export async function postMessage(code: string, playerId: string, text: unknown, options: { voice?: unknown; replyTo?: unknown; emote?: unknown; whisperTo?: unknown } = {}): Promise<Message> {
   const trimmed = typeof text === 'string' ? text.trim() : '';
   if (!trimmed || trimmed.length > 500) throw badRequest('text must be 1–500 characters');
   let voice;
@@ -312,12 +361,36 @@ export async function postMessage(code: string, playerId: string, text: unknown,
   }
   const game = await loadGame(code);
   const player = member(game, playerId);
+  const party = game.players.map((p) => ({ playerId: p.playerId, name: p.character.name }));
+  let interpreted;
+  try {
+    interpreted = interpretChat(trimmed, party, { emote: options.emote, whisperTo: options.whisperTo });
+  } catch (error) {
+    if (error instanceof Error) throw badRequest(error.message);
+    throw error;
+  }
+  const body = interpreted.text;
+  if (!body || body.length > 500) throw badRequest('text must be 1–500 characters');
+  let whisperTo: Mention[] | null = null;
+  if (interpreted.whisperTo) {
+    whisperTo = interpreted.whisperTo.filter((target) => target.playerId !== playerId);
+    if (whisperTo.length === 0) throw badRequest('whisper to someone else at the table');
+  }
+
   const quoted = replyTo === null ? null : await getStore().getMessage(code, replyTo);
-  if (replyTo !== null && !quoted) throw badRequest('replyTo must be a message in this game');
-  const mentions = parseMentions(trimmed, game.players.map((p) => ({ playerId: p.playerId, name: p.character.name })));
+  if (replyTo !== null && (!quoted || !canSee(quoted, playerId))) throw badRequest('replyTo must be a message in this game');
+  if (quoted?.whisperTo?.length) {
+    const allowed = new Set<string>([quoted.playerId, ...quoted.whisperTo.map((target) => target.playerId)].filter((id): id is string => !!id));
+    if (!whisperTo) whisperTo = whisperAudience(quoted, party, playerId);
+    else if (whisperTo.some((target) => !allowed.has(target.playerId))) throw badRequest('a reply to a whisper stays with those who heard it');
+    if (!whisperTo.length) throw badRequest('whisper to someone else at the table');
+  }
+
+  const mentions = parseMentions(body, party);
   const message = await getStore().addMessage(code, {
-    kind: 'chat', playerId, characterName: player.character.name, text: trimmed,
+    kind: 'chat', playerId, characterName: player.character.name, text: body,
     voice, replyTo, reply: quoted ? quoteOf(quoted) : null, mentions,
+    emote: interpreted.emote, whisperTo,
   });
   pushChat(game, message);
   return message;
@@ -330,6 +403,9 @@ export async function react(code: string, playerId: string, messageId: unknown, 
   if (typeof messageId !== 'number' || !Number.isInteger(messageId) || messageId < 1) throw badRequest('messageId must be a message id');
   const mark = oneEmoji(emoji);
   if (!mark) throw badRequest('emoji must be a single emoji');
+  const existing = await getStore().getMessage(code, messageId);
+  // The same answer as a missing line, so a guessed id does not reveal a whisper.
+  if (!existing || !canSee(existing, playerId)) throw notFound('no such message');
   const message = await getStore().toggleReaction(code, messageId, playerId, mark);
   if (!message) throw notFound('no such message');
   return message;
@@ -393,6 +469,8 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
   const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for
   const scenes = count + TREK_SCENES; // every game opens with the road from the tavern
+  const blocking = game.players.filter((p) => isOutdated(p.appVersion ?? null));
+  if (blocking.length > 0) throw partyOutdated(blocking.map((p) => p.character.name));
   if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
     throw conflict('the game is already starting');
   }
@@ -751,7 +829,9 @@ async function writeOpening(code: string, origin: string): Promise<void> {
   } catch (error) {
     console.error(`DM failed to open ${code}:`, error);
     if (await store.updateGame(code, { status: 'preparing' }, { status: 'lobby' })) {
-      await system(code, `The dungeon master lost their notes and couldn't begin. The host can press start to try again.`);
+      await system(code, outOfCredit(error)
+        ? `The dungeon master could not begin. ${OUT_OF_CREDIT} Starting again will not work until then; the party can stay at the door.`
+        : `The dungeon master lost their notes and couldn't begin. The host can press start to try again.`);
     }
     return;
   }
@@ -927,7 +1007,9 @@ async function catchUpPicture(code: string, from: number, to: number): Promise<v
 async function dmFumbled(code: string, sceneIndex: number, error: unknown): Promise<void> {
   console.error(`DM failed to resolve ${code}#${sceneIndex}:`, error);
   if (await getStore().updateGame(code, { status: 'resolving', sceneIndex }, { status: 'voting' })) {
-    await system(code, `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);
+    await system(code, outOfCredit(error)
+      ? `The dungeon master could not go on. ${OUT_OF_CREDIT} Your votes are kept; the host can advance once that is done.`
+      : `The dungeon master fumbled their dice. Votes are still open; the host can advance to try again.`);
   }
 }
 

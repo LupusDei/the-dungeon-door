@@ -1,3 +1,4 @@
+import { appVersionOf } from '../lib/app-version.ts';
 import { createGame } from '../lib/game.ts';
 import { handle, readBody, requirePlayer } from '../lib/http.ts';
 
@@ -6,6 +7,6 @@ export async function POST(request: Request): Promise<Response> {
   return handle(async () => {
     const player = requirePlayer(request);
     const body = await readBody(request);
-    return createGame(player, body.characterId, body.dungeonMaster);
+    return createGame(player, body.characterId, body.dungeonMaster, appVersionOf(request));
   });
 }

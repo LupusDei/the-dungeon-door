@@ -29,14 +29,25 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * Lines the narrator must answer and must not rewrite: a scene's roleplay (from POST /speak and a
  * written action) plus in-character chat. Out-of-character chat (`voice: "out"`) is table talk and
  * is left out. A chat line with no voice yet counts as in character, the same as the stored default.
+ * A whisper is never included, whatever its voice. An in-character emote is included as a deed
+ * (`*draws her sword*`). An out-of-character emote is not a deed.
  */
 export function keptWords(
   roleplay: { characterName: string; text: string }[],
-  chat: { characterName: string | null; kind?: string; text: string; voice?: 'in' | 'out' | null }[],
+  chat: {
+    characterName: string | null;
+    kind?: string;
+    text: string;
+    voice?: 'in' | 'out' | null;
+    emote?: boolean;
+    whisperTo?: { playerId: string }[] | null;
+  }[],
 ): { characterName: string; text: string }[] {
   const fromChat = chat.flatMap((line) => {
     if ((line.kind ?? 'chat') !== 'chat' || line.voice === 'out' || !line.characterName) return [];
-    return [{ characterName: line.characterName, text: line.text }];
+    if (line.whisperTo && line.whisperTo.length > 0) return [];
+    const text = line.emote ? `*${line.text}*` : line.text;
+    return [{ characterName: line.characterName, text }];
   });
   const seen = new Set<string>();
   const lines: { characterName: string; text: string }[] = [];

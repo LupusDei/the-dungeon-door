@@ -270,6 +270,16 @@ test('quick choices put the best scores in the class’s primary abilities, then
   }
 });
 
+test('after the primary abilities and Constitution, the rest go where the SRD 5.2 Standard Array by Class puts its higher scores', () => {
+  const order = (classId: string, seed: number) => (quickChoices(seededRng(seed), { name: 'Test', classId }).abilities as { order: string[] }).order;
+  for (let seed = 0; seed < 8; seed++) {
+    assert.deepEqual(order('wizard', seed), ['int', 'con', 'wis', 'dex', 'cha', 'str'], 'Wizard 8/12/13/15/14/10: Wisdom, then Dexterity');
+    assert.deepEqual(order('fighter', seed), ['str', 'con', 'dex', 'cha', 'wis', 'int'], 'Fighter 15/14/13/8/10/12');
+    assert.deepEqual(order('cleric', seed), ['wis', 'con', 'str', 'cha', 'int', 'dex'], 'Cleric 14/8/13/10/15/12');
+  }
+  assert.equal(buildCharacter(quickChoices(seededRng(3), { name: 'Quill', classId: 'wizard', backgroundId: 'sage' }), rng()).abilityScores.dex, 12, 'no more Dexterity 8 wizards');
+});
+
 test('a hero who can cast a healing spell at level 1 has one prepared: Cure Wounds, else Healing Word', () => {
   for (const classId of ['cleric', 'bard', 'druid', 'paladin', 'ranger']) {
     for (let seed = 0; seed < 12; seed++) {

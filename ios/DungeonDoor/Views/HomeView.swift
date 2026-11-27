@@ -76,6 +76,11 @@ struct HomeView: View {
         .fullScreenCover(isPresented: Binding(get: { model.activeGame != nil }, set: { if !$0 { model.closeGame() } })) {
             if let session = model.activeGame { GameView(session: session) }
         }
+        .overlay {
+            if UpdateGate.shared.required && model.activeGame == nil {
+                UpdateRequiredView().ignoresSafeArea()
+            }
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 1.1).delay(0.35)) { revealed = true }
         }
@@ -150,6 +155,7 @@ struct HomeView: View {
             Text("Gather your party.\nThe master of this dungeon is watching.")
                 .font(.system(size: 16, design: .serif).italic())
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Palette.parchment.opacity(0.9))
                 .shadow(color: .black, radius: 6)
         }
@@ -270,7 +276,7 @@ struct HomeView: View {
             SectionLabel("Your heroes")
                 .shadow(color: .black, radius: 6)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     // Once any hero has a sheet, every tile keeps a line for it, so the row stays level.
                     let showVitals = model.characters.contains { $0.sheet != nil }
                     ForEach(model.characters) { hero in
@@ -280,6 +286,9 @@ struct HomeView: View {
                     Button { forging = true } label: { ForgeTile() }
                         .buttonStyle(.plain)
                 }
+                // As tall as the tallest tile and no taller: the tiles fill the row's height, and
+                // without this the row would take all the height the screen offers.
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 2)
             }
             .scrollClipDisabled()
@@ -344,45 +353,86 @@ private struct InvitationCard: View {
     }
 }
 
+/// A roster tile's measures. Its column of text is 104 points wide at the default text size and
+/// wider as the text grows (to 170), so a species and class or a line of vitals wraps onto whole
+/// words instead of being cut short.
+private enum Tile {
+    static let base: CGFloat = 104
+    /// The portrait at the accessibility sizes, where it sits beside the words instead of above them:
+    /// this screen does not scroll, and a tall tile would push the title off it.
+    static let smallPortrait: CGFloat = 72
+
+    static func textWidth(_ percent: CGFloat) -> CGFloat { min(max(base * percent / 100, base), 170) }
+
+    static func layout(big: Bool) -> AnyLayout {
+        big ? AnyLayout(HStackLayout(alignment: .top, spacing: 10)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+    }
+}
+
+private struct TileChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(9)
+            .glassCard()
+            // A tile is a glance, not a page: its text stops growing at the second accessibility size.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+    }
+}
+
 private struct HeroTile: View {
     @Environment(AppModel.self) private var model
+    @ScaledMetric(relativeTo: .caption2) private var percent: CGFloat = 100
+    @Environment(\.dynamicTypeSize) private var typeSize
     let hero: Character
     var showVitals = false
 
+    private var big: Bool { typeSize.isAccessibilitySize }
+
     var body: some View {
         let fallen = hero.isFallen
-        return VStack(alignment: .leading, spacing: 6) {
-            PortraitView(url: hero.portraitURL, symbol: classSymbol, size: 104)
+        let width = Tile.textWidth(percent)
+        let arrangement = Tile.layout(big: big)
+        return arrangement {
+            PortraitView(url: hero.portraitURL, symbol: classSymbol, size: big ? Tile.smallPortrait : width)
                 .saturation(fallen ? 0 : 1)
                 .opacity(fallen ? 0.55 : 1)
                 .overlay(alignment: .bottomLeading) {
-                    if fallen {
+                    if fallen && !big {
                         TagLabel("Fallen", tint: Palette.ember)
                             .background(Palette.ink.opacity(0.85), in: Capsule(style: .circular))
                             .padding(6)
                     }
                 }
-            Text(hero.name)
-                .font(.display(15))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .foregroundStyle(fallen ? Palette.muted : Palette.parchment)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(Palette.muted)
-                .lineLimit(1)
-            if showVitals {
-                Text(fallen ? "Died at level \(hero.sheet?.level ?? 1)" : hero.shortVitalsLine ?? " ")
-                    .font(.caption2.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(fallen ? Palette.ember : Palette.verdigris)
-                    .lineLimit(1)
+            // Below the accessibility sizes a name and the vitals keep to one line, shrunk a little if
+            // need be (the tile has widened with the text). At those sizes they wrap in full.
+            VStack(alignment: .leading, spacing: big ? 3 : 6) {
+                Text(hero.name)
+                    .font(.serif(.subheadline, weight: .semibold))
+                    .lineLimit(big ? nil : 1)
                     .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(fallen ? Palette.muted : Palette.parchment)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if showVitals {
+                    Text(fallen ? "Died at level \(hero.sheet?.level ?? 1)" : hero.shortVitalsLine ?? " ")
+                        .font(.caption2.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(fallen ? Palette.ember : Palette.verdigris)
+                        .lineLimit(big ? nil : 1)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(width: width, alignment: .leading)
         }
-        .frame(width: 104)
-        .padding(9)
-        .glassCard()
+        .modifier(TileChrome())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(fallen ? "\(hero.name), \(subtitle), fallen" : "\(hero.name), \(subtitle), \(hero.vitalsLine ?? "")")
     }
@@ -398,23 +448,37 @@ private struct HeroTile: View {
 }
 
 private struct ForgeTile: View {
+    @ScaledMetric(relativeTo: .caption2) private var percent: CGFloat = 100
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let big = typeSize.isAccessibilitySize
+        let width = Tile.textWidth(percent)
+        let side = big ? Tile.smallPortrait : width
+        let arrangement = Tile.layout(big: big)
+        return arrangement {
             ZStack {
                 RoundedRectangle(cornerRadius: 17)
                     .strokeBorder(Palette.gold.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
                 Image(systemName: "wand.and.stars")
-                    .font(.system(size: 32))
+                    .font(.system(size: big ? 24 : 32))
                     .foregroundStyle(Palette.gold)
                     .symbolEffect(.pulse, options: .repeating)
             }
-            .frame(width: 104, height: 104)
-            Text("Forge a hero").font(.display(15)).lineLimit(1)
-            Text("Describe, we paint").font(.caption2).foregroundStyle(Palette.muted).lineLimit(1)
+            .frame(width: side, height: side)
+            VStack(alignment: .leading, spacing: big ? 3 : 6) {
+                Text("Forge a hero")
+                    .font(.serif(.subheadline, weight: .semibold))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Describe, we paint")
+                    .font(.caption2).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(width: width, alignment: .leading)
         }
-        .frame(width: 104)
-        .padding(9)
-        .glassCard()
+        .modifier(TileChrome())
     }
 }
 

@@ -44,6 +44,18 @@ test('at levels 1 and 2 the 5.2 budget is halved (rounded down); from level 3 it
   assert.equal(temperedBudget([3, 3], 'moderate'), encounterBudget([3, 3], 'moderate'));
 });
 
+test('a lone hero at levels 1 and 2, with nobody to stabilize them, meets no more than a moderate fight: a high room is stocked to the moderate budget', () => {
+  for (let seed = 0; seed < 60; seed++) {
+    const lone = buildEncounter(seededRng(seed), [1], 'high');
+    assert.deepEqual([lone.difficulty, lone.budget], ['high', temperedBudget([1], 'moderate')], `seed ${seed}`);
+    assert.ok(lone.monsters.every((id) => monster(id).xp <= 37), `seed ${seed}: ${lone.monsters.join()}`);
+  }
+  assert.equal(buildEncounter(seededRng(1), [2], 'high').budget, temperedBudget([2], 'moderate'));
+  assert.equal(buildEncounter(seededRng(1), [3], 'high').budget, temperedBudget([3], 'high'), 'from level 3, the table’s high');
+  assert.equal(buildEncounter(seededRng(1), [1, 1], 'high').budget, temperedBudget([1, 1], 'high'), 'two heroes keep their high');
+  assert.equal(buildEncounter(seededRng(1), [1], 'low').budget, temperedBudget([1], 'low'));
+});
+
 test('the foes are capped by the party’s size: half of it at levels 1 and 2, all of it at 3 and 4, twice it from 5, never above eight', () => {
   assert.deepEqual([foeCap(1, 1), foeCap(4, 1), foeCap(5, 2), foeCap(4, 3), foeCap(4, 4), foeCap(3, 5), foeCap(6, 9)], [1, 2, 3, 4, 4, 6, 8]);
 });

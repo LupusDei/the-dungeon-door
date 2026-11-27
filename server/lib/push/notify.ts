@@ -10,6 +10,7 @@
  * Nothing here may break a game: every entry point runs in the background and swallows its errors.
  */
 import { runInBackground } from '../background.ts';
+import { canSee } from '../chat.ts';
 import { canAct } from '../play/your-turn.ts';
 import { getStore } from '../store/index.ts';
 import type { Game, Message, StoredScene } from '../types.ts';
@@ -132,13 +133,18 @@ export function pushSceneReady(code: string): void {
   });
 }
 
-/** A player spoke: the rest of the party hears, unless they are looking. */
+/** A player spoke: the rest of the party hears, unless they are looking. A whisper reaches only who it names. */
 export function pushChat(game: Game, message: Message): void {
   if (message.kind !== 'chat' || !message.playerId) return;
+  const hearers = game.players.filter((p) => p.playerId !== message.playerId && canSee(message, p.playerId));
+  const name = message.characterName ?? 'Someone';
+  const body = message.whisperTo?.length
+    ? clip(`${name} whispers: ${message.text}`, 170)
+    : message.emote
+      ? clip(`*${name} ${message.text}*`, 170)
+      : clip(`${name}: ${message.text}`, 170);
   inBackground(`chat ${game.code}`, async () => {
-    const body = clip(`${message.characterName ?? 'Someone'}: ${message.text}`, 170);
-    await Promise.all(game.players.filter((p) => p.playerId !== message.playerId)
-      .map((p) => notify(p.playerId, { kind: 'chat', code: game.code, title: titleOf(game), body, grace: true })));
+    await Promise.all(hearers.map((p) => notify(p.playerId, { kind: 'chat', code: game.code, title: titleOf(game), body, grace: true })));
   });
 }
 

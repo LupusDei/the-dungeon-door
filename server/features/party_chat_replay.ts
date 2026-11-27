@@ -10,9 +10,11 @@ import * as joinApi from '../api/game-join.ts';
 import * as gamesApi from '../api/games.ts';
 import { call } from '../lib/api.fixture.ts';
 import { makeCharacter } from '../lib/api.fixture.ts';
+import { chatLines } from '../lib/chat.ts';
+import { keptWords } from '../lib/dm/playerVoice.ts';
 import { postMessage, react, setTyping, viewGame } from '../lib/game.ts';
 import { MemoryStore } from '../lib/store/memory.ts';
-import { setStore } from '../lib/store/index.ts';
+import { getStore, setStore } from '../lib/store/index.ts';
 import type { GameState, Message } from '../lib/types.ts';
 
 interface Say {
@@ -21,6 +23,9 @@ interface Say {
   text: string;
   voice: 'in' | 'out';
   reply: boolean;
+  emote?: boolean;
+  /** Hero names, joined with "and", who a whisper is for. */
+  whisper?: string;
 }
 type Op =
   | { op: 'party'; names: string[] }
@@ -32,6 +37,9 @@ interface View {
   messages: Message[];
   typing: GameState['typing'];
   players: { playerId: string; name: string }[];
+  byHero: Record<string, Message[]>;
+  narratorKept: string;
+  narratorTalk: string;
   anchorId: number | null;
   lastId: number | null;
 }
@@ -74,7 +82,14 @@ async function replay(ops: Op[]): Promise<View> {
     const playerId = ids[op.hero];
     if (!playerId) throw new Error(`no hero ${op.hero} at the table`);
     if (op.op === 'say') {
-      const message = await postMessage(code, playerId, op.text, { voice: op.voice, replyTo: op.reply ? anchorId : undefined });
+      const whisperTo = op.whisper?.split(/\s+and\s+/).map((name) => {
+        const id = ids[name.trim()];
+        if (!id) throw new Error(`no hero ${name} at the table`);
+        return { playerId: id, target: 'hero' as const };
+      });
+      const message = await postMessage(code, playerId, op.text, {
+        voice: op.voice, replyTo: op.reply ? anchorId : undefined, emote: op.emote, whisperTo,
+      });
       if (!op.reply) anchorId = message.id;
       lastId = message.id;
     } else if (op.op === 'react') {
@@ -89,10 +104,17 @@ async function replay(ops: Op[]): Promise<View> {
   const viewer = names.find((name) => name !== typer) ?? names[0];
   if (!viewer) throw new Error('the table is empty');
   const state = await viewGame(code, ids[viewer]!);
+  const byHero: Record<string, Message[]> = {};
+  for (const name of names) byHero[name] = (await viewGame(code, ids[name]!)).messages;
+  const all = await getStore().listMessages(code);
+  const lines = chatLines(all);
   return {
     messages: state.messages,
     typing: state.typing,
     players: state.players.map((p) => ({ playerId: p.playerId, name: p.character.name })),
+    byHero,
+    narratorKept: keptWords([], all).map((line) => `${line.characterName}: ${line.text}`).join('\n'),
+    narratorTalk: lines.filter((line) => line.kind !== 'chat' || line.voice === 'out').map((line) => `${line.characterName ?? 'DM'}: ${line.text}`).join('\n'),
     anchorId,
     lastId,
   };

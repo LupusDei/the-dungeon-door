@@ -1,5 +1,5 @@
-import { requestNarration } from '../lib/game.ts';
-import { gameCodeOf, handle, originOf, readBody, requirePlayer } from '../lib/http.ts';
+import { rememberPlayer, requestNarration } from '../lib/game.ts';
+import { handle, originOf, readBody } from '../lib/http.ts';
 
 /**
  * POST /api/games/{code}/narration { sceneIndex, voice? } → { sceneIndex, voice, status: "ready" | "making", voiceUrl }.
@@ -9,8 +9,8 @@ import { gameCodeOf, handle, originOf, readBody, requirePlayer } from '../lib/ht
  */
 export async function POST(request: Request): Promise<Response> {
   return handle(async () => {
-    const player = requirePlayer(request);
+    const { playerId, code } = await rememberPlayer(request);
     const body = await readBody(request);
-    return requestNarration(gameCodeOf(request), player, body.sceneIndex, body.voice, originOf(request));
+    return requestNarration(code, playerId, body.sceneIndex, body.voice, originOf(request));
   });
 }

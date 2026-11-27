@@ -11,9 +11,47 @@ There is no sign-in in the MVP. The app makes a random player id (UUID) on first
 | --- | --- |
 | `x-dd-player` | The caller's player id (UUID). Required on every endpoint except `GET /api/catalog`. |
 | `x-dd-key` | Shared app key (`DD_APP_KEY` on the server). Required when the server has one set. |
+| `x-dd-app-version` | The caller's app version, sent on every request. `marketing+build` (for example `0.2+47`), where `build` is `CFBundleVersion`. A bare build (`47`) or `0.2 (47)` is also accepted. |
 
 Errors are `{ "error": "message" }` with 400 (bad input), 401 (missing/wrong key or player),
-403 (not allowed, e.g. not the host), 404 (no such game/character), 409 (wrong game state).
+403 (not allowed, e.g. not the host), 404 (no such game/character), 409 (wrong game state),
+426 (this install is too old to play). A 426 also carries `"code": "update_required"`. An old build
+does not read `code`; it already shows `error` as the message of a failed action. The game poll
+stays 200 so that build does not turn the lobby into "Reconnecting…".
+503 with a message to show the player means the account that pays for the AI is out of credit: a
+portrait or a reading cannot be made until its owner tops it up, and asking again will not help.
+The dungeon master's own work happens after the request has answered, so a game that cannot open or
+go on for that reason says so in a `system` message instead (and goes back to the lobby, or reopens
+the votes).
+
+## App versions
+
+The oldest build that may begin a tale or a dungeon is `MIN_APP_BUILD` in `server/lib/app-version.ts`.
+Override it without a code change by setting `DD_MIN_APP_VERSION` to a build number, or to
+`marketing+build`. A client with no header, no build number, or a build below that minimum is out of date.
+
+Each seat remembers the last header from that player (`players[].appVersion`, null when they have
+never sent one). `players[].outdated` is true when that version is below the minimum, so the host
+can see who is holding the door.
+
+`POST …/start` does not begin while anyone is outdated:
+
+- the caller themselves is outdated or sent no version → 426 `update_required`,
+  `"Update the app to keep playing. This version of The Dungeon Door is no longer supported."`
+- the caller is current and someone else is not → 409 `"code": "party_outdated"` and
+  `"Ilsa needs to update the app before the adventure can begin."` (several names joined with "and")
+
+The same 426 is returned when an outdated or versionless client votes, writes an action, speaks in
+character, or advances the scene. Chat, the poll, joining and the forge stay open, so a current host
+still sees who has to update and an old build is not told the connection dropped.
+
+Bump the minimum when a TestFlight build must be installed before a party can start. `ios/fastlane`
+(`bump_build`) sets `CFBundleVersion` to one past the newest TestFlight build at upload time, in the
+temporary worktree, and does not write it back. `ios/project.yml` keeps `CURRENT_PROJECT_VERSION`
+(today `"1"`) for local Xcode builds. `MARKETING_VERSION` (today `"0.2"`) is not bumped by the ship
+script. After the build is on TestFlight, set `MIN_APP_BUILD` to that build's number and deploy, or
+set `DD_MIN_APP_VERSION` to the same number. Setting the constant in the same commit as the app races
+the number fastlane assigns.
 
 ## Catalog
 
@@ -232,16 +270,23 @@ GameState {
   dungeonMaster: string              // catalog dungeonMasters id
   title: string | null               // DM-named adventure title, set when the game starts
   sceneCount: number                 // scenes planned (default 4, including the finale)
-  players: [{ playerId, character: Character, isHost: boolean, joinedAt }]
+  players: [{ playerId, character: Character, isHost: boolean, joinedAt,
+              appVersion: string | null, outdated: boolean }]
                                      // the whole party, including heroes who have not chosen yet. Who has
                                      // acted is `scene.votes` and `scene.freeforms`, not a shorter `players`.
                                      // in a rules game `character.sheet` and `.attacks` are the hero as it
-                                     // stands in this game: live HP, level, slots, gear
+                                     // stands in this game: live HP, level, slots, gear.
+                                     // `appVersion` is the last `x-dd-app-version` from that player
+                                     // (null when their client never sent one). `outdated` is true when
+                                     // that version is below the server's minimum, which blocks start.
   scene: Scene | null                // the current scene (null in lobby)
   chronicle: ChronicleEntry[]        // resolved scenes, oldest first (the story so far)
-  messages: Message[]                // newest last; only those after `since` when given
+  messages: Message[]                // newest last; only those after `since` when given. A whisper is
+                                     // left out unless the caller sent it or was named in it. The same
+                                     // rule applies to messageUpdates, a quoted reply, and a push
   messageUpdates: Message[]          // lines already delivered (id ≤ `since`) whose reactions changed;
-                                     // empty when `since` is omitted, because those lines are in `messages`
+                                     // empty when `since` is omitted, because those lines are in `messages`.
+                                     // A whisper the caller cannot see is never in this list
   typing: [{ playerId, name }]       // heroes whose players are composing a line, other than the caller
   rules: RulesView | null            // the rules engine's numbers; null for games started before it
   turn: null | {                     // the choice window, while status is "voting" and the scene is not
@@ -453,13 +498,20 @@ Message {
   voice: "in" | "out" | null         // "in": the hero speaks (name and portrait). "out": the player, out of
                                      // character. null for system and dm lines. A chat line from before this
                                      // field reads as "in". Stored, and copied onto the DM's recentChat so
-                                     // in-character lines are visible in that data
+                                     // in-character lines are visible in that data. A whisper is never
+                                     // in-character for the narrator, even when voice is "in"
   replyTo: number | null             // the id of the line this one answers
   reply: MessageQuote | null         // that line, quoted, so the preview survives even if it has scrolled
-                                     // out of the poll window
+                                     // out of the poll window. A reply to a whisper stays inside that whisper
   mentions: Mention[]                // heroes and players named in the text; empty when it names nobody
   reactions: Reaction[]              // emoji on this line, in the order they were first used; empty when
                                      // nobody has reacted. Tap the same emoji again to leave it
+  emote: boolean                     // true: a third-person deed, shown as "*Mira draws her sword*".
+                                     // false on lines from before emotes. An in-character emote is a deed
+                                     // the narrator must keep. An out-of-character emote is table talk
+  whisperTo: Mention[] | null        // who else may read this, besides the sender. null: the whole party.
+                                     // A whisper is never returned to anyone else, on any poll or view,
+                                     // and is never given to the narrator. Absent on a server from before whispers
   createdAt: string
 }
 
@@ -470,13 +522,16 @@ MessageQuote {
   characterName: string | null
   text: string
   voice: "in" | "out" | null
+  emote?: boolean                    // true when the quoted line was an emote. Absent on older quotes
 }
 
 Mention {
   playerId: string
-  name: string                       // the hero's name, as the party knows it
+  name: string                       // the hero's name, as the party knows it. There is no separate
+                                     // account name: a player is addressed by the hero they play
   target: "hero" | "player"          // "hero": @Name addresses the character. "player": @player:Name
-                                     // addresses the person who plays them
+                                     // addresses the person who plays them. The same shape names who
+                                     // a whisper is for
 }
 
 Reaction {
@@ -493,17 +548,31 @@ Reaction {
 - `POST /api/games/{code}/join` body `{ characterId }` → `GameState`. Lobby only (409 after start).
   Re-joining with a different character swaps the character. Max 6 players.
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
-- `POST /api/games/{code}/messages` body `{ text, voice?, replyTo? }` → `Message`. `voice` is `"in"`
-  (the default: the hero speaks) or `"out"` (the player, out of character). `"in"` is the same kind of
-  player-voice input as `POST …/speak`: those words are the hero's, and the narrator must answer them
-  and must not rewrite them. `"out"` is table talk. It is not what the hero said, and it is never an
-  instruction to the dungeon master. `replyTo` is a message id in this game; 400 when it isn't. Names in
-  the text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa` is the player of that hero. The longest
-  hero name that fits is used, and a name that isn't at the table is left as text. 400 when `text` isn't
-  1–500 characters or `voice` isn't `"in"` or `"out"`.
+- `POST /api/games/{code}/messages` body `{ text, voice?, replyTo?, emote?, whisperTo? }` → `Message`.
+  `voice` is `"in"` (the default: the hero speaks) or `"out"` (the player, out of character). `"in"` is
+  the same kind of player-voice input as `POST …/speak`: those words are the hero's, and the narrator
+  must answer them and must not rewrite them. `"out"` is table talk. It is not what the hero said, and
+  it is never an instruction to the dungeon master. `emote: true` is a third-person deed (`/me draws her
+  sword` is the same thing, and the stored `text` is what follows the command). An in-character emote
+  reaches the narrator as something the hero does (`*draws her sword*`). An out-of-character emote does
+  not. `whisperTo` is `[{ playerId, target? }]`, the characters (`"hero"`, the default) or players
+  (`"player"`) who may hear it besides the sender. `/w Name …` and `/whisper Name …` do the same from
+  `text`: a comma or `and` separates names, `player:Name` names the player, and the longest name at the
+  table wins, so spaces stay inside the name. A colon may sit between the names and the words. A whisper
+  is never in-character speech and is never sent to the narrator, whatever `voice` is. It is returned
+  only to the sender and the players it names: every poll, every other view, every reaction update, and
+  every push. A reply to a whisper stays inside that whisper (a reply that names someone who did not
+  hear it is 400). Replying to a whisper you cannot see is 400, the same as a missing line. Reacting to
+  one you cannot see is 404. `replyTo` is a message id in this game; 400 when it isn't. Names in the
+  text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa` is the player of that hero (the name the
+  table has for that person; there is no separate account name). The longest hero name that fits is
+  used, and a name that isn't at the table is left as text. 400 when `text` isn't 1–500 characters,
+  `voice` isn't `"in"` or `"out"`, `emote` isn't a boolean, `whisperTo` names nobody at the table or
+  only the sender, or a slash whisper names nobody or has no words.
 - `POST /api/games/{code}/reactions` body `{ messageId, emoji }` → `Message`. Toggles the caller's reaction
-  on that line (any kind of line): the first tap adds it, the next removes it. The returned line has the
-  same `id`. `emoji` is a single emoji. 400 when it isn't; 404 when the line isn't in this game.
+  on that line (any kind of line the caller can see): the first tap adds it, the next removes it. The
+  returned line has the same `id`. `emoji` is a single emoji. 400 when it isn't; 404 when the line isn't
+  in this game, or is a whisper the caller cannot see.
 - `POST /api/games/{code}/typing` body `{ typing? }` → `{ ok: true }`. `typing: true` (the default) says the
   caller is composing; the next poll shows them in `typing` for about five seconds, to everyone else.
   `typing: false` clears it at once.
@@ -513,10 +582,13 @@ Reaction {
   `roleplay`, which is the turn's log, and stays on that chronicle entry once the scene resolves. The
   dungeon master's next narration, and the NPCs in it, answer these words. A player may send several.
   This is not a freeform action. An in-character chat line (`voice: "in"`) is the same promise: the
-  narrator keeps those words. Out-of-character chat is not.
+  narrator keeps those words, and an in-character emote is kept as a deed. Out-of-character chat is not.
+  A whisper is not, even when its voice is `"in"`.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
-  Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
+  Host only. Refused while any seated player is outdated (see App versions): 426 when the caller
+  themselves must update, 409 `party_outdated` naming the others when the caller is current. The game
+  stays in the lobby. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
   map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
   The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
   becomes `voting` when it's ready. Every game opens with two scenes on the road from the tavern

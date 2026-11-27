@@ -8,6 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
+import { supportedAppVersionHeader } from '../lib/app-version.ts';
 
 const { values } = parseArgs({
   options: {
@@ -28,7 +29,7 @@ const player = randomUUID();
 const pollMs = Number(values.poll);
 
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { 'x-dd-player': player, 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'x-dd-player': player, 'content-type': 'application/json', 'x-dd-app-version': supportedAppVersionHeader() };
   if (process.env.DD_APP_KEY) headers['x-dd-key'] = process.env.DD_APP_KEY;
   const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   const json = (await response.json()) as T & { error?: string };

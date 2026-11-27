@@ -64,6 +64,7 @@ npm run dm:check    # REAL model, text only (~5 cents): the DM accepts the schem
 | `DATABASE_URL` | Postgres (Neon). Unset → in-memory store (dev/tests only: data is per process). Run `npm run migrate` once to create the tables (`db/schema.sql`, idempotent). |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob (public) for portraits and scene art. Unset → in-memory images served by `/api/image`. |
 | `DD_APP_KEY` | Optional shared key; when set every request (catalog included) needs a matching `x-dd-key`. `/api/image` stays open. |
+| `DD_MIN_APP_VERSION` | Oldest iOS build (`CFBundleVersion`) that may start a tale or a dungeon. A build number (`47`) or `marketing+build` (`0.2+47`). Unset → `MIN_APP_BUILD` in `lib/app-version.ts`. Clients that send no build are always out of date. See `docs/api.md`. |
 | `DD_TEXT_MODEL` | DM + appearance model (default `anthropic/claude-sonnet-5.5`). |
 | `DD_IMAGE_MODEL` | Portrait + scene art model (default `google/gemini-3.1-flash-image`, which takes party portraits as reference images). Image-only models such as `openai/gpt-image-2` also work (via `generateImage`). |
 | `DD_IMAGE_API` | Force `text` (generateText with image output) or `image` (generateImage) if auto-detection is wrong. |

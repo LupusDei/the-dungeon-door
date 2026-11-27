@@ -1,0 +1,62 @@
+name: Deploy server
+
+# Every push to main that touches server/ migrates the production database and deploys the server
+# to Vercel (the CLI deploy from server/, as before; the Vercel project is not linked to git).
+#
+# The migration is db/schema.sql, which is idempotent and additive (CREATE ... IF NOT EXISTS,
+# ADD COLUMN IF NOT EXISTS), so it runs on every deploy and a deploy never waits on a missed one.
+# It runs before the deploy, so new code never meets an old schema. A migration that drops or
+# rewrites data still needs the owner's word (AGENTS.md) and does not belong in schema.sql.
+#
+# Tests are not run here yet; they run locally before pushing (see AGENTS.md, "Gates").
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '!server/**/*.md'
+      - '.github/workflows/deploy-server.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migrate and deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      VERCEL_ORG_ID: team_bM3mfevSaSiCKW0nxDw1s0ts
+      VERCEL_PROJECT_ID: prj_Ef3JYkgu5nElYXsxAZhHqLaKHivw
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install
+        run: |
+          npm ci
+          npm install --global vercel@latest
+
+      # Production env vars (DATABASE_URL from the Neon integration) into .vercel/.env.production.local.
+      - name: Pull the production environment
+        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Migrate the database
+        run: node --env-file=.vercel/.env.production.local --experimental-strip-types scripts/migrate.ts
+
+      - name: Deploy to production
+        run: vercel deploy --prod --token "$VERCEL_TOKEN"
+
+      - name: Check the live site answers
+        run: curl --fail --silent --show-error --retry 3 --retry-delay 5 https://the-dungeon-door.vercel.app/api/quests > /dev/null

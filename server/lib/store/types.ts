@@ -46,6 +46,9 @@ export interface NewMessage {
   replyTo?: number | null;
   reply?: MessageQuote | null;
   mentions?: Mention[];
+  emote?: boolean;
+  /** Null or omitted: the whole party. A non-empty list is a whisper to those players. */
+  whisperTo?: Mention[] | null;
 }
 
 /** A scene as written by the DM: everything but its votes, its in-character lines, and its resolution. */
@@ -77,6 +80,11 @@ export interface Store {
    * lobby and (for a newcomer) has fewer than `maxPlayers`. Returns whether it did.
    */
   upsertPlayer(code: string, player: GamePlayer, maxPlayers: number): Promise<boolean>;
+  /**
+   * Records the app version last seen from a player already in the game. No-op when they are not
+   * seated, or when the stored value is already this one. Null means the client sent no version.
+   */
+  noteAppVersion(code: string, playerId: string, appVersion: string | null): Promise<void>;
   removePlayer(code: string, playerId: string): Promise<boolean>;
 
   /** Inserts (or rewrites the text of) a scene; its votes and resolution are kept. */

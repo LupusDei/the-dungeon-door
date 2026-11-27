@@ -119,9 +119,9 @@ export class PostgresStore implements Store {
          INSERT INTO games (code, host_id, dungeon_master, scene_count) VALUES ($1, $2, $3, $4)
          ON CONFLICT (code) DO NOTHING RETURNING code
        )
-       INSERT INTO game_players (game_code, player_id, character, joined_at)
-       SELECT code, $5, $6, $7 FROM g RETURNING game_code`,
-      [game.code, game.hostId, game.dungeonMaster, game.sceneCount, game.host.playerId, JSON.stringify(game.host.character), game.host.joinedAt],
+       INSERT INTO game_players (game_code, player_id, character, joined_at, app_version)
+       SELECT code, $5, $6, $7, $8 FROM g RETURNING game_code`,
+      [game.code, game.hostId, game.dungeonMaster, game.sceneCount, game.host.playerId, JSON.stringify(game.host.character), game.host.joinedAt, game.host.appVersion ?? null],
     );
     return rows.length > 0;
   }
@@ -138,7 +138,12 @@ export class PostgresStore implements Store {
     );
     if (!row) return null;
     const votes = (row.votes as Row[]).map((v) => ({ sceneIdx: v.scene_idx as number, vote: voteOf(v) }));
-    const players = (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) }));
+    const players = (row.players as Row[]).map((p): GamePlayer => ({
+      playerId: p.player_id,
+      character: p.character as StoredCharacter,
+      joinedAt: iso(p.joined_at),
+      appVersion: typeof p.app_version === 'string' ? p.app_version : null,
+    }));
     const readings = (row.voices ?? []) as Row[];
     const scenes = (row.scenes as Row[]).map((s): StoredScene => ({
       index: s.idx,
@@ -171,15 +176,27 @@ export class PostgresStore implements Store {
            AND (EXISTS (SELECT 1 FROM game_players WHERE game_code = $1 AND player_id = $2)
                 OR (SELECT count(*) FROM game_players WHERE game_code = $1) < $5)
        ), up AS (
-         INSERT INTO game_players (game_code, player_id, character, joined_at)
-         SELECT code, $2, $3, $4 FROM ok
-         ON CONFLICT (game_code, player_id) DO UPDATE SET character = EXCLUDED.character
+         INSERT INTO game_players (game_code, player_id, character, joined_at, app_version)
+         SELECT code, $2, $3, $4, $6 FROM ok
+         ON CONFLICT (game_code, player_id) DO UPDATE SET character = EXCLUDED.character, app_version = EXCLUDED.app_version
          RETURNING game_code
        )
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM up) RETURNING code`,
-      [code, player.playerId, JSON.stringify(player.character), player.joinedAt, maxPlayers],
+      [code, player.playerId, JSON.stringify(player.character), player.joinedAt, maxPlayers, player.appVersion ?? null],
     );
     return rows.length > 0;
+  }
+
+  async noteAppVersion(code: string, playerId: string, appVersion: string | null) {
+    await this.q(
+      `WITH u AS (
+         UPDATE game_players SET app_version = $3
+         WHERE game_code = $1 AND player_id = $2 AND app_version IS DISTINCT FROM $3
+         RETURNING game_code
+       )
+       UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM u)`,
+      [code, playerId, appVersion],
+    );
   }
 
   async removePlayer(code: string, playerId: string) {
@@ -311,14 +328,16 @@ export class PostgresStore implements Store {
     // A reaction never touches message_seq: the id handed out here stays the line's id.
     const [row] = await this.q(
       `WITH s AS (UPDATE games SET message_seq = message_seq + 1, updated_at = now() WHERE code = $1 RETURNING message_seq)
-       INSERT INTO messages (game_code, id, kind, player_id, character_name, text, voice, reply_to, reply, mentions)
-       SELECT $1, message_seq, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb FROM s
-       RETURNING id, kind, player_id, character_name, text, created_at, voice, reply_to, reply, mentions`,
+       INSERT INTO messages (game_code, id, kind, player_id, character_name, text, voice, reply_to, reply, mentions, emote, whisper_to)
+       SELECT $1, message_seq, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11::jsonb FROM s
+       RETURNING id, kind, player_id, character_name, text, created_at, voice, reply_to, reply, mentions, emote, whisper_to`,
       [
         code, message.kind, message.playerId, message.characterName, message.text,
         message.voice ?? null, message.replyTo ?? null,
         message.reply ? JSON.stringify(message.reply) : null,
         JSON.stringify(message.mentions ?? []),
+        message.emote === true,
+        message.whisperTo && message.whisperTo.length ? JSON.stringify(message.whisperTo) : null,
       ],
     );
     if (!row) throw new Error(`no game ${code}`);
@@ -361,7 +380,7 @@ export class PostgresStore implements Store {
     // removes, so the two never both happen. The message id is not touched; revised_at marks it for the poll.
     const [row] = await this.q(
       `WITH target AS (
-         SELECT id, kind, player_id, character_name, text, created_at, voice, reply_to, reply, mentions
+         SELECT id, kind, player_id, character_name, text, created_at, voice, reply_to, reply, mentions, emote, whisper_to
          FROM messages WHERE game_code = $1 AND id = $2
        ),
        existing AS (
@@ -472,6 +491,7 @@ export class PostgresStore implements Store {
 /** Columns of a message plus its reactions, grouped in the order each emoji was first used. */
 const MESSAGE_COLUMNS = `
   m.id, m.kind, m.player_id, m.character_name, m.text, m.created_at, m.voice, m.reply_to, m.reply, m.mentions,
+  m.emote, m.whisper_to,
   COALESCE((
     SELECT jsonb_agg(jsonb_build_object('emoji', g.emoji, 'count', g.cnt, 'playerIds', g.player_ids) ORDER BY g.first_at)
     FROM (
@@ -506,7 +526,12 @@ function asQuote(value: unknown): MessageQuote | null {
   if (!value || typeof value !== 'object') return null;
   const quote = value as MessageQuote;
   if (typeof quote.id !== 'number' || typeof quote.text !== 'string') return null;
-  return quote;
+  return quote.emote === true ? { ...quote, emote: true } : { ...quote, emote: undefined };
+}
+
+function asWhisper(value: unknown): Mention[] | null {
+  const mentions = asMentions(value);
+  return mentions.length ? mentions : null;
 }
 
 function asMentions(value: unknown): Mention[] {
@@ -544,5 +569,7 @@ function toMessage(row: Row): Message {
     reply: asQuote(row.reply),
     mentions: asMentions(row.mentions),
     reactions: asReactions(row.reactions),
+    emote: row.emote === true || row.emote === 't',
+    whisperTo: asWhisper(row.whisper_to),
   };
 }

@@ -523,6 +523,13 @@ enum DemoData {
                     replyTo: 12,
                     reply: Message.Quote(id: 12, kind: .chat, playerId: miraId, characterName: "Mira Thal",
                                          text: "The stone is humming, @Pip. Stay close.", voice: "in")),
+            Message(id: 15, kind: .chat, playerId: miraId, characterName: "Mira Thal",
+                    text: "draws her sword", createdAt: "2026-11-26T17:55:00Z",
+                    voice: "in", emote: true),
+            Message(id: 16, kind: .chat, playerId: brynId, characterName: "Bryn Stonehand",
+                    text: "The left passage is trapped.", createdAt: "2026-11-26T17:56:00Z",
+                    voice: "in",
+                    whisperTo: [Message.Mention(playerId: miraId, name: "Mira Thal", target: "hero")]),
         ]
     }
 

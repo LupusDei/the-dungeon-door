@@ -61,6 +61,37 @@ afterEach(async () => {
   delete process.env.DD_APP_KEY;
 });
 
+test('an account out of credit is told to the table as that, in the lobby and mid-game, not as a fumble to retry', async () => {
+  const broke = () => Object.assign(new Error('A positive credit balance is required for all requests, including BYOK.'), { statusCode: 402 });
+  let paid = false;
+  const unpaid: DungeonMaster = {
+    openingScene: async (ctx) => { if (!paid) throw broke(); return fakeDungeonMaster.openingScene(ctx); },
+    nextScene: async () => { throw new Error('Failed after 3 attempts', { cause: broke() }); },
+    finale: fakeDungeonMaster.finale,
+  };
+  registerDungeonMaster('chronicler', unpaid);
+  const { code, players, host } = await table(2);
+  await call(startApi.POST, gamePath(code, 'start'), { player: host, body: {} });
+  await settle();
+  let state = await view(code, host);
+  assert.equal(state.status, 'lobby', 'the party is back at the door');
+  const said = (text: RegExp) => state.messages.some((m: Message) => m.kind === 'system' && text.test(m.text));
+  assert.ok(said(/could not begin\. The game's AI account has run out of credit/), JSON.stringify(state.messages.map((m: Message) => m.text)));
+  assert.equal(said(/lost their notes/), false);
+
+  paid = true;
+  await call(startApi.POST, gamePath(code, 'start'), { player: host, body: {} });
+  await settle();
+  state = await view(code, host);
+  assert.equal(state.status, 'voting');
+  for (const p of players) await call(voteApi.POST, gamePath(code, 'vote'), { player: p, body: { sceneIndex: 0, choiceId: 'a' } });
+  await settle();
+  state = await view(code, host);
+  assert.equal(state.status, 'voting', 'votes reopen');
+  assert.ok(said(/could not go on\. The game's AI account has run out of credit/), JSON.stringify(state.messages.map((m: Message) => m.text).slice(-4)));
+  assert.equal(said(/fumbled their dice/), false);
+});
+
 test('catalog lists the options and hides server-only DM fields', async () => {
   const { status, body } = await call(catalogApi.GET, '/api/catalog');
   assert.equal(status, 200);

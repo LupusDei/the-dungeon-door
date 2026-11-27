@@ -8,12 +8,16 @@ struct AbilityBonusPicker: View {
     @State private var mode = ""
     @State private var plusTwo = ""
     @State private var plusOne = ""
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// 100 at the default text size, more as the chips' text style grows.
+    @ScaledMetric(relativeTo: .subheadline) private var percent: CGFloat = 100
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                modeChip("twoOne", " +2 and +1 ")
-                modeChip("oneOneOne", " +1 to each ")
+            // Side by side while both fit; one above the other once the text is large (see ChipPicker).
+            ChipGrid(minWidth: 130 * percent / 100) {
+                modeChip("twoOne", "+2 and +1")
+                modeChip("oneOneOne", "+1 to each")
             }
             if mode == "twoOne" {
                 scoreRow("Plus 2", selection: plusTwo) { plusTwo = $0; publish() }
@@ -44,12 +48,16 @@ struct AbilityBonusPicker: View {
         } label: {
             Text(title)
                 .font(.system(.subheadline, design: .serif, weight: selected ? .semibold : .regular))
-                .lineLimit(1)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, minHeight: 40)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, minHeight: 40, maxHeight: .infinity)
                 .foregroundStyle(selected ? Palette.ink : Palette.parchment)
-                .background(selected ? Palette.gold : Palette.surface, in: .capsule)
-                .overlay { Capsule().strokeBorder(Palette.gold.opacity(selected ? 0 : 0.3)) }
+                .background(selected ? Palette.gold : Palette.surface, in: .rect(cornerRadius: 24))
+                .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.gold.opacity(selected ? 0 : 0.3)) }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])

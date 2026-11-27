@@ -57,19 +57,23 @@ and **slagyr-assistant**. For work that comes from any of them (the owner asking
    changed, `npm run dm:check` passes too: three real text calls (about five cents) that prove the
    model accepts the schema and writes hooks the engine takes. The fake DM cannot show that.
 3. **Commit and push** `main` (`git push origin main`, as its own command).
-4. **Migrate** when `server/db/schema.sql` changed: `cd server && npm run migrate`. Migrations are
-   additive (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`).
-5. **Deploy** the server: `cd server && vercel deploy --prod`, then check the live site answers.
-6. **Ship a TestFlight build** when `ios/` changed or the server now sends something the app should
-   show: `cd ios && ./ship.sh "What's new"`.
+4. **Migrate and deploy** happen on the push, in GitHub Actions (`.github/workflows/deploy-server.yml`):
+   any push to `main` that touches `server/` applies `db/schema.sql` to production, then runs
+   `vercel deploy --prod` and checks the live site answers. Migrations are additive
+   (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`), so they run on every deploy. Watch the
+   run (`gh run watch`); if Actions is down, `cd server && npm run migrate && vercel deploy --prod`.
+5. **Ship a TestFlight build** by bumping `MARKETING_VERSION` in `ios/project.yml` in the push, when
+   `ios/` changed or the server now sends something the app should show. The push builds and uploads
+   it (`.github/workflows/testflight.yml`) and tags `testflight/v<version>`; a version already tagged
+   is not shipped again. "Run workflow" on that workflow ships without a bump; `cd ios && ./ship.sh
+   "What's new"` still ships from the owner's Mac.
+6. **Tests run locally**, not in Actions (step 2), so a push is a release: run the gates first.
 7. **Update the quest log**: tasks done with their links, problems found filed as issues for whoever
    owns the code, and the "Latest build" fact.
 
-Who does which part: steps 4 to 6 need the owner's credentials (Vercel, Neon, App Store Connect), which
-live on the owner's machine. An agent working there runs every step. An agent anywhere else (a
-contributor's machine, a cloud session) does what it can reach, which is steps 1 to 3 and 7, and says in
-its hand-off that the release is waiting for the owner's agent; the owner's agent then releases it
-without further ceremony.
+Who does which part: the credentials for steps 4 and 5 (Vercel, Neon, App Store Connect) live in the
+repository's Actions secrets, so whoever pushes `main` releases. A version bump is still the pusher's
+call: bump it when the build is worth putting in testers' hands.
 
 Still ask the owner first for: a migration that drops or rewrites data, deleting anything in
 production, changing secrets, keys or environment variables, rewriting history on `main`, spending

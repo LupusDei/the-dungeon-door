@@ -39,6 +39,12 @@ final class GameSession {
     var draft = ""
     /// True when the hero speaks. False is the player, out of character.
     var speakingInCharacter = true
+    /// The next line is a third-person deed: "*Mira draws her sword*".
+    var emoting = false
+    /// Who the next line is whispered to. Empty means the whole table.
+    var whisperTo: [Message.Mention] = []
+    /// The list of characters and players a whisper can name is open.
+    var whisperPickerOpen = false
     /// The line the next message will quote.
     var replyingTo: Message?
     var chatOpen = false { didSet { if chatOpen { unreadChat = 0 } } }
@@ -106,13 +112,14 @@ final class GameSession {
 
     // MARK: Actions
 
-    func say(_ text: String, voice: String = "in", replyTo: Int? = nil) async {
+    func say(_ text: String, voice: String = "in", replyTo: Int? = nil, emote: Bool = false, whisperTo: [Message.Mention] = []) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         announcedTyping = false
         lastTypingPing = nil
+        let heard = whisperTo.map { APIClient.ChatWhisper(playerId: $0.playerId, target: $0.target) }
         await run {
-            let message = try await self.api.say(self.code, text: String(trimmed.prefix(500)), voice: voice, replyTo: replyTo)
+            let message = try await self.api.say(self.code, text: String(trimmed.prefix(500)), voice: voice, replyTo: replyTo, emote: emote, whisperTo: heard)
             try? await self.api.typing(self.code, typing: false)
             self.append([message], countUnread: false)
         }

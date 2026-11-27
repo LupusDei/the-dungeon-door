@@ -349,6 +349,7 @@ struct CharacterForgeView: View {
                 SectionLabel("Backstory")
                 Text("Where do they come from, and what drives them through the door?")
                     .font(.footnote).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 ParchmentEditor(prompt: "Raised by smugglers in a lighthouse; owes a debt to a sea hag…",
                                 text: $hero.backstory)
             }
@@ -356,6 +357,7 @@ struct CharacterForgeView: View {
                 SectionLabel("Look")
                 Text("Describe them in your own words. The dungeon master will embellish it into a portrait.")
                     .font(.footnote).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 ParchmentEditor(prompt: "Copper braid, a burn scar on one cheek, patched green cloak, too many rings…",
                                 text: $hero.description)
             }
@@ -509,21 +511,44 @@ struct CharacterForgeView: View {
 private struct StepTrack: View {
     let current: CharacterForgeView.Step
     let steps: [CharacterForgeView.Step]
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// Five small labels in a row fit only at the smaller text sizes. Past them the track is bars
+    /// alone, with the step spelled out underneath in text that grows.
+    private var spelledOut: Bool { typeSize >= .xxLarge }
+    private var position: Int { (steps.firstIndex(of: current) ?? 0) + 1 }
+
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(steps, id: \.self) { step in
-                VStack(spacing: 6) {
-                    Capsule()
-                        .fill(step.rawValue <= current.rawValue ? Palette.gold : Palette.raised)
-                        .frame(height: 3)
-                    Text(step.title.uppercased())
-                        .font(.system(size: 10, weight: .semibold, design: .serif))
-                        .tracking(1.5)
-                        .foregroundStyle(step == current ? Palette.gold : Palette.muted)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(steps, id: \.self) { step in
+                    VStack(spacing: 6) {
+                        Capsule()
+                            .fill(step.rawValue <= current.rawValue ? Palette.gold : Palette.raised)
+                            .frame(height: 3)
+                        if !spelledOut {
+                            Text(step.title.uppercased())
+                                .font(.system(size: 10, weight: .semibold, design: .serif))
+                                .tracking(1.2)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .foregroundStyle(step == current ? Palette.gold : Palette.muted)
+                        }
+                    }
                 }
+            }
+            if spelledOut {
+                Text("Step \(position) of \(steps.count): \(current.title)")
+                    .font(.serif(.footnote, weight: .semibold))
+                    .foregroundStyle(Palette.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+                    // Pinned above the step: past this size it would take the room the step needs.
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             }
         }
         .animation(.snappy, value: current)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(position) of \(steps.count): \(current.title)")
     }
 }
 

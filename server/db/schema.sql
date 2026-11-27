@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS game_players (
   PRIMARY KEY (game_code, player_id)
 );
 
+-- Last x-dd-app-version seen from this player (`marketing+build`). Null when the client never sent one.
+ALTER TABLE game_players ADD COLUMN IF NOT EXISTS app_version text;
+
 CREATE TABLE IF NOT EXISTS scenes (
   game_code        text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
   idx              int  NOT NULL,
@@ -119,6 +122,11 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS mentions jsonb NOT NULL DEFAULT '[
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS revised_at timestamptz;
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_voice_check;
 ALTER TABLE messages ADD CONSTRAINT messages_voice_check CHECK (voice IS NULL OR voice IN ('in', 'out'));
+
+-- A third-person emote, and who a whisper is for. whisper_to is null when the whole party may read
+-- the line. A whisper is never returned to anyone else, and never given to the narrator.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS emote boolean NOT NULL DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS whisper_to jsonb;
 
 -- One row per player per emoji. Toggling deletes the row. The message id does not change.
 CREATE TABLE IF NOT EXISTS message_reactions (

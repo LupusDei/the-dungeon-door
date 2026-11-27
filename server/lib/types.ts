@@ -128,6 +128,8 @@ export interface GamePlayer {
   playerId: string;
   character: StoredCharacter;
   joinedAt: string;
+  /** Last `x-dd-app-version` from this player. Null or absent when their client never sent one. */
+  appVersion?: string | null;
 }
 
 /** Everything about a game except its chat, as the store returns it. */
@@ -180,6 +182,8 @@ export interface MessageQuote {
   characterName: string | null;
   text: string;
   voice: MessageVoice | null;
+  /** True when the quoted line was an emote. Absent on quotes from before emotes. */
+  emote?: boolean;
 }
 
 /** Something a player said or did in character this turn. No roll, and the engine does not adjudicate it. */
@@ -202,6 +206,13 @@ export interface Message {
   reply: MessageQuote | null;
   mentions: Mention[];
   reactions: Reaction[];
+  /** A third-person action. The table reads it as "*Name text*". False on lines from before emotes. */
+  emote: boolean;
+  /**
+   * Who else may read this whisper, besides the sender. Null when the whole party may.
+   * Never returned to anyone else, and never given to the narrator, whatever `voice` says.
+   */
+  whisperTo: Mention[] | null;
   createdAt: string;
 }
 
@@ -279,7 +290,7 @@ export interface GameState {
   title: string | null;
   sceneCount: number;
   /** In a rules game each character is the hero as it stands in the game (live sheet). */
-  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string }[];
+  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string; appVersion: string | null; outdated: boolean }[];
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];

@@ -157,6 +157,16 @@ test('a chat message pushes the rest of the party, not the one who spoke', async
   assert.deepEqual(pushes().sort(), [['01', 'chat', 'Corin: Are we going in?'], ['03', 'chat', 'Corin: Are we going in?']]);
 });
 
+test('a whisper pushes only the people it names', async () => {
+  const { code, players } = await lobby();
+  await call(messagesApi.POST, gamePath(code, 'messages'), {
+    player: players[0],
+    body: { text: 'The door is trapped', whisperTo: [{ playerId: players[2], target: 'hero' }] },
+  });
+  await settle();
+  assert.deepEqual(pushes(), [['03', 'chat', 'Bryn whispers: The door is trapped']]);
+});
+
 /** Lets everything that needs no time run. */
 const idle = async () => { for (let i = 0; i < 300; i++) await new Promise<void>((done) => setImmediate(done)); };
 

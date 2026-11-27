@@ -138,6 +138,11 @@ struct LobbyView: View {
                             if player.playerId == session.playerId {
                                 Text("you").font(.caption2).foregroundStyle(Palette.muted)
                             }
+                            if player.outdated {
+                                Text("Needs update")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(Palette.ember)
+                            }
                         }
                         Text(describe(player.character)).font(.caption).foregroundStyle(Palette.muted)
                         if let vitals = player.character.vitalsLine {
@@ -231,8 +236,13 @@ struct LobbyView: View {
                 if session.busy { ProgressView().tint(Palette.ink) } else { Label("Open the door", systemImage: "door.left.hand.open") }
             }
             .buttonStyle(.gilded)
-            .disabled(session.busy)
-            if state.players.count == 1 {
+            .disabled(session.busy || updateHold != nil)
+            if let updateHold {
+                Text(updateHold)
+                    .font(.footnote)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Palette.ember)
+            } else if state.players.count == 1 {
                 Text("You can go alone, or wait for friends to knock.")
                     .font(.footnote.italic()).foregroundStyle(Palette.muted)
             }
@@ -292,13 +302,29 @@ struct LobbyView: View {
 
     private var waiting: some View {
         HStack(spacing: 10) {
-            ProgressView().tint(Palette.gold)
-            Text("Waiting for \(state.player(state.hostId)?.character.name ?? "the host") to open the door…")
+            if updateHold == nil { ProgressView().tint(Palette.gold) }
+            Text(updateHold ?? "Waiting for \(state.player(state.hostId)?.character.name ?? "the host") to open the door…")
                 .font(.proseSmall.italic())
-                .foregroundStyle(Palette.muted)
+                .foregroundStyle(updateHold == nil ? Palette.muted : Palette.ember)
+                .multilineTextAlignment(.leading)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+    }
+
+    /// Who has to update before the door can open, in the same words the server uses when start is refused.
+    private var updateHold: String? {
+        let names = state.players.filter(\.outdated).map(\.character.name)
+        guard let first = names.first else { return nil }
+        let who: String
+        if names.count == 1 {
+            who = first
+        } else if names.count == 2 {
+            who = "\(first) and \(names[1])"
+        } else {
+            who = "\(names.dropLast().joined(separator: ", ")) and \(names[names.count - 1])"
+        }
+        return "\(who) \(names.count == 1 ? "needs" : "need") to update the app before the adventure can begin."
     }
 
     private var dmSheet: some View {

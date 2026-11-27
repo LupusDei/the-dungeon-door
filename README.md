@@ -220,16 +220,26 @@ curl -X PATCH "https://the-dungeon-door.vercel.app/api/quests?id=TASK_ID" \
 ## Shipping
 
 Work from the team (LupusDei, unclebob, slagyr, slagyr-assistant) ships when it lands: it is
-integrated into `main`, pushed, migrated, deployed and sent to TestFlight by default, without anyone
-asking. The steps, the gates and the short list of things that still need the owner's word are in
-`AGENTS.md` under "Shipping is the default". The commands, from the owner's machine:
+integrated into `main` and pushed, and GitHub Actions does the rest. The steps, the gates and the short
+list of things that still need the owner's word are in `AGENTS.md` under "Shipping is the default".
+
+- **Server.** A push to `main` that touches `server/` migrates the production database (`db/schema.sql`,
+  idempotent) and deploys to Vercel: `.github/workflows/deploy-server.yml`.
+- **App.** A push to `main` with a new `MARKETING_VERSION` in `ios/project.yml` builds the app and uploads
+  it to TestFlight, then tags `testflight/v<version>`: `.github/workflows/testflight.yml`.
+- **Tests** run locally before the push; Actions does not run them yet.
 
 ```bash
-cd server && npm run typecheck && npm test      # gates
+cd server && npm run typecheck && npm test      # gates, before every push
 cd server && npm run dm:check                   # when the dungeon master's prompt or schema changed (real model, ~5 cents)
-git push origin main
-cd server && npm run migrate                    # only when db/schema.sql changed
-cd server && vercel deploy --prod
+git push origin main                            # releases: migrate + deploy, and TestFlight on a version bump
+gh run watch                                    # follow the release
+```
+
+By hand, from the owner's machine, when Actions can't:
+
+```bash
+cd server && npm run migrate && vercel deploy --prod
 cd ios && ./ship.sh "What's new in this build"  # builds a clean copy of HEAD, uploads with fastlane
 ```
 

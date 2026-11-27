@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The whole game, full screen: lobby, then the tabbed play screen (Story, Sheet, Map, Chat),
-/// then the finale on that same screen. The chronicle and another hero's full sheet open from here.
+/// then the finale on that same screen. The chronicle opens from the toolbar. Before play, that
+/// toolbar also opens the caller's sheet; once the door is open, the Sheet tab is the sheet.
 struct GameView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -44,7 +45,7 @@ struct GameView: View {
                 case .preparing where session.state.scene == nil:
                     PreparingView(title: session.state.title)
                 default:
-                    PlayShell(session: session, narrator: narrator, openHero: { sheetHero = SheetHero(playerId: $0) },
+                    PlayShell(session: session, narrator: narrator,
                               initialTab: AppConfig.playTabArgument ?? .story,
                               initialPane: AppConfig.playPaneArgument ?? .abilities,
                               scrollOffers: AppConfig.scrollToArgument == "choices")
@@ -118,6 +119,11 @@ struct GameView: View {
                 showMap = true
             }
         }
+        .overlay {
+            if session.me?.outdated == true || UpdateGate.shared.required {
+                UpdateRequiredView().ignoresSafeArea()
+            }
+        }
         .onDisappear { narrator.stop() }
         .confirmationDialog("Leave the party?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave", role: .destructive) { Task { await model.leaveGame() } }
@@ -139,7 +145,8 @@ struct GameView: View {
         }
         ToolbarItemGroup(placement: .primaryAction) {
             // A server from before the rules engine sends no sheet: nothing to open.
-            if session.me?.character.sheet != nil {
+            // During play the Sheet tab is that sheet, so this stays in the lobby only.
+            if !playing, session.me?.character.sheet != nil {
                 Button { sheetHero = SheetHero(playerId: session.playerId) } label: { Image(systemName: "person.text.rectangle") }
                     .accessibilityLabel("My hero")
             }
