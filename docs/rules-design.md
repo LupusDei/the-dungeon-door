@@ -540,7 +540,73 @@ won and under 5% of heroes dead per fight**.
 - *Before this phase*, level-1 parties lost most of their first fights. A lone level-1 wizard is still
   fragile (40% won).
 
-Not yet: an XP award for finishing a quest, so leveling up still takes many fights.
+Fights are no longer the only XP: see "Experience without a fight" below, which also adds the award for
+finishing a quest.
+
+## Experience without a fight
+
+**The owner's ask:** *"Even if there's no battle, characters should get some experience for just making
+decisions and going through experiences."* `play/xp.ts`, called from `play/table.ts engineStep` for
+each scene and `endQuest` at the end.
+
+**The basis.** The 2014 DMG (p. 261) gives a non-combat challenge the XP of a fight of the same
+difficulty, and a milestone the XP of an easy (minor) or hard (major) encounter; the 2024 rules keep the
+encounter budgets per character. So a hero's **unit** is the **SRD 5.2 Low encounter budget for its own
+level** (50 XP at level 1), and each reason pays a share of it. Heroes of different levels in one party
+each get their own amounts.
+
+| Reason (line label) | Share | L1 | L2 | L3 | L4 | L5 | L10 | When |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| taking part | 10% | 5 | 10 | 15 | 25 | 50 | 160 | the hero declared (a vote, an action, a written check) |
+| a success | 20% | 10 | 20 | 30 | 50 | 100 | 320 | one of their d20s outside a fight came good (check, save, parley, written check) |
+| a brave failure | 10% | 5 | 10 | 15 | 25 | 50 | 160 | they rolled and none came good |
+| a trap overcome | 50% | 25 | 50 | 75 | 125 | 250 | 800 | a trap spotted, avoided or disarmed (a trap hook, or a trap on the way) |
+| a puzzle solved | 50% | 25 | 50 | 75 | 125 | 250 | 800 | DM tag `puzzle` |
+| a clever parley | 50% | 25 | 50 | 75 | 125 | 250 | 800 | a parley that works, or DM tag `social` |
+| a discovery | 20% | 10 | 20 | 30 | 50 | 100 | 320 | DM tag `discovery` |
+| new ground | 10% | 5 | 10 | 15 | 25 | 50 | 160 | the party entered a dungeon room it had not seen |
+| a chapter closed | 50% | 25 | 50 | 75 | 125 | 250 | 800 | DM tag `milestone` (a minor milestone) |
+| deeper into the dungeon | 50% | 25 | 50 | 75 | 125 | 250 | 800 | the dungeon went a level deeper |
+| the adventure's end | 100% | 50 | 100 | 150 | 250 | 500 | 1,600 | the quest is over (a major milestone) |
+
+**The rules.**
+- Only heroes who **declared** earn in a scene. A hero who did not earns nothing. A hero whose die the
+  server **threw for them** (the choice window ran out, or the host advanced first: `votes.auto_rolled`)
+  earns **half** of each amount, rounded down.
+- A hero gets at most one of *a success* or *a brave failure* a scene. The shared reasons (trap, parley,
+  new ground, a tag) go to every hero who declared, and the same reason twice in a scene pays once.
+- **Caps.** Everything but a milestone is held to **one unit per hero per scene**. A chapter milestone
+  (*a chapter closed* or *deeper into the dungeon*) is paid on top, **at most one a scene and one every
+  three scenes**. *The adventure's end* goes to every living hero who took part in the quest (declared in
+  a scene, or fought).
+- **Fights pay their own XP.** A round of a fight earns nothing more, and a tag on a fight, an Engage or
+  a Run pays nothing. A choice that starts a fight pays its tag nothing either.
+- **The engine owns the numbers.** The DM only tags a choice it offers (`reward`: `discovery`, `social`,
+  `puzzle`, `milestone` or `none`). The tag pays when the party takes the choice and its dice did not fail
+  (no dice, or a success). Anything else in the field is no tag.
+- **Visible.** One line per reason and amount goes into the scene's results, the chat and the DM's
+  resolution: "+25 XP: a clever parley (Bryn, Cleo)." The API has `rules.xpAwards`, and each hero's `xp`,
+  `questXp` and `nextLevelXp`.
+- **Levelling** stays at the quest's end (`endQuest`): the adventure's-end XP is paid first, then each
+  living hero levels up as far as its XP reaches. Mid-adventure levelling was not chosen: `autoLevelUp`
+  could run after any scene, but the 2024 thresholds are a between-sessions step (new features, spells
+  and hit points), a rested hero is what the epilogue sends home, and Phase 5 chose the quest's end.
+
+**The pace.** A default game is the road (two scenes) and four scenes of the tale, so five scenes are
+played before the epilogue. A typical scene without a fight pays about a third of a unit (taking part, a
+roll that mostly comes good, a tag or an event every other scene), and the end one unit: about 2.75 units
+a quest, with no fight at all.
+
+| Level | XP a no-fight quest | XP to the next level | Quests |
+| --- | --- | --- | --- |
+| 1 | ~140 | 300 | 2–3 |
+| 2 | ~275 | 600 | 2–3 |
+| 3 | ~410 | 1,800 | 4–5 |
+| 4 | ~690 | 3,800 | 5–6 |
+
+A longer game levels faster, a shorter one slower; fights add their own XP on top. From level 3 the 2024
+thresholds outgrow the budgets, so fights carry more of the climb. `lib/play/xp.test.ts` holds the pace:
+a no-fight quest of the default length takes a level-1 hero to level 2 in two or three quests.
 
 ## Range bands
 

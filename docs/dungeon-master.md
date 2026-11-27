@@ -106,11 +106,22 @@ The engine owns the numbers; you propose and narrate. For a game from before the
     thing that proves a schema or prompt change works. The fake DM offers an Athletics check
     (or the first exit), a Perception check and a Persuasion check (a parley when foes wait in the
     room), and never starts a fight itself.
+- **Choices may carry `reward`**, an XP tag: `'discovery'` (a secret, a hidden place, lost lore),
+  `'social'` (winning someone over), `'puzzle'` (a riddle, a mechanism) or `'milestone'` (it closes a
+  chapter of the story). Most choices have none (`'none'`, null or absent). It is a tag, not a number: the
+  engine (`play/xp.ts`) sets every amount, caps it, and pays it only when the party takes the choice and its
+  dice do not fail; a tag on a fight pays nothing, and a milestone comes at most once every three scenes.
+  Players never see it. The engine also pays, by itself, each hero who acted, a d20 that came good or a brave
+  failure, a trap overcome, a parley won, new ground and the adventure's end (amounts in
+  [rules-design.md](rules-design.md#experience-without-a-fight)). The fake DM tags its quieter way a
+  discovery and its parley social.
 - **`resolution.rules`** (`RulesResults`):
   - `chosen`: the choice the engine picked. Ties go to the higher-rolling voters. `leaders` is just
     `[chosen]`, so return it as `chosenChoiceId`.
   - `lines`: the dice, one line each ("Bryn: Athletics 14 + 5 = 19 vs DC 12, success"). For the
     epilogue they end with the heroes who levelled up ("Bryn reaches level 2 (+7 max HP)."): celebrate it.
+    After the dice come the XP the scene earned ("+25 XP: a clever parley (Bryn, Cleo)."): you may let the
+    heroes feel they have grown, but put no XP numbers in the story.
   - `success` for a check or save, and `fight` ('started' | 'victory' | 'defeat' | 'fled' | null).
   - Your `outcome` and narration must match these results: color them, never change them, and still
     use no numbers in the story.

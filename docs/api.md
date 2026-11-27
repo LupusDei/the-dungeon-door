@@ -493,6 +493,9 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // { "poisoned", "40 minutes" }, { "restrained", "DC 13 Athletics to break free" },
                                       // "until a long rest", "DC 12 CON save to end"
     concentratingOn: string | null    // the spell the hero holds by concentration, by name ("Bless")
+    nextLevelXp: number | null        // the XP of the next level (2024 thresholds: 300, 900, 2,700 …); null at 20.
+                                      // xp may pass it mid-quest: the hero levels up at the quest's end.
+    questXp: number                   // XP earned on this adventure, fights and all. Both absent from older servers.
   }]
   combat: null | {
     round: number
@@ -554,6 +557,15 @@ RulesView {                          // SRD 5.2 (2024 rules)
   results: string[]                   // the engine's dice lines for the last resolved scene
   levelUps: [{ playerId: string; name: string; from: number; to: number }]   // who levelled up at the
                                       // quest's end (set with the epilogue; empty until then)
+  xpAwards: [{ playerId: string; name: string; xp: number   // XP each hero earned outside a fight in the
+               idle: boolean          // last resolved scene (see "Experience without a fight"). idle: the
+                                      // server threw their die for them, so every amount is halved.
+               reasons: [{ reason: "took-part" | "success" | "brave-failure" | "trap" | "puzzle" | "social"
+                                   | "discovery" | "new-ground" | "chapter" | "deeper" | "quest";
+                           label: string      // "a clever parley": the words the dice log uses
+                           xp: number }] }]   // empty for none and for a round of a fight; absent from older
+                                      // servers. The same awards are lines in results ("+25 XP: a clever
+                                      // parley (Bryn, Cleo).") and in the chat.
   time: { seconds: number; label: string }   // the adventure's clock, from 8 in the morning of day 1:
                                       // "Day 1, 08:40". A choice takes ten minutes, a rest its length.
   light: {
@@ -800,9 +812,20 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   level, with few foes at levels 1–2.
 - **Treasure** is shared in whole gold among the living heroes. The odd pieces go one each to the first
   of them, and the dead get none ("Treasure: 5 gp in coin (2 each, and 1 more to Bryn)").
-- **Levelling up at the quest's end.** When the next scene is the epilogue, each living hero levels up
-  as far as its XP reaches (2024 thresholds, average hit points). The lines are in `rules.results` and
-  the chat, `rules.levelUps` lists who levelled up, and the hero goes home at its new level.
+- **Experience without a fight.** Each scene outside a fight pays XP to every hero who declared something
+  (a vote, an action, a written check): a little for taking part, more for a d20 that came good, some for
+  a brave failure, and more for a trap overcome, a parley won, new ground in a dungeon, a discovery, a
+  puzzle, or a chapter closed. The DM may tag a choice it offers (discovery, social, puzzle, milestone);
+  the engine pays the tag only when the party takes the choice and its dice do not fail, and it sets every
+  amount. A hero who did not declare earns nothing that scene; one whose die the server threw for them (the
+  choice window ran out, or the host advanced first) earns half. Every living hero who took part gets a
+  milestone at the adventure's end. The amounts scale with the hero's level and are in
+  [docs/rules-design.md](rules-design.md#experience-without-a-fight). They are in `rules.xpAwards`, as lines
+  in `rules.results` and the chat, and on each hero's `xp`, `questXp` and `nextLevelXp`.
+- **Levelling up at the quest's end.** When the next scene is the epilogue, each living hero who took part
+  gets the adventure's-end XP, then levels up as far as its XP reaches (2024 thresholds, average hit
+  points). The lines are in `rules.results` and the chat, `rules.levelUps` lists who levelled up, and the
+  hero goes home at its new level. Heroes do not level up mid-adventure.
 - **Meeting monsters.** Foes in a dungeon room roll an attitude (2d6): 2–5 Hostile, 6–9 Indifferent,
   10–12 Friendly. They do not attack at once. Hostile ones bar the way (`rules.dungeon.waiting`, attitude
   `hostile`): the scene's three choices are Engage, Run and Parley, whatever the DM wrote. Run, before
