@@ -323,6 +323,16 @@ export class MemoryStore implements Store {
     return [...met.values()].sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt)).slice(0, limit);
   }
 
+  async listGameCodes(playerId: string, limit = 40) {
+    await tick();
+    return [...this.games.values()]
+      .map(({ game }) => game)
+      .filter((game) => game.players.some((p) => p.playerId === playerId))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map((game) => game.code);
+  }
+
   async addInvite(invite: Invite) {
     await tick();
     if (this.invites.some((i) => i.code === invite.code && i.toPlayerId === invite.toPlayerId)) return false;

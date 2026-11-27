@@ -111,6 +111,38 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
   the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
 - `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
+## Past adventures
+
+`GET /api/adventures` → `{ adventures: Adventure[] }`: the caller's adventures, most recently played
+first (the newest 40 games they have a seat in). `?characterId=<id>` keeps only the ones that hero went
+on, which is what a hero's page shows. A door that never opened is not listed. Nor is a game the player
+left: leaving gives up the seat.
+
+```
+Adventure {
+  code: string                       // read the story with GET /api/games/{code}, as for a game being played:
+                                     // `chronicle` is every resolved scene with its picture and outcome, and
+                                     // `scene` is the epilogue once it has ended
+  title: string | null               // the dungeon master's name for it
+  status: "voting" | "resolving" | "ended" | "preparing" | "lobby"
+  ended: boolean                     // the epilogue has been told. False: still going, or left unfinished
+  dungeonMaster: string              // a catalog dungeonMasters id
+  startedAt: string; lastPlayedAt: string   // the first scene, and the last one told (reading it later does not count)
+  hero: { characterId: string; name: string; portraitUrl: string | null }   // the caller's hero, as they joined
+  party: string[]                    // the other heroes' names
+  scenes: number                     // scenes told so far, the epilogue included
+  images: string[]                   // the scene pictures in order, painted ones only; a fight's rounds
+                                     // share one picture, listed once
+  ending: string | null              // the epilogue, once ended
+  result: null | {                   // how it came out for the caller's hero; null for a game from before the rules
+    level: number                    // their level as the adventure stands (or stood, at its end)
+    levelsGained: number; xpGained: number
+    fell: boolean                    // the caller's hero died on it
+    fallen: string[]                 // every hero who died on it, the caller's included
+  }
+}
+```
+
 ## Characters
 
 ```ts

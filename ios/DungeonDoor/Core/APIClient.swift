@@ -245,6 +245,13 @@ struct APIClient: Sendable {
     }
 
     /// The players this one has shared a game with, most recent first.
+    /// The player's adventures, most recently played first; with a hero's id, the ones that hero went on.
+    func adventures(characterId: String? = nil) async throws -> [Adventure] {
+        struct Wrapper: Decodable { let adventures: [Adventure] }
+        let w: Wrapper = try await send("GET", "api/adventures", query: characterId.map { ["characterId": $0] } ?? [:])
+        return w.adventures
+    }
+
     func companions() async throws -> [Companion] {
         struct Wrapper: Decodable { let companions: [Companion] }
         let w: Wrapper = try await send("GET", "api/companions")

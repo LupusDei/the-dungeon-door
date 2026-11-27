@@ -560,6 +560,102 @@ struct Companion: Codable, Hashable, Identifiable {
     var id: String { playerId }
 }
 
+/// One of the player's adventures, as a hero's page lists it (docs/api.md, "Past adventures"). The
+/// story itself is the game: `GET /api/games/{code}` gives every scene and the epilogue.
+struct Adventure: Codable, Hashable, Identifiable {
+    struct Hero: Codable, Hashable {
+        var characterId = ""
+        var name = ""
+        var portraitUrl: String? = nil
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            characterId = try c.value(.characterId, or: "")
+            name = try c.value(.name, or: "")
+            portraitUrl = try c.decodeIfPresent(String.self, forKey: .portraitUrl)
+        }
+    }
+
+    /// How it came out for the player's hero.
+    struct Outcome: Codable, Hashable {
+        var level = 1
+        var levelsGained = 0
+        var xpGained = 0
+        /// The player's hero died on it.
+        var fell = false
+        /// Every hero who died on it.
+        var fallen: [String] = []
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            level = try c.whole(.level, or: 1)
+            levelsGained = try c.whole(.levelsGained)
+            xpGained = try c.whole(.xpGained)
+            fell = try c.value(.fell, or: false)
+            fallen = try c.value(.fallen, or: [])
+        }
+    }
+
+    let code: String
+    var title: String? = nil
+    /// The epilogue has been told. False: still going, or left unfinished.
+    var ended = false
+    var dungeonMaster = ""
+    var startedAt = ""
+    var lastPlayedAt = ""
+    var hero: Hero? = nil
+    /// The other heroes, by name.
+    var party: [String] = []
+    /// Scenes told so far, the epilogue included.
+    var scenes = 0
+    /// The scene pictures, in order.
+    var images: [String] = []
+    /// The epilogue, once it has ended.
+    var ending: String? = nil
+    /// Nil for a game from before the rules engine.
+    var result: Outcome? = nil
+
+    var id: String { code }
+    var imageURLs: [URL] { images.compactMap(URL.init(string:)) }
+    /// The picture to show it by: the last one painted, which for a finished adventure is its ending.
+    var coverURL: URL? { imageURLs.last }
+    var name: String { title?.isEmpty == false ? title! : "An untitled adventure" }
+
+    /// "26 Nov 2026", or nothing when the date cannot be read.
+    var day: String? {
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = precise.date(from: lastPlayedAt) ?? ISO8601DateFormatter().date(from: lastPlayedAt) else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    /// One line on how it came out: "Fell on this adventure", "Finished at level 2 (+300 XP)", "Unfinished: 3 scenes in".
+    var verdict: String {
+        if result?.fell == true { return ended ? "Fell on this adventure" : "Fell, and the adventure is unfinished" }
+        guard ended else { return "Unfinished: \(scenes) scene\(scenes == 1 ? "" : "s") in" }
+        guard let result else { return "Finished" }
+        var line = result.levelsGained > 0 ? "Finished, and rose to level \(result.level)" : "Finished at level \(result.level)"
+        if result.xpGained > 0 { line += " (+\(result.xpGained) XP)" }
+        return line
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        ended = try c.value(.ended, or: false)
+        dungeonMaster = try c.value(.dungeonMaster, or: "")
+        startedAt = try c.value(.startedAt, or: "")
+        lastPlayedAt = try c.value(.lastPlayedAt, or: "")
+        hero = try? c.decodeIfPresent(Hero.self, forKey: .hero)
+        party = try c.value(.party, or: [])
+        scenes = try c.whole(.scenes)
+        images = try c.value(.images, or: [])
+        ending = try c.decodeIfPresent(String.self, forKey: .ending)
+        result = try? c.decodeIfPresent(Outcome.self, forKey: .result)
+    }
+}
+
 /// An invitation to a party still gathering in its lobby.
 struct Invitation: Codable, Hashable, Identifiable {
     let code: String
