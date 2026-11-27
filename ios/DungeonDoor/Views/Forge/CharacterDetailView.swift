@@ -10,6 +10,8 @@ struct CharacterDetailView: View {
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var error: String?
+    /// `-openQuests YES`: straight on to this hero's quests (screenshot checks).
+    @State private var launchQuests = AppConfig.openQuestsArgument
 
     /// The latest copy, so edits show straight away.
     private var hero: Character { model.characters.first { $0.id == character.id } ?? character }
@@ -32,6 +34,10 @@ struct CharacterDetailView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 14)
                 }
+                // The adventures this hero has been on: their pictures and how each came out.
+                QuestsLink(hero: hero)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 14)
                 HeroSheetView(character: hero, tab: $tab)
                 if hero.sheet == nil {
                     // No sheet to hold the Story tab yet: their words still belong on the page.
@@ -61,6 +67,7 @@ struct CharacterDetailView: View {
             }
         }
         .sheet(isPresented: $editing) { CharacterForgeView(editing: hero) }
+        .navigationDestination(isPresented: $launchQuests) { HeroQuestsView(hero: hero) }
         .confirmationDialog("Retire \(hero.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Retire", role: .destructive) {
                 Task {

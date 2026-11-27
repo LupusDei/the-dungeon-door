@@ -139,6 +139,8 @@ export interface Store {
 
   /** The players this one has shared a game with, most recent first. */
   listCompanions(playerId: string, limit?: number): Promise<Companion[]>;
+  /** The codes of the games this player still has a seat in, most recently played first. */
+  listGameCodes(playerId: string, limit?: number): Promise<string[]>;
   /** Records an invitation. False when that player is already invited to that game. */
   addInvite(invite: Invite): Promise<boolean>;
   /** The player's invitations to games still in the lobby that they have not joined, newest first. */

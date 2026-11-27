@@ -394,7 +394,8 @@ private struct HeroTile: View {
         let width = Tile.textWidth(percent)
         let arrangement = Tile.layout(big: big)
         return arrangement {
-            PortraitView(url: hero.portraitURL, symbol: classSymbol, size: big ? Tile.smallPortrait : width)
+            // The whole tile opens the hero's page; the picture opens large from there.
+            PortraitView(url: hero.portraitURL, symbol: classSymbol, size: big ? Tile.smallPortrait : width, opensViewer: false)
                 .saturation(fallen ? 0 : 1)
                 .opacity(fallen ? 0.55 : 1)
                 .overlay(alignment: .bottomLeading) {

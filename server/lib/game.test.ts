@@ -26,6 +26,7 @@ import { call, gamePath, makeCharacter } from './api.fixture.ts';
 import { settle } from './background.ts';
 import { setDice } from './game.ts';
 import { TREK_SCENES } from './play/trek.ts';
+import { TURN_SECONDS } from './play/turn-clock.ts';
 import { fakeDungeonMaster } from './dm/fake.ts';
 import { registerDungeonMaster, unregisterDungeonMaster } from './dm/registry.ts';
 import type { DungeonMaster } from './dm/types.ts';
@@ -424,4 +425,42 @@ test('in a game from before the rules engine, ties are broken by the DM pick, bu
   await settle();
   state = await view(code, host);
   assert.equal(state.chronicle[1].choiceLabel, 'Parley first', 'DM pick b ignored: c won outright');
+});
+
+test('the choice window is on the view before anyone votes, and gone while the next turn is written', async () => {
+  const { code, players, host } = await table(2);
+  const lobby = await view(code, host);
+  assert.equal(lobby.status, 'lobby');
+  assert.equal(lobby.turn, null);
+  assert.equal(lobby.players.length, 2);
+
+  const started = await call<GameState>(startApi.POST, gamePath(code, 'start'), { player: host, body: { sceneCount: 2 } });
+  assert.equal(started.body.status, 'preparing');
+  assert.equal(started.body.turn, null);
+  await settle();
+
+  const open = await view(code, host);
+  assert.equal(open.status, 'voting');
+  assert.equal(open.scene?.votes.length, 0, 'nobody has chosen yet');
+  assert.equal(open.players.length, 2, 'both heroes are on the view before either responds');
+  assert.equal(open.turn?.seconds, TURN_SECONDS);
+  const stored = await getStore().getGame(code);
+  const scene = stored?.scenes.find((s) => s.index === open.scene?.index);
+  assert.ok(scene);
+  assert.equal(Date.parse(open.turn!.deadline), Date.parse(scene.createdAt) + TURN_SECONDS * 1000);
+  assert.ok(Math.abs(Date.parse(open.turn!.now) - Date.now()) < 5_000);
+
+  await call(voteApi.POST, gamePath(code, 'vote'), { player: host, body: { sceneIndex: open.scene!.index, choiceId: 'a' } });
+  const mid = await view(code, players[1]);
+  assert.equal(mid.status, 'voting');
+  assert.equal(mid.turn?.deadline, open.turn!.deadline, 'one vote does not move the window');
+  assert.equal(mid.scene?.votes.length, 1);
+  assert.equal(mid.players.length, 2, 'the hero who has not chosen is still listed');
+  assert.equal(mid.players.some((p) => p.playerId === players[1]), true);
+
+  const resolving = (await call<GameState>(voteApi.POST, gamePath(code, 'vote'), {
+    player: players[1], body: { sceneIndex: open.scene!.index, choiceId: 'b' },
+  })).body;
+  assert.equal(resolving.status, 'resolving');
+  assert.equal(resolving.turn, null, 'the window closes while the next turn is written');
 });

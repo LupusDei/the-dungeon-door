@@ -57,9 +57,15 @@ Under that, two different boxes:
 - **The table** is each hero beside their portrait: the action once they declare it, then the roll
   once it is thrown. A bar drains across `turn` for anyone still choosing.
 
-Votes already in, who the table is waiting on, and the host's "resolve now" sit under the
-offers. The dice of the last resolved scene are at the bottom. The finale offers the way back
-to the tavern.
+Under the offers, the Story page lists every hero at once: portrait, name, and whether they
+have chosen or are still waiting. It does not wait for a vote to arrive before drawing them.
+Each waiting hero has a bar that drains across `turn` (90 seconds from when the scene was
+stored, counted against `turn.now`). A hero who has chosen shows a check and a full bar. The
+window is display only: nothing resolves at zero, and the host can still proceed early.
+
+Once the choices are in and `status` is `resolving`, the Story page covers itself with a
+turning d20 and "The tale unfolds…" until the next scene is up. The dice of the last resolved
+scene are at the bottom. The finale offers the way back to the tavern.
 
 ## Sheet
 

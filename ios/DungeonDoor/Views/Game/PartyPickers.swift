@@ -36,7 +36,7 @@ struct HeroPicker: View {
                                 withAnimation(.snappy) { selection = hero.id }
                             } label: {
                                 VStack(spacing: 6) {
-                                    PortraitView(url: hero.portraitURL, size: side)
+                                    PortraitView(url: hero.portraitURL, size: side, opensViewer: false)
                                     Text(hero.name)
                                         .font(.serif(.footnote, weight: .semibold))
                                         .lineLimit(typeSize.isAccessibilitySize ? nil : 1)

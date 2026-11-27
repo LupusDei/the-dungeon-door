@@ -16,7 +16,6 @@ struct PlayStoryPage: View {
     var focusOffers: Int
     /// Offer-focuses the shell has already scrolled to. A later visit must not jump down again.
     @Binding var offersSeen: Int
-    var onOffer: (TableOffer) -> Void
 
     @State private var freeform = ""
     @State private var spoken = ""
@@ -75,6 +74,11 @@ struct PlayStoryPage: View {
                 .id("storyTop")
             }
             .scrollDismissesKeyboard(.interactively)
+            .overlay {
+                if state.status == .resolving, let scene = state.scene {
+                    ResolvingOverlay(scene: scene, players: state.players, coversChrome: false)
+                }
+            }
             .task(id: storyTurn) {
                 // Runs when the page appears and whenever the turn changes. Appearance covers a
                 // turn that arrived while another tab was showing: this page is built then, already
@@ -254,56 +258,6 @@ struct PlayStoryPage: View {
         }
     }
 
-    private func offerButton(_ offer: TableOffer, index: Int) -> some View {
-        let selected = scene.map { offer.isChosen(in: $0, playerId: session.playerId) } ?? false
-        let enabled = offer.available && canSend
-        let opensMap = offer.kind == "move" && offer.action?.squares.isEmpty == false
-        return Button { onOffer(offer) } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Text(ChoiceLetter.at(index))
-                    .font(.serif(.headline, weight: .bold))
-                    .foregroundStyle(selected ? Palette.ink : Palette.gold)
-                    .frame(width: 28, height: 28)
-                    .background(selected ? Palette.gold : Palette.raised, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(offer.label)
-                        .font(.serif(.body, weight: .semibold))
-                        .foregroundStyle(enabled || selected ? Palette.parchment : Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !offer.detail.isEmpty {
-                        Text(offer.detail)
-                            .font(.serif(.footnote))
-                            .foregroundStyle(Palette.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if offer.kind == "move", let action = offer.action, !action.squares.isEmpty {
-                        Text("Pick a gold square on the map.")
-                            .font(.serif(.caption, weight: .semibold))
-                            .foregroundStyle(Palette.gold.opacity(0.85))
-                    }
-                    if let note = offer.note, !note.isEmpty {
-                        Text(note)
-                            .font(.serif(.caption, weight: .semibold))
-                            .foregroundStyle(Palette.gold.opacity(0.85))
-                    }
-                    if let reason = offer.reason, !offer.available, !reason.isEmpty {
-                        Text(reason)
-                            .font(.serif(.caption))
-                            .foregroundStyle(Palette.ember)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(12)
-            .card(highlighted: selected)
-        }
-        .buttonStyle(.plain)
-        .disabled(!offer.available || (!canSend && !opensMap))
-        .opacity(enabled || selected || opensMap ? 1 : 0.55)
-        .accessibilityLabel(offer.label)
-    }
-
     private var freeformBox: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("What do you do?")
@@ -330,111 +284,6 @@ struct PlayStoryPage: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-
-    @ViewBuilder private var votes: some View {
-        if let scene {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Votes")
-                let others = scene.votes.filter { $0.playerId != session.playerId }
-                if others.isEmpty && scene.freeforms.filter({ $0.playerId != session.playerId }).isEmpty {
-                    Text(state.status == .voting ? "No one else has acted yet." : "No votes yet.")
-                        .font(.serif(.footnote).italic())
-                        .foregroundStyle(Palette.muted)
-                }
-                ForEach(others, id: \.playerId) { vote in
-                    otherVote(vote, scene: scene)
-                }
-                let written = scene.freeforms.enumerated().filter { item in
-                    item.element.playerId != nil && item.element.playerId != session.playerId
-                }
-                ForEach(written, id: \.offset) { item in
-                    if let playerId = item.element.playerId {
-                        HStack(spacing: 8) {
-                            Text(state.player(playerId)?.character.name ?? "A hero")
-                                .font(.caption.weight(.semibold))
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(item.element.text)
-                                .font(.caption)
-                                .foregroundStyle(Palette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                waiting(scene)
-            }
-        }
-    }
-
-    private func otherVote(_ vote: Vote, scene: GameScene) -> some View {
-        let hero = state.player(vote.playerId)?.character
-        return HStack(spacing: 8) {
-            PortraitView(url: hero?.portraitURL, size: 26, circular: true)
-            Text(hero?.name ?? "A hero")
-                .font(.caption.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            Text(voteWords(vote, scene: scene))
-                .font(.caption)
-                .foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            D20Badge(roll: vote.roll, size: 28)
-        }
-    }
-
-    private func voteWords(_ vote: Vote, scene: GameScene) -> String {
-        let base: String = {
-            if let label = vote.label, !label.isEmpty { return label }
-            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
-            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
-            return "Voted"
-        }()
-        if let intent = vote.intent, !intent.isEmpty, intent.compare(base, options: .caseInsensitive) != .orderedSame {
-            return "\(base) — \(intent)"
-        }
-        return base
-    }
-
-    @ViewBuilder private func waiting(_ scene: GameScene) -> some View {
-        if state.status == .voting {
-            let names = waitingNames(scene)
-            if names.isEmpty {
-                Text(scene.combat ? "Every action is in." : "All votes are in.")
-                    .font(.proseSmall.italic())
-                    .foregroundStyle(Palette.muted)
-            } else {
-                HStack(spacing: 8) {
-                    ProgressView().tint(Palette.gold)
-                    Text("Waiting on \(ListFormatter.localizedString(byJoining: names))…")
-                        .font(.proseSmall.italic())
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if session.isHost, scene.combat || !scene.votes.isEmpty || !scene.freeforms.isEmpty {
-                    Button(scene.combat ? "Resolve the round now" : "Proceed without them") {
-                        Task { await session.advance() }
-                    }
-                    .buttonStyle(.gildedOutline)
-                    .disabled(session.busy)
-                }
-            }
-        }
-    }
-
-    private func waitingNames(_ scene: GameScene) -> [String] {
-        var acted = Set(scene.votes.map(\.playerId))
-        for turn in scene.freeforms {
-            if let playerId = turn.playerId { acted.insert(playerId) }
-        }
-        if scene.myVote != nil || scene.myAction != nil || scene.myFreeform != nil {
-            acted.insert(session.playerId)
-        }
-        if scene.combat, let combat = state.rules?.combat {
-            return combat.combatants.filter { !$0.isFoe && $0.isUp && !acted.contains($0.id) }
-                .map { $0.id == session.playerId ? "you" : $0.name }
-        }
-        return state.players.filter { !acted.contains($0.playerId) }
-            .map { $0.playerId == session.playerId ? "you" : $0.character.name }
     }
 
     private var finale: some View {

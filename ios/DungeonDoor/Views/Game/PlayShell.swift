@@ -81,6 +81,12 @@ struct PlayShell: View {
             tabBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .overlay {
+                    // The Story tab draws this on its own page, and leaves the tab bar free.
+                    if tab != .story, state.status == .resolving, let scene = state.scene {
+                        ResolvingOverlay(scene: scene, players: state.players, coversChrome: false)
+                    }
+                }
             PlayTabBar(tab: $tab, inCombat: inCombat, unread: session.unreadChat)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -104,11 +110,6 @@ struct PlayShell: View {
             .presentationBackground(Palette.ink)
         }
         .overlay {
-            if state.status == .resolving, let scene = state.scene {
-                ResolvingOverlay(scene: scene, players: state.players)
-            }
-        }
-        .overlay {
             if let notice = session.levelUp {
                 LevelUpOverlay(notice: notice) {
                     withAnimation(.easeOut(duration: 0.25)) { session.levelUp = nil }
@@ -128,7 +129,7 @@ struct PlayShell: View {
         switch tab {
         case .story:
             PlayStoryPage(session: session, narrator: narrator, focusOffers: focusOffers,
-                          offersSeen: $offersSeen, onOffer: considerOffer)
+                          offersSeen: $offersSeen)
         case .sheet:
             PlaySheetPage(session: session, pane: $pane, onStory: focusStory) { action, intent in
                 consider(action, intent: intent)
@@ -143,14 +144,6 @@ struct PlayShell: View {
     private func focusStory() {
         withAnimation(.snappy) { tab = .story }
         focusOffers += 1
-    }
-
-    private func considerOffer(_ offer: TableOffer) {
-        if let action = offer.action {
-            consider(action)
-        } else if let choice = offer.choice, PlayTurn.canSend(status: state.status, scene: state.scene, busy: session.busy) {
-            Task { await session.vote(choice) }
-        }
     }
 
     /// Sends the action, asks who it names, or opens the map when the move is a square.

@@ -473,6 +473,15 @@ export class PostgresStore implements Store {
     return rows.map((r): Companion => ({ playerId: r.player_id, name: r.name, lastPlayedAt: iso(r.last_played) }));
   }
 
+  async listGameCodes(playerId: string, limit = 40) {
+    const rows = await this.q(
+      `SELECT g.code FROM games g JOIN game_players p ON p.game_code = g.code
+       WHERE p.player_id = $1 ORDER BY g.updated_at DESC LIMIT $2`,
+      [playerId, limit],
+    );
+    return rows.map((r) => r.code as string);
+  }
+
   async addInvite(invite: Invite) {
     const rows = await this.q(
       `INSERT INTO invites (game_code, to_player, from_player, from_name, created_at) VALUES ($1, $2, $3, $4, $5)

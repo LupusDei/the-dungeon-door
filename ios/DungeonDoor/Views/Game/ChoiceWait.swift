@@ -177,10 +177,16 @@ struct ChoiceWaitPanel: View {
     }
 
     private func words(_ vote: Vote) -> String {
-        if let label = vote.label, !label.isEmpty { return label }
-        if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
-        if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
-        return "Chosen"
+        let base: String = {
+            if let label = vote.label, !label.isEmpty { return label }
+            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
+            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
+            return "Chosen"
+        }()
+        if let intent = vote.intent, !intent.isEmpty, intent.compare(base, options: .caseInsensitive) != .orderedSame {
+            return "\(base) — \(intent)"
+        }
+        return base
     }
 
     /// Seconds left on the server's clock. Nil when this server sent no window.

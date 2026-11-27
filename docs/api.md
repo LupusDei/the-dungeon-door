@@ -111,6 +111,38 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
   the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
 - `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
+## Past adventures
+
+`GET /api/adventures` → `{ adventures: Adventure[] }`: the caller's adventures, most recently played
+first (the newest 40 games they have a seat in). `?characterId=<id>` keeps only the ones that hero went
+on, which is what a hero's page shows. A door that never opened is not listed. Nor is a game the player
+left: leaving gives up the seat.
+
+```
+Adventure {
+  code: string                       // read the story with GET /api/games/{code}, as for a game being played:
+                                     // `chronicle` is every resolved scene with its picture and outcome, and
+                                     // `scene` is the epilogue once it has ended
+  title: string | null               // the dungeon master's name for it
+  status: "voting" | "resolving" | "ended" | "preparing" | "lobby"
+  ended: boolean                     // the epilogue has been told. False: still going, or left unfinished
+  dungeonMaster: string              // a catalog dungeonMasters id
+  startedAt: string; lastPlayedAt: string   // the first scene, and the last one told (reading it later does not count)
+  hero: { characterId: string; name: string; portraitUrl: string | null }   // the caller's hero, as they joined
+  party: string[]                    // the other heroes' names
+  scenes: number                     // scenes told so far, the epilogue included
+  images: string[]                   // the scene pictures in order, painted ones only; a fight's rounds
+                                     // share one picture, listed once
+  ending: string | null              // the epilogue, once ended
+  result: null | {                   // how it came out for the caller's hero; null for a game from before the rules
+    level: number                    // their level as the adventure stands (or stood, at its end)
+    levelsGained: number; xpGained: number
+    fell: boolean                    // the caller's hero died on it
+    fallen: string[]                 // every hero who died on it, the caller's included
+  }
+}
+```
+
 ## Characters
 
 ```ts
@@ -264,11 +296,16 @@ GameState {
   code: string
   hostId: string
   status: "lobby" | "preparing" | "voting" | "resolving" | "ended"
+                                     // "resolving": the choices are in (or the host advanced) and the
+                                     // dungeon master is writing the next turn. The app shows a loading
+                                     // state until status returns to "voting" or "ended".
   dungeonMaster: string              // catalog dungeonMasters id
   title: string | null               // DM-named adventure title, set when the game starts
   sceneCount: number                 // scenes planned (default 4, including the finale)
   players: [{ playerId, character: Character, isHost: boolean, joinedAt,
               appVersion: string | null, outdated: boolean }]
+                                     // the whole party, including heroes who have not chosen yet. Who has
+                                     // acted is `scene.votes` and `scene.freeforms`, not a shorter `players`.
                                      // in a rules game `character.sheet` and `.attacks` are the hero as it
                                      // stands in this game: live HP, level, slots, gear.
                                      // `appVersion` is the last `x-dd-app-version` from that player
@@ -284,6 +321,16 @@ GameState {
                                      // A whisper the caller cannot see is never in this list
   typing: [{ playerId, name }]       // heroes whose players are composing a line, other than the caller
   rules: RulesView | null            // the rules engine's numbers; null for games started before it
+  turn: null | {                     // the choice window, while status is "voting" and the scene is not
+                                     // the finale. Null otherwise (lobby, preparing, resolving, ended).
+                                     // Opens when the scene is stored, which is when voting on it begins.
+                                     // Display only: a vote after `deadline` is still taken, and the scene
+                                     // does not resolve when the window ends. The host can still advance.
+    deadline: string                 // ISO-8601, when the window ends
+    seconds: number                  // the window, 90. A bar drains across it from the scene's start.
+    now: string                      // the server's clock when this view was built, ISO-8601, so the app
+                                     // can count down against the server between polls
+  }
   updatedAt: string
 }
 
@@ -622,6 +669,7 @@ Reaction {
   stepping to a square that puts the hero there. An illegal move is a 400. When every player has voted the scene resolves:
   status `resolving`, the DM weighs all votes and rolls, writes `outcome` on the old scene and the
   next scene (or the finale) in the background, then status returns to `voting` (or `ended`).
+  `turn` (above) is the choice window the app counts down. It does not gate this endpoint.
   Voting again replaces a written action (below) and keeps the same d20.
 - `POST /api/games/{code}/action` body `{ sceneIndex, text }` → `GameState` with `action`.
   Voting status only. `text` is the player's own action, 1–280 characters ("I kick the brazier onto
