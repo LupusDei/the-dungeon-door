@@ -46,6 +46,9 @@ export interface NewMessage {
   replyTo?: number | null;
   reply?: MessageQuote | null;
   mentions?: Mention[];
+  emote?: boolean;
+  /** Null or omitted: the whole party. A non-empty list is a whisper to those players. */
+  whisperTo?: Mention[] | null;
 }
 
 /** A scene as written by the DM: everything but its votes, its in-character lines, and its resolution. */

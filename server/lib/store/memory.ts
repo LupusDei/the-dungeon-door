@@ -256,6 +256,8 @@ export class MemoryStore implements Store {
       replyTo: message.replyTo ?? null,
       reply: message.reply ? structuredClone(message.reply) : null,
       mentions: structuredClone(message.mentions ?? []),
+      emote: message.emote === true,
+      whisperTo: message.whisperTo && message.whisperTo.length ? structuredClone(message.whisperTo) : null,
       reactions: [],
     };
     data.messages.push(stored);

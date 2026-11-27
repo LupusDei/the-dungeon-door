@@ -41,3 +41,61 @@ Feature: Party chat
   Scenario: The rest of the table can see who is writing
     When Ilsa is typing
     Then the next look at the table shows "Ilsa" typing
+
+  Scenario: A whisper is heard only by the people it names
+    Given the table is Bryn and Ilsa and Mara
+    When Bryn whispers "The door is trapped" to "Ilsa"
+    Then the line is a whisper to the hero "Ilsa"
+    And only Bryn and Ilsa can see that line
+    And the narrator never hears "The door is trapped"
+
+  Scenario: A whisper can name two heroes
+    Given the table is Bryn and Ilsa and Mara
+    When Bryn whispers "Stay back" to "Ilsa and Mara"
+    Then the line is a whisper to the hero "Ilsa"
+    And the line is a whisper to the hero "Mara"
+    And only Bryn and Ilsa and Mara can see that line
+    And the narrator never hears "Stay back"
+
+  Scenario: A slash whisper names a hero, spaces and all
+    Given the table is Bryn and Ilsa of the Gate and Mara
+    When Bryn says in character "/whisper Ilsa of the Gate the left door"
+    Then the line reads "the left door"
+    And the line is a whisper to the hero "Ilsa of the Gate"
+    And only Bryn and Ilsa of the Gate can see that line
+    And the narrator never hears "the left door"
+
+  Scenario: A slash whisper can name the player
+    When Bryn says out of character "/w player:Ilsa, look here"
+    Then the line reads "look here"
+    And the line is a whisper to the player of "Ilsa"
+    And the narrator never hears "look here"
+
+  Scenario: A reply to a whisper stays inside it
+    Given the table is Bryn and Ilsa and Mara
+    When Bryn whispers "The door is trapped" to "Ilsa"
+    And Ilsa replies in character "I saw it" to that line
+    Then only Bryn and Ilsa can see that line
+    And the narrator never hears "I saw it"
+    And the narrator never hears "The door is trapped"
+
+  Scenario: An in-character emote is something the hero does
+    When Bryn emotes in character "draws her sword"
+    Then the line is an emote by "Bryn" saying "draws her sword"
+    And the narrator keeps it as something "Bryn" does: "draws her sword"
+
+  Scenario: An out-of-character emote is not a deed of the hero
+    When Bryn emotes out of character "checks the time"
+    Then the line is an emote by "Bryn" saying "checks the time"
+    And the narrator does not keep "checks the time" as a deed
+
+  Scenario: A slash emote is the same deed
+    When Bryn says in character "/me draws her sword"
+    Then the line is an emote by "Bryn" saying "draws her sword"
+    And the narrator keeps it as something "Bryn" does: "draws her sword"
+
+  Scenario: A line names a hero and a player, spaces included
+    Given the table is Bryn and Ilsa of the Gate
+    When Bryn says out of character "Ask @Ilsa of the Gate and @player:Ilsa of the Gate"
+    Then the line mentions the hero "Ilsa of the Gate"
+    And the line mentions the player of "Ilsa of the Gate"

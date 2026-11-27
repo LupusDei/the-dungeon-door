@@ -1601,6 +1601,12 @@ struct Message: Codable, Hashable, Identifiable {
         let characterName: String?
         let text: String
         var voice: String? = nil
+        /// True when the quoted line was an emote. False when a server from before emotes leaves it out.
+        var emote: Bool = false
+
+        private enum CodingKeys: String, CodingKey {
+            case id, kind, playerId, characterName, text, voice, emote
+        }
     }
 
     /// `@Name` is the hero. `@player:Name` is the person who plays them.
@@ -1632,8 +1638,31 @@ struct Message: Codable, Hashable, Identifiable {
     var reply: Quote? = nil
     var mentions: [Mention] = []
     var reactions: [Reaction] = []
+    /// A third-person deed, shown as "*Mira draws her sword*". False when an older server leaves it out.
+    var emote: Bool = false
+    /// Who else may read a whisper. Empty when the whole party can, and when a server from before whispers leaves it out.
+    var whisperTo: [Mention] = []
 
     var inCharacter: Bool { kind == .chat && voice != "out" }
+    var isWhisper: Bool { !whisperTo.isEmpty }
+
+    /// "whisper to Ilsa and Bryn's player"
+    var whisperLabel: String {
+        let names = whisperTo.map { $0.target == "player" ? "\($0.name)'s player" : $0.name }
+        switch names.count {
+        case 0: return "whisper"
+        case 1: return "whisper to \(names[0])"
+        case 2: return "whisper to \(names[0]) and \(names[1])"
+        default:
+            let head = names.dropLast().joined(separator: ", ")
+            return "whisper to \(head) and \(names[names.count - 1])"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, playerId, characterName, text, createdAt
+        case voice, replyTo, reply, mentions, reactions, emote, whisperTo
+    }
 }
 
 extension Message {
@@ -1650,6 +1679,9 @@ extension Message {
         reply = try c.decodeIfPresent(Quote.self, forKey: .reply)
         mentions = try c.value(.mentions, or: [])
         reactions = try c.value(.reactions, or: [])
+        // A missing or unexpected value is the older shape: speech the whole party can read.
+        emote = (try? c.decode(Bool.self, forKey: .emote)) ?? false
+        whisperTo = (try? c.decode([Mention].self, forKey: .whisperTo)) ?? []
     }
 }
 
@@ -1662,6 +1694,7 @@ extension Message.Quote {
         characterName = try c.decodeIfPresent(String.self, forKey: .characterName)
         text = try c.value(.text, or: "")
         voice = try c.decodeIfPresent(String.self, forKey: .voice)
+        emote = (try? c.decode(Bool.self, forKey: .emote)) ?? false
     }
 }
 

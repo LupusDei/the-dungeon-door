@@ -123,6 +123,11 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS revised_at timestamptz;
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_voice_check;
 ALTER TABLE messages ADD CONSTRAINT messages_voice_check CHECK (voice IS NULL OR voice IN ('in', 'out'));
 
+-- A third-person emote, and who a whisper is for. whisper_to is null when the whole party may read
+-- the line. A whisper is never returned to anyone else, and never given to the narrator.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS emote boolean NOT NULL DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS whisper_to jsonb;
+
 -- One row per player per emoji. Toggling deletes the row. The message id does not change.
 CREATE TABLE IF NOT EXISTS message_reactions (
   game_code  text NOT NULL,

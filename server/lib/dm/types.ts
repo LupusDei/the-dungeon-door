@@ -90,6 +90,8 @@ export interface ChatLine {
    * Null on the dungeon master's own lines. On the line so a prompt can tell roleplay from table talk.
    */
   voice: 'in' | 'out' | null;
+  /** A third-person deed ("*draws her sword*"). Absent on speech, and on lines from before emotes. */
+  emote?: boolean;
 }
 
 export interface DMContext {

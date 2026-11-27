@@ -67,6 +67,15 @@ test('in-character chat is player voice: the narrator must keep it, and out-of-c
   assert.deepEqual(keptWords([], ctx.recentChat), [{ characterName: 'Bryn', text: 'We come in peace.' }]);
 });
 
+test('a whisper is never player voice, and an in-character emote is a deed', () => {
+  const chat = [
+    { characterName: 'Bryn', kind: 'chat', text: 'The door is trapped', voice: 'in' as const, whisperTo: [{ playerId: 'i' }] },
+    { characterName: 'Bryn', kind: 'chat', text: 'draws her sword', voice: 'in' as const, emote: true },
+    { characterName: 'Bryn', kind: 'chat', text: 'checks the time', voice: 'out' as const, emote: true },
+  ];
+  assert.deepEqual(keptWords([], chat), [{ characterName: 'Bryn', text: '*draws her sword*' }]);
+});
+
 test('quoted speech a hero did not write is dropped, and the world stays', () => {
   const stolen = 'Bryn says, "Draw your swords." The innkeeper eyes you warily. What do you say?';
   assert.equal(hasStolenHeroSpeech(stolen, heroes, []), true);

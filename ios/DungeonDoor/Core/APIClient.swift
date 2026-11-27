@@ -115,10 +115,24 @@ struct APIClient: Sendable {
         let _: OK = try await send("POST", "api/games/\(code)/leave", body: [String: String]())
     }
 
+    /// Who a whisper is for. `target` is "hero" or "player".
+    struct ChatWhisper: Encodable {
+        let playerId: String
+        let target: String
+    }
+
     /// `voice` is "in" (the hero) or "out" (the player). `replyTo` quotes that message.
-    func say(_ code: String, text: String, voice: String, replyTo: Int?) async throws -> Message {
-        struct Body: Encodable { let text: String; let voice: String; let replyTo: Int? }
-        return try await send("POST", "api/games/\(code)/messages", body: Body(text: text, voice: voice, replyTo: replyTo))
+    /// `emote` is a third-person deed. `whisperTo` is who else may read it; empty is the whole party.
+    func say(_ code: String, text: String, voice: String, replyTo: Int?, emote: Bool = false, whisperTo: [ChatWhisper] = []) async throws -> Message {
+        struct Body: Encodable {
+            let text: String
+            let voice: String
+            let replyTo: Int?
+            let emote: Bool
+            let whisperTo: [ChatWhisper]?
+        }
+        let heard = whisperTo.isEmpty ? nil : whisperTo
+        return try await send("POST", "api/games/\(code)/messages", body: Body(text: text, voice: voice, replyTo: replyTo, emote: emote, whisperTo: heard))
     }
 
     /// Toggles the caller's emoji on a line. The returned line has the same id.

@@ -17,12 +17,18 @@ interface Op {
   voice?: 'in' | 'out';
   reply?: boolean;
   emoji?: string;
+  emote?: boolean;
+  /** Hero names, joined with "and", who a whisper is for. */
+  whisper?: string;
 }
 
 interface View {
   messages: Message[];
   typing: { playerId: string; name: string }[];
   players: { playerId: string; name: string }[];
+  byHero: Record<string, Message[]>;
+  narratorKept: string;
+  narratorTalk: string;
   anchorId: number | null;
   lastId: number | null;
 }
@@ -95,6 +101,21 @@ export class PartyChatSteps {
     this.play();
   }
 
+  whispersTo(hero: string, text: string, who: string): void {
+    this.journal.push({ op: 'say', hero, text, voice: 'in', reply: false, whisper: who });
+    this.play();
+  }
+
+  emotesInCharacter(hero: string, text: string): void {
+    this.journal.push({ op: 'say', hero, text, voice: 'in', reply: false, emote: true });
+    this.play();
+  }
+
+  emotesOutOfCharacter(hero: string, text: string): void {
+    this.journal.push({ op: 'say', hero, text, voice: 'out', reply: false, emote: true });
+    this.play();
+  }
+
   replyQuotes(text: string): void {
     assert.equal(this.latest(this.play()).reply?.text, text);
   }
@@ -153,6 +174,52 @@ export class PartyChatSteps {
   showsTyping(hero: string): void {
     const view = this.play();
     assert.ok(view.typing.some((t) => t.name === hero), JSON.stringify(view.typing));
+  }
+
+  whisperToHero(name: string): void {
+    const line = this.latest(this.play());
+    assert.ok(line.whisperTo?.some((m) => m.target === 'hero' && m.name === name), JSON.stringify(line.whisperTo));
+  }
+
+  whisperToPlayer(name: string): void {
+    const line = this.latest(this.play());
+    assert.ok(line.whisperTo?.some((m) => m.target === 'player' && m.name === name), JSON.stringify(line.whisperTo));
+  }
+
+  onlyThoseSee(who: string): void {
+    const view = this.play();
+    const names = who.split(/\s+and\s+/).map((name) => name.trim());
+    for (const [hero, messages] of Object.entries(view.byHero)) {
+      const sees = messages.some((m) => m.id === view.lastId);
+      assert.equal(sees, names.includes(hero), `${hero} ${sees ? 'sees' : 'misses'} ${view.lastId}`);
+    }
+  }
+
+  lineReads(text: string): void {
+    assert.equal(this.latest(this.play()).text, text);
+  }
+
+  lineIsEmote(hero: string, text: string): void {
+    const line = this.latest(this.play());
+    assert.equal(line.emote, true);
+    assert.equal(line.characterName, hero);
+    assert.equal(line.text, text);
+  }
+
+  narratorNeverHears(text: string): void {
+    const view = this.play();
+    assert.equal(view.narratorKept.includes(text), false, view.narratorKept);
+    assert.equal(view.narratorTalk.includes(text), false, view.narratorTalk);
+  }
+
+  narratorKeepsDeed(hero: string, text: string): void {
+    const view = this.play();
+    assert.ok(view.narratorKept.includes(`${hero}: *${text}*`), view.narratorKept);
+  }
+
+  narratorDoesNotKeepDeed(text: string): void {
+    const view = this.play();
+    assert.equal(view.narratorKept.includes(text), false, view.narratorKept);
   }
 
   private speak(hero: string, text: string, voice: 'in' | 'out', reply: boolean): void {

@@ -182,6 +182,8 @@ export interface MessageQuote {
   characterName: string | null;
   text: string;
   voice: MessageVoice | null;
+  /** True when the quoted line was an emote. Absent on quotes from before emotes. */
+  emote?: boolean;
 }
 
 /** Something a player said or did in character this turn. No roll, and the engine does not adjudicate it. */
@@ -204,6 +206,13 @@ export interface Message {
   reply: MessageQuote | null;
   mentions: Mention[];
   reactions: Reaction[];
+  /** A third-person action. The table reads it as "*Name text*". False on lines from before emotes. */
+  emote: boolean;
+  /**
+   * Who else may read this whisper, besides the sender. Null when the whole party may.
+   * Never returned to anyone else, and never given to the narrator, whatever `voice` says.
+   */
+  whisperTo: Mention[] | null;
   createdAt: string;
 }
 

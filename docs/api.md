@@ -276,9 +276,12 @@ GameState {
                                      // that version is below the server's minimum, which blocks start.
   scene: Scene | null                // the current scene (null in lobby)
   chronicle: ChronicleEntry[]        // resolved scenes, oldest first (the story so far)
-  messages: Message[]                // newest last; only those after `since` when given
+  messages: Message[]                // newest last; only those after `since` when given. A whisper is
+                                     // left out unless the caller sent it or was named in it. The same
+                                     // rule applies to messageUpdates, a quoted reply, and a push
   messageUpdates: Message[]          // lines already delivered (id ≤ `since`) whose reactions changed;
-                                     // empty when `since` is omitted, because those lines are in `messages`
+                                     // empty when `since` is omitted, because those lines are in `messages`.
+                                     // A whisper the caller cannot see is never in this list
   typing: [{ playerId, name }]       // heroes whose players are composing a line, other than the caller
   rules: RulesView | null            // the rules engine's numbers; null for games started before it
   updatedAt: string
@@ -480,13 +483,20 @@ Message {
   voice: "in" | "out" | null         // "in": the hero speaks (name and portrait). "out": the player, out of
                                      // character. null for system and dm lines. A chat line from before this
                                      // field reads as "in". Stored, and copied onto the DM's recentChat so
-                                     // in-character lines are visible in that data
+                                     // in-character lines are visible in that data. A whisper is never
+                                     // in-character for the narrator, even when voice is "in"
   replyTo: number | null             // the id of the line this one answers
   reply: MessageQuote | null         // that line, quoted, so the preview survives even if it has scrolled
-                                     // out of the poll window
+                                     // out of the poll window. A reply to a whisper stays inside that whisper
   mentions: Mention[]                // heroes and players named in the text; empty when it names nobody
   reactions: Reaction[]              // emoji on this line, in the order they were first used; empty when
                                      // nobody has reacted. Tap the same emoji again to leave it
+  emote: boolean                     // true: a third-person deed, shown as "*Mira draws her sword*".
+                                     // false on lines from before emotes. An in-character emote is a deed
+                                     // the narrator must keep. An out-of-character emote is table talk
+  whisperTo: Mention[] | null        // who else may read this, besides the sender. null: the whole party.
+                                     // A whisper is never returned to anyone else, on any poll or view,
+                                     // and is never given to the narrator. Absent on a server from before whispers
   createdAt: string
 }
 
@@ -497,13 +507,16 @@ MessageQuote {
   characterName: string | null
   text: string
   voice: "in" | "out" | null
+  emote?: boolean                    // true when the quoted line was an emote. Absent on older quotes
 }
 
 Mention {
   playerId: string
-  name: string                       // the hero's name, as the party knows it
+  name: string                       // the hero's name, as the party knows it. There is no separate
+                                     // account name: a player is addressed by the hero they play
   target: "hero" | "player"          // "hero": @Name addresses the character. "player": @player:Name
-                                     // addresses the person who plays them
+                                     // addresses the person who plays them. The same shape names who
+                                     // a whisper is for
 }
 
 Reaction {
@@ -520,17 +533,31 @@ Reaction {
 - `POST /api/games/{code}/join` body `{ characterId }` → `GameState`. Lobby only (409 after start).
   Re-joining with a different character swaps the character. Max 6 players.
 - `POST /api/games/{code}/leave` → `{ ok: true }`. If the host leaves, the earliest remaining player becomes host.
-- `POST /api/games/{code}/messages` body `{ text, voice?, replyTo? }` → `Message`. `voice` is `"in"`
-  (the default: the hero speaks) or `"out"` (the player, out of character). `"in"` is the same kind of
-  player-voice input as `POST …/speak`: those words are the hero's, and the narrator must answer them
-  and must not rewrite them. `"out"` is table talk. It is not what the hero said, and it is never an
-  instruction to the dungeon master. `replyTo` is a message id in this game; 400 when it isn't. Names in
-  the text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa` is the player of that hero. The longest
-  hero name that fits is used, and a name that isn't at the table is left as text. 400 when `text` isn't
-  1–500 characters or `voice` isn't `"in"` or `"out"`.
+- `POST /api/games/{code}/messages` body `{ text, voice?, replyTo?, emote?, whisperTo? }` → `Message`.
+  `voice` is `"in"` (the default: the hero speaks) or `"out"` (the player, out of character). `"in"` is
+  the same kind of player-voice input as `POST …/speak`: those words are the hero's, and the narrator
+  must answer them and must not rewrite them. `"out"` is table talk. It is not what the hero said, and
+  it is never an instruction to the dungeon master. `emote: true` is a third-person deed (`/me draws her
+  sword` is the same thing, and the stored `text` is what follows the command). An in-character emote
+  reaches the narrator as something the hero does (`*draws her sword*`). An out-of-character emote does
+  not. `whisperTo` is `[{ playerId, target? }]`, the characters (`"hero"`, the default) or players
+  (`"player"`) who may hear it besides the sender. `/w Name …` and `/whisper Name …` do the same from
+  `text`: a comma or `and` separates names, `player:Name` names the player, and the longest name at the
+  table wins, so spaces stay inside the name. A colon may sit between the names and the words. A whisper
+  is never in-character speech and is never sent to the narrator, whatever `voice` is. It is returned
+  only to the sender and the players it names: every poll, every other view, every reaction update, and
+  every push. A reply to a whisper stays inside that whisper (a reply that names someone who did not
+  hear it is 400). Replying to a whisper you cannot see is 400, the same as a missing line. Reacting to
+  one you cannot see is 404. `replyTo` is a message id in this game; 400 when it isn't. Names in the
+  text become `mentions`: `@Ilsa` is the hero, `@player:Ilsa` is the player of that hero (the name the
+  table has for that person; there is no separate account name). The longest hero name that fits is
+  used, and a name that isn't at the table is left as text. 400 when `text` isn't 1–500 characters,
+  `voice` isn't `"in"` or `"out"`, `emote` isn't a boolean, `whisperTo` names nobody at the table or
+  only the sender, or a slash whisper names nobody or has no words.
 - `POST /api/games/{code}/reactions` body `{ messageId, emoji }` → `Message`. Toggles the caller's reaction
-  on that line (any kind of line): the first tap adds it, the next removes it. The returned line has the
-  same `id`. `emoji` is a single emoji. 400 when it isn't; 404 when the line isn't in this game.
+  on that line (any kind of line the caller can see): the first tap adds it, the next removes it. The
+  returned line has the same `id`. `emoji` is a single emoji. 400 when it isn't; 404 when the line isn't
+  in this game, or is a whisper the caller cannot see.
 - `POST /api/games/{code}/typing` body `{ typing? }` → `{ ok: true }`. `typing: true` (the default) says the
   caller is composing; the next poll shows them in `typing` for about five seconds, to everyone else.
   `typing: false` clears it at once.
@@ -540,7 +567,8 @@ Reaction {
   `roleplay`, which is the turn's log, and stays on that chronicle entry once the scene resolves. The
   dungeon master's next narration, and the NPCs in it, answer these words. A player may send several.
   This is not a freeform action. An in-character chat line (`voice: "in"`) is the same promise: the
-  narrator keeps those words. Out-of-character chat is not.
+  narrator keeps those words, and an in-character emote is kept as a deed. Out-of-character chat is not.
+  A whisper is not, even when its voice is `"in"`.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
   Host only. Refused while any seated player is outdated (see App versions): 426 when the caller

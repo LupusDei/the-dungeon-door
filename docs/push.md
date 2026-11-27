@@ -10,6 +10,8 @@ side is `ios/DungeonDoor/Core/PushCenter.swift`.
 | A scene is ready for votes | Every player in the game | "The Sunken Crypt. What will Bryn do?" |
 | A combat round begins | Every player whose hero can act (not down, not dead) | "Round 2: Bryn, choose your action. Facing Zombie, Giant Rat ×2." |
 | A player chats | The rest of the party, not the one who spoke | "Corin: Are we going in?" |
+| A player whispers | Only the players it names, not the one who spoke and not the rest of the party | "Bryn whispers: The door is trapped." |
+| A player emotes | The rest of the party, not the one who acted | "*Bryn draws her sword*" |
 | A companion invites them | The invited player | "Bryn invites you to a new adventure. Door code ABCDEF." |
 
 A player who is looking at the game hears nothing about it. The app fetches the game every two seconds

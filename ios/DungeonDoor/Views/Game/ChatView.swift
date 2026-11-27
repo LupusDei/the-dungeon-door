@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Party chat. A line is the hero speaking, or the player out of character. It can quote another
-/// line, name someone at the table, and carry emoji. The composer also sits on the table itself,
-/// so a player can talk without opening this sheet.
+/// Party chat. A line is the hero speaking, the player out of character, an emote, or a whisper.
+/// It can quote another line, name a character or a player, and carry emoji. The composer also sits
+/// on the table itself, so a player can talk without opening this sheet.
 struct ChatView: View {
     @Bindable var session: GameSession
 
@@ -97,13 +97,36 @@ struct ChatComposerBar: View {
                     }
                 }
             }
+            if !session.whisperTo.isEmpty {
+                HStack(spacing: 8) {
+                    Text(whisperCaption)
+                        .font(.caption.italic())
+                        .foregroundStyle(Palette.verdigris)
+                    Spacer(minLength: 0)
+                    Button { session.whisperTo = [] } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Stop whispering")
+                }
+            }
+            if session.whisperPickerOpen {
+                whisperPicker
+            }
             // With large text the voice switch has its own line, so the hero's name is whole and the
-            // field keeps its width.
-            if typeSize >= .xxLarge { voiceSwitch(wide: true) }
+            // field keeps its width. Emote and whisper sit with it.
+            HStack(spacing: 8) {
+                if typeSize >= .xxLarge { voiceSwitch(wide: true) }
+                modeButton(session.emoting ? "*me*" : "Emote", on: session.emoting, tint: Palette.gold) {
+                    session.emoting.toggle()
+                }
+                .accessibilityLabel(session.emoting ? "Emoting" : "Speak instead of emoting")
+                modeButton("Whisper", on: session.whisperPickerOpen || !session.whisperTo.isEmpty, tint: Palette.verdigris) {
+                    session.whisperPickerOpen.toggle()
+                }
+                .accessibilityLabel("Choose who to whisper to")
+                Spacer(minLength: 0)
+            }
             HStack(alignment: .bottom, spacing: 10) {
                 if typeSize < .xxLarge { voiceSwitch(wide: false) }
-                TextField(session.speakingInCharacter ? "Speak as \(session.me?.character.name ?? "your hero")…" : "Out of character…",
-                          text: $session.draft, axis: .vertical)
+                TextField(fieldPrompt, text: $session.draft, axis: .vertical)
                     .font(.prose)
                     .lineLimit(1...4)
                     .focused($focused)
@@ -151,6 +174,86 @@ struct ChatComposerBar: View {
         .accessibilityLabel(session.speakingInCharacter ? "Speaking as your hero" : "Speaking out of character")
     }
 
+    private func modeButton(_ title: String, on: Bool, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background((on ? tint : Palette.raised).opacity(on ? 0.28 : 1), in: Capsule())
+                .foregroundStyle(on ? tint : Palette.parchment)
+        }
+    }
+
+    private var fieldPrompt: String {
+        let name = session.me?.character.name ?? "your hero"
+        if !session.whisperTo.isEmpty {
+            return session.emoting ? "Whisper what \(name) does…" : "Whisper…"
+        }
+        if session.emoting {
+            return session.speakingInCharacter ? "What \(name) does…" : "What you do, out of character…"
+        }
+        return session.speakingInCharacter ? "Speak as \(name)…" : "Out of character…"
+    }
+
+    private var whisperCaption: String {
+        let names = session.whisperTo.map { $0.target == "player" ? "\($0.name)'s player" : $0.name }
+        switch names.count {
+        case 0: return "Whisper"
+        case 1: return "Whisper to \(names[0])"
+        case 2: return "Whisper to \(names[0]) and \(names[1])"
+        default:
+            let head = names.dropLast().joined(separator: ", ")
+            return "Whisper to \(head) and \(names[names.count - 1])"
+        }
+    }
+
+    private struct WhisperChoice: Identifiable {
+        let id: String
+        let playerId: String
+        let name: String
+        let target: String
+        let label: String
+    }
+
+    private var whisperChoices: [WhisperChoice] {
+        session.state.players.filter { $0.playerId != session.playerId }.flatMap { seated in
+            let name = seated.character.name
+            return [
+                WhisperChoice(id: "\(seated.playerId)-hero", playerId: seated.playerId, name: name, target: "hero", label: "\(name) · character"),
+                WhisperChoice(id: "\(seated.playerId)-player", playerId: seated.playerId, name: name, target: "player", label: "\(name) · player"),
+            ]
+        }
+    }
+
+    private var whisperPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(whisperChoices) { choice in
+                    let on = session.whisperTo.contains { $0.playerId == choice.playerId && $0.target == choice.target }
+                    Button { toggleWhisper(choice) } label: {
+                        Text(choice.label)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background((on ? Palette.verdigris : Palette.raised).opacity(on ? 0.28 : 1), in: Capsule())
+                            .foregroundStyle(on ? Palette.verdigris : Palette.parchment)
+                    }
+                    .accessibilityLabel(on ? "\(choice.label), selected" : choice.label)
+                }
+            }
+        }
+    }
+
+    private func toggleWhisper(_ choice: WhisperChoice) {
+        if let index = session.whisperTo.firstIndex(where: { $0.playerId == choice.playerId && $0.target == choice.target }) {
+            session.whisperTo.remove(at: index)
+        } else {
+            session.whisperTo.append(Message.Mention(playerId: choice.playerId, name: choice.name, target: choice.target))
+        }
+    }
+
     private var typingLine: String {
         let names = session.typing.map(\.name)
         switch names.count {
@@ -179,9 +282,7 @@ struct ChatComposerBar: View {
             let previous = text[text.index(before: at)]
             if previous.isLetter || previous.isNumber { return nil }
         }
-        let after = text[text.index(after: at)...]
-        if after.contains(where: { $0.isWhitespace }) { return nil }
-        return String(after)
+        return String(text[text.index(after: at)...])
     }
 
     private struct MentionChoice: Identifiable {
@@ -199,11 +300,11 @@ struct ChatComposerBar: View {
             let name = seated.character.name
             guard query.isEmpty || name.lowercased().hasPrefix(query.lowercased()) else { return [] }
             if playerMode {
-                return [MentionChoice(id: "\(seated.playerId)-player", label: "\(name)'s player", insert: "@player:\(name) ", player: true)]
+                return [MentionChoice(id: "\(seated.playerId)-player", label: "\(name) · player", insert: "@player:\(name) ", player: true)]
             }
             return [
-                MentionChoice(id: "\(seated.playerId)-hero", label: name, insert: "@\(name) ", player: false),
-                MentionChoice(id: "\(seated.playerId)-player", label: "\(name)'s player", insert: "@player:\(name) ", player: true),
+                MentionChoice(id: "\(seated.playerId)-hero", label: "\(name) · character", insert: "@\(name) ", player: false),
+                MentionChoice(id: "\(seated.playerId)-player", label: "\(name) · player", insert: "@player:\(name) ", player: true),
             ]
         }
     }
@@ -219,9 +320,11 @@ struct ChatComposerBar: View {
         let text = session.draft
         let voice = session.speakingInCharacter ? "in" : "out"
         let reply = session.replyingTo?.id
+        let emote = session.emoting
+        let whisper = session.whisperTo
         session.draft = ""
         session.replyingTo = nil
-        Task { await session.say(text, voice: voice, replyTo: reply) }
+        Task { await session.say(text, voice: voice, replyTo: reply, emote: emote, whisperTo: whisper) }
     }
 }
 
@@ -291,32 +394,83 @@ struct MessageLine: View {
                 }
             }
         case .chat:
-            if compact {
+            if message.emote {
+                emoteLine
+            } else if compact {
+                compactChat
+            } else {
+                speech
+            }
+        }
+    }
+
+    /// "*Mira draws her sword*", italic, and tinted when it is also a whisper.
+    private var emoteLine: some View {
+        let words = styled("*\(speaker) \(message.text)*")
+            .font(compact ? .footnote.italic() : .prose.italic())
+            .foregroundStyle(message.isWhisper ? Palette.verdigris : (message.voice == "out" ? Palette.muted : Palette.gold.opacity(0.95)))
+            .lineLimit(compact ? 2 : nil)
+            .fixedSize(horizontal: false, vertical: !compact)
+        return VStack(alignment: .leading, spacing: 3) {
+            if message.isWhisper {
+                Text(message.whisperLabel).font(.caption2.italic()).foregroundStyle(Palette.verdigris)
+            } else if message.voice == "out", !compact {
+                Text("out of character").font(.caption2).foregroundStyle(Palette.muted)
+            }
+            if let quote = message.reply, !compact { quoteView(quote) }
+            words
+        }
+        .padding(message.isWhisper && !compact ? 8 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            if message.isWhisper && !compact {
+                RoundedRectangle(cornerRadius: 10).fill(Palette.verdigris.opacity(0.12))
+            }
+        }
+    }
+
+    private var compactChat: some View {
+        Group {
+            if message.isWhisper {
+                (Text("\(speaker) whispers: ").foregroundStyle(Palette.verdigris).bold() + styled(message.text).italic())
+                    .font(.footnote)
+            } else {
                 (Text(speaker + ": ").bold() + styled(message.text))
                     .font(.footnote)
-                    .lineLimit(2)
+            }
+        }
+        .lineLimit(2)
+    }
+
+    private var speech: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if message.inCharacter {
+                PortraitView(url: portrait, size: 32, circular: true)
             } else {
-                HStack(alignment: .top, spacing: 10) {
-                    if message.inCharacter {
-                        PortraitView(url: portrait, size: 32, circular: true)
-                    } else {
-                        PortraitView(url: nil, symbol: "person.fill", size: 32, circular: true)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(speaker)
-                            .font(.caption.weight(.semibold))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(message.inCharacter ? (isMine ? Palette.gold : Palette.verdigris) : Palette.parchment)
-                        if message.voice == "out" {
-                            Text("out of character").font(.caption2).foregroundStyle(Palette.muted)
-                        }
-                        if let quote = message.reply { quoteView(quote) }
-                        styled(message.text)
-                            .font(message.inCharacter ? .prose.italic() : .prose)
-                            .lineLimit(nil)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                PortraitView(url: nil, symbol: "person.fill", size: 32, circular: true)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(speaker)
+                    .font(.caption.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(message.isWhisper ? Palette.verdigris : (message.inCharacter ? (isMine ? Palette.gold : Palette.verdigris) : Palette.parchment))
+                if message.isWhisper {
+                    Text(message.whisperLabel).font(.caption2.italic()).foregroundStyle(Palette.verdigris)
+                } else if message.voice == "out" {
+                    Text("out of character").font(.caption2).foregroundStyle(Palette.muted)
                 }
+                if let quote = message.reply { quoteView(quote) }
+                styled(message.text)
+                    .font(message.isWhisper || message.inCharacter ? .prose.italic() : .prose)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(message.isWhisper ? 8 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            if message.isWhisper {
+                RoundedRectangle(cornerRadius: 10).fill(Palette.verdigris.opacity(0.12))
             }
         }
     }
@@ -331,7 +485,10 @@ struct MessageLine: View {
             RoundedRectangle(cornerRadius: 1).fill(Palette.gold.opacity(0.7)).frame(width: 2)
             VStack(alignment: .leading, spacing: 1) {
                 Text(quote.characterName ?? "Earlier").font(.caption2.weight(.semibold)).foregroundStyle(Palette.gold)
-                Text(quote.text).font(.caption).foregroundStyle(Palette.muted).lineLimit(2)
+                Text(quote.emote ? "*\(quote.characterName ?? "Someone") \(quote.text)*" : quote.text)
+                    .font(.caption.italic())
+                    .foregroundStyle(Palette.muted)
+                    .lineLimit(2)
             }
         }
     }

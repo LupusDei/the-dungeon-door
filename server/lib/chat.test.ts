@@ -15,7 +15,10 @@ import * as reactionsApi from '../api/game-reactions.ts';
 import * as typingApi from '../api/game-typing.ts';
 import * as gamesApi from '../api/games.ts';
 import { call, gamePath, makeCharacter } from './api.fixture.ts';
-import { chatLine, chatLines, oneEmoji, parseMentions } from './chat.ts';
+import { chatLine, chatLines, interpretChat, oneEmoji, parseMentions } from './chat.ts';
+import { archetype } from './catalog.ts';
+import { storyPrompt } from './dm/llm.ts';
+import { keptWords } from './dm/playerVoice.ts';
 import { MemoryStore } from './store/memory.ts';
 import { getStore, setStore } from './store/index.ts';
 import type { GameState, Message } from './types.ts';
@@ -52,13 +55,15 @@ test('mentions: @Name is the hero, @player:Name is the player, the longest name 
 test('chat lines for the dungeon master keep in-character speech apart from table talk', () => {
   const line = (over: Partial<Message>): Message => ({
     id: 1, kind: 'chat', playerId: 'p', characterName: 'Bryn', text: 'hello', voice: 'in',
-    replyTo: null, reply: null, mentions: [], reactions: [], createdAt: 't', ...over,
+    replyTo: null, reply: null, mentions: [], reactions: [], emote: false, whisperTo: null, createdAt: 't', ...over,
   });
   assert.equal(chatLine(line({ kind: 'system', voice: null })), null);
   assert.deepEqual(chatLine(line({ voice: 'in', text: 'Left door.' })), {
     characterName: 'Bryn', kind: 'chat', text: 'Left door.', voice: 'in',
   });
   assert.equal(chatLine(line({ voice: 'out' }))?.voice, 'out');
+  assert.equal(chatLine(line({ whisperTo: [{ playerId: 'i', name: 'Ilsa', target: 'hero' }], text: 'secret' })), null);
+  assert.equal(chatLine(line({ emote: true, text: 'draws her sword' }))?.emote, true);
   assert.equal(chatLine(line({ voice: null }))?.voice, 'in', 'a chat line from before the flag reads as the hero');
   assert.deepEqual(chatLine(line({ kind: 'dm', playerId: null, characterName: 'Mara', voice: null, text: 'Well?' })), {
     characterName: 'Mara', kind: 'dm', text: 'Well?', voice: null,
@@ -211,4 +216,143 @@ test('the poll delivers reaction changes on lines the client already has, and ty
   // Expiry is the store's clock, not a second poll: a ping already in the past is gone.
   await getStore().setTyping(code, ilsa, 'Ilsa', new Date(Date.now() - 1000).toISOString());
   assert.deepEqual(await getStore().listTyping(code, new Date().toISOString()), []);
+});
+
+const gate = [
+  { playerId: 'i', name: 'Ilsa of the Gate' },
+  { playerId: 'b', name: 'Bryn' },
+  { playerId: 'm', name: 'Mara' },
+];
+
+test('a slash names an emote, or a whisper, and the longest name keeps its spaces', () => {
+  assert.deepEqual(interpretChat('/me draws her sword', gate), { text: 'draws her sword', emote: true, whisperTo: null });
+  assert.deepEqual(interpretChat('/emote nods', gate, { emote: false }), { text: 'nods', emote: true, whisperTo: null });
+  assert.deepEqual(interpretChat('draws her sword', gate, { emote: true }), { text: 'draws her sword', emote: true, whisperTo: null });
+  assert.equal(interpretChat('/mean well', gate).emote, false);
+
+  assert.deepEqual(interpretChat('/whisper Ilsa of the Gate, Bryn: the left door', gate), {
+    text: 'the left door', emote: false, whisperTo: [
+      { playerId: 'i', name: 'Ilsa of the Gate', target: 'hero' },
+      { playerId: 'b', name: 'Bryn', target: 'hero' },
+    ],
+  });
+  assert.deepEqual(interpretChat('/w player:Ilsa of the Gate look here', gate).whisperTo, [
+    { playerId: 'i', name: 'Ilsa of the Gate', target: 'player' },
+  ]);
+  assert.equal(interpretChat('/w Ilsa of the Gate and Bryn hold', gate).text, 'hold');
+  assert.equal(interpretChat('/w Bryn and then we go', gate).text, 'and then we go');
+  assert.deepEqual(interpretChat('/w @Ilsa of the Gate /me nods', gate), {
+    text: 'nods', emote: true, whisperTo: [{ playerId: 'i', name: 'Ilsa of the Gate', target: 'hero' }],
+  });
+  assert.throws(() => interpretChat('/w Nobody hello', gate), /someone at the table/);
+  assert.throws(() => interpretChat('/whisper Ilsa of the Gate', gate), /needs words/);
+  assert.throws(() => interpretChat('hi', gate, { whisperTo: [{ playerId: 'nope', target: 'hero' }] }), /whisperTo/);
+  assert.throws(() => interpretChat('hi', gate, { emote: 'yes' }), /emote/);
+});
+
+test('a whisper stays with the people it names, and never reaches the narrator', async () => {
+  const bryn = randomUUID();
+  const ilsa = randomUUID();
+  const mara = randomUUID();
+  const heroes = await Promise.all([
+    makeCharacter(bryn, 'Bryn'),
+    makeCharacter(ilsa, 'Ilsa of the Gate'),
+    makeCharacter(mara, 'Mara'),
+  ]);
+  const created = await call<GameState>(gamesApi.POST, '/api/games', { player: bryn, body: { characterId: heroes[0].id } });
+  const code = created.body.code;
+  assert.equal((await call(joinApi.POST, gamePath(code, 'join'), { player: ilsa, body: { characterId: heroes[1].id } })).status, 200);
+  assert.equal((await call(joinApi.POST, gamePath(code, 'join'), { player: mara, body: { characterId: heroes[2].id } })).status, 200);
+
+  const secret = 'The door is trapped';
+  const whispered = await say(code, bryn, { text: `/whisper Ilsa of the Gate ${secret}`, voice: 'in' });
+  assert.equal(whispered.status, 200, JSON.stringify(whispered.body));
+  assert.equal(whispered.body.text, secret);
+  assert.equal(whispered.body.voice, 'in');
+  assert.equal(whispered.body.emote, false);
+  assert.deepEqual(whispered.body.whisperTo, [{ playerId: ilsa, name: 'Ilsa of the Gate', target: 'hero' }]);
+
+  const seenBy = async (player: string) => JSON.stringify(await view(code, player));
+  assert.match(await seenBy(bryn), /The door is trapped/);
+  assert.match(await seenBy(ilsa), /The door is trapped/);
+  assert.doesNotMatch(await seenBy(mara), /The door is trapped/);
+  const polled = await view(code, mara, 0);
+  assert.equal(JSON.stringify(polled).includes(secret), false);
+  assert.equal(polled.messages.some((m) => m.id === whispered.body.id), false);
+
+  const reply = await say(code, ilsa, { text: 'I saw it', voice: 'in', replyTo: whispered.body.id });
+  assert.equal(reply.status, 200, JSON.stringify(reply.body));
+  assert.equal(reply.body.reply?.text, secret);
+  assert.deepEqual(reply.body.whisperTo?.map((t) => t.playerId), [bryn]);
+  assert.match(await seenBy(bryn), /I saw it/);
+  assert.doesNotMatch(await seenBy(mara), /I saw it/);
+  assert.equal((await say(code, mara, { text: 'what?', replyTo: whispered.body.id })).status, 400);
+  assert.equal((await say(code, ilsa, { text: 'everyone', whisperTo: [{ playerId: mara, target: 'hero' }], replyTo: whispered.body.id })).status, 400);
+
+  const reacted = await call<Message>(reactionsApi.POST, gamePath(code, 'reactions'), {
+    player: ilsa, body: { messageId: whispered.body.id, emoji: '👀' },
+  });
+  assert.equal(reacted.status, 200, JSON.stringify(reacted.body));
+  assert.equal(reacted.body.reactions[0]?.emoji, '👀');
+  assert.equal((await call(reactionsApi.POST, gamePath(code, 'reactions'), {
+    player: mara, body: { messageId: whispered.body.id, emoji: '👀' },
+  })).status, 404);
+  const updates = await view(code, mara, whispered.body.id);
+  assert.equal(updates.messageUpdates.some((m) => m.id === whispered.body.id), false);
+  assert.equal(JSON.stringify(updates).includes(secret), false);
+  const told = await view(code, bryn, whispered.body.id);
+  assert.equal(told.messageUpdates.some((m) => m.id === whispered.body.id), true);
+
+  const all = await getStore().listMessages(code);
+  assert.equal(chatLines(all).some((line) => line.text.includes(secret) || line.text.includes('I saw it')), false);
+  assert.equal(keptWords([], all).some((line) => line.text.includes(secret) || line.text.includes('I saw it')), false);
+  const prompt = storyPrompt({
+    archetype: archetype('chronicler'), adventureTitle: null, party: [], history: [], sceneIndex: 0, sceneCount: 4,
+    recentChat: chatLines(all), rules: null,
+  });
+  assert.equal(prompt.includes(secret), false);
+  assert.equal(prompt.includes('I saw it'), false);
+
+  const both = await say(code, bryn, {
+    text: 'the torch gutters',
+    whisperTo: [{ playerId: ilsa, target: 'hero' }, { playerId: mara, target: 'player' }],
+  });
+  assert.equal(both.status, 200, JSON.stringify(both.body));
+  assert.deepEqual(both.body.whisperTo, [
+    { playerId: ilsa, name: 'Ilsa of the Gate', target: 'hero' },
+    { playerId: mara, name: 'Mara', target: 'player' },
+  ]);
+  assert.match(await seenBy(ilsa), /the torch gutters/);
+  assert.match(await seenBy(mara), /the torch gutters/);
+  assert.equal(keptWords([], await getStore().listMessages(code)).some((line) => line.text.includes('torch gutters')), false);
+
+  assert.equal((await say(code, bryn, { text: '/w Bryn only me' })).status, 400);
+  assert.equal((await say(code, bryn, { text: 'hi', whisperTo: [{ playerId: mara, target: 'nope' }] })).status, 400);
+  const before = (await view(code, mara)).messages.length;
+  assert.equal((await say(code, bryn, { text: '/w Nobody the secret stays here' })).status, 400);
+  assert.equal((await view(code, mara)).messages.length, before);
+});
+
+test('an in-character emote reaches the narrator as a deed, and an out-of-character one does not', async () => {
+  const { code, bryn } = await table();
+  const deed = await say(code, bryn, { text: '/me draws her sword', voice: 'in' });
+  assert.equal(deed.status, 200, JSON.stringify(deed.body));
+  assert.equal(deed.body.emote, true);
+  assert.equal(deed.body.text, 'draws her sword');
+  assert.equal(deed.body.whisperTo, null);
+  assert.equal(deed.body.voice, 'in');
+
+  const aside = await say(code, bryn, { text: 'checks the time', voice: 'out', emote: true });
+  assert.equal(aside.body.emote, true);
+  assert.equal(aside.body.voice, 'out');
+
+  const all = await getStore().listMessages(code);
+  assert.deepEqual(keptWords([], all).map((line) => line.text), ['*draws her sword*']);
+  const prompt = storyPrompt({
+    archetype: archetype('chronicler'), adventureTitle: null, party: [], history: [], sceneIndex: 0, sceneCount: 4,
+    recentChat: chatLines(all), rules: null,
+  });
+  assert.match(prompt, /Bryn: \*draws her sword\*/);
+  assert.doesNotMatch(prompt.split('RECENT TABLE TALK')[0] ?? '', /checks the time/);
+  assert.match(prompt, /checks the time/);
 });
