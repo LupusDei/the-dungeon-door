@@ -117,7 +117,10 @@ export function upgradeCharacter(stored: StoredCharacter): Character {
   const race = currentRace(stored.race) as string;
   const { sheet: kept = heroSheet({ ...stored, race }, 'classic') } = stored;
   const sheet = asItStands(kept); // a stored passive Perception from before exhaustion counted
-  return { ...stored, race, sheet, attacks: heroAttacks(sheet), bonusesOpen: bonusesAreOpen(stored.id, sheet) };
+  return {
+    ...stored, race, sheet, attacks: heroAttacks(sheet), bonusesOpen: bonusesAreOpen(stored.id, sheet),
+    retiredAt: stored.retiredAt ?? null, death: stored.death ?? null,
+  };
 }
 
 /** What the store keeps of a character: everything but what is worked out on read. */
@@ -214,6 +217,8 @@ export async function saveCharacter(playerId: string, body: unknown): Promise<Ch
     appearance: c.appearance,
     portraitUrl: c.portraitUrl,
     sheet,
+    retiredAt: stored?.retiredAt ?? null,
+    death: stored?.death ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   }));
@@ -243,17 +248,51 @@ export async function assignAbilityBoost(playerId: string, characterId: unknown,
   return upgradeCharacter({ ...storable({ ...hero, sheet, updatedAt: now }) });
 }
 
-export async function listCharacters(playerId: string): Promise<Character[]> {
-  return (await getStore().listCharacters(playerId)).map(upgradeCharacter);
+const ROSTERS = {
+  active: (c: Character) => !c.retiredAt && !c.sheet.dead,
+  retired: (c: Character) => !!c.retiredAt && !c.sheet.dead,
+  dead: (c: Character) => c.sheet.dead === true,
+  all: () => true,
+} as const;
+
+/** What apps from before the Hall of Heroes show: the living and the fallen, but not the retired. */
+const notRetired = (c: Character) => !c.retiredAt;
+
+/** GET /api/characters?status=… — the caller's heroes, newest first; `status` picks which (docs/api.md). */
+export async function listCharacters(playerId: string, status: string | null = null): Promise<Character[]> {
+  if (status !== null && !Object.hasOwn(ROSTERS, status)) throw badRequest('status must be "active", "retired", "dead" or "all"');
+  const keep = status === null ? notRetired : ROSTERS[status as keyof typeof ROSTERS];
+  return (await getStore().listCharacters(playerId)).map(upgradeCharacter).filter(keep);
 }
 
+async function saved(hero: Character, patch: Partial<StoredCharacter>): Promise<Character> {
+  const next = storable({ ...hero, ...patch, updatedAt: new Date().toISOString() });
+  await getStore().saveCharacter(next);
+  return upgradeCharacter(next);
+}
+
+/** POST /api/characters/retire — off the roster, kept for the Hall of Heroes. A second retirement keeps the first date. */
+export async function retireCharacter(playerId: string, characterId: unknown): Promise<Character> {
+  const hero = await ownCharacter(playerId, characterId);
+  if (hero.retiredAt) return hero;
+  return saved(hero, { retiredAt: new Date().toISOString() });
+}
+
+/** POST /api/characters/unretire — back on the roster. The dead stay where they are: a temple can raise them. */
+export async function unretireCharacter(playerId: string, characterId: unknown): Promise<Character> {
+  const hero = await ownCharacter(playerId, characterId);
+  if (hero.sheet.dead) throw conflict(`${hero.name} is dead: the dead are not un-retired, but a temple can raise them`);
+  if (!hero.retiredAt) throw conflict(`${hero.name} is not retired`);
+  return saved(hero, { retiredAt: null });
+}
+
+/** DELETE /api/characters — what older apps call "Retire hero". Nothing deletes a hero for good. */
 export async function deleteCharacter(playerId: string, id: string | null): Promise<void> {
   if (!id) throw badRequest('id is required');
-  const store = getStore();
-  const existing = await store.getCharacter(id);
+  const existing = await getStore().getCharacter(id);
   if (!existing) throw notFound('no such character');
   if (existing.ownerId !== playerId) throw forbidden('that character belongs to another player');
-  await store.deleteCharacter(id);
+  await retireCharacter(playerId, id);
 }
 
 /** The caller's own character, or 404. */
@@ -280,6 +319,7 @@ export async function reviveCharacter(playerId: string, characterId: unknown, pa
   const paid = (c: Character) => ({ ...c.sheet, gp: c.sheet.gp - TEMPLE_RAISE_DEAD });
   if (payer !== hero) await store.saveCharacter(storable({ ...payer, sheet: paid(payer), updatedAt: now }));
   const sheet = revive(payer === hero ? paid(hero) : hero.sheet, 'raise-dead');
-  await store.saveCharacter(storable({ ...hero, sheet, updatedAt: now }));
-  return upgradeCharacter(storable({ ...hero, sheet, updatedAt: now }));
+  const raised = storable({ ...hero, sheet, retiredAt: null, death: null, updatedAt: now });
+  await store.saveCharacter(raised);
+  return upgradeCharacter(raised);
 }

@@ -3,10 +3,12 @@ import { renderImage, SCENE_STYLE } from './ai.ts';
 import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
+import { deathIn, newlyFallen } from './fallen.ts';
 import { knownActionIds, settleRuling } from './play/actions.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
 import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import type { PartyState } from './play/state.ts';
 import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { turnWindow } from './play/turn-clock.ts';
@@ -251,10 +253,11 @@ export async function rememberPlayer(request: Request): Promise<{ playerId: stri
 // ---------------------------------------------------------------------------------------------------------
 // Lobby
 
-/** One of your heroes who is fit to go: the dead stay dead until revived. */
+/** One of your heroes who is fit to go: the dead stay dead until revived, and the retired until un-retired. */
 async function livingCharacter(playerId: string, characterId: unknown): Promise<Character> {
   const character = await ownCharacter(playerId, characterId);
   if (character.sheet.dead) throw conflict(`${character.name} is dead`);
+  if (character.retiredAt) throw conflict(`${character.name} is retired`);
   return character;
 }
 
@@ -945,13 +948,30 @@ async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
   return draft;
 }
 
-/** The adventure is over: each hero's sheet goes home to its character. */
+/** The adventure is over: each hero's sheet goes home to its character, the dead with how and where they fell. */
 async function sendHeroesHome(game: Game, rules: RulesState | null): Promise<void> {
   if (!rules) return;
   const store = getStore();
+  const now = new Date().toISOString();
+  const lastScene = game.scenes.filter((s) => !s.isFinale).at(-1) ?? null;
   for (const { characterId, sheet } of writeBack(rules.party, game.players)) {
     const character = await store.getCharacter(characterId);
-    if (character) await store.saveCharacter({ ...character, sheet, updatedAt: new Date().toISOString() });
+    if (!character) continue;
+    const death = sheet.dead ? (character.death ?? deathIn(game, lastScene, sheet.name, rules.party.results ?? [], now)) : null;
+    await store.saveCharacter({ ...character, sheet, death, updatedAt: now });
+  }
+}
+
+/**
+ * The heroes this resolution killed get their death on the character now, while the scene and the engine's
+ * lines are known. It shows once the hero goes home dead; one raised before the end goes home without it.
+ */
+async function recordFalls(game: Game, scene: StoredScene, after: PartyState, lines: readonly string[]): Promise<void> {
+  const store = getStore();
+  const at = new Date().toISOString();
+  for (const p of newlyFallen(game.party, after, game.players)) {
+    const character = await store.getCharacter(p.character.id);
+    if (character) await store.saveCharacter({ ...character, death: deathIn(game, scene, after.sheets[p.playerId].name, lines, at) });
   }
 }
 
@@ -972,6 +992,7 @@ async function resolveScene(code: string, sceneIndex: number, origin: string): P
   if (!(await store.updateGame(code, { status: 'resolving', sceneIndex }, { status, sceneIndex: plan.next, ...plan.patch }))) return;
   if (plan.isFinale) pushForget(code, game.players.map((p) => p.playerId));
   else pushSceneReady(code);
+  if (plan.rules) await recordFalls(game, scene, plan.rules.party, plan.lines);
   await announce(game, plan, draft);
   if (plan.sharesPicture) await catchUpPicture(code, sceneIndex, plan.next);
   else await paintScene(code, plan.next, draft, origin);

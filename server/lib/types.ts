@@ -29,12 +29,30 @@ export interface Character {
    * player may place them once. Worked out on read, not stored.
    */
   bonusesOpen: boolean;
+  /** When the player retired the hero; null while active. Kept in the character JSON. */
+  retiredAt: string | null;
+  /** How and where the hero fell; null while alive, and for a hero that died before deaths were recorded. */
+  death: Death | null;
   createdAt: string;
   updatedAt: string;
 }
 
+/** How and where a hero fell, written when the adventure sends it home dead (lib/fallen.ts). */
+export interface Death {
+  at: string;
+  adventure: string | null;
+  place: string | null;
+  cause: string | null;
+  gameCode: string | null;
+}
+
 /** A character as stored: heroes saved before the rules engine have no sheet (and may be a half-orc or half-elf). */
-export type StoredCharacter = Omit<Character, 'sheet' | 'attacks' | 'bonusesOpen'> & { sheet?: CharacterSheet };
+export type StoredCharacter = Omit<Character, 'sheet' | 'attacks' | 'bonusesOpen' | 'retiredAt' | 'death'> & {
+  sheet?: CharacterSheet;
+  /** Absent on heroes stored before the Hall of Heroes: active, and alive or fallen unrecorded. */
+  retiredAt?: string | null;
+  death?: Death | null;
+};
 
 export type GameStatus = 'lobby' | 'preparing' | 'voting' | 'resolving' | 'ended';
 export type ChoiceId = 'a' | 'b' | 'c';
