@@ -15,11 +15,15 @@ struct TableOffer: Identifiable {
 
     static func list(in scene: GameScene) -> [TableOffer] {
         if !scene.actions.isEmpty {
-            return scene.actions.map { action in
+            let offers = scene.actions.map { action in
                 TableOffer(id: action.id, label: action.label, detail: action.detail, note: nil,
                            available: action.available, reason: action.reason, kind: action.kind,
                            action: action, choice: nil)
             }
+            // What the hero can do comes first, in the server's order; what they cannot follows, grey.
+            // Outside a fight the server lists every combat action as unavailable ahead of the scene's
+            // three choices, which would otherwise sit under a screen and a half of grey rows.
+            return offers.filter(\.available) + offers.filter { !$0.available }
         }
         return scene.choices.map { choice in
             TableOffer(id: "choice:\(choice.id)", label: choice.label, detail: choice.detail,

@@ -26,6 +26,9 @@ import SwiftUI
 /// - `-newGame YES` opens the "A New Adventure" sheet (the hero picker) from the home screen.
 /// - `-scrollTo <choices|combat|bottom>` scrolls an open scene down to its choices, its fight or
 ///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end.
+/// - `-playTab <story|sheet|map|chat>` opens a game being played on that tab; `-playPane
+///   <abilities|saves|attacks|spells|items|features>` opens its Sheet tab on that pane; and
+///   `-scrollTo choices` opens Story scrolled to what the table offers.
 /// - `-dd.pushOn NO` starts with the player's notification switch off, so iOS is not asked for leave.
 /// - `-pushOpen <kind>:<CODE>` acts as if a notification of that kind ("turn", "combat", "chat",
 ///   "invite") about that game had been tapped.
@@ -91,6 +94,8 @@ enum AppConfig {
     static var showChronicleArgument: Bool { UserDefaults.standard.bool(forKey: "showChronicle") }
     static var newGameArgument: Bool { UserDefaults.standard.bool(forKey: "newGame") }
     static var scrollToArgument: String? { argument("scrollTo")?.lowercased() }
+    static var playTabArgument: PlayTab? { argument("playTab").flatMap { PlayTab(rawValue: $0.lowercased()) } }
+    static var playPaneArgument: PlaySheetPane? { argument("playPane").flatMap { PlaySheetPane(rawValue: $0.lowercased()) } }
     static var pushOpenArgument: PushNews? { argument("pushOpen").flatMap(PushNews.init(argument:)) }
     /// Where a page's scroll view starts: the top, unless `-scrollTo bottom` asks for the end.
     static var launchScrollAnchor: UnitPoint { scrollToArgument == "bottom" ? .bottom : .top }

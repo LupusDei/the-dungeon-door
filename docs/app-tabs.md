@@ -50,7 +50,8 @@ Under that, two different boxes:
 - **In character** is `POST /speak`. No roll. The line joins the scene's roleplay.
 - **The table offers** is `scene.actions` for this hero, including `kind: "move"`. A tap votes
   that `actionId`. An action that needs one target among several asks who. An action the hero
-  cannot take stays in the list, grey, with the server's reason. A move that lists squares
+  cannot take stays in the list, grey, with the server's reason, after the ones they can take
+  (outside a fight that puts the scene's choices first, above the combat actions). A move that lists squares
   opens the Map. When the server sent no `actions` (a game from before that list), the three
   `choices` are the offers and a tap still votes the letter.
 - **In your own words** is `POST /action`. The dungeon master classifies it. A known deed

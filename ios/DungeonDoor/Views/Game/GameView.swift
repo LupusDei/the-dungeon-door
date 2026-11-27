@@ -44,7 +44,10 @@ struct GameView: View {
                 case .preparing where session.state.scene == nil:
                     PreparingView(title: session.state.title)
                 default:
-                    PlayShell(session: session, narrator: narrator, openHero: { sheetHero = SheetHero(playerId: $0) })
+                    PlayShell(session: session, narrator: narrator, openHero: { sheetHero = SheetHero(playerId: $0) },
+                              initialTab: AppConfig.playTabArgument ?? .story,
+                              initialPane: AppConfig.playPaneArgument ?? .abilities,
+                              scrollOffers: AppConfig.scrollToArgument == "choices")
                 }
             }
             .animation(.easeInOut(duration: 0.4), value: session.state.status)

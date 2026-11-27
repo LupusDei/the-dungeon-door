@@ -438,11 +438,8 @@ struct BattleToken: Identifiable {
         let text = String(letters.prefix(2))
         return text.isEmpty ? "?" : text
     }
-    var gauge: CGFloat {
-        let reading = combatant.gauge
-        guard reading.most > 0 else { return 0 }
-        return CGFloat(max(0, reading.now)) / CGFloat(reading.most)
-    }
+    /// The ring's fill, 0 to 1: a hero's hit points, a foe's fuzzy gauge (`Combatant.gauge`).
+    var gauge: CGFloat { CGFloat(combatant.gauge) }
 }
 
 enum BattleLayout {
