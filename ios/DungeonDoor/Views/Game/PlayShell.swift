@@ -41,7 +41,7 @@ enum PlaySheetPane: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// The game, once the door is open: a slim vitals strip, one Act chip, and four tabs.
+/// The game, once the door is open: the party's heads-up display, one Act chip, and four tabs.
 struct PlayShell: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -75,7 +75,7 @@ struct PlayShell: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PlayTopStrip(session: session)
+            PartyHUD(session: session)
             PlayActBar(session: session, choose: focusStory)
             if inCombat, let hud = state.rules?.combat?.hud {
                 Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
@@ -176,128 +176,6 @@ struct PlayShell: View {
             await session.vote(actionId: action.id, targets: targets, intent: intent)
             focusStory()
         }
-    }
-}
-
-// MARK: - Top strip
-
-struct PlayTopStrip: View {
-    @Bindable var session: GameSession
-
-    private var me: Character? { session.me?.character }
-    private var live: LiveHero? { session.state.live(of: session.playerId) }
-    private var hp: Int { live?.standing.hp ?? me?.sheet?.hp ?? 0 }
-    private var maxHp: Int { live?.standing.maxHp ?? me?.sheet?.maxHp ?? 1 }
-    private var ac: Int { live?.standing.armorClass ?? me?.sheet?.armorClass ?? 10 }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            PortraitView(url: me?.portraitURL, size: 32, circular: true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(me?.name ?? "Hero")
-                    .font(.serif(.subheadline, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                HStack(spacing: 6) {
-                    HPBar(hp: hp, maxHp: max(maxHp, 1),
-                          tint: Health.tint(hp: hp, maxHp: max(maxHp, 1), standing: hp > 0), height: 5)
-                        .frame(width: 72)
-                    Text("\(hp)/\(maxHp)")
-                        .font(.system(size: 11, weight: .semibold, design: .serif))
-                        .monospacedDigit()
-                        .foregroundStyle(Palette.muted)
-                }
-            }
-            acBadge
-            if !conditionNames.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(conditionNames, id: \.self) { name in
-                            Text(name)
-                                .font(.system(size: 10, weight: .semibold, design: .serif))
-                                .lineLimit(1)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Palette.ember.opacity(0.25), in: Capsule())
-                                .overlay { Capsule().strokeBorder(Palette.ember.opacity(0.6), lineWidth: 0.75) }
-                        }
-                    }
-                }
-                .frame(maxWidth: 120)
-            }
-            Spacer(minLength: 4)
-            turnBadge
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Palette.ink)
-    }
-
-    private var conditionNames: [String] {
-        var seen = Set<String>()
-        var names: [String] = []
-        func add(_ id: String) {
-            let key = id.lowercased()
-            guard !key.isEmpty, seen.insert(key).inserted else { return }
-            names.append(SRD.name(id))
-        }
-        for id in live?.conditions ?? [] { add(id) }
-        for held in live?.standing.conditions ?? [] { add(held.condition) }
-        return names
-    }
-
-    private var acBadge: some View {
-        VStack(spacing: 0) {
-            Text("AC").font(.system(size: 8, weight: .semibold, design: .serif)).foregroundStyle(Palette.muted)
-            Text("\(ac)").font(.serif(.headline, weight: .bold)).monospacedDigit()
-        }
-        .frame(width: 36, height: 36)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 8))
-        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.gold.opacity(0.35), lineWidth: 1) }
-        .accessibilityLabel("Armour class \(ac)")
-    }
-
-    private var turnBadge: some View {
-        let line = turnLine
-        return VStack(alignment: .trailing, spacing: 1) {
-            if session.state.scene?.combat == true, let round = session.state.rules?.combat?.round {
-                Text("Round \(round)")
-                    .font(.system(size: 10, weight: .semibold, design: .serif))
-                    .foregroundStyle(Palette.gold)
-            }
-            Text(line)
-                .font(.system(size: 11, weight: .semibold, design: .serif))
-                .foregroundStyle(line == "Your turn" || line == "Throw your die" ? Palette.gold : Palette.muted)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: 96, alignment: .trailing)
-        .accessibilityLabel(line)
-    }
-
-    private var turnLine: String {
-        if session.state.status == .resolving { return "Resolving…" }
-        guard let scene = session.state.scene else { return "Holding" }
-        if !scene.canAct { return "You are down" }
-        if PlayTurn.chosenLine(scene: scene, playerId: session.playerId) != nil {
-            // Declared, with the d20 still in hand: the table is waiting on this player, not the others.
-            if scene.myDie != nil, session.state.status == .voting { return "Throw your die" }
-            var acted = Set(scene.votes.map(\.playerId))
-            for turn in scene.freeforms {
-                if let playerId = turn.playerId { acted.insert(playerId) }
-            }
-            acted.insert(session.playerId)
-            let waiting: Bool
-            if scene.combat, let combat = session.state.rules?.combat {
-                waiting = combat.combatants.contains { !$0.isFoe && $0.isUp && !acted.contains($0.id) }
-            } else {
-                waiting = session.state.players.contains { !acted.contains($0.playerId) }
-            }
-            return waiting ? "Waiting on others" : "Ready"
-        }
-        if session.state.status == .voting { return "Your turn" }
-        return "Holding"
     }
 }
 

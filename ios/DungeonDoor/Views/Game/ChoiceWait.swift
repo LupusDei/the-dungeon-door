@@ -17,7 +17,7 @@ struct ChoiceWaitPanel: View {
         let kind: Kind
         let detail: String
         let roll: Int?
-        enum Kind { case chosen, waiting, down }
+        typealias Kind = TurnSeat
     }
 
     var body: some View {
@@ -145,48 +145,13 @@ struct ChoiceWaitPanel: View {
         }
     }
 
+    /// Chosen, waiting or down, by the rule the party's heads-up display also uses (`PlayTurn.seat`).
     private func kind(of player: GamePlayer, chosen: Bool) -> Seat.Kind {
-        if chosen { return .chosen }
-        guard scene.combat, let combat = state.rules?.combat else { return .waiting }
-        if let hero = combat.combatants.first(where: { $0.id == player.playerId && !$0.isFoe }) {
-            return hero.isUp ? .waiting : .down
-        }
-        if player.playerId == session.playerId, !scene.canAct { return .down }
-        return .waiting
+        PlayTurn.seat(of: player.playerId, chosen: chosen, in: scene, combat: state.rules?.combat, me: session.playerId)
     }
 
     private func acted(_ playerId: String) -> (detail: String, roll: Int?)? {
-        if let vote = scene.votes.first(where: { $0.playerId == playerId }) {
-            let waiting = vote.pending ? (vote.formula.map { " · \($0)" } ?? " · d20") : ""
-            return (words(vote) + waiting, vote.roll)
-        }
-        if let written = scene.freeforms.first(where: { $0.playerId == playerId }) {
-            let waiting = written.pending ? " · d20" : ""
-            return (written.text + waiting, written.roll)
-        }
-        guard playerId == session.playerId else { return nil }
-        if let written = scene.myFreeform { return (written.text, written.roll) }
-        if let id = scene.myAction?.id, let action = scene.actions.first(where: { $0.id == id }) {
-            return (action.label, nil)
-        }
-        if let id = scene.myVote, let choice = scene.choices.first(where: { $0.id == id }) {
-            return (choice.label.isEmpty ? "Chosen" : choice.label, nil)
-        }
-        if scene.myVote != nil || scene.myAction != nil { return ("Chosen", nil) }
-        return nil
-    }
-
-    private func words(_ vote: Vote) -> String {
-        let base: String = {
-            if let label = vote.label, !label.isEmpty { return label }
-            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
-            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
-            return "Chosen"
-        }()
-        if let intent = vote.intent, !intent.isEmpty, intent.compare(base, options: .caseInsensitive) != .orderedSame {
-            return "\(base) — \(intent)"
-        }
-        return base
+        PlayTurn.entry(of: playerId, in: scene, me: session.playerId)
     }
 
     /// Seconds left on the server's clock. Nil when this server sent no window.

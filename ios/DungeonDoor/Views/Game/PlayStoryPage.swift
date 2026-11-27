@@ -47,9 +47,6 @@ struct PlayStoryPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    if let party = state.rules?.party, !party.isEmpty {
-                        PartyStrip(party: party, players: state.players, me: session.playerId)
-                    }
                     if state.rules?.time != nil || state.rules?.light != nil {
                         TimeAndLight(clock: state.rules?.time, light: state.rules?.light,
                                      mine: state.standing(session.playerId))

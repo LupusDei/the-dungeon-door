@@ -36,6 +36,11 @@ struct TableOffer: Identifiable {
     }
 }
 
+/// Where a hero is in the turn the table is choosing: answered, still to answer, or unable to.
+enum TurnSeat: Hashable {
+    case chosen, waiting, down
+}
+
 /// What the table is asking of this hero, shared by the story, the sheet and the map.
 enum PlayTurn {
     static func canSend(status: GameStatus, scene: GameScene?, busy: Bool) -> Bool {
@@ -68,6 +73,60 @@ enum PlayTurn {
     static func roll(scene: GameScene, playerId: String) -> Int? {
         if let vote = scene.votes.first(where: { $0.playerId == playerId }) { return vote.roll }
         return scene.myFreeform?.roll
+    }
+
+    /// What a hero has put into this turn: the words for it, and its d20 once the face shows. Nil
+    /// until they choose. Votes and written actions name every player; the caller's own may only be
+    /// on `myFreeform`, `myAction` or `myVote`.
+    static func entry(of playerId: String, in scene: GameScene, me: String) -> (detail: String, roll: Int?)? {
+        if let vote = scene.votes.first(where: { $0.playerId == playerId }) {
+            let waiting = vote.pending ? (vote.formula.map { " · \($0)" } ?? " · d20") : ""
+            return (words(vote, in: scene) + waiting, vote.roll)
+        }
+        if let written = scene.freeforms.first(where: { $0.playerId == playerId }) {
+            let waiting = written.pending ? " · d20" : ""
+            return (written.text + waiting, written.roll)
+        }
+        guard playerId == me else { return nil }
+        if let written = scene.myFreeform { return (written.text, written.roll) }
+        if let id = scene.myAction?.id, let action = scene.actions.first(where: { $0.id == id }) {
+            return (action.label, nil)
+        }
+        if let id = scene.myVote, let choice = scene.choices.first(where: { $0.id == id }) {
+            return (choice.label.isEmpty ? "Chosen" : choice.label, nil)
+        }
+        if scene.myVote != nil || scene.myAction != nil { return ("Chosen", nil) }
+        return nil
+    }
+
+    /// Whether a hero has chosen this turn, has yet to, or is down. In a fight a hero who cannot
+    /// take a turn is down, and the round does not wait for them. The wait panel under the story and
+    /// the party's heads-up display both ask here, so they cannot disagree.
+    static func seat(of playerId: String, chosen: Bool, in scene: GameScene, combat: Combat?, me: String) -> TurnSeat {
+        if chosen { return .chosen }
+        guard scene.combat, let combat else { return .waiting }
+        if let hero = combat.combatants.first(where: { $0.id == playerId && !$0.isFoe }) {
+            return hero.isUp ? .waiting : .down
+        }
+        if playerId == me, !scene.canAct { return .down }
+        return .waiting
+    }
+
+    static func seat(of playerId: String, in scene: GameScene, combat: Combat?, me: String) -> TurnSeat {
+        seat(of: playerId, chosen: entry(of: playerId, in: scene, me: me) != nil, in: scene, combat: combat, me: me)
+    }
+
+    private static func words(_ vote: Vote, in scene: GameScene) -> String {
+        let base: String = {
+            if let label = vote.label, !label.isEmpty { return label }
+            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) { return action.label }
+            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty { return choice.label }
+            return "Chosen"
+        }()
+        if let intent = vote.intent, !intent.isEmpty, intent.compare(base, options: .caseInsensitive) != .orderedSame {
+            return "\(base) — \(intent)"
+        }
+        return base
     }
 
     /// The move a tap on this square should send. A shorter move wins over Dash when both list the square.
