@@ -1,11 +1,13 @@
 import { timingSafeEqual } from 'node:crypto';
 
-/** An error the API turns into `{ error }` with this status (see docs/api.md). */
+/** An error the API turns into `{ error }` with this status (see docs/api.md). `code` is added when set. */
 export class HttpError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -20,7 +22,10 @@ export async function handle(fn: () => Promise<Response | unknown>): Promise<Res
     const result = await fn();
     return result instanceof Response ? result : Response.json(result);
   } catch (error) {
-    if (error instanceof HttpError) return Response.json({ error: error.message }, { status: error.status });
+    if (error instanceof HttpError) {
+      const body = error.code ? { error: error.message, code: error.code } : { error: error.message };
+      return Response.json(body, { status: error.status });
+    }
     console.error(error);
     return Response.json({ error: 'internal error' }, { status: 500 });
   }

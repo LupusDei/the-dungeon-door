@@ -102,12 +102,22 @@ export class MemoryStore implements Store {
     const existing = game.players.find((p) => p.playerId === player.playerId);
     if (existing) {
       existing.character = structuredClone(player.character);
+      if (player.appVersion !== undefined) existing.appVersion = player.appVersion;
     } else {
       if (game.players.length >= maxPlayers) return false;
       game.players.push(structuredClone(player));
     }
     game.updatedAt = now();
     return true;
+  }
+
+  async noteAppVersion(code: string, playerId: string, appVersion: string | null) {
+    await tick();
+    const game = this.games.get(code)?.game;
+    const player = game?.players.find((p) => p.playerId === playerId);
+    if (!game || !player || (player.appVersion ?? null) === appVersion) return;
+    player.appVersion = appVersion;
+    game.updatedAt = now();
   }
 
   async removePlayer(code: string, playerId: string) {

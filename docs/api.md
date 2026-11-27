@@ -11,9 +11,42 @@ There is no sign-in in the MVP. The app makes a random player id (UUID) on first
 | --- | --- |
 | `x-dd-player` | The caller's player id (UUID). Required on every endpoint except `GET /api/catalog`. |
 | `x-dd-key` | Shared app key (`DD_APP_KEY` on the server). Required when the server has one set. |
+| `x-dd-app-version` | The caller's app version, sent on every request. `marketing+build` (for example `0.2+47`), where `build` is `CFBundleVersion`. A bare build (`47`) or `0.2 (47)` is also accepted. |
 
 Errors are `{ "error": "message" }` with 400 (bad input), 401 (missing/wrong key or player),
-403 (not allowed, e.g. not the host), 404 (no such game/character), 409 (wrong game state).
+403 (not allowed, e.g. not the host), 404 (no such game/character), 409 (wrong game state),
+426 (this install is too old to play). A 426 also carries `"code": "update_required"`. An old build
+does not read `code`; it already shows `error` as the message of a failed action. The game poll
+stays 200 so that build does not turn the lobby into "Reconnecting…".
+
+## App versions
+
+The oldest build that may begin a tale or a dungeon is `MIN_APP_BUILD` in `server/lib/app-version.ts`.
+Override it without a code change by setting `DD_MIN_APP_VERSION` to a build number, or to
+`marketing+build`. A client with no header, no build number, or a build below that minimum is out of date.
+
+Each seat remembers the last header from that player (`players[].appVersion`, null when they have
+never sent one). `players[].outdated` is true when that version is below the minimum, so the host
+can see who is holding the door.
+
+`POST …/start` does not begin while anyone is outdated:
+
+- the caller themselves is outdated or sent no version → 426 `update_required`,
+  `"Update the app to keep playing. This version of The Dungeon Door is no longer supported."`
+- the caller is current and someone else is not → 409 `"code": "party_outdated"` and
+  `"Ilsa needs to update the app before the adventure can begin."` (several names joined with "and")
+
+The same 426 is returned when an outdated or versionless client votes, writes an action, speaks in
+character, or advances the scene. Chat, the poll, joining and the forge stay open, so a current host
+still sees who has to update and an old build is not told the connection dropped.
+
+Bump the minimum when a TestFlight build must be installed before a party can start. `ios/fastlane`
+(`bump_build`) sets `CFBundleVersion` to one past the newest TestFlight build at upload time, in the
+temporary worktree, and does not write it back. `ios/project.yml` keeps `CURRENT_PROJECT_VERSION`
+(today `"1"`) for local Xcode builds. `MARKETING_VERSION` (today `"0.2"`) is not bumped by the ship
+script. After the build is on TestFlight, set `MIN_APP_BUILD` to that build's number and deploy, or
+set `DD_MIN_APP_VERSION` to the same number. Setting the constant in the same commit as the app races
+the number fastlane assigns.
 
 ## Catalog
 
@@ -229,9 +262,13 @@ GameState {
   dungeonMaster: string              // catalog dungeonMasters id
   title: string | null               // DM-named adventure title, set when the game starts
   sceneCount: number                 // scenes planned (default 4, including the finale)
-  players: [{ playerId, character: Character, isHost: boolean, joinedAt }]
+  players: [{ playerId, character: Character, isHost: boolean, joinedAt,
+              appVersion: string | null, outdated: boolean }]
                                      // in a rules game `character.sheet` and `.attacks` are the hero as it
-                                     // stands in this game: live HP, level, slots, gear
+                                     // stands in this game: live HP, level, slots, gear.
+                                     // `appVersion` is the last `x-dd-app-version` from that player
+                                     // (null when their client never sent one). `outdated` is true when
+                                     // that version is below the server's minimum, which blocks start.
   scene: Scene | null                // the current scene (null in lobby)
   chronicle: ChronicleEntry[]        // resolved scenes, oldest first (the story so far)
   messages: Message[]                // newest last; only those after `since` when given
@@ -501,7 +538,9 @@ Reaction {
   narrator keeps those words. Out-of-character chat is not.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
 - `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
-  Host only. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
+  Host only. Refused while any seated player is outdated (see App versions): 426 when the caller
+  themselves must update, 409 `party_outdated` naming the others when the caller is current. The game
+  stays in the lobby. `sceneCount` 2–8. `dungeon`: `"none"` (default: the DM's story, no map), `"fixed"` (a whole
   map of 5–9 rooms built from a seed) or `"explore"` (rooms are rolled as the party opens each door).
   The engine copies each hero's sheet into the game. The DM writes scene 0 in the background; status
   becomes `voting` when it's ready. Every game opens with two scenes on the road from the tavern

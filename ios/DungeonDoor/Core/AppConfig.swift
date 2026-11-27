@@ -55,6 +55,23 @@ enum AppConfig {
         (Bundle.main.object(forInfoDictionaryKey: "DDAppKey") as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// `marketing+build`, for example `0.2+1`. The build is CFBundleVersion, which TestFlight raises
+    /// on every upload. The server compares that build with its minimum.
+    static var appVersion: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        return "\(short)+\(build)"
+    }
+
+    /// A TestFlight or App Store link. Set `DDUpdateURL` in the app's Info.plist (project.yml `info`)
+    /// when there is one. Until then the update screen says so in words.
+    static var updateURL: URL? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "DDUpdateURL") as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme == "https" || url.scheme == "itms-beta" else { return nil }
+        return url
+    }
+
     /// A random id made on first launch. There's no sign-in in the MVP.
     static var playerId: String {
         let defaults = UserDefaults.standard

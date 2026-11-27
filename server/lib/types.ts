@@ -128,6 +128,8 @@ export interface GamePlayer {
   playerId: string;
   character: StoredCharacter;
   joinedAt: string;
+  /** Last `x-dd-app-version` from this player. Null or absent when their client never sent one. */
+  appVersion?: string | null;
 }
 
 /** Everything about a game except its chat, as the store returns it. */
@@ -269,7 +271,7 @@ export interface GameState {
   title: string | null;
   sceneCount: number;
   /** In a rules game each character is the hero as it stands in the game (live sheet). */
-  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string }[];
+  players: { playerId: string; character: Character; isHost: boolean; joinedAt: string; appVersion: string | null; outdated: boolean }[];
   scene: SceneView | null;
   chronicle: ChronicleEntry[];
   messages: Message[];

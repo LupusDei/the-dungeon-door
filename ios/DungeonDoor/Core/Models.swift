@@ -602,7 +602,27 @@ struct GamePlayer: Codable, Hashable, Identifiable {
     let character: Character
     let isHost: Bool
     let joinedAt: String
+    /// The last version this player's app sent. Nil when it never has, and on a server from before the gate.
+    var appVersion: String? = nil
+    /// True when that version is below the server's minimum. Absent on an older server, which means no.
+    var outdated: Bool = false
     var id: String { playerId }
+
+    private enum CodingKeys: String, CodingKey {
+        case playerId, character, isHost, joinedAt, appVersion, outdated
+    }
+}
+
+extension GamePlayer {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playerId = try c.decode(String.self, forKey: .playerId)
+        character = try c.decode(Character.self, forKey: .character)
+        isHost = try c.decode(Bool.self, forKey: .isHost)
+        joinedAt = try c.value(.joinedAt, or: "")
+        appVersion = try c.decodeIfPresent(String.self, forKey: .appVersion)
+        outdated = try c.decodeIfPresent(Bool.self, forKey: .outdated) ?? false
+    }
 }
 
 struct Choice: Codable, Hashable, Identifiable {

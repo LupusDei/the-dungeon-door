@@ -119,9 +119,9 @@ export class PostgresStore implements Store {
          INSERT INTO games (code, host_id, dungeon_master, scene_count) VALUES ($1, $2, $3, $4)
          ON CONFLICT (code) DO NOTHING RETURNING code
        )
-       INSERT INTO game_players (game_code, player_id, character, joined_at)
-       SELECT code, $5, $6, $7 FROM g RETURNING game_code`,
-      [game.code, game.hostId, game.dungeonMaster, game.sceneCount, game.host.playerId, JSON.stringify(game.host.character), game.host.joinedAt],
+       INSERT INTO game_players (game_code, player_id, character, joined_at, app_version)
+       SELECT code, $5, $6, $7, $8 FROM g RETURNING game_code`,
+      [game.code, game.hostId, game.dungeonMaster, game.sceneCount, game.host.playerId, JSON.stringify(game.host.character), game.host.joinedAt, game.host.appVersion ?? null],
     );
     return rows.length > 0;
   }
@@ -138,7 +138,12 @@ export class PostgresStore implements Store {
     );
     if (!row) return null;
     const votes = (row.votes as Row[]).map((v) => ({ sceneIdx: v.scene_idx as number, vote: voteOf(v) }));
-    const players = (row.players as Row[]).map((p): GamePlayer => ({ playerId: p.player_id, character: p.character as StoredCharacter, joinedAt: iso(p.joined_at) }));
+    const players = (row.players as Row[]).map((p): GamePlayer => ({
+      playerId: p.player_id,
+      character: p.character as StoredCharacter,
+      joinedAt: iso(p.joined_at),
+      appVersion: typeof p.app_version === 'string' ? p.app_version : null,
+    }));
     const readings = (row.voices ?? []) as Row[];
     const scenes = (row.scenes as Row[]).map((s): StoredScene => ({
       index: s.idx,
@@ -171,15 +176,27 @@ export class PostgresStore implements Store {
            AND (EXISTS (SELECT 1 FROM game_players WHERE game_code = $1 AND player_id = $2)
                 OR (SELECT count(*) FROM game_players WHERE game_code = $1) < $5)
        ), up AS (
-         INSERT INTO game_players (game_code, player_id, character, joined_at)
-         SELECT code, $2, $3, $4 FROM ok
-         ON CONFLICT (game_code, player_id) DO UPDATE SET character = EXCLUDED.character
+         INSERT INTO game_players (game_code, player_id, character, joined_at, app_version)
+         SELECT code, $2, $3, $4, $6 FROM ok
+         ON CONFLICT (game_code, player_id) DO UPDATE SET character = EXCLUDED.character, app_version = EXCLUDED.app_version
          RETURNING game_code
        )
        UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM up) RETURNING code`,
-      [code, player.playerId, JSON.stringify(player.character), player.joinedAt, maxPlayers],
+      [code, player.playerId, JSON.stringify(player.character), player.joinedAt, maxPlayers, player.appVersion ?? null],
     );
     return rows.length > 0;
+  }
+
+  async noteAppVersion(code: string, playerId: string, appVersion: string | null) {
+    await this.q(
+      `WITH u AS (
+         UPDATE game_players SET app_version = $3
+         WHERE game_code = $1 AND player_id = $2 AND app_version IS DISTINCT FROM $3
+         RETURNING game_code
+       )
+       UPDATE games SET updated_at = now() WHERE code IN (SELECT game_code FROM u)`,
+      [code, playerId, appVersion],
+    );
   }
 
   async removePlayer(code: string, playerId: string) {

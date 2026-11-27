@@ -76,6 +76,11 @@ struct HomeView: View {
         .fullScreenCover(isPresented: Binding(get: { model.activeGame != nil }, set: { if !$0 { model.closeGame() } })) {
             if let session = model.activeGame { GameView(session: session) }
         }
+        .overlay {
+            if UpdateGate.shared.required && model.activeGame == nil {
+                UpdateRequiredView().ignoresSafeArea()
+            }
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 1.1).delay(0.35)) { revealed = true }
         }

@@ -26,6 +26,7 @@ const gameApi = await import('../api/game.ts');
 const { settle } = await import('../lib/background.ts');
 const { fakeDungeonMaster } = await import('../lib/dm/fake.ts');
 const { registerDungeonMaster } = await import('../lib/dm/registry.ts');
+import { supportedAppVersionHeader } from '../lib/app-version.ts';
 import type { DMContext, DungeonMaster } from '../lib/dm/types.ts';
 import type { GameState } from '../lib/types.ts';
 
@@ -34,7 +35,7 @@ type Handler = (request: Request) => Promise<Response>;
 async function call<T>(handler: Handler, path: string, player: string, body?: unknown, method?: string): Promise<T> {
   const response = await handler(new Request(`http://localhost:3000${path}`, {
     method: method ?? (body === undefined ? 'GET' : 'POST'),
-    headers: { 'content-type': 'application/json', 'x-dd-player': player },
+    headers: { 'content-type': 'application/json', 'x-dd-player': player, 'x-dd-app-version': supportedAppVersionHeader() },
     body: body === undefined ? undefined : JSON.stringify(body),
   }));
   const json = await response.json();

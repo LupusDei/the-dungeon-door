@@ -1,11 +1,26 @@
 import Foundation
 
-private struct ErrorBody: Decodable { let error: String }
+private struct ErrorBody: Decodable {
+    let error: String
+    let code: String?
+}
 
 struct APIError: LocalizedError {
     let status: Int
     let message: String
+    let code: String?
     var errorDescription: String? { message }
+    /// 426, or the server's `update_required` code. An old build only shows `message`.
+    var updateRequired: Bool { status == 426 || code == "update_required" }
+}
+
+/// Set when this install has to be updated. The home screen and the game cover themselves with it.
+@MainActor @Observable
+final class UpdateGate {
+    static let shared = UpdateGate()
+    private(set) var required = false
+    func require() { required = true }
+    private init() {}
 }
 
 /// Thin async client for docs/api.md. Every call carries the player id and, when built with one,
@@ -189,6 +204,7 @@ struct APIClient: Sendable {
     /// A reading's audio, whole: it is played from memory, so any server that can send a file will do.
     func audio(at url: URL) async throws -> Data {
         var request = URLRequest(url: url, timeoutInterval: 60)
+        request.setValue(AppConfig.appVersion, forHTTPHeaderField: "x-dd-app-version")
         if let appKey, !appKey.isEmpty, url.host == base.host { request.setValue(appKey, forHTTPHeaderField: "x-dd-key") }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), !data.isEmpty else {
@@ -244,6 +260,7 @@ struct APIClient: Sendable {
         var request = URLRequest(url: components.url!, timeoutInterval: timeout)
         request.httpMethod = method
         request.setValue(playerId, forHTTPHeaderField: "x-dd-player")
+        request.setValue(AppConfig.appVersion, forHTTPHeaderField: "x-dd-app-version")
         if let appKey, !appKey.isEmpty { request.setValue(appKey, forHTTPHeaderField: "x-dd-key") }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -252,14 +269,18 @@ struct APIClient: Sendable {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
-                ?? HTTPURLResponse.localizedString(forStatusCode: status)
-            throw APIError(status: status, message: message)
+            let body = try? JSONDecoder().decode(ErrorBody.self, from: data)
+            let message = body?.error ?? HTTPURLResponse.localizedString(forStatusCode: status)
+            let code = body?.code
+            if status == 426 || code == "update_required" {
+                await MainActor.run { UpdateGate.shared.require() }
+            }
+            throw APIError(status: status, message: message, code: code)
         }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            throw APIError(status: status, message: "Unexpected reply from the server (\(error))")
+            throw APIError(status: status, message: "Unexpected reply from the server (\(error))", code: nil)
         }
     }
 }

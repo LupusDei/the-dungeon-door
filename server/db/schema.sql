@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS game_players (
   PRIMARY KEY (game_code, player_id)
 );
 
+-- Last x-dd-app-version seen from this player (`marketing+build`). Null when the client never sent one.
+ALTER TABLE game_players ADD COLUMN IF NOT EXISTS app_version text;
+
 CREATE TABLE IF NOT EXISTS scenes (
   game_code        text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
   idx              int  NOT NULL,

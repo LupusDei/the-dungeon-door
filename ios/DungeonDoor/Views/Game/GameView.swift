@@ -118,6 +118,11 @@ struct GameView: View {
                 showMap = true
             }
         }
+        .overlay {
+            if session.me?.outdated == true || UpdateGate.shared.required {
+                UpdateRequiredView().ignoresSafeArea()
+            }
+        }
         .onDisappear { narrator.stop() }
         .confirmationDialog("Leave the party?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave", role: .destructive) { Task { await model.leaveGame() } }

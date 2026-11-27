@@ -21,7 +21,8 @@ import { parseMove, validateMove } from './rules/bands.ts';
 import { paceOf } from './rules/inventory.ts';
 import { ensureGrid } from './rules/scene.ts';
 import { RuleViolation } from './rules/violation.ts';
-import { badRequest, conflict, forbidden, HttpError, notFound } from './http.ts';
+import { appVersionOf, isOutdated, partyOutdated } from './app-version.ts';
+import { badRequest, conflict, forbidden, gameCodeOf, HttpError, notFound, requirePlayer } from './http.ts';
 import { getImageStore, type StoredImage } from './images/index.ts';
 import { defaultNarrator, narrate, narratorOf, spokenText } from './voice.ts';
 import { getStore } from './store/index.ts';
@@ -132,6 +133,18 @@ function rulesOf(game: Game): RulesView | null {
 const wasRound = (scene: StoredScene): boolean =>
   scene.choices.length === COMBAT_CHOICES.length && scene.choices.every((c, i) => c.label === COMBAT_CHOICES[i].label && !c.hook);
 
+function playerView(game: Game, p: GamePlayer) {
+  const appVersion = p.appVersion ?? null;
+  return {
+    playerId: p.playerId,
+    character: heroInGame(game, p),
+    isHost: p.playerId === game.hostId,
+    joinedAt: p.joinedAt,
+    appVersion,
+    outdated: isOutdated(appVersion),
+  };
+}
+
 /** The player's character as it stands in this game: its live sheet once the rules engine holds one. */
 function heroInGame(game: Game, { playerId, character }: GamePlayer): Character {
   const live = game.party && Object.hasOwn(game.party.sheets, playerId) ? game.party.sheets[playerId] : character.sheet;
@@ -147,7 +160,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     dungeonMaster: game.dungeonMaster,
     title: game.title,
     sceneCount: game.sceneCount,
-    players: game.players.map((p) => ({ playerId: p.playerId, character: heroInGame(game, p), isHost: p.playerId === game.hostId, joinedAt: p.joinedAt })),
+    players: game.players.map((p) => playerView(game, p)),
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
       .filter((s) => s.outcome !== null)
@@ -216,6 +229,20 @@ export async function viewGame(code: string, playerId: string, since?: number): 
   return toState(game, playerId, messages, messageUpdates, typing.filter((notice) => notice.playerId !== playerId));
 }
 
+/** Writes the version on this request onto the player's seat, when they are already in the game. */
+export async function notePlayerAppVersion(code: string, playerId: string, appVersion: string | null): Promise<void> {
+  await getStore().noteAppVersion(code, playerId, appVersion);
+}
+
+/** The caller, and the version their app sent, recorded against the game in the URL. */
+export async function rememberPlayer(request: Request): Promise<{ playerId: string; code: string; appVersion: string | null }> {
+  const playerId = requirePlayer(request);
+  const code = gameCodeOf(request);
+  const appVersion = appVersionOf(request);
+  await notePlayerAppVersion(code, playerId, appVersion);
+  return { playerId, code, appVersion };
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Lobby
 
@@ -227,13 +254,13 @@ async function livingCharacter(playerId: string, characterId: unknown): Promise<
 }
 
 /** POST /api/games */
-export async function createGame(playerId: string, characterId: unknown, dungeonMaster: unknown): Promise<GameState> {
+export async function createGame(playerId: string, characterId: unknown, dungeonMaster: unknown, appVersion: string | null = null): Promise<GameState> {
   if (dungeonMaster !== undefined && dungeonMaster !== null && !isValid('dungeonMaster', dungeonMaster)) {
     throw badRequest('unknown dungeonMaster');
   }
   const character = await livingCharacter(playerId, characterId);
   const store = getStore();
-  const host: GamePlayer = { playerId, character: storable(character), joinedAt: new Date().toISOString() };
+  const host: GamePlayer = { playerId, character: storable(character), joinedAt: new Date().toISOString(), appVersion };
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = newCode();
     const created = await store.createGame({
@@ -252,20 +279,24 @@ export async function createGame(playerId: string, characterId: unknown, dungeon
 }
 
 /** POST /api/games/{code}/join */
-export async function joinGame(code: string, playerId: string, characterId: unknown): Promise<GameState> {
+export async function joinGame(code: string, playerId: string, characterId: unknown, appVersion: string | null = null): Promise<GameState> {
   const character = await livingCharacter(playerId, characterId);
   const game = await loadGame(code);
   const existing = game.players.find((p) => p.playerId === playerId);
   if (game.status !== 'lobby') {
     // Re-joining a game you're already in (e.g. after an app restart) just returns it.
-    if (existing) return viewGame(code, playerId);
+    if (existing) {
+      await notePlayerAppVersion(code, playerId, appVersion);
+      return viewGame(code, playerId);
+    }
     throw conflict('this adventure has already begun');
   }
   if (!existing && game.players.length >= MAX_PLAYERS) throw conflict(`the party is full (${MAX_PLAYERS} players)`);
   if (existing?.character.id === character.id && existing.character.updatedAt === character.updatedAt) {
+    await notePlayerAppVersion(code, playerId, appVersion);
     return viewGame(code, playerId);
   }
-  const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString() }, MAX_PLAYERS);
+  const joined = await getStore().upsertPlayer(code, { playerId, character: storable(character), joinedAt: new Date().toISOString(), appVersion }, MAX_PLAYERS);
   if (!joined) throw conflict('could not join: the game started or the party is full');
   await getStore().removeInvite(code, playerId);
   if (!existing) await system(code, `${character.name} joined the party.`);
@@ -391,6 +422,8 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
   const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for
   const scenes = count + TREK_SCENES; // every game opens with the road from the tavern
+  const blocking = game.players.filter((p) => isOutdated(p.appVersion ?? null));
+  if (blocking.length > 0) throw partyOutdated(blocking.map((p) => p.character.name));
   if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
     throw conflict('the game is already starting');
   }
