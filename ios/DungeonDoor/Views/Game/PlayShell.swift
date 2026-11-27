@@ -79,7 +79,8 @@ struct PlayShell: View {
             PlayActBar(session: session, choose: focusStory)
             if inCombat, let hud = state.rules?.combat?.hud {
                 Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
-                CombatHUD(hud: hud, me: session.playerId)
+                // The party is in the strip at the top: here, the foes.
+                CombatHUD(hud: hud, me: session.playerId, showsParty: false)
             }
             Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
             tabBody

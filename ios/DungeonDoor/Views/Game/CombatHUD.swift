@@ -7,15 +7,19 @@ import SwiftUI
 /// tab away; the cells are not buttons.
 ///
 /// Colour is never the only signal: a foe's tier is a word and a row of pips, and each condition is
-/// a word with its icon.
+/// a word with its icon. The words grow with the reader's text size, up to the first accessibility
+/// size: past that a lane would take the screen from the story.
 struct CombatHUD: View {
     let hud: CombatHud
     /// The caller's player id: their own hero is outlined in gold.
     let me: String
+    /// False where the party is on screen already (the play screen's strip at the top shows every
+    /// hero's hit points and what holds them): then this is the foes alone.
+    var showsParty = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            if !hud.party.isEmpty {
+            if showsParty, !hud.party.isEmpty {
                 lane("Party", tint: Palette.verdigris) {
                     ForEach(hud.party) { hero in heroChip(hero) }
                 }
@@ -29,19 +33,14 @@ struct CombatHUD: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.ink)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("The fight at a glance")
+        .accessibilityLabel(showsParty ? "The fight at a glance" : "The foes at a glance")
     }
 
     private func lane<Content: View>(_ title: String, tint: Color, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 8.5, weight: .bold, design: .serif))
-                .tracking(0.8)
-                .foregroundStyle(tint)
-                .frame(width: 34, alignment: .leading)
-                .padding(.top, 6)
-                .accessibilityAddTraits(.isHeader)
+            LaneTitle(title: title, tint: tint)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 6) { content() }
                     .padding(.trailing, 14)
@@ -58,12 +57,12 @@ struct CombatHUD: View {
         return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(shortName(hero.name))
-                    .font(.system(size: 12, weight: .semibold, design: .serif))
+                    .font(.system(.caption, design: .serif, weight: .semibold))
                     .foregroundStyle(standing ? (mine ? Palette.gold : Palette.parchment) : Palette.muted)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(standing ? "\(hero.hp)/\(hero.maxHp)" : statusWord(hero.status))
-                    .font(.system(size: 10.5, weight: .semibold, design: .serif))
+                    .font(.system(.caption2, design: .serif, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(standing ? Palette.muted : Palette.ember)
                     .lineLimit(1)
@@ -84,14 +83,14 @@ struct CombatHUD: View {
         let tint = tierTint(foe)
         return VStack(alignment: .leading, spacing: 3) {
             Text(foe.name)
-                .font(.system(size: 12, weight: .semibold, design: .serif))
+                .font(.system(.caption, design: .serif, weight: .semibold))
                 .strikethrough(foe.isDead, color: Palette.muted)
                 .foregroundStyle(foe.isDead ? Palette.muted : Palette.parchment)
                 .lineLimit(1)
             HStack(spacing: 5) {
                 TierPips(lit: foe.pipsLit, tint: tint)
                 Text(foe.label)
-                    .font(.system(size: 10.5, weight: .semibold, design: .serif))
+                    .font(.system(.caption2, design: .serif, weight: .semibold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .fixedSize()
@@ -168,10 +167,31 @@ private extension View {
     }
 }
 
+/// A lane's name at its left. Its own view, so its width follows the text size the HUD is held to.
+private struct LaneTitle: View {
+    let title: String
+    let tint: Color
+    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 36
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(.caption2, design: .serif, weight: .bold))
+            .tracking(0.6)
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(width: width, alignment: .leading)
+            .padding(.top, 6)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
 /// A foe's tier as pips: four for unhurt, none once down. Read with the word beside it.
 struct TierPips: View {
     let lit: Int
     let tint: Color
+    @ScaledMetric(relativeTo: .caption2) private var wide: CGFloat = 6
+    @ScaledMetric(relativeTo: .caption2) private var tall: CGFloat = 7
 
     var body: some View {
         HStack(spacing: 2) {
@@ -181,7 +201,7 @@ struct TierPips: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 1).strokeBorder(tint.opacity(0.35), lineWidth: 0.5)
                     }
-                    .frame(width: 6, height: 7)
+                    .frame(width: wide, height: tall)
             }
         }
         .accessibilityHidden(true)
@@ -195,9 +215,10 @@ struct ConditionBadge: View {
     var body: some View {
         HStack(spacing: 2) {
             Image(systemName: condition.symbol)
-                .font(.system(size: 8.5, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
+                .imageScale(.small)
             Text(condition.label)
-                .font(.system(size: 9.5, weight: .semibold, design: .serif))
+                .font(.system(.caption2, design: .serif, weight: .semibold))
                 .lineLimit(1)
                 .fixedSize()
         }

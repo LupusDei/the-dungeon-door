@@ -85,10 +85,13 @@ extension PartyMember {
     init(player: GamePlayer, state: GameState, me: String) {
         let live = state.live(of: player.playerId)
         let sheet = player.character.sheet
-        let points = live?.standing.hp ?? sheet?.hp ?? 0
-        let dead = live?.standing.dead ?? sheet?.dead ?? false
-        let known = live != nil || sheet != nil
-        let down = !dead && (live?.standing.down == true || (known && points <= 0))
+        // In a fight the server's own glance at it (rules.combat.hud) has the last word: the hit
+        // points as the round left them, and what holds each hero, named as the table says it.
+        let fight = state.scene?.combat == true ? state.rules?.combat?.hud?.party.first { $0.id == player.playerId } : nil
+        let points = fight?.hp ?? live?.standing.hp ?? sheet?.hp ?? 0
+        let dead = fight.map { $0.status == "dead" } ?? live?.standing.dead ?? sheet?.dead ?? false
+        let known = fight != nil || live != nil || sheet != nil
+        let down = !dead && (fight.map { !$0.isUp } ?? (live?.standing.down == true) || (known && points <= 0))
         let named = live?.standing.name.isEmpty == false ? live?.standing.name : nil
 
         id = player.playerId
@@ -97,16 +100,20 @@ extension PartyMember {
         isMe = player.playerId == me
         level = live?.standing.level ?? sheet?.level
         hp = points
-        maxHp = max(live?.standing.maxHp ?? sheet?.maxHp ?? 1, 1)
+        maxHp = max(fight?.maxHp ?? live?.standing.maxHp ?? sheet?.maxHp ?? 1, 1)
         armorClass = live?.standing.armorClass ?? sheet?.armorClass ?? 10
 
-        var seen = Set<String>()
-        var names: [String] = []
-        for condition in (live?.conditions ?? []) + (live?.standing.conditions.map(\.condition) ?? []) {
-            let key = condition.lowercased()
-            if !key.isEmpty, seen.insert(key).inserted { names.append(SRD.name(condition)) }
+        if let fight {
+            conditions = fight.conditions.map(\.label)
+        } else {
+            var seen = Set<String>()
+            var names: [String] = []
+            for condition in (live?.conditions ?? []) + (live?.standing.conditions.map(\.condition) ?? []) {
+                let key = condition.lowercased()
+                if !key.isEmpty, seen.insert(key).inserted { names.append(SRD.name(condition)) }
+            }
+            conditions = names
         }
-        conditions = names
 
         if dead {
             turn = .fallen
