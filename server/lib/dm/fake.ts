@@ -1,5 +1,6 @@
 import { fakeDelay } from '../models.ts';
 import { ROAD_EVENTS } from '../play/trek.ts';
+import { sceneHeading } from './pacing.ts';
 import type { ActionRequest, DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
 
 /**
@@ -112,7 +113,7 @@ export const fakeDungeonMaster: DungeonMaster = {
     const place = PLACES[ctx.sceneIndex % PLACES.length];
     return {
       ...resolve(resolution),
-      title: `Scene ${ctx.sceneIndex + 1}: ${place.replace(/^(a|the) /, '').replace(/^./, (c) => c.toUpperCase())}`,
+      title: `${sceneHeading(ctx)}: ${place.replace(/^(a|the) /, '').replace(/^./, (c) => c.toUpperCase())}`,
       narration: road(ctx, 'The road goes on along') ??
         `The path opens onto ${place}.\n\nThe air smells of old magic and fresh trouble. What do you do?`,
       imagePrompt: `The party arriving at ${place}`,

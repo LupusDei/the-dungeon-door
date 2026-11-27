@@ -153,6 +153,7 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   assert.match(state.scene!.choices.map((c) => c.label).join(' | '), /^Attack with .+ \| (Attack with|Cast) .+ \| Dodge$/, 'written for the caller’s hero');
   assert.equal(state.rules!.combat!.round, 1);
   assert.equal(state.sceneCount, 6, 'after the road, scene 3 is a round, counted as it is made; the last story scene and the epilogue are still to come');
+  assert.deepEqual([seen.at(-1)!.ctx.sceneCount, seen.at(-1)!.ctx.progress], [6, { part: 'tale', scene: 2, of: 4 }], 'the DM counts the round too: it is not the climax');
   assert.ok(state.messages.some((m) => m.kind === 'system' && /^A fight begins: Rat\. Initiative: /.test(m.text)));
   const before = state.rules!.party[0].xp;
 
@@ -222,6 +223,84 @@ test('a dungeon game begins on the road from the tavern: two scenes of it, then 
   assert.ok(state.rules!.results.includes('The party reaches the dungeon door.'));
   assert.match(state.scene!.choices[0].rules!, /^Go on/, 'the door scene starts as it always has');
   assert.equal(state.sceneCount, 6);
+});
+
+/** A DM that plays as the fake does, and records what it was told. */
+const recordingDM = (seen: DMContext[]): DungeonMaster => ({
+  openingScene: async (ctx) => { seen.push(ctx); return fakeDungeonMaster.openingScene(ctx); },
+  nextScene: async (ctx, r) => { seen.push(ctx); return fakeDungeonMaster.nextScene(ctx, r); },
+  finale: async (ctx, r) => { seen.push(ctx); return fakeDungeonMaster.finale(ctx, r); },
+});
+
+test('the road is counted apart from the tale: a tale told of 4 scenes gets all 4 after the road, the epilogue its last', async () => {
+  const seen: DMContext[] = [];
+  registerDungeonMaster('chronicler', recordingDM(seen));
+  const { code, players, host } = await table(1);
+  await start(code, host);
+  await settle();
+  let state = await view(code, host);
+  assert.deepEqual(state.progress, { part: 'road', scene: 1, of: 2, tale: 4 });
+  assert.deepEqual(seen.at(-1)!.progress, state.progress, 'the DM is told it too');
+  await voteAll(code, players, 0, 'b');
+  assert.deepEqual((await view(code, host)).progress, { part: 'road', scene: 2, of: 2, tale: 4 });
+  await voteAll(code, players, 1, 'b');
+  const told: unknown[] = [];
+  for (let index = 2; (state = await view(code, host)).status === 'voting'; index++) {
+    told.push(state.progress);
+    await voteAll(code, players, index, 'b');
+  }
+  assert.deepEqual(told, [1, 2, 3].map((scene) => ({ part: 'tale', scene, of: 4 })));
+  assert.deepEqual([state.status, state.scene!.isFinale, state.progress], ['ended', true, { part: 'tale', scene: 4, of: 4 }]);
+  assert.deepEqual(seen.at(-1)!.progress, { part: 'tale', scene: 4, of: 4 }, 'the DM writes the epilogue as the tale’s last scene');
+});
+
+test('a scene the DM leaves untitled is headed by where it falls: on the road, or the tale’s scene number', async () => {
+  const untitled = <T extends { title?: string }>(scene: T): T => ({ ...scene, title: '' });
+  registerDungeonMaster('chronicler', { ...fakeDungeonMaster, nextScene: async (ctx, r) => untitled(await fakeDungeonMaster.nextScene(ctx, r)) });
+  const { code, players, host } = await table(1);
+  await start(code, host);
+  await settle();
+  await voteAll(code, players, 0, 'b');
+  assert.equal((await view(code, host)).scene!.title, 'On the road');
+  await voteAll(code, players, 1, 'b');
+  assert.equal((await view(code, host)).scene!.title, 'Scene 1');
+});
+
+test('the fake DM heads its scenes by where they fall', async () => {
+  const { code, players, host } = await table(1);
+  await start(code, host);
+  await settle();
+  await walkTheRoad(code, players);
+  assert.match((await view(code, host)).scene!.title, /^Scene 1: /);
+});
+
+test('a fight on the road takes the road’s scenes, not the dungeon’s: the tale still has the 4 asked for', async () => {
+  setDice({ d20: () => rolls.shift() ?? 10, seed: () => 8 });
+  const { code, players, host } = await table(2);
+  await start(code, host, { dungeon: 'fixed' });
+  await settle();
+  await voteAll(code, players, 0, 'a'); // Engage
+  let state = await view(code, host);
+  assert.ok(state.rules!.combat, 'a fight on the road');
+  let index = 1;
+  for (; (state = await view(code, host)).rules!.trek; index++) {
+    d20(20, 20);
+    await voteAll(code, players, index, state.scene!.combat ? 'a' : 'b');
+    assert.ok(index < 15, 'the road ends');
+  }
+  assert.ok(index > 2, 'the road took more than its two scenes');
+  assert.deepEqual([state.scene!.index, state.progress], [index, { part: 'tale', scene: 1, of: 4 }]);
+  assert.equal(state.sceneCount, index + 4);
+  assert.equal(state.rules!.dungeon!.at, 'r0', 'at the door');
+});
+
+test('explore mode counts the road apart too', async () => {
+  const { code, players, host } = await table(1);
+  await start(code, host, { dungeon: 'explore', sceneCount: 3 });
+  await settle();
+  assert.deepEqual((await view(code, host)).progress, { part: 'road', scene: 1, of: 2, tale: 3 });
+  await walkTheRoad(code, players);
+  assert.deepEqual((await view(code, host)).progress, { part: 'tale', scene: 1, of: 3 });
 });
 
 test('foes barring the road as the game starts: the opening scene offers Engage, Run and Parley', async () => {

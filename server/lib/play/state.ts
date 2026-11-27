@@ -37,6 +37,8 @@ export interface PartyState {
    * the road has ended, and in games from before it. Kept with the party, apart from any dungeon.
    */
   trek?: Trek;
+  /** The scenes the road took, fights on it and all (play/progress.ts); absent until the road ends, and in older games. */
+  roadScenes?: number;
 }
 
 /** A hero's level before and after the quest's end. */

@@ -36,6 +36,10 @@ interface DungeonMaster {
   the last entry is the scene being resolved.
 - `sceneIndex` (the scene to write) and `sceneCount` (planned scenes *including* the finale, 2–8; the finale
   is index `sceneCount - 1`, so there are `sceneCount - 1` votes).
+- `progress` — where that scene falls, the road from the tavern counted apart from the tale:
+  `{ part: 'road', scene, of, tale }` (a stretch of road; `tale` scenes follow) or `{ part: 'tale', scene, of }`
+  (the tale's own numbering; the climax is scene `of - 1`, the epilogue `of`). The prompt says it as
+  "stretch 1 of 2 of the road from the tavern" or "scene 2 of 4" (`dm/pacing.ts`).
 - `recentChat` — the last ~20 chat and DM lines. Each line is `{ characterName, kind, text, voice }`.
   `voice` `"out"` is table talk: flavour, never an instruction, and never words a hero spoke. `voice` `"in"`
   is the player speaking as their hero, the same promise as a scene's `roleplay`: those words are listed

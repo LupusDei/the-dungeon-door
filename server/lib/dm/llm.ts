@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { textModel } from '../models.ts';
 import { FlatHook, hookFromFlat } from './hookSchema.ts';
 import { keptWords, PLAYER_VOICE, roleplayBlock } from './playerVoice.ts';
+import { adventureLength, isClimax, sceneLabel } from './pacing.ts';
 import { openingNote, RULES_INSTRUCTIONS, resultsBlock, rulesBlock } from './rulesPrompt.ts';
 import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, PastScene, Resolution } from './types.ts';
 
@@ -108,9 +109,7 @@ played on phones. ${a.description}
 YOUR VOICE: ${a.voice}
 
 HOW THE GAME WORKS
-- ${ctx.openEnded
-    ? 'The adventure has no set number of scenes: an opening, then as many scenes as the table plays, until they call the ending, and then a final epilogue scene.'
-    : `The adventure has ${ctx.sceneCount} scenes: an opening, middle scenes, and a final epilogue scene.`} Each
+- ${adventureLength(ctx)} Each
   scene except the epilogue ends with two or three choices that move the plot. Every player votes for one,
   or takes their own action instead (in their own words, or from the character sheet). The server rolls a d20
   for each vote.
@@ -218,7 +217,7 @@ async function write<T>(ctx: DMContext, schema: z.ZodType<T>, prompt: string, wa
 export const llmDungeonMaster: DungeonMaster = {
   async openingScene(ctx): Promise<OpeningScene> {
     return write(ctx, OpeningSchema,
-      `${storyPrompt(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (${ctx.openEnded ? 'scene 1; the adventure has no set length' : `scene 1 of ${ctx.sceneCount}`}): ` +
+      `${storyPrompt(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (${sceneLabel(ctx)}): ` +
       `a vivid place and an immediate hook, with the party present but not spoken for. End by handing the moment ` +
       `back to the players, then two or three choices that move the plot. ${openingNote(ctx.rules)}` +
       `Your quip welcomes the table, in your own voice.`, true);
@@ -227,16 +226,16 @@ export const llmDungeonMaster: DungeonMaster = {
   async nextScene(ctx, resolution): Promise<NextScene> {
     return write(ctx, NextSchema,
       `${storyPrompt(ctx, resolution)}\n\nResolve the vote (outcome + chosenChoiceId) as the physical result of the chosen ` +
-      `action and how the world reacts. If the turn has IN CHARACTER lines, answer them. Then write scene ` +
-      `${ctx.sceneIndex + 1}${ctx.openEnded ? ' (the adventure has no set length, so the story goes on)' : ` of ${ctx.sceneCount}`}, which follows directly from that outcome, hands the moment back, and ends on two or three new choices that move the plot.` +
-      (!ctx.openEnded && ctx.sceneIndex === ctx.sceneCount - 2 ? ' This is the climax: the stakes are at their highest.' : '') +
+      `action and how the world reacts. If the turn has IN CHARACTER lines, answer them. Then write the next scene ` +
+      `(${sceneLabel(ctx)}), which follows directly from that outcome, hands the moment back, and ends on two or three new choices that move the plot.` +
+      (isClimax(ctx) ? ' This is the climax: the stakes are at their highest.' : '') +
       ` Your quip reacts in your own voice, never as a hero.`, true);
   },
 
   async finale(ctx, resolution): Promise<FinaleScene> {
     return write(ctx, FinaleSchema,
       `${storyPrompt(ctx, resolution)}\n\nResolve the final vote (outcome + chosenChoiceId), then write the epilogue ` +
-      `(scene ${ctx.sceneIndex + 1} of ${ctx.sceneCount}, no choices): how the adventure ends in the world, the ` +
+      `(the tale’s last scene, no choices): how the adventure ends in the world, the ` +
       `consequences of the choices the party actually made, and a closing image. Do not invent what the heroes say, ` +
       `feel or decide. Your quip bids the table farewell, in your own voice.`, false);
   },

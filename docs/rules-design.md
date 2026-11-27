@@ -654,6 +654,12 @@ to the dungeon begins."*
 tale begins. The game is two scenes longer than the `sceneCount` asked for (a dungeon's map is still sized
 for the count asked for).
 
+- **The road never uses up the tale's scenes.** The tale (the dungeon, or the story told) gets every scene
+  asked for after the road, finale included, however long the road takes: a fight on it adds its rounds to
+  the road. When the road ends the party records where the tale began (`PartyState.roadScenes`,
+  `play/progress.ts`), and `GameState.progress` and the DM count the road's stretches apart from the
+  tale's scenes ("On the road 1 of 2", then "Scene 1 of 4").
+
 - **The road is the party's, not the dungeon's.** It lives in `PartyState.trek` (with where it leads,
   `leadsTo: 'door' | 'tale'`, and any foes met on the current stretch, `facing`), so a game with no dungeon
   state walks it the same way, and the dungeon's own `facing` is only ever its wanderers. Games stored

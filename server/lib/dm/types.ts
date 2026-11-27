@@ -5,6 +5,7 @@
  */
 import type { DungeonMasterArchetype } from '../catalog.ts';
 import type { RulesHook } from '../play/hooks.ts';
+import type { SceneProgress } from '../play/progress.ts';
 import type { FightNews } from '../play/turn.ts';
 import type { RulesContext } from '../play/view.ts';
 import type { ChoiceId, RoleplayLine } from '../types.ts';
@@ -107,6 +108,8 @@ export interface DMContext {
   sceneCount: number;
   /** The adventure has no set length: it goes on until the table calls the ending. Absent: a set length. */
   openEnded?: boolean;
+  /** Where the scene to write falls: a stretch of the road, or a scene of the tale counted from its own first (play/progress.ts). */
+  progress?: SceneProgress;
   /** The most recent table talk, oldest first. Players may hint at what they want. */
   recentChat: ChatLine[];
   /** The rules engine's state (after the resolved scene's dice); null for a game from before the engine. */

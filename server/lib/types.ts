@@ -1,6 +1,7 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
 import type { AttackView } from './attacks.ts';
 import type { RulesHook } from './play/hooks.ts';
+import type { SceneProgress } from './play/progress.ts';
 import type { CombatState, DungeonState, PartyState } from './play/state.ts';
 import type { RulesView } from './play/view.ts';
 import type { Move } from './rules/bands.ts';
@@ -340,6 +341,11 @@ export interface GameState {
   openEnded: boolean;
   /** Scenes with choices still to come after this one, before the epilogue. Null with no set length, and in the lobby. */
   scenesLeft: number | null;
+  /**
+   * Where the current scene falls, the road from the tavern counted apart from the tale: 'road', stretch
+   * `scene` of `of` (and the tale's scenes to come); 'tale', scene `scene` of `of`, the epilogue its last. Null with no scene.
+   */
+  progress: SceneProgress | null;
   /** In a rules game each character is the hero as it stands in the game (live sheet). */
   players: { playerId: string; character: Character; isHost: boolean; joinedAt: string; appVersion: string | null; outdated: boolean }[];
   scene: SceneView | null;

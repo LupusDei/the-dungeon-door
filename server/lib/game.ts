@@ -11,11 +11,13 @@ import { COMBAT_CHOICES } from './play/fight.ts';
 import { foeLevels } from './play/delve.ts';
 import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
 import type { PartyState } from './play/state.ts';
+import { markRoadEnd, sceneProgress } from './play/progress.ts';
 import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { checkVote, legalActions } from './play/legal.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
+import { sceneHeading } from './dm/pacing.ts';
 import { getDungeonMaster } from './dm/registry.ts';
 import { canSee, chatLines, interpretChat, oneEmoji, parseMentions, quoteOf, replyIdOf, TYPING_MS, voiceOf } from './chat.ts';
 import { hasStolenHeroSpeech, keptWords, stripHeroSpeech, type HeroLine } from './dm/playerVoice.ts';
@@ -206,6 +208,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     sceneCount: hasNoSetLength(game.sceneCount) ? 0 : game.sceneCount,
     openEnded: hasNoSetLength(game.sceneCount),
     scenesLeft: game.status === 'lobby' || game.status === 'preparing' ? null : scenesLeft(game.sceneCount, game.sceneIndex),
+    progress: current && sceneProgress(game.party, current.index, game.sceneCount),
     players: game.players.map((p) => playerView(game, p)),
     scene: current && sceneView(game, current, playerId),
     chronicle: game.scenes
@@ -921,7 +924,8 @@ function writtenLines(game: Game, scene: StoredScene): RoleplayLine[] {
   });
 }
 
-async function contextFor(game: Game, sceneIndex: number, rules: RulesState | null = rulesStateOf(game)): Promise<DMContext> {
+/** What the DM is told to write scene `sceneIndex` of a game of `sceneCount` scenes (after the resolved scene's dice, if `rules`). */
+async function contextFor(game: Game, sceneIndex: number, rules: RulesState | null = rulesStateOf(game), sceneCount = game.sceneCount): Promise<DMContext> {
   const messages = await getStore().listMessages(game.code, undefined, 20);
   return {
     archetype: archetype(game.dungeonMaster),
@@ -929,8 +933,9 @@ async function contextFor(game: Game, sceneIndex: number, rules: RulesState | nu
     party: partyOf(game),
     history: game.scenes.filter((s) => s.index < sceneIndex).map((s) => pastScene(game, s)),
     sceneIndex,
-    sceneCount: game.sceneCount,
-    openEnded: hasNoSetLength(game.sceneCount),
+    sceneCount,
+    openEnded: hasNoSetLength(sceneCount),
+    progress: sceneProgress(rules?.party ?? null, sceneIndex, sceneCount),
     recentChat: chatLines(messages),
     rules: rules && rulesContext(rules),
   };
@@ -1052,7 +1057,8 @@ function planOf(game: Game, scene: StoredScene): Plan {
   const next = scene.index + 1;
   const state = rulesStateOf(game);
   if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [], sharesPicture: false };
-  const played = safeStep(state, scene, resolution);
+  const stepped = safeStep(state, scene, resolution);
+  const played = { ...stepped, state: { ...stepped.state, party: markRoadEnd(state.party, stepped.state.party, next) } };
   const sceneCount = sceneCountAfter(played, next, game.sceneCount);
   const isFinale = next >= sceneCount - 1;
   const step = isFinale ? endQuest(played) : played; // the heroes level up for the epilogue
@@ -1091,7 +1097,7 @@ async function inTheirOwnWords<T extends SceneText & { outcome?: string }>(game:
 
 async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
   const dm = getDungeonMaster(game.dungeonMaster);
-  const ctx = await contextFor(game, plan.next, plan.rules); // history ends with the scene being resolved
+  const ctx = await contextFor(game, plan.next, plan.rules, plan.patch.sceneCount ?? game.sceneCount); // history ends with the scene being resolved
   const draft = await inTheirOwnWords(game, () => plan.isFinale ? dm.finale(ctx, plan.resolution) : dm.nextScene(ctx, plan.resolution));
   const { leaders } = plan.resolution;
   const chosen = leaders.includes(draft.chosenChoiceId) ? draft.chosenChoiceId : (leaders[0] ?? null);
@@ -1099,7 +1105,7 @@ async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
   await store.setSceneOutcome(game.code, scene.index, clip(draft.outcome.trim(), 1000), chosen);
   await store.saveScene(game.code, {
     index: plan.next,
-    title: sceneTitle(draft, plan.isFinale ? 'Epilogue' : `Scene ${plan.next + 1}`),
+    title: sceneTitle(draft, plan.isFinale ? 'Epilogue' : sceneHeading(ctx)),
     narration: draft.narration.trim(),
     imagePrompt: plan.sharesPicture ? SHARED_PICTURE : draft.imagePrompt,
     imageUrl: plan.sharesPicture ? scene.imageUrl : null,

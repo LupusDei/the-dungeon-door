@@ -340,6 +340,12 @@ GameState {
                                      // 0 on the last such scene and on the epilogue. A fight's rounds do not
                                      // use them up. Null with no set length, and in the lobby. Absent from a
                                      // server before it: show nothing
+  progress: { part: "road", scene, of, tale } | { part: "tale", scene, of } | null
+                                     // where the current scene falls, the road counted apart: "road" is
+                                     // stretch `scene` of `of` (and `tale` scenes follow it); "tale" is scene
+                                     // `scene` of `of` counted from the tale's first, the epilogue its last.
+                                     // `of` and `tale` are null with no set length. Show "On the road 1 of 2",
+                                     // then "Scene 1 of 4". Null with no scene
   players: [{ playerId, character: Character, isHost: boolean, joinedAt,
               appVersion: string | null, outdated: boolean }]
                                      // the whole party, including heroes who have not chosen yet. Who has
