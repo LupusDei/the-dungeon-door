@@ -60,3 +60,16 @@ targets:
           APS_ENVIRONMENT: development
         Release:
           APS_ENVIRONMENT: production
+  # Unit tests for the app's pure logic. Not hosted in the app: they compile only the files they test.
+  DungeonDoorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: DungeonDoorTests
+      - path: DungeonDoor/Core/ReturnKey.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jmm.the-dungeon-door.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+
