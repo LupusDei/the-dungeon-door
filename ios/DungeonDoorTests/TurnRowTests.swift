@@ -30,6 +30,18 @@ final class TurnRowTests: XCTestCase {
         XCTAssertEqual(row.later.map(\.id), ["foe-1"])
     }
 
+    func testInOrderIsInitiativeOrderFromTheTopWhereverTheTurnIs() {
+        XCTAssertEqual(TurnRow(hud: hud, me: "p2").inOrder.map(\.id), ["foe-1", "p2", "foe-2", "p1", "foe-3"])
+        var later = hud
+        later.now = "p1"
+        later.next = "foe-1"
+        XCTAssertEqual(TurnRow(hud: later, me: "p2").inOrder.map(\.id), ["foe-1", "p2", "foe-2", "p1", "foe-3"])
+        var over = hud
+        over.now = nil
+        over.next = nil
+        XCTAssertEqual(TurnRow(hud: over, me: "p2").inOrder.map(\.id), ["foe-1", "p2", "foe-2", "p1", "foe-3"])
+    }
+
     func testTheCurrentActorIsNowAndWhoeverIsUpAfterThemIsNext() {
         let rings = TurnRow(hud: hud, me: "p2").all
         XCTAssertEqual(rings.filter(\.isNow).map(\.id), ["p2"])

@@ -1,6 +1,6 @@
 # The tabbed play screen
 
-Once the door is open, the game is four tabs under a slim strip of the hero and one Act chip.
+Once the door is open, the game is four tabs under the party's heads-up display and one Act chip.
 `GameView` opens this (`PlayShell`) for every status except the lobby and the beat before the
 first scene. iPhone portrait is the layout it is built for. The column is held to 720 points, the
 same measure as the other screens.
@@ -29,12 +29,30 @@ map are tabs, so those toolbar buttons are not repeated while playing. The calle
 on the toolbar in the lobby, where there is no Sheet tab. The eight-button action bar is gone.
 Common actions are rows in Story's offers and on the Sheet.
 
-## The strip and Act
+## The heads-up display and Act
 
-The strip is the caller's portrait, name, hit points, armour class, conditions, and the round
-with whose turn it is. "Your turn" means the table is taking this hero's vote. After they have
-voted or written an action it says they are waiting, or that everyone is ready. A hero who
-cannot act reads "You are down". Resolving reads "Resolving…".
+The party is pinned at the top of every tab (`Views/Game/PartyHUD.swift`), in one of two shapes.
+
+**Closed**, it is a slim row: the caller's hero in a ring with their name, hit points, armour
+class and conditions, and every other hero as a health ring on the right (portrait or initials; a
+tick for a hero who has chosen, an arrow for one who is down, a cross for one who has fallen). The
+rings are as large as the row allows, 34 points with few heroes and 30 at a full table; with
+larger text the numbers move to a line of their own before the rings shrink.
+
+**Pulled down** (a tap or a pull on the row), the row unfolds into a compact card that stands in
+its place and moves the rest of the screen down. Its top line says the round and where the caller
+stands in it ("Choose your action", "Waiting on others", "Ready", "Throw your die", "You are down",
+"Resolving…"); a tap on that line, on the handle, or a push up anywhere on the card closes it.
+Under it every hero is a chip, three across on a phone: ring, first name, hit points and armour
+class, conditions as badges. In a fight the foes follow as chips of their own, a ring of four
+segments for the tier and the tier's word, never hit points. Each side is in initiative order, so
+a chip keeps its place; whoever acts first when the round is played out is outlined in gold and
+tagged Now, whoever is up after them Next (`rules.combat.hud`: `order`, `now`, `next`). The card's
+words grow with the text size as far as the second large size, so it stays a card.
+
+A fight pulls the card down by itself, since that is where the foes are, and its end puts it
+away. The player can close it during a fight and it stays closed. Nobody is on the screen twice:
+the card replaces the row, and there is no second strip under the Act bar.
 
 Act is one chip. Choose jumps to Story and scrolls to the offers. After a vote or a written
 action, the chip shows the d20 and what was chosen, and Change jumps back to the offers. A new

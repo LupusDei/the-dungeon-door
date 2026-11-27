@@ -773,8 +773,8 @@ Each combatant's conditions come with the spell behind them and how they end: wh
 (`Combatant.conditions`, a hero's timed ones from its sheet), a spell's hold (below), a hero's
 concentration, and the Dodge.
 
-**The turn order.** The app draws the HUD as one row of rings in initiative order, heroes and foes
-together, so the HUD also carries `order` (every id), `now` (whose turn it is: `combat.turn`) and `next`
+**The turn order.** The app's heads-up card seats the heroes and the foes in initiative order and
+marks who acts now and who is next, so the HUD also carries `order` (every id), `now` (whose turn it is: `combat.turn`) and `next`
 (the first after them, wrapping round, who can act: standing and not incapacitated, paralyzed,
 petrified, stunned or unconscious, the same test the turn loop uses in `scene.ts`). A sleeper or a dying
 hero is passed over; once the fight is over both are null.

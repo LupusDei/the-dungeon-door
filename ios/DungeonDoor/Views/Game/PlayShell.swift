@@ -73,23 +73,10 @@ struct PlayShell: View {
     private var state: GameState { session.state }
     private var inCombat: Bool { state.scene?.combat == true }
 
-    /// Each hero's portrait by player id, for the turn order's rings.
-    private var portraits: [String: URL] {
-        var urls: [String: URL] = [:]
-        for player in state.players {
-            if let url = player.character.portraitURL { urls[player.playerId] = url }
-        }
-        return urls
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             PartyHUD(session: session)
             PlayActBar(session: session, choose: focusStory)
-            if inCombat, let combat = state.rules?.combat, let hud = combat.hud {
-                Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
-                CombatHUD(hud: hud, me: session.playerId, round: combat.round, portraits: portraits)
-            }
             Rectangle().fill(Palette.gold.opacity(0.2)).frame(height: 1)
             tabBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

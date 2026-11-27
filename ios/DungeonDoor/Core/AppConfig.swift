@@ -36,8 +36,9 @@ import SwiftUI
 /// - `-wheel <actions|powers>` opens that quick-action wheel on the Story tab as soon as the scene
 ///   has actions; `-wheelTurn <n>` shows it turned n slots on; `-wheelAim <text>` shows the targets
 ///   of the first action whose label contains that text.
-/// - `-hudOpen YES` opens a game being played with the party's heads-up display pulled down, so
-///   the panel that lists everyone can be seen without a drag.
+/// - `-hudOpen YES` opens a game being played with the party's heads-up display pulled down into
+///   its card, and `-hudOpen NO` with it closed to its slim row, whether or not a fight is on
+///   (without the argument a fight pulls it down and its end puts it away).
 /// - `-dd.pushOn NO` starts with the player's notification switch off, so iOS is not asked for leave.
 /// - `-pushOpen <kind>:<CODE>` acts as if a notification of that kind ("turn", "combat", "chat",
 ///   "invite") about that game had been tapped.
@@ -129,7 +130,9 @@ enum AppConfig {
     static var wheelAimArgument: String? { argument("wheelAim") }
     static var playTabArgument: PlayTab? { argument("playTab").flatMap { PlayTab(rawValue: $0.lowercased()) } }
     static var playPaneArgument: PlaySheetPane? { argument("playPane").flatMap { PlaySheetPane(rawValue: $0.lowercased()) } }
-    static var hudOpenArgument: Bool { UserDefaults.standard.bool(forKey: "hudOpen") }
+    static var hudOpenArgument: Bool? {
+        UserDefaults.standard.object(forKey: "hudOpen") == nil ? nil : UserDefaults.standard.bool(forKey: "hudOpen")
+    }
     static var pushOpenArgument: PushNews? { argument("pushOpen").flatMap(PushNews.init(argument:)) }
     /// Where a page's scroll view starts: the top, unless `-scrollTo bottom` asks for the end.
     static var launchScrollAnchor: UnitPoint {

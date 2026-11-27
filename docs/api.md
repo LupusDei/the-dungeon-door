@@ -552,7 +552,7 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // half or less (the 2024 term). near-death: a quarter or less. down: 0
                                       // (a foe at 0 HP is dead). A dead foe's conditions are [].
       order: string[]                 // every combatant's id, heroes and foes together, in initiative
-                                      // order: the app draws one row of rings in this order
+                                      // order: the app seats each side's chips in its heads-up card by it
       now: string | null              // whose turn it is (the engine's combat.turn); null once the fight is over
       next: string | null             // who comes up after them, wrapping to the top of the order and passing
                                       // over anyone who cannot act (down, dying, asleep, paralyzed, …);

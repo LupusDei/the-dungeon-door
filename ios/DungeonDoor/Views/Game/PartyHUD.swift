@@ -8,13 +8,16 @@ struct PartyMember: Identifiable, Equatable {
     let name: String
     let portrait: URL?
     let isMe: Bool
-    let level: Int?
     let hp: Int
     let maxHp: Int
     let armorClass: Int
-    /// Condition names: the fight's first, then those carried from scene to scene.
-    let conditions: [String]
+    /// What is on the hero: the fight's own list while there is one, else what they carry from
+    /// scene to scene.
+    let conditions: [HudCondition]
     let turn: Turn
+    /// In a fight: the one whose turn it is, and the one who comes up after them.
+    var isNow = false
+    var isNext = false
 
     enum Turn: Equatable {
         case chosen, waiting, down, fallen
@@ -66,6 +69,11 @@ struct PartyMember: Identifiable, Equatable {
         return text.isEmpty ? "?" : text
     }
 
+    /// "Maud" from "Maud Ashdown": a chip is narrow.
+    var shortName: String {
+        name.split(separator: " ").first.map(String.init) ?? name
+    }
+
     /// "Maud Ashdown 12 of 12 hit points", "Corin Vale down".
     var spoken: String {
         switch turn {
@@ -73,6 +81,19 @@ struct PartyMember: Identifiable, Equatable {
         case .down: "\(name) down"
         default: "\(name) \(hp) of \(maxHp) hit points"
         }
+    }
+
+    /// Everything a chip shows, for VoiceOver: "Maud Ashdown, you, acting now, 12 of 12 hit points,
+    /// armour class 16, Dodging, chosen".
+    var spokenInFull: String {
+        var parts = [isMe ? "\(name), you" : name]
+        if isNow { parts.append("acting now") }
+        if isNext { parts.append("next") }
+        if standing { parts.append("\(hp) of \(maxHp) hit points") }
+        parts.append("armour class \(armorClass)")
+        parts += conditions.map(\.spoken)
+        if let word = turn.word { parts.append(word.lowercased()) }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -87,7 +108,8 @@ extension PartyMember {
         let sheet = player.character.sheet
         // In a fight the server's own glance at it (rules.combat.hud) has the last word: the hit
         // points as the round left them, and what holds each hero, named as the table says it.
-        let fight = state.scene?.combat == true ? state.rules?.combat?.hud?.party.first { $0.id == player.playerId } : nil
+        let hud = state.scene?.combat == true ? state.rules?.combat?.hud : nil
+        let fight = hud?.party.first { $0.id == player.playerId }
         let points = fight?.hp ?? live?.standing.hp ?? sheet?.hp ?? 0
         let dead = fight.map { $0.status == "dead" } ?? live?.standing.dead ?? sheet?.dead ?? false
         let known = fight != nil || live != nil || sheet != nil
@@ -98,22 +120,25 @@ extension PartyMember {
         name = named ?? (player.character.name.isEmpty ? "A hero" : player.character.name)
         portrait = player.character.portraitURL
         isMe = player.playerId == me
-        level = live?.standing.level ?? sheet?.level
         hp = points
         maxHp = max(fight?.maxHp ?? live?.standing.maxHp ?? sheet?.maxHp ?? 1, 1)
         armorClass = live?.standing.armorClass ?? sheet?.armorClass ?? 10
 
         if let fight {
-            conditions = fight.conditions.map(\.label)
+            conditions = fight.conditions
         } else {
             var seen = Set<String>()
-            var names: [String] = []
+            var carried: [HudCondition] = []
             for condition in (live?.conditions ?? []) + (live?.standing.conditions.map(\.condition) ?? []) {
                 let key = condition.lowercased()
-                if !key.isEmpty, seen.insert(key).inserted { names.append(SRD.name(condition)) }
+                if !key.isEmpty, seen.insert(key).inserted {
+                    carried.append(HudCondition(id: key, label: SRD.name(condition)))
+                }
             }
-            conditions = names
+            conditions = carried
         }
+        isNow = fight != nil && hud?.now == player.playerId
+        isNext = fight != nil && hud?.next == player.playerId && hud?.now != player.playerId
 
         if dead {
             turn = .fallen
@@ -133,98 +158,102 @@ extension PartyMember {
 
     /// The caller before the game knows them: what the strip showed in that moment.
     static func stranger(_ playerId: String) -> PartyMember {
-        PartyMember(id: playerId, name: "Hero", portrait: nil, isMe: true, level: nil,
+        PartyMember(id: playerId, name: "Hero", portrait: nil, isMe: true,
                     hp: 0, maxHp: 1, armorClass: 10, conditions: [], turn: .idle)
     }
 }
 
 // MARK: - The heads-up display
 
-/// The party, pinned over the game: the player's own hero in one slim row, everyone else as
-/// health rings beside them, and a panel that pulls down from the row to list the whole party.
+/// The party, pinned over the game, in one of two shapes.
 ///
-/// The panel hangs below the row and lies over what follows it (the Act bar, the tab). It takes no
-/// room of its own, so nothing under it moves. `zIndex` keeps it above the views that come after.
+/// Closed, it is a slim row: the player's own hero, and everyone else as health rings. Pulled down
+/// or tapped, the row unfolds into a compact card: every hero as a chip with their ring, hit points,
+/// armour class and conditions, and in a fight the foes as chips of their own, with whoever acts
+/// now and whoever is next marked. A fight pulls the card down by itself, since that is where the
+/// foes are, and its end puts it away; the player can push it up to give the story the room.
+///
+/// The card takes its own room: what follows it (the Act bar, the tab) moves down. Nobody is on the
+/// screen twice: open, the card stands in the row's place.
 struct PartyHUD: View {
     @Bindable var session: GameSession
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Pulled down. `-hudOpen YES` starts it so (screenshot checks).
-    @State private var open = AppConfig.hudOpenArgument
-    /// The row's own height: the panel has that much less of the screen.
-    @State private var barHeight: CGFloat = 44
+    /// Pulled down. `-hudOpen YES` or `NO` holds it so (screenshot checks).
+    @State private var open: Bool
+
+    init(session: GameSession) {
+        self.session = session
+        _open = State(initialValue: AppConfig.hudOpenArgument ?? (session.state.scene?.combat == true))
+    }
 
     private var state: GameState { session.state }
+    private var inCombat: Bool { state.scene?.combat == true }
 
     var body: some View {
         let party = PartyMember.party(of: state, me: session.playerId)
         let mine = party.first(where: \.isMe) ?? .stranger(session.playerId)
         let others = party.filter { !$0.isMe }
         let line = turnLine
-        Button {
-            set(!open)
-        } label: {
-            PartyBar(me: mine, others: others, round: round, turnLine: line, open: open)
-                // A glance, not a page: the row's words stop growing at the first accessibility size.
-                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-        }
-        .buttonStyle(.plain)
-        .highPriorityGesture(HUDPull.gesture(set))
-        .accessibilityLabel("Party: " + ([mine] + others).map(\.spoken).joined(separator: ", "))
-        .accessibilityValue(status(of: mine, line: line))
-        .accessibilityHint(open ? "Hides everyone" : "Shows everyone")
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
-        .overlay(alignment: .bottom) {
-            // Its top edge on the row's bottom edge.
-            drawer([mine] + others).alignmentGuide(.bottom) { $0[.top] }
-        }
-        .zIndex(1)
-    }
-
-    /// The dimmed game and the panel over it. The dimming is as tall as the whole game, which is
-    /// more than is left under the row, so it reaches the foot of the screen (the tab bar too: a tap
-    /// anywhere outside closes the panel). The panel itself keeps clear of the tab bar, and scrolls
-    /// inside when the party does not fit.
-    private func drawer(_ party: [PartyMember]) -> some View {
+        // One over the other while they change places, so the display is never both heights at once.
         ZStack(alignment: .top) {
             if open {
-                Color.black.opacity(0.55)
-                    .contentShape(.rect)
-                    .onTapGesture { set(false) }
-                    .gesture(HUDPull.gesture(set))
-                    .accessibilityHidden(true)
-                    .transition(.opacity)
-            }
-            VStack(spacing: 0) {
-                if open {
-                    PartyPanel(party: party, set: set)
-                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                let sides = sides([mine] + others)
+                PartyCard(heroes: sides.heroes, foes: sides.foes, round: round, turnLine: line, set: set)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+            } else {
+                Button {
+                    set(true)
+                } label: {
+                    PartyBar(me: mine, others: others)
+                        // A glance, not a page: the row's words stop growing at the first accessibility size.
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 }
-            }
-            .frame(maxHeight: .infinity, alignment: .top)
-            .containerRelativeFrame(.vertical, alignment: .top) { length, _ in
-                max(200, length - barHeight - HUDMetrics.clearance)
+                .buttonStyle(.plain)
+                .highPriorityGesture(HUDPull.gesture(set))
+                .accessibilityLabel("Party: " + ([mine] + others).map(\.spoken).joined(separator: ", "))
+                .accessibilityValue(status(of: mine, line: line))
+                .accessibilityHint("Shows everyone")
+                .transition(.opacity)
             }
         }
-        .containerRelativeFrame(.vertical, alignment: .top)
+        .frame(maxWidth: .infinity)
         .clipped()
-        .allowsHitTesting(open)
+        // Its own room only: a colour that ran on under the navigation bar would take the row's
+        // accessibility frame up there with it.
+        .background(Palette.ink, ignoresSafeAreaEdges: [])
+        .onChange(of: inCombat) { _, fighting in
+            if AppConfig.hudOpenArgument == nil { set(fighting) }
+        }
+    }
+
+    /// The card's two sides. In a fight each is in initiative order, so a chip keeps its place as
+    /// the turn moves; outside one there are no foes, and the player's own hero comes first.
+    private func sides(_ party: [PartyMember]) -> (heroes: [PartyMember], foes: [TurnRing]) {
+        guard inCombat, let hud = state.rules?.combat?.hud else { return (party, []) }
+        let order = TurnRow(hud: hud, me: session.playerId).inOrder
+        var place: [String: Int] = [:]
+        for (index, ring) in order.enumerated() { place[ring.id] = index }
+        let heroes = party.enumerated()
+            .sorted { ($0.element.id.place(in: place), $0.offset) < ($1.element.id.place(in: place), $1.offset) }
+            .map(\.element)
+        return (heroes, order.filter { !$0.isHero })
     }
 
     private func set(_ wanted: Bool) {
         guard wanted != open else { return }
-        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.42, bounce: 0.2)) {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.3, bounce: 0.1)) {
             open = wanted
         }
     }
 
     private var round: Int? {
-        state.scene?.combat == true ? state.rules?.combat?.round : nil
+        inCombat ? state.rules?.combat?.round : nil
     }
 
     /// What VoiceOver adds after the party: the player's own armour and conditions, the round, the turn.
     private func status(of mine: PartyMember, line: String) -> String {
         var parts = ["Armour class \(mine.armorClass)"]
-        parts += mine.conditions
+        parts += mine.conditions.map(\.spoken)
         if let round { parts.append("Round \(round)") }
         parts.append(line)
         return parts.joined(separator: ", ")
@@ -250,19 +279,28 @@ struct PartyHUD: View {
             }
             return waiting ? "Waiting on others" : "Ready"
         }
-        if session.state.status == .voting { return "Your turn" }
+        if session.state.status == .voting { return Self.choose }
         return "Holding"
     }
 }
 
+extension PartyHUD {
+    /// The table is taking this hero's choice. Not "your turn": in a fight everyone chooses at once,
+    /// and the card marks whose turn comes first when the round is played out.
+    static let choose = "Choose your action"
+}
+
+private extension String {
+    /// Where this id comes in an order; anyone the order does not name goes last.
+    func place(in order: [String: Int]) -> Int { order[self] ?? Int.max }
+}
+
 private enum HUDMetrics {
-    /// What the panel leaves free at the foot of the screen: the tab bar, and a strip of the game to tap.
-    static let clearance: CGFloat = 84
-    /// The widest the panel's list gets, as the story under it does.
+    /// The widest the card gets, as the story under it does.
     static let column: CGFloat = 720
 }
 
-/// A pull on the row or the panel: down opens, up closes. It acts as soon as the finger has gone
+/// A pull on the row or the card: down opens, up closes. It acts as soon as the finger has gone
 /// far enough, without waiting for it to lift.
 private enum HUDPull {
     static func gesture(_ set: @escaping (Bool) -> Void) -> some Gesture {
@@ -286,112 +324,88 @@ private struct HUDGrabber: View {
     }
 }
 
+private enum HUDFont {
+    /// The small words: 11 points at the default text size, and growing with it.
+    static let small = Font.serif(.caption2, weight: .semibold)
+}
+
 // MARK: - The row
 
-/// The slim row. One line while everything fits in it: the rings shrink first, then the name is
-/// drawn a little smaller. When it does not (larger text, a long name, conditions), two lines:
-/// the hero's name and the party, then their numbers and the turn. There the name and the numbers
-/// wrap, so nothing is ever cut short.
+/// The slim row: the player's hero in a ring, their name over their numbers, and everyone else as
+/// rings on the right. Whose turn it is belongs to the Act bar under it and to the card; a tick on
+/// a ring says who has chosen.
+///
+/// The rings are as large as the row allows: 34 points with few heroes, 30 with a full table. When
+/// one row does not hold everything (larger text, a long name, conditions), the numbers go to a
+/// line of their own under it, and only then do the name and the rings give way, a step at a time.
 private struct PartyBar: View {
     let me: PartyMember
     let others: [PartyMember]
-    let round: Int?
-    let turnLine: String
-    let open: Bool
-    /// The caption style's size, for the name when it is drawn smaller.
-    @ScaledMetric(relativeTo: .caption) private var nameSize: CGFloat = 12
-    /// A ring on two lines sits beside one line of words, and grows with them: 24 to 30 points.
-    @ScaledMetric(relativeTo: .caption) private var lineRing: CGFloat = 24
-    private var ownRing: CGFloat { min(max(lineRing, 24), 30) }
+    /// The player's own ring grows with the words beside it: 38 to 42 points.
+    @ScaledMetric(relativeTo: .caption) private var scaled: CGFloat = 38
+    private var own: CGFloat { min(max(scaled, 38), 42) }
+    /// The footnote style's size, for the name when it is drawn smaller.
+    @ScaledMetric(relativeTo: .footnote) private var nameSize: CGFloat = 13
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            oneLine(ring: 28)
-            oneLine(ring: 24)
-            oneLine(ring: 22)
-            oneLine(ring: 20)
-            oneLine(ring: 20, nameShare: 0.86)
-            twoLines
+            oneRow(ring: 34)
+            oneRow(ring: 30)
+            twoLines(ring: 30)
+            twoLines(ring: 30, nameShare: 0.86)
+            twoLines(ring: 28)
+            twoLines(ring: 28, nameShare: 0.86)
+            twoLines(ring: 26, nameShare: 0.86)
+            twoLines(ring: 24, nameShare: 0.86)
+            twoLines(ring: 22, nameShare: 0.86, wraps: true)
         }
         .padding(.horizontal, 12)
-        .padding(.top, 3)
-        .padding(.bottom, 8)
+        .padding(.top, 4)
+        .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
-        .background(Palette.ink)
-        .overlay(alignment: .bottom) {
-            HUDGrabber().padding(.bottom, 2).opacity(open ? 0 : 1)
-        }
+        .overlay(alignment: .bottom) { HUDGrabber().padding(.bottom, 2.5) }
         .contentShape(.rect)
     }
 
     /// Everything at its own width, so `ViewThatFits` can tell whether it fits.
-    private func oneLine(ring: CGFloat, nameShare: CGFloat = 1) -> some View {
+    private func oneRow(ring: CGFloat) -> some View {
         HStack(spacing: 0) {
-            RingAvatar(member: me, size: 30)
-            VStack(alignment: .leading, spacing: 0) {
-                name(nameShare)
+            RingAvatar(member: me, size: own)
+            VStack(alignment: .leading, spacing: 1) {
+                name()
                 vitals
             }
             .lineLimit(1)
             .fixedSize()
-            .padding(.leading, 6)
-            rings(ring).padding(.leading, 8)
-            Spacer(minLength: 0)
-            turnColumn.padding(.leading, 8)
+            .padding(.leading, 8)
+            Spacer(minLength: 10)
+            party(ring)
         }
     }
 
-    private var twoLines: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            ViewThatFits(in: .horizontal) {
-                top(ring: ownRing, wraps: false)
-                top(ring: max(ownRing - 4, 20), wraps: false)
-                top(ring: 20, wraps: true)
+    /// The name and the rings, then the numbers under them with the whole width to wrap in. The
+    /// last arrangement lets the name wrap as well, so nothing is ever cut short.
+    private func twoLines(ring: CGFloat, nameShare: CGFloat = 1, wraps: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 0) {
+                RingAvatar(member: me, size: own)
+                name(nameShare)
+                    .lineLimit(wraps ? nil : 1)
+                    .fixedSize(horizontal: !wraps, vertical: true)
+                    .frame(maxWidth: wraps ? .infinity : nil, alignment: .leading)
+                    .padding(.leading, 8)
+                if !wraps { Spacer(minLength: 10) }
+                party(ring).padding(.leading, wraps ? 10 : 0)
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    vitals.fixedSize()
-                    Spacer(minLength: 0)
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        if round != nil {
-                            roundText
-                            Text("·").font(HUDFont.small).foregroundStyle(Palette.muted)
-                        }
-                        lineText
-                    }
-                    .fixedSize()
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    vitals
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(alignment: .trailing, spacing: 0) {
-                        if round != nil { roundText }
-                        lineText
-                    }
-                    .fixedSize()
-                }
-            }
+            vitals.fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func top(ring: CGFloat, wraps: Bool) -> some View {
-        HStack(spacing: 0) {
-            RingAvatar(member: me, size: ownRing)
-            name()
-                .fixedSize(horizontal: !wraps, vertical: true)
-                .frame(maxWidth: wraps ? .infinity : nil, alignment: .leading)
-                .padding(.leading, 6)
-            if !wraps { Spacer(minLength: 0) }
-            rings(ring).padding(.leading, 8)
-        }
-    }
-
-    /// The hero's name, or the same at a share of its size. The size follows the caption style
+    /// The hero's name, or the same at a share of its size. The size follows the footnote style
     /// either way, so it grows with the system text size.
     private func name(_ share: CGFloat = 1) -> some View {
         Text(me.name)
-            .font(share == 1 ? .serif(.caption, weight: .bold) : .system(size: nameSize * share, weight: .bold, design: .serif))
+            .font(share == 1 ? .serif(.footnote, weight: .bold) : .system(size: nameSize * share, weight: .bold, design: .serif))
             .foregroundStyle(me.standing ? Palette.parchment : Palette.muted)
             .multilineTextAlignment(.leading)
     }
@@ -403,7 +417,7 @@ private struct PartyBar: View {
         let heart = Text(Image(systemName: me.standing ? "heart.fill" : "heart.slash.fill")).foregroundStyle(me.tint)
         let points = Text("\(me.hp)/\(me.maxHp)").foregroundStyle(me.standing ? Palette.parchment : Palette.ember)
         let armour = Text("AC\(gap)\(me.armorClass)").foregroundStyle(Palette.muted)
-        let names = me.conditions.map { $0.replacingOccurrences(of: " ", with: gap) }.joined(separator: ", ")
+        let names = me.conditions.map { $0.label.replacingOccurrences(of: " ", with: gap) }.joined(separator: ", ")
         let carried = Text(names.isEmpty ? "" : "  \(names)").foregroundStyle(Palette.ember)
         return Text("\(heart)\(gap)\(points)  \(armour)\(carried)")
             .font(HUDFont.small)
@@ -411,74 +425,36 @@ private struct PartyBar: View {
             .multilineTextAlignment(.leading)
     }
 
-    @ViewBuilder private func rings(_ size: CGFloat) -> some View {
+    @ViewBuilder private func party(_ size: CGFloat) -> some View {
         if !others.isEmpty {
-            HStack(spacing: size >= 26 ? 4 : 3) {
+            HStack(spacing: size >= 30 ? 5 : 4) {
                 ForEach(others) { RingAvatar(member: $0, size: size) }
             }
             .fixedSize()
         }
     }
-
-    /// The round over the turn line, as wide as the longest line there is, so the row does not
-    /// change when the turn does.
-    private var turnColumn: some View {
-        ZStack(alignment: .trailing) {
-            Text("Waiting on others").font(HUDFont.small).hidden()
-            VStack(alignment: .trailing, spacing: 0) {
-                if round != nil { roundText }
-                lineText
-            }
-        }
-        .fixedSize()
-    }
-
-    private var roundText: some View {
-        Text("Round \(round ?? 1)")
-            .font(HUDFont.small)
-            .foregroundStyle(Palette.gold)
-    }
-
-    private var lineText: some View {
-        Text(turnLine)
-            .font(HUDFont.small)
-            .foregroundStyle(turnLine == "Your turn" || turnLine == "Throw your die" ? Palette.gold : Palette.muted)
-    }
-}
-
-private enum HUDFont {
-    /// The row's small words: 11 points at the default text size, and growing with it.
-    static let small = Font.serif(.caption2, weight: .semibold)
 }
 
 // MARK: - A hero in a ring
 
-/// A hero's portrait, or their initials, inside a ring as full as their hit points. A hero who is
-/// down is dimmed and marked with an arrow, a fallen one with a cross; one who has chosen this
-/// turn, with a check.
+/// A hero's portrait, or their initials, inside a ring as full as their hit points, with a dark
+/// gap between the two so the ring reads as a ring. A hero who is down is dimmed and marked with
+/// an arrow, a fallen one with a cross; one who has chosen this turn, with a tick.
 struct RingAvatar: View {
     let member: PartyMember
-    var size: CGFloat = 26
+    var size: CGFloat = 30
 
     var body: some View {
-        let line = max(2, size * 0.085)
-        let face = size - 2 * line - 2
+        let face = size - 2 * RingGauge.line(size) - 3
         ZStack {
-            Circle()
-                .stroke(member.standing ? Color.white.opacity(0.14) : member.tint.opacity(0.7), lineWidth: line)
-                .padding(line / 2)
-            Circle()
-                .trim(from: 0, to: member.fraction)
-                .stroke(member.tint, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(line / 2)
+            RingGauge(gauge: .health(Double(member.fraction)), tint: member.tint, size: size,
+                      track: member.standing ? RingGauge.track : member.tint.opacity(0.7))
             portrait(face)
                 .saturation(member.standing ? 1 : 0)
                 .opacity(member.standing ? 1 : 0.5)
         }
         .frame(width: size, height: size)
         .overlay(alignment: .bottomTrailing) { mark }
-        .animation(.easeOut(duration: 0.5), value: member.fraction)
         .accessibilityHidden(true)
     }
 
@@ -495,193 +471,256 @@ struct RingAvatar: View {
                     .minimumScaleFactor(0.6)
             }
             .frame(width: side, height: side)
-            .overlay { Circle().stroke(Palette.gold.opacity(0.55), lineWidth: 1) }
         }
     }
 
-    /// Nothing for a hero still to choose: in the row a mark means done, or out of the fight.
+    /// Nothing for a hero still to choose: a mark means done, or out of the fight. It sits on the
+    /// ring's lower corner, small, so it hides as little of the ring as it can.
     @ViewBuilder private var mark: some View {
         if member.turn != .waiting, let symbol = member.turn.symbol {
-            let side = max(9, size * 0.42)
+            let side = max(9, size * 0.36)
             Image(systemName: symbol)
                 .font(.system(size: side, weight: .bold))
                 .foregroundStyle(member.turn == .fallen ? Palette.parchment : member.turn.tint)
                 .background { Circle().fill(Palette.ink).padding(-1) }
-                .offset(x: side * 0.3, y: side * 0.12)
+                .offset(x: side * 0.34, y: side * 0.2)
         }
     }
 }
 
-// MARK: - The panel
+// MARK: - The card
 
-/// Everyone, the player first. It fits its heroes when it can and scrolls inside itself when it
-/// cannot. Its text grows with the system text size, without a ceiling.
-private struct PartyPanel: View {
-    let party: [PartyMember]
+/// Everyone at once, in little room: the heroes as chips, then the fight's foes as chips. Its words
+/// grow with the system text size as far as the second large size; past that the card would take
+/// the screen from the story, which is what it is here to avoid.
+private struct PartyCard: View {
+    let heroes: [PartyMember]
+    let foes: [TurnRing]
+    let round: Int?
+    let turnLine: String
+    /// Opens or closes the display: a push up anywhere on the card closes it.
     var set: (Bool) -> Void
+
+    private func close() { set(false) }
 
     var body: some View {
         VStack(spacing: 0) {
-            ViewThatFits(in: .vertical) {
-                list.gesture(HUDPull.gesture(set))
-                ScrollView { list }
+            header
+            VStack(spacing: 7) {
+                HUDChipGrid {
+                    ForEach(heroes) { HeroChip(member: $0) }
+                }
+                if !foes.isEmpty {
+                    Rectangle().fill(Palette.gold.opacity(0.18)).frame(height: 1)
+                    HUDChipGrid {
+                        ForEach(foes) { FoeChip(ring: $0) }
+                    }
+                }
             }
-            Button {
-                set(false)
-            } label: {
+            .padding(.horizontal, 10)
+            .contentShape(.rect)
+            .gesture(HUDPull.gesture(set))
+            Button(action: close) {
                 HUDGrabber()
-                    .padding(.top, 6)
-                    .padding(.bottom, 8)
+                    .padding(.top, 7)
+                    .padding(.bottom, 5)
                     .frame(maxWidth: .infinity)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .highPriorityGesture(HUDPull.gesture(set))
-            .accessibilityLabel("Close the party")
+            .accessibilityHidden(true)
         }
-        .background(Palette.ink)
-        .overlay(alignment: .bottom) { Rectangle().fill(Palette.gold.opacity(0.3)).frame(height: 1) }
-        .shadow(color: .black.opacity(0.6), radius: 14, y: 8)
-        .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { set(false) }
-    }
-
-    private var list: some View {
-        VStack(spacing: 0) {
-            ForEach(party) { member in
-                if member.id != party.first?.id {
-                    Rectangle().fill(Palette.gold.opacity(0.14)).frame(height: 1)
-                }
-                PartyRow(member: member)
-            }
-        }
-        .padding(.horizontal, 14)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .frame(maxWidth: HUDMetrics.column)
         .frame(maxWidth: .infinity)
-        .contentShape(.rect)
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(.escape, close)
+    }
+
+    /// The round and the turn, and the way back up: the whole line closes the card.
+    private var header: some View {
+        Button(action: close) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                if let round {
+                    Text("Round \(round)").foregroundStyle(Palette.gold)
+                    Text("·").foregroundStyle(Palette.muted)
+                }
+                Text(turnLine)
+                    .foregroundStyle(turnLine == PartyHUD.choose || turnLine == "Throw your die" ? Palette.gold : Palette.muted)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up")
+                    .font(.system(.caption2, weight: .bold))
+                    .foregroundStyle(Palette.muted)
+            }
+            .font(HUDFont.small)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .padding(.top, 5)
+            .padding(.bottom, 8)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .highPriorityGesture(HUDPull.gesture(set))
+        .accessibilityLabel("Close the party")
+        .accessibilityValue((round.map { "Round \($0), " } ?? "") + turnLine)
     }
 }
 
-private struct PartyRow: View {
-    let member: PartyMember
-    @ScaledMetric(relativeTo: .subheadline) private var avatar: CGFloat = 44
+/// Chips in equal columns, as many as fit, each row as tall as its tallest chip. The narrowest a
+/// chip may be does not grow with the text size: three still fit across a phone, and the words in
+/// them make room by stacking.
+private struct HUDChipGrid: Layout {
+    var narrowest: CGFloat = 104
+    var widest: CGFloat = 190
+    var spacing: CGFloat = 6
+
+    private func columns(in width: CGFloat) -> (count: Int, width: CGFloat) {
+        guard width.isFinite, width > narrowest else { return (1, max(width.isFinite ? width : narrowest, 1)) }
+        let count = max(1, Int((width + spacing) / (narrowest + spacing)))
+        return (count, min(widest, (width - CGFloat(count - 1) * spacing) / CGFloat(count)))
+    }
+
+    private func rows(_ subviews: Subviews, columns: (count: Int, width: CGFloat)) -> [CGFloat] {
+        stride(from: 0, to: subviews.count, by: columns.count).map { start in
+            subviews[start..<min(start + columns.count, subviews.count)]
+                .map { $0.sizeThatFits(ProposedViewSize(width: columns.width, height: nil)).height }
+                .max() ?? 0
+        }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? CGFloat(max(subviews.count, 1)) * (narrowest + spacing) - spacing
+        let heights = rows(subviews, columns: columns(in: width))
+        return CGSize(width: width, height: heights.reduce(0, +) + CGFloat(max(heights.count - 1, 0)) * spacing)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let grid = columns(in: bounds.width)
+        var y = bounds.minY
+        for (row, height) in rows(subviews, columns: grid).enumerated() {
+            for column in 0..<grid.count {
+                let index = row * grid.count + column
+                guard index < subviews.count else { break }
+                subviews[index].place(at: CGPoint(x: bounds.minX + CGFloat(column) * (grid.width + spacing), y: y),
+                                      anchor: .topLeading,
+                                      proposal: ProposedViewSize(width: grid.width, height: height))
+            }
+            y += height + spacing
+        }
+    }
+}
+
+/// A chip's frame: the ring, the words beside it, the conditions under both, and the turn's tag on
+/// its corner. Whoever acts now is outlined in gold.
+private struct Chip<Ring: View, Words: View>: View {
+    var isNow = false
+    var isNext = false
+    var isOut = false
+    var conditions: [HudCondition] = []
+    @ViewBuilder var ring: Ring
+    @ViewBuilder var words: Words
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 9, style: .continuous) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            RingAvatar(member: member, size: min(avatar, 60))
-            VStack(alignment: .leading, spacing: 5) {
-                heading
-                health
-                if !member.conditions.isEmpty {
-                    FlowLayout(spacing: 5, lineSpacing: 5) {
-                        ForEach(member.conditions, id: \.self) { TagLabel($0, tint: Palette.ember) }
-                    }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                ring
+                VStack(alignment: .leading, spacing: 0) { words }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // At its own height whatever the row is given: a word squeezed for height shrinks.
+            .fixedSize(horizontal: false, vertical: true)
+            if !conditions.isEmpty {
+                FlowLayout(spacing: 3, lineSpacing: 3) {
+                    ForEach(conditions) { ConditionBadge(condition: $0, squeezes: true) }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 10)
+        .opacity(isOut ? 0.55 : 1)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Palette.surface, in: shape)
+        .overlay {
+            shape.strokeBorder(isNow ? Palette.gold : Palette.gold.opacity(0.14), lineWidth: isNow ? 1.25 : 0.75)
+        }
+        .shadow(color: isNow ? Palette.gold.opacity(0.35) : .clear, radius: 5)
+        .overlay(alignment: .topTrailing) {
+            Group {
+                if isNow {
+                    TurnTag(text: "Now", prominent: true)
+                } else if isNext {
+                    TurnTag(text: "Next", prominent: false)
+                }
+            }
+            .offset(x: -7, y: -5)
+        }
+    }
+}
+
+private struct HeroChip: View {
+    let member: PartyMember
+    @ScaledMetric(relativeTo: .caption2) private var scaled: CGFloat = 32
+
+    var body: some View {
+        Chip(isNow: member.isNow, isNext: member.isNext, isOut: !member.standing, conditions: member.conditions) {
+            RingAvatar(member: member, size: min(scaled, 34))
+        } words: {
+            Text(member.shortName)
+                .font(.serif(.caption, weight: .bold))
+                .foregroundStyle(member.isMe ? Palette.gold : member.standing ? Palette.parchment : Palette.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            numbers
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken)
+        .accessibilityLabel(member.spokenInFull)
     }
 
-    /// Name, level and the turn on one line; as the text grows, the name over the other two; then
-    /// each on its own line.
-    private var heading: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                name.fixedSize()
-                level.fixedSize()
-                Spacer(minLength: 4)
-                turn.fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                name.fixedSize(horizontal: false, vertical: true)
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        level.fixedSize()
-                        Spacer(minLength: 4)
-                        turn.fixedSize()
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        level.fixedSize(horizontal: false, vertical: true)
-                        turn.fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-    }
-
-    private var name: some View {
-        Text(member.name)
-            .font(.serif(.subheadline, weight: .bold))
-            .foregroundStyle(member.isMe ? Palette.gold : member.standing ? Palette.parchment : Palette.muted)
-            .multilineTextAlignment(.leading)
-    }
-
-    @ViewBuilder private var level: some View {
-        if let level = member.level {
-            Text("Level \(level)")
-                .font(.serif(.caption))
-                .foregroundStyle(Palette.muted)
-        }
-    }
-
-    @ViewBuilder private var turn: some View {
-        if let word = member.turn.word, let symbol = member.turn.symbol {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Image(systemName: symbol)
-                Text(word)
-            }
-            .font(.serif(.caption, weight: .semibold))
-            .foregroundStyle(member.turn.tint)
-        }
-    }
-
-    /// The bar with the numbers beside it; with larger text, under it.
-    private var health: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                bar.frame(minWidth: 56)
-                numbers.fixedSize()
-                armour.fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                bar
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    numbers
-                    Spacer(minLength: 4)
-                    armour
-                }
-            }
-        }
-    }
-
-    private var bar: some View {
-        HPBar(hp: member.standing ? member.hp : 0, maxHp: member.maxHp, tint: member.tint, height: 6)
-    }
-
+    /// "12/12  AC 16" on one line while it fits; with larger text, one over the other.
     private var numbers: some View {
-        Text("\(member.hp)/\(member.maxHp)")
-            .font(.serif(.caption, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(member.standing ? Palette.parchment : Palette.ember)
+        let points = Text(member.standing ? "\(member.hp)/\(member.maxHp)" : (member.turn.word ?? "Down"))
+            .foregroundStyle(member.standing && member.hp * 2 > member.maxHp ? Palette.parchment : Palette.ember)
+        let armour = Text("AC\u{00A0}\(member.armorClass)").foregroundStyle(Palette.muted)
+        return ViewThatFits(in: .horizontal) {
+            Text("\(points)  \(armour)")
+            VStack(alignment: .leading, spacing: 0) {
+                points
+                armour
+            }
+        }
+        .font(HUDFont.small)
+        .monospacedDigit()
+        .lineLimit(1)
     }
+}
 
-    private var armour: some View {
-        Text("AC \(member.armorClass)")
-            .font(.serif(.caption))
-            .monospacedDigit()
-            .foregroundStyle(Palette.muted)
-    }
+private struct FoeChip: View {
+    let ring: TurnRing
+    @ScaledMetric(relativeTo: .caption2) private var scaled: CGFloat = 32
+    /// The caption style's size, for a name drawn a little smaller.
+    @ScaledMetric(relativeTo: .caption) private var nameSize: CGFloat = 12
 
-    private var spoken: String {
-        var parts = [member.isMe ? "\(member.name), you" : member.name]
-        if let level = member.level { parts.append("level \(level)") }
-        parts.append("\(member.hp) of \(member.maxHp) hit points")
-        parts.append("armour class \(member.armorClass)")
-        parts += member.conditions
-        if let word = member.turn.word { parts.append(word.lowercased()) }
-        return parts.joined(separator: ", ")
+    var body: some View {
+        Chip(isNow: ring.isNow, isNext: ring.isNext, isOut: ring.isOut, conditions: ring.conditions) {
+            FoeRing(ring: ring, size: min(scaled, 34))
+        } words: {
+            // On one line; if not, a little smaller; a long name ("Goblin Archer 2") on two.
+            ViewThatFits(in: .horizontal) {
+                Text(ring.name).font(.serif(.caption, weight: .bold)).lineLimit(1)
+                Text(ring.name).font(.system(size: nameSize * 0.84, weight: .bold, design: .serif)).lineLimit(1)
+                Text(ring.name).font(.serif(.caption, weight: .bold)).lineLimit(2).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(ring.isOut ? Palette.muted : Palette.parchment)
+            .multilineTextAlignment(.leading)
+            Text(ring.caption)
+                .font(HUDFont.small)
+                .foregroundStyle(ring.isOut ? Palette.muted : ring.tone.color)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ring.spoken)
     }
 }

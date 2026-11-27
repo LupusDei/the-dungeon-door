@@ -142,6 +142,12 @@ struct TurnRow: Equatable {
     }
 }
 
+extension TurnRow {
+    /// Everyone in initiative order from the top, wherever the turn has got to: a place in this
+    /// list does not move as the turn does. The heads-up display's card seats its chips by it.
+    var inOrder: [TurnRing] { later + upcoming }
+}
+
 extension HudCondition {
     /// "Asleep, from Sleep", "Concentrating on Sleep", "Poisoned, 10 minutes".
     var spoken: String {
