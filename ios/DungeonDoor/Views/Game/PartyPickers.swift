@@ -5,6 +5,9 @@ import SwiftUI
 struct HeroPicker: View {
     @Environment(AppModel.self) private var model
     @Binding var selection: String?
+    /// 100 at the default text size, more as the cards' small text grows.
+    @ScaledMetric(relativeTo: .caption2) private var percent: CGFloat = 100
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var living: [Character] { model.characters.filter { !$0.isFallen } }
     private var fallen: [Character] { model.characters.filter(\.isFallen) }
@@ -22,34 +25,46 @@ struct HeroPicker: View {
                     .card()
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
                         // Once any hero has a sheet, every card keeps a line for it, so the row stays level.
                         let showVitals = living.contains { $0.sheet != nil }
+                        // A card widens with the text (to 150), so a name and vitals wrap instead of being cut.
+                        let side = min(max(84 * percent / 100, 84), 150)
                         ForEach(living) { hero in
                             let selected = hero.id == selection
                             Button {
                                 withAnimation(.snappy) { selection = hero.id }
                             } label: {
                                 VStack(spacing: 6) {
-                                    PortraitView(url: hero.portraitURL, size: 84)
-                                    Text(hero.name).font(.display(14)).lineLimit(1)
+                                    PortraitView(url: hero.portraitURL, size: side)
+                                    Text(hero.name)
+                                        .font(.serif(.footnote, weight: .semibold))
+                                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                        .minimumScaleFactor(0.8)
+                                        .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     if showVitals {
                                         Text(hero.shortVitalsLine ?? " ")
                                             .font(.caption2.weight(.semibold))
                                             .monospacedDigit()
                                             .foregroundStyle(Palette.verdigris)
-                                            .lineLimit(1)
+                                            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                                             .minimumScaleFactor(0.8)
+                                            .multilineTextAlignment(.center)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
-                                .frame(width: 92)
+                                .frame(width: side + 8)
+                                .frame(maxHeight: .infinity, alignment: .top)
                                 .padding(8)
                                 .card(highlighted: selected)
+                                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 2)
                 }
                 .scrollClipDisabled()

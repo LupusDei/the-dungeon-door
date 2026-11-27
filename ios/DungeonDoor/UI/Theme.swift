@@ -76,10 +76,14 @@ struct SectionLabel: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
+        // The caption style is 12 points at the default text size and grows with it. A heading in
+        // spaced capitals gets wide fast, so it stops growing at the second accessibility size.
         Text(text.uppercased())
-            .font(.system(size: 12, weight: .semibold, design: .serif))
+            .font(.system(.caption, design: .serif, weight: .semibold))
             .tracking(2.2)
             .foregroundStyle(Palette.gold)
+            .fixedSize(horizontal: false, vertical: true)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 }
 
