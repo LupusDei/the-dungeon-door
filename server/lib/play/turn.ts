@@ -18,6 +18,7 @@ import { afterHarm } from './dying.ts';
 import { fightRound, startFight, type FightEnd } from './fight.ts';
 import { foesNamed, type RollHook, type RulesHook } from './hooks.ts';
 import { parley, rollAttitude } from './parley.ts';
+import { confrontGoal, goalFound, questAfter } from './quest.ts';
 import { partyRest } from './rest.ts';
 import { newlyDead, raiseTheDead, revivify } from './revive.ts';
 import type { CombatState, DungeonState, PartyState } from './state.ts';
@@ -207,9 +208,10 @@ function move(s: RulesState, exit: string, ballots: readonly Ballot[]): RulesTur
 type Moved = NonNullable<ReturnType<typeof enter>>;
 
 /** Into an area: light where needed, then what is there springs (foes met, a trap), then its treasure is taken. */
-function arrive(s: RulesState, moved: Moved, ballots: readonly Ballot[], before: string[]): RulesTurn {
-  const entered = { ...s, dungeon: moved.dungeon };
-  const lit = lightUp(s.party, ambientLight(entered));
+function arrive(s: RulesState, entering: Moved, ballots: readonly Ballot[], before: string[]): RulesTurn {
+  const { moved, party } = goalHere(s.party, entering);
+  const entered = { ...s, party, dungeon: moved.dungeon };
+  const lit = lightUp(party, ambientLight(entered));
   const here = { ...entered, party: lit.party };
   const lines = [...before, `The party enters ${moved.node.name}${moved.node.purpose ? `: ${moved.node.purpose}` : ''}.`, ...deeperLine(s.dungeon!, moved.dungeon), ...lit.lines];
   const found = arrival(moved.dungeon, moved.node);
@@ -218,6 +220,13 @@ function arrive(s: RulesState, moved: Moved, ballots: readonly Ballot[], before:
   if (wiped(trapped)) return trapped;
   const cleared = clearHere(trapped, trapped.lines);
   return { ...trapped, ...cleared.state, lines: cleared.lines };
+}
+
+/** Explore mode: the room entered may be where the quest's goal is found (play/quest.ts). */
+function goalHere(party: PartyState, moved: Moved): { moved: Moved; party: PartyState } {
+  if (!party.quest) return { moved, party };
+  const found = goalFound(party.quest, moved.dungeon, moved.node);
+  return { moved: { dungeon: found.dungeon, node: found.node }, party: { ...party, quest: found.quest } };
 }
 
 /** The way went a level deeper on this move. */
@@ -303,6 +312,7 @@ const HOOKS: { [K in RulesHook['kind']]: (s: RulesState, hook: Extract<RulesHook
   hazard: (s, { kind: _, hazard, ...amount }) => traded(s, harmed(s.party, partyHazard(s.party, { kind: hazard, ...amount } as HazardSpec))),
   parley: (s, hook, ballots) => talk(s, hook.monsters, ballots),
   revive: (s) => traded(s, raiseTheDead(s.party)),
+  goal: (s) => confrontGoal(s),
 };
 
 /** A written check outside a fight: the dice are rolled and logged. There is no creature here to mark. */
@@ -351,7 +361,7 @@ function goOn(t: RulesTurn, trek: Trek): RulesTurn {
 
 /** A combat round if a fight is on; otherwise the chosen choice's hook (none: a story choice, nothing to roll). */
 export function playTurn(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[] = []): RulesTurn {
-  return withDeathTimes(clockOf(s.party), alongTheRoad(turnPlayed(s, hook, ballots, freeforms)));
+  return withDeathTimes(clockOf(s.party), questAfter(alongTheRoad(turnPlayed(s, hook, ballots, freeforms))));
 }
 
 function turnPlayed(s: RulesState, hook: RulesHook | null, ballots: readonly Ballot[], freeforms: readonly FreeformBallot[]): RulesTurn {

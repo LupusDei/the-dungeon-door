@@ -338,14 +338,16 @@ GameState {
   openEnded: boolean                 // no set length: it goes on until the host calls the ending (POST …/ending)
   scenesLeft: number | null          // scenes with choices still to come after this one, before the epilogue:
                                      // 0 on the last such scene and on the epilogue. A fight's rounds do not
-                                     // use them up. Null with no set length, and in the lobby. Absent from a
-                                     // server before it: show nothing
-  progress: { part: "road", scene, of, tale } | { part: "tale", scene, of } | null
+                                     // use them up. Null with no set length, and in the lobby. Null from the
+                                     // plan's last scene on while the quest is open (`rules.quest`): it may take
+                                     // longer. Absent from a server before it: show nothing
+  progress: { part: "road", scene, of, tale } | { part: "tale", scene, of, about? } | null
                                      // where the current scene falls, the road counted apart: "road" is
                                      // stretch `scene` of `of` (and `tale` scenes follow it); "tale" is scene
                                      // `scene` of `of` counted from the tale's first, the epilogue its last.
-                                     // `of` and `tale` are null with no set length. Show "On the road 1 of 2",
-                                     // then "Scene 1 of 4". Null with no scene
+                                     // `of` and `tale` are null with no set length. `about: true` while the
+                                     // quest is open: `of` is the plan and `scene` may pass it. Show "On the
+                                     // road 1 of 2", then "Scene 1 of 4" ("Scene 5 of about 4"). Null with no scene
   players: [{ playerId, character: Character, isHost: boolean, joinedAt,
               appVersion: string | null, outdated: boolean }]
                                      // the whole party, including heroes who have not chosen yet. Who has
@@ -561,6 +563,12 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // (the scene's choices are Engage, Run and Parley). band and monsters
                                       // rate them against this party; absent from servers older than that
   }
+  quest: { kind: "slay" | "recover" | "rescue"; goal: string; reached: boolean; where: string | null } | null
+                                      // the adventure's goal (lib/play/quest.ts): goal "Slay or drive off the
+                                      // Ogre", where "in the well room", "deeper in the dungeon" (explore, not
+                                      // found yet) or null (a tale told). Reaching it ends the adventure: the
+                                      // next scene is the epilogue. Null with no set length, and in games
+                                      // started before quests
   results: string[]                   // the engine's dice lines for the last resolved scene
   levelUps: [{ playerId: string; name: string; from: number; to: number }]   // who levelled up at the
                                       // quest's end (set with the epilogue; empty until then)
@@ -755,8 +763,9 @@ Reaction {
   (for an AFK player). Needs at least one vote or written action. A combat round needs neither.
 - `POST /api/games/{code}/ending` → `GameState`. Host only, while the table is voting: the scene being played
   becomes the last one and the epilogue follows it (after the fight, if one is on). A `system` line tells the
-  table. This is how an adventure with no set length ends, and it cuts a longer one short. On a scene that is
-  already the last it changes nothing. 403 for anyone but the host; 409 in the lobby, while a scene resolves,
+  table. This is how an adventure with no set length ends, and it cuts a longer one short, or one past its plan
+  with the quest still open (the quest is closed, its goal not reached). On a scene that is already the last
+  it changes nothing. 403 for anyone but the host; 409 in the lobby, while a scene resolves,
   and once the game has ended.
 - `POST /api/games/{code}/narration` with `{ sceneIndex, voice? }` → `{ sceneIndex, voice, status, voiceUrl }`.
   The scene read aloud, on demand: nothing is spoken until a player asks. `voice` is a catalog `narrators`

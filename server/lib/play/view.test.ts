@@ -187,3 +187,12 @@ test('a foe’s hit points are hidden from the players and the DM: they see its 
   assert.deepEqual(byName(told.filter((c) => c.side === 'foes')).map((c) => [c.wound, c.hp, 'fill' in c]), [['Unhurt', undefined, false], ['Crumbling', undefined, false]]);
   assert.equal(told.find((c) => c.name === 'Cleo')!.hp, wizard.hp);
 });
+
+test('the table and the DM see the quest: its goal, where it lies, whether it is done; none with no set length', () => {
+  const quest = { kind: 'rescue' as const, target: 'a captured merchant', foes: ['goblin-warrior'], xp: 50, at: null, planned: 4, reached: false };
+  const s: RulesState = { party: { ...party, quest }, combat: null, dungeon: null };
+  const seen = { kind: 'rescue', goal: 'Rescue a captured merchant from the captors (Goblin Warrior)', reached: false, where: null };
+  assert.deepEqual(rulesView(s, []).quest, seen);
+  assert.deepEqual(rulesContext(s).quest, seen);
+  assert.equal(rulesView({ party, combat: null, dungeon: null }, []).quest, null);
+});

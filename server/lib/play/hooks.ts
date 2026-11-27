@@ -45,7 +45,9 @@ export type RulesHook =
   /** Talk to the foes waiting in the room, or to these (play/parley.ts). */
   | { kind: 'parley'; monsters?: string[] | null }
   /** A temple or shrine: every dead hero is raised (Raise Dead) while the party's gold lasts (play/revive.ts). */
-  | { kind: 'revive' };
+  | { kind: 'revive' }
+  /** A tale told: the story reaches the quest's goal, and its foes are met (play/quest.ts). */
+  | { kind: 'goal' };
 
 interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
 
@@ -99,6 +101,7 @@ const HookSchema = z.discriminatedUnion('kind', [
   hazardSchema,
   z.object({ kind: z.literal('parley'), monsters: z.array(z.string()).transform((ids) => ids.filter(isMonster)).nullish() }),
   z.object({ kind: z.literal('revive') }),
+  z.object({ kind: z.literal('goal') }),
 ]);
 
 /** The hook, or null when there is none or it doesn't hold up (unknown skill or monster, DC out of 1–30…). */
@@ -177,6 +180,7 @@ const LABELS: { [K in RulesHook['kind']]: (hook: Extract<RulesHook, { kind: K }>
   hazard: (h) => `Hazard: ${titleCase(h.hazard)}${hazardAmount(h)}`,
   parley: (h) => (h.monsters && h.monsters.length > 0 ? `Parley with ${foesNamed(h.monsters)}` : 'Parley'),
   revive: () => 'Raise the dead',
+  goal: () => 'The quest’s goal: face its foes',
 };
 
 function labelContext(context?: readonly number[] | DungeonState | null): LabelContext {

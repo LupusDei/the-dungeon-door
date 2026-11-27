@@ -175,7 +175,8 @@ export function generateDungeon(seed: number, size: MapSize, levels: number[]): 
 
 /**
  * An area as it is found at a deeper level: its fight rebuilt for the level (same difficulty) and its
- * treasure rolled for it; its kind, trap (scaled when sprung), name and ways are kept. Seeded by the area
+ * treasure rolled for it; its kind, trap (scaled when sprung), name and ways are kept. The goal room keeps
+ * its foes and its magic item: they are the quest's (play/quest.ts). Seeded by the area
  * and the level, so it comes out the same every time. Not deeper: unchanged.
  */
 export function restock(map: Dungeon, node: DungeonNode, level: number): DungeonNode {
@@ -184,6 +185,8 @@ export function restock(map: Dungeon, node: DungeonNode, level: number): Dungeon
   if (!c) return { ...node, depth: level };
   const rng = derivedRng(map.seed, `restock:${node.id}:${level}`);
   const context = { levels: map.levels, depth: level, difficulty: 'moderate' as const, pool: habitat(kindIdOf(map.kind)) };
-  const encounter = c.encounter && encounterAt(rng, context, c.encounter.difficulty);
-  return { ...node, depth: level, contents: { ...c, encounter, treasure: c.treasure && rollTreasure(rng, level) } };
+  const goal = node.id === map.goal; // the quest's room keeps its foes and the item it holds (play/quest.ts)
+  const encounter = c.encounter && (goal ? c.encounter : encounterAt(rng, context, c.encounter.difficulty));
+  const treasure = c.treasure && { ...rollTreasure(rng, level), ...(goal ? { magicItem: c.treasure.magicItem } : {}) };
+  return { ...node, depth: level, contents: { ...c, encounter, treasure } };
 }

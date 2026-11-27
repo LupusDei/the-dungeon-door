@@ -17,7 +17,7 @@ import * as startApi from '../../api/game-start.ts';
 import * as voteApi from '../../api/game-vote.ts';
 import * as gameApi from '../../api/game.ts';
 import * as gamesApi from '../../api/games.ts';
-import { call, gamePath, makeCharacter } from '../api.fixture.ts';
+import { call, gamePath, makeCharacter, withoutQuest } from '../api.fixture.ts';
 import { settle } from '../background.ts';
 import { fakeDungeonMaster } from '../dm/fake.ts';
 import { registerDungeonMaster, unregisterDungeonMaster } from '../dm/registry.ts';
@@ -140,6 +140,7 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   const { code, players, host, characters } = await table(2);
   await start(code, host, { sceneCount: 3 });
   await settle();
+  await withoutQuest(code);
   await walkTheRoad(code, players, fightingDM(['rat'], seen));
   assert.equal(seen[0].ctx.rules!.party.length, 2, 'the DM sees the party');
   let state = await view(code, host);
@@ -238,6 +239,7 @@ test('the road is counted apart from the tale: a tale told of 4 scenes gets all 
   const { code, players, host } = await table(1);
   await start(code, host);
   await settle();
+  await withoutQuest(code); // its scene count is its end; with a quest, play/quest-game.test.ts
   let state = await view(code, host);
   assert.deepEqual(state.progress, { part: 'road', scene: 1, of: 2, tale: 4 });
   assert.deepEqual(seen.at(-1)!.progress, state.progress, 'the DM is told it too');
@@ -289,7 +291,7 @@ test('a fight on the road takes the road’s scenes, not the dungeon’s: the ta
     assert.ok(index < 15, 'the road ends');
   }
   assert.ok(index > 2, 'the road took more than its two scenes');
-  assert.deepEqual([state.scene!.index, state.progress], [index, { part: 'tale', scene: 1, of: 4 }]);
+  assert.deepEqual([state.scene!.index, state.progress], [index, { part: 'tale', scene: 1, of: 4, about: true }]);
   assert.equal(state.sceneCount, index + 4);
   assert.equal(state.rules!.dungeon!.at, 'r0', 'at the door');
 });
@@ -300,7 +302,7 @@ test('explore mode counts the road apart too', async () => {
   await settle();
   assert.deepEqual((await view(code, host)).progress, { part: 'road', scene: 1, of: 2, tale: 3 });
   await walkTheRoad(code, players);
-  assert.deepEqual((await view(code, host)).progress, { part: 'tale', scene: 1, of: 3 });
+  assert.deepEqual((await view(code, host)).progress, { part: 'tale', scene: 1, of: 3, about: true });
 });
 
 test('foes barring the road as the game starts: the opening scene offers Engage, Run and Parley', async () => {
@@ -454,6 +456,7 @@ test('at the epilogue the heroes level up by their XP: the table, the DM and the
   const { code, players, host, characters } = await table(2);
   await start(code, host, { sceneCount: 2 });
   await settle();
+  await withoutQuest(code);
   await walkTheRoad(code, players);
   const game = (await getStore().getGame(code))!;
   await getStore().updateGame(code, {}, { party: { ...game.party!, sheets: { ...game.party!.sheets, [host]: { ...game.party!.sheets[host], xp: 300 } } } });

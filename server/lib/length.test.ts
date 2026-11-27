@@ -15,7 +15,7 @@ import * as startApi from '../api/game-start.ts';
 import * as voteApi from '../api/game-vote.ts';
 import * as gameApi from '../api/game.ts';
 import * as gamesApi from '../api/games.ts';
-import { call, gamePath, makeCharacter } from './api.fixture.ts';
+import { call, gamePath, makeCharacter, withoutQuest } from './api.fixture.ts';
 import { settle } from './background.ts';
 import { fakeDungeonMaster } from './dm/fake.ts';
 import { registerDungeonMaster, unregisterDungeonMaster } from './dm/registry.ts';
@@ -72,6 +72,7 @@ test('a game with a set length counts its scenes down to the epilogue', async ()
   assert.equal((await call(startApi.POST, gamePath(code, 'start'), { player: host, body: { sceneCount: 1 } })).status, 400);
   await call(startApi.POST, gamePath(code, 'start'), { player: host, body: { sceneCount: 3 } });
   await settle();
+  await withoutQuest(code); // past the plan a quest's count is none: play/quest-game.test.ts
   state = await view();
   assert.equal(state.sceneCount, 5, 'three asked for, and the two stretches of road');
   const seen: (number | null)[] = [state.scenesLeft];

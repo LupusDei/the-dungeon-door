@@ -2,6 +2,7 @@
  * What the rules engine shows: the API's RulesView (docs/api.md) and the DM's RulesContext
  * (docs/dungeon-master.md). Plain projections of the stored state.
  */
+import { questView, type QuestView } from './quest.ts';
 import { passiveScore } from '../rules/checks.ts';
 import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
 import { heroResistances } from '../rules/defenses.ts';
@@ -170,6 +171,8 @@ export interface RulesView {
     /** Foes the party is facing here, rated against it. Hostile ones are barring the way. */
     waiting: Waiting | null;
   };
+  /** The quest's goal (play/quest.ts); null for a game with no set length. */
+  quest: QuestView | null;
   results: string[];
   /** Who levelled up at the quest's end (empty until then). */
   levelUps: { playerId: string; name: string; from: number; to: number }[];
@@ -239,6 +242,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
     })(),
     trek: trekView(state),
     dungeon: dungeonView(state),
+    quest: questView(state),
     results,
     levelUps: (party.levelUps ?? []).map((u) => ({ ...u, name: party.sheets[u.playerId].name })),
     xpAwards: (party.xpAwards ?? []).map((a) => ({
@@ -273,6 +277,7 @@ export interface RulesContext {
   dungeon: null | { kind: string; level: number; area: string; purpose: string | null; exits: { id: string; connection: string; leadsTo: string | null }[]; waiting: Waiting | null };
   /** SRD monster ids that suit the party, for fights the DM proposes. */
   monsters: string[];
+  quest: QuestView | null;
 }
 
 const MONSTER_PICKS = 40;
@@ -333,5 +338,6 @@ export function rulesContext(state: RulesState): RulesContext {
       waiting: waiting(state),
     },
     monsters: suitableMonsters(foeLevels(party, dungeon), habitatOf(party, dungeon)),
+    quest: questView(state),
   };
 }

@@ -8,8 +8,9 @@ import { dungeonLevel } from './delve.ts';
 import { startFight } from './fight.ts';
 import type { PartyState } from './state.ts';
 import { meetOnTheRoad, planTrek } from './trek.ts';
-import { choiceView, dungeonMode, endQuest, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
+import { choiceView, dungeonMode, endingOf, endQuest, engineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './table.ts';
 import type { RulesState } from './turn.ts';
+import type { Quest } from './quest.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const player = (playerId: string, name: string, sheet?: typeof fighter): GamePlayer => ({
@@ -184,6 +185,10 @@ test('a fight still on is never followed by the epilogue, even in a game counted
   assert.equal(sceneCountAfter({ state: { party, combat, dungeon: null }, fight: null }, 2, 6), 7);
 });
 
+test('a lost fight: the scene after it is the last, the epilogue, however many were planned', () => {
+  assert.equal(sceneCountAfter({ state: { party, combat: null, dungeon: null }, fight: 'defeat' }, 3, 9), 4);
+});
+
 test('at the end the heroes go home: their sheets after a long rest (the fallen too), for the players still at the table', () => {
   const hurt: PartyState = { version: 1, rng: 1, sheets: { p1: { ...fighter, hp: 0, xp: 300, level: 1 }, gone: fighter } };
   const back = writeBack(hurt, [player('p1', 'Bryn')]);
@@ -270,4 +275,47 @@ test('at the quest’s end each living hero who took part gets the adventure’s
   assert.deepEqual(lines.slice(0, 2), ['+5 XP: taking part (Bryn).', '+50 XP: the adventure’s end (Bryn).']);
   assert.match(lines[2], /^Bryn reaches level 2 \(\+\d+ max HP\)\.$/);
   assert.deepEqual(ended.resolution.rules!.lines, lines);
+});
+
+test('a new game has a quest for the scenes asked for; one with no set length has none', () => {
+  const players = [player('p1', 'Bryn'), player('p2', 'Ann')];
+  for (const mode of ['none', 'fixed', 'explore'] as const) {
+    const quest = newRules(players, mode, 7, 4).party.quest!;
+    assert.deepEqual([quest.planned, quest.reached], [4, false], mode);
+  }
+  const fixed = newRules(players, 'fixed', 7, 4);
+  assert.equal(fixed.dungeon!.map.goal, fixed.party.quest!.at);
+  assert.equal(newRules(players, 'fixed', 7, 8, false).party.quest, undefined);
+});
+
+const QUEST: Quest = { kind: 'slay', target: 'Ogre', foes: ['ogre'], xp: 450, at: 'r2', planned: 4, reached: false };
+const withQuest = (quest?: Quest) => ({ state: { party: { ...party, ...(quest ? { quest } : {}) }, combat: null, dungeon: null }, fight: null });
+
+test('the scene count is pacing while the quest is open: the planned finale passes, as many scenes again are allowed, then the ending', () => {
+  assert.deepEqual(endingOf(withQuest(QUEST), 5, 6), { isFinale: false, sceneCount: 6 }, 'past the plan: overtime');
+  assert.deepEqual(endingOf(withQuest(QUEST), 8, 6), { isFinale: false, sceneCount: 6 });
+  assert.deepEqual(endingOf(withQuest(QUEST), 9, 6), { isFinale: true, sceneCount: 10 }, 'the cap: twice the planned tale');
+});
+
+test('the goal reached: the next scene is the epilogue, however early', () => {
+  assert.deepEqual(endingOf(withQuest({ ...QUEST, reached: true }), 3, 6), { isFinale: true, sceneCount: 4 });
+});
+
+test('the ending called, or no quest: the scene count is the end, as before', () => {
+  assert.deepEqual(endingOf(withQuest({ ...QUEST, called: true }), 5, 6), { isFinale: true, sceneCount: 6 });
+  assert.deepEqual(endingOf(withQuest(), 5, 6), { isFinale: true, sceneCount: 6 });
+  assert.deepEqual(endingOf(withQuest(), 4, 6), { isFinale: false, sceneCount: 6 });
+});
+
+test('a round in overtime adds one scene, as anywhere; a lost fight ends it', () => {
+  const { combat } = startFight(party, ['goblin-warrior']);
+  const round = { state: { party: { ...party, quest: QUEST }, combat, dungeon: null }, fight: 'started' as const };
+  assert.deepEqual(endingOf(round, 8, 6), { isFinale: false, sceneCount: 7 });
+  assert.deepEqual(endingOf({ ...withQuest(QUEST), fight: 'defeat' }, 7, 6), { isFinale: true, sceneCount: 8 });
+});
+
+test('at the end a quest still open is closed, the goal not reached; one reached stays reached', () => {
+  const step = (quest: Quest) => engineStep({ party: { ...party, quest }, combat: null, dungeon: null }, scene([]), resolution([], []));
+  assert.deepEqual(endQuest(step(QUEST)).state.party.quest, { ...QUEST, called: true });
+  assert.deepEqual(endQuest(step({ ...QUEST, reached: true })).state.party.quest, { ...QUEST, reached: true });
 });

@@ -151,3 +151,12 @@ test('a room restocked a level deeper: same kind, its fight rebuilt and its trea
   const corridor = { ...guarded, contents: null };
   assert.deepEqual(restock(d, corridor, 6), { ...corridor, depth: 6 });
 });
+
+test('the goal room keeps its foes and its magic item a level deeper (the quest’s, play/quest.ts); its coin is rolled for the level', () => {
+  const d = generateDungeon(42, 'short', [2, 2]);
+  const goal = d.nodes[d.goal!];
+  const deeper = restock(d, goal, 6);
+  assert.deepEqual([deeper.depth, deeper.contents!.encounter], [6, goal.contents!.encounter]);
+  const held = { ...goal, contents: { ...goal.contents!, treasure: { sp: 0, gp: 0, gems: 0, jewellery: 0, magicItem: 'Wand of Magic Missiles' } } };
+  assert.equal(restock(d, held, 6).contents!.treasure!.magicItem, 'Wand of Magic Missiles', 'an item to recover is still there');
+});

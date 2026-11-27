@@ -524,7 +524,7 @@ rounded down, and split evenly. The odd pieces go one each to the first living h
 share. Gems, jewellery and the magic item go to whoever has room.
 
 **XP and levels.** Fights only add XP: the living heroes share it, and nobody levels up during the
-quest. When the next scene is the **epilogue** (the last scene, or after a lost fight),
+quest. When the next scene is the **epilogue** (the goal reached, the last scene, or after a lost fight),
 `play/table.ts endQuest` levels up each living hero as far as its XP reaches. It uses the 2024
 thresholds (300, 900, 2,700 …), average hit points, the SRD subclass, and +2 to the best score at an
 Ability Score Improvement. The lines ("Bryn reaches level 2 (+7 max HP).") go to the chat and into the
@@ -659,6 +659,26 @@ for the count asked for).
   the road. When the road ends the party records where the tale began (`PartyState.roadScenes`,
   `play/progress.ts`), and `GameState.progress` and the DM count the road's stretches apart from the
   tale's scenes ("On the road 1 of 2", then "Scene 1 of 4").
+
+- **The quest: a goal, and the scene count a plan** (`play/quest.ts`). A game of a set length gets a quest
+  at the start (`PartyState.quest`, seeded): slay or drive off a boss, recover a magic item from its
+  keepers, or rescue a captive. Its foes are a **high** fight for the party: a boss of the toughest kind the
+  high budget affords (`stockedBudget`: the 2024 high XP per hero, halved at levels 1–2; a lone hero at 1–2
+  gets moderate), its band from what is left, up to the foe cap; in a dungeon counted at the dungeon's level
+  and from its habitat. The goal fits the scenes asked for (N): the door (or the tale's opening) is the
+  tale's scene 1 and the epilogue its last, so the goal is N − 2 moves in. A **fixed map** holds it in path
+  room `r(N−2)` (at least r1, at most the path's last room; the map's `goal` becomes it, and restocking
+  leaves it): its foes and treasure, the item to recover among it. **Explore** reveals it in the first room
+  entered once N − 2 areas are behind the party. A **tale told** has no room: the DM's `{"kind":"goal"}`
+  hook brings on its foes. The goal is reached when its room is cleared (won, the foes fled, or a successful
+  parley), or in a tale when its fight is won or the foes flee: "The quest is done: …" and the next scene
+  is the epilogue (`play/table.ts endingOf`). A lost fight ends it as before.
+  The count is pacing: while the quest is open the game runs **as many scenes again** past the plan
+  (overtime, `quest.planned`), so the cap is 2 × the tale's scenes (the road and fight rounds added as
+  ever); then the ending is called. Past the plan the DM is told to steer to the goal, and in a tale told
+  the first choice becomes "Face the goal". `progress` says "of about N" (`about: true`) and `scenesLeft`
+  is null from the plan's last scene. The host's ending, or the cap, closes the quest (`called`,
+  `questClosed`), the goal not reached. A game with no set length has no quest.
 
 - **The road is the party's, not the dungeon's.** It lives in `PartyState.trek` (with where it leads,
   `leadsTo: 'door' | 'tale'`, and any foes met on the current stretch, `facing`), so a game with no dungeon

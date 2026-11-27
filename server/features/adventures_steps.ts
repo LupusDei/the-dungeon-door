@@ -101,6 +101,12 @@ export class AdventureSteps {
     assert.equal(view.scenesLeft, 0);
   }
 
+  noLongerCounted(): void {
+    const view = this.view();
+    assert.equal(view.gameStatus, 'voting');
+    assert.equal(view.scenesLeft, null, 'the quest may take longer than planned');
+  }
+
   hasNoSetLength(): void {
     const view = this.view();
     assert.equal(view.openEnded, true);

@@ -7,6 +7,7 @@ import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import type { Attitude } from './parley.ts';
 import type { Lit } from './time.ts';
+import type { Quest } from './quest.ts';
 import type { Trek } from './trek.ts';
 import type { XpAward } from './xp.ts';
 
@@ -39,6 +40,8 @@ export interface PartyState {
   trek?: Trek;
   /** The scenes the road took, fights on it and all (play/progress.ts); absent until the road ends, and in older games. */
   roadScenes?: number;
+  /** The adventure's goal (play/quest.ts); absent with no set length, and in games from before it. */
+  quest?: Quest;
 }
 
 /** A hero's level before and after the quest's end. */

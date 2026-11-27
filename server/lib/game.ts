@@ -9,9 +9,10 @@ import { dieForAction, dieForCheck, rollPending, type PlayerDie } from './play/d
 import { TURN_SECONDS, turnWindow } from './play/turn-clock.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
 import { foeLevels } from './play/delve.ts';
-import { choiceView, dungeonMode, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, sceneCountAfter, storedChoice, writeBack } from './play/table.ts';
+import { choiceView, dungeonMode, endingOf, endQuest, engineStep, type EngineStep, newRules, rulesStateOf, storedChoice, writeBack } from './play/table.ts';
 import type { PartyState } from './play/state.ts';
 import { markRoadEnd, sceneProgress } from './play/progress.ts';
+import { questClosed, questOpen, towardTheGoal } from './play/quest.ts';
 import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
@@ -198,13 +199,16 @@ function heroInGame(game: Game, { playerId, character }: GamePlayer): Character 
 }
 
 /** How long the adventure is, and where the current scene falls in it, the road counted apart (play/progress.ts). */
+/** The quest still open on the planned last scene or after it: no count of scenes left (play/quest.ts). */
+const pastThePlan = (game: Game): boolean => questOpen(game.party?.quest) && game.sceneIndex >= game.sceneCount - 2;
+
 function lengthOf(game: Game, current: StoredScene | null): Pick<GameState, 'sceneCount' | 'openEnded' | 'scenesLeft' | 'progress'> {
   const open = hasNoSetLength(game.sceneCount);
   const begun = game.status !== 'lobby' && game.status !== 'preparing';
   return {
     sceneCount: open ? 0 : game.sceneCount,
     openEnded: open,
-    scenesLeft: begun ? scenesLeft(game.sceneCount, game.sceneIndex) : null,
+    scenesLeft: begun && !pastThePlan(game) ? scenesLeft(game.sceneCount, game.sceneIndex) : null,
     progress: current && sceneProgress(game.party, current.index, game.sceneCount),
   };
 }
@@ -526,7 +530,7 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   const game = await loadGame(code);
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
-  const rules = newRules(game.players, mode, dice.seed(), count); // the map is sized for the scenes asked for (the most, with no set length)
+  const rules = newRules(game.players, mode, dice.seed(), count, !open); // the map is sized for the scenes asked for (the most, with no set length)
   const scenes = open ? NO_SET_LENGTH : count + TREK_SCENES; // every game opens with the road from the tavern
   const blocking = game.players.filter((p) => isOutdated(p.appVersion ?? null));
   if (blocking.length > 0) throw partyOutdated(blocking.map((p) => p.character.name));
@@ -854,7 +858,10 @@ export async function callEnding(code: string, playerId: string): Promise<GameSt
   const host = requireHost(game, playerId);
   if (game.status !== 'voting') throw conflict(`can't call the ending: the game is ${game.status}`);
   const last = game.sceneIndex + 2; // this scene, then the epilogue
-  if (game.sceneCount > last && (await getStore().updateGame(code, { status: 'voting', sceneIndex: game.sceneIndex }, { sceneCount: last }))) {
+  const closed = game.party && questClosed(game.party);
+  const called = closed && closed !== game.party ? { party: closed } : {}; // no overtime (play/quest.ts)
+  const cuts = game.sceneCount > last || 'party' in called;
+  if (cuts && (await getStore().updateGame(code, { status: 'voting', sceneIndex: game.sceneIndex }, { sceneCount: Math.min(last, game.sceneCount), ...called }))) {
     await system(code, game.combat
       ? `${host.character.name} has called the ending. When this fight is over, the epilogue follows.`
       : `${host.character.name} has called the ending. This is the last scene; the epilogue follows it.`);
@@ -1068,20 +1075,23 @@ function planOf(game: Game, scene: StoredScene): Plan {
   if (!state) return { resolution, next, isFinale: next >= game.sceneCount - 1, rules: null, patch: {}, lines: [], sharesPicture: false };
   const stepped = safeStep(state, scene, resolution);
   const played = { ...stepped, state: { ...stepped.state, party: markRoadEnd(state.party, stepped.state.party, next) } };
-  const sceneCount = sceneCountAfter(played, next, game.sceneCount);
-  const isFinale = next >= sceneCount - 1;
+  const { isFinale, sceneCount } = endingOf(played, next, game.sceneCount);
   const step = isFinale ? endQuest(played) : played; // the heroes level up for the epilogue
   const { party } = step.state;
   const sharesPicture = step.round && step.state.combat !== null;
   return { resolution: step.resolution, next, isFinale, rules: step.state, patch: { ...step.state, sceneCount }, lines: party.results!, sharesPicture };
 }
 
-/** The next scene's choices: a fight's Attack, Cast and Dodge, Engage/Run/Parley when foes bar the way, or the DM's. */
-function nextChoices(plan: Plan, draft: NextScene): StoredChoice[] {
+/**
+ * The next scene's choices: a fight's Attack, Cast and Dodge, Engage/Run/Parley when foes bar the way, or the
+ * DM's, the first facing the quest's goal in a tale told past its plan (play/quest.ts).
+ */
+function nextChoices(plan: Plan, draft: NextScene, sceneCount: number): StoredChoice[] {
   if (plan.rules?.combat) return COMBAT_CHOICES.map((c, i) => ({ id: CHOICE_IDS[i], ...c }));
   const face = plan.rules && confrontationChoices(plan.rules);
   if (face) return face;
-  return choicesOf(draft.choices, plan.rules);
+  const offered = choicesOf(draft.choices, plan.rules);
+  return plan.rules ? towardTheGoal(offered, plan.rules, plan.next, sceneCount) : offered;
 }
 
 async function spokenBy(game: Game): Promise<HeroLine[]> {
@@ -1118,7 +1128,7 @@ async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
     narration: draft.narration.trim(),
     imagePrompt: plan.sharesPicture ? SHARED_PICTURE : draft.imagePrompt,
     imageUrl: plan.sharesPicture ? scene.imageUrl : null,
-    choices: plan.isFinale ? [] : nextChoices(plan, draft as NextScene),
+    choices: plan.isFinale ? [] : nextChoices(plan, draft as NextScene, plan.patch.sceneCount ?? game.sceneCount),
     isFinale: plan.isFinale,
   });
   return draft;

@@ -39,3 +39,12 @@ test('no set length: no count, no climax, the story goes on until the table call
   assert.equal(isClimax(open), false);
   assert.equal(sceneHeading(open), 'Scene 2');
 });
+
+test('with the quest open the tale has about so many scenes; past them the DM steers to the goal', () => {
+  const about = (scene: number) => ({ sceneIndex: scene + 1, sceneCount: 6, progress: { part: 'tale' as const, scene, of: 4, about: true as const } });
+  assert.equal(sceneLabel(about(2)), 'scene 2 of about 4');
+  assert.equal(sceneLabel(about(4)), 'scene 4 of about 4, past the plan: steer the party to the quest’s goal');
+  assert.equal(sceneLabel(about(6)), 'scene 6 of about 4, past the plan: steer the party to the quest’s goal');
+  assert.equal(adventureLength(about(1)), 'After the road from the tavern, the tale has about 4 scenes: an opening, middle scenes, and a final epilogue scene. It goes on past them until the quest’s goal is reached.');
+  assert.deepEqual([3, 5].map((n) => isClimax(about(n))), [true, false]);
+});

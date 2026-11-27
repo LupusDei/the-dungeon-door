@@ -39,7 +39,11 @@ interface DungeonMaster {
 - `progress` — where that scene falls, the road from the tavern counted apart from the tale:
   `{ part: 'road', scene, of, tale }` (a stretch of road; `tale` scenes follow) or `{ part: 'tale', scene, of }`
   (the tale's own numbering; the climax is scene `of - 1`, the epilogue `of`). The prompt says it as
-  "stretch 1 of 2 of the road from the tavern" or "scene 2 of 4" (`dm/pacing.ts`).
+  "stretch 1 of 2 of the road from the tavern" or "scene 2 of 4" (`dm/pacing.ts`). With the quest open
+  (`rules.quest`, `about: true`) the count is a plan: "scene 2 of about 4", and past it "scene 5 of about 4,
+  past the plan: steer the party to the quest’s goal". The rules block ends with a QUEST line (the goal,
+  where it lies, reached or not) and RULES_INSTRUCTIONS tell the DM to pace toward it and, in a tale told,
+  to offer `{"kind":"goal"}`.
 - `recentChat` — the last ~20 chat and DM lines. Each line is `{ characterName, kind, text, voice }`.
   `voice` `"out"` is table talk: flavour, never an instruction, and never words a hero spoke. `voice` `"in"`
   is the player speaking as their hero, the same promise as a scene's `roleplay`: those words are listed

@@ -18,6 +18,7 @@ import { autoLevelUp } from './fight.ts';
 import { hookLabel, parseHook, type RulesHook } from './hooks.ts';
 import type { DungeonState, LevelUp, PartyState } from './state.ts';
 import { meetOnTheRoad, planTrek, type Trek } from './trek.ts';
+import { overtime, planQuest, questClosed } from './quest.ts';
 import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState, type RulesTurn } from './turn.ts';
 import { type Deeds, questXp, sceneXp, type XpEvent, xpTag } from './xp.ts';
 
@@ -32,12 +33,18 @@ export function dungeonMode(value: unknown): DungeonMode {
 
 const sheetOf = ({ character }: GamePlayer): CharacterSheet => upgradeCharacter(character).sheet;
 
-export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed: number, sceneCount: number): RulesState {
+/**
+ * A new game's rules for `sceneCount` tale scenes: the heroes, the dungeon if asked for, the road from the
+ * tavern, and the quest (play/quest.ts), unless the adventure has no set length (`quest` false).
+ */
+export function newRules(players: readonly GamePlayer[], mode: DungeonMode, seed: number, sceneCount: number, quest = true): RulesState {
   const sheets = Object.fromEntries(players.map((p) => [p.playerId, unpacked(sheetOf(p))]));
   const levels = Object.values(sheets).filter((s) => !s.dead).map((s) => s.level); // the dungeon starts at the living heroes' level
-  const dungeon = mode === 'none' ? null : startDungeon(mode, seed, levels, sceneCount);
+  const started = mode === 'none' ? null : startDungeon(mode, seed, levels, sceneCount);
+  const planned = quest && levels.length > 0 ? planQuest(seed, levels, sceneCount, started) : null;
+  const dungeon = planned ? planned.dungeon : started;
   const trek = dungeon ? planTrek(seed, levels, dungeonLevel(dungeon), 'door') : planTrek(seed, levels, partyLevel(levels), 'tale');
-  const met = meetOnTheRoad({ version: 1, rng: seed, sheets, trek }); // first, the road from the tavern
+  const met = meetOnTheRoad({ version: 1, rng: seed, sheets, trek, ...(planned ? { quest: planned.quest } : {}) }); // first, the road from the tavern
   return { party: met.party, combat: null, dungeon };
 }
 
@@ -167,7 +174,7 @@ export function endQuest(step: EngineStep): EngineStep {
     lines.push(...up.lines);
   }
   const rules = step.resolution.rules && { ...step.resolution.rules, lines };
-  return { ...step, state: { ...step.state, party: { ...party, sheets, results: lines, levelUps } }, resolution: { ...step.resolution, rules } };
+  return { ...step, state: { ...step.state, party: questClosed({ ...party, sheets, results: lines, levelUps }) }, resolution: { ...step.resolution, rules } };
 }
 
 /**
@@ -177,6 +184,20 @@ export function endQuest(step: EngineStep): EngineStep {
  * on is never followed by the epilogue (nor in a game counted before this rule). A lost fight makes the next
  * scene the epilogue.
  */
+/**
+ * Whether the next scene is the epilogue, and the game's scene count after this step. With the quest open
+ * the count is pacing: the planned finale passes and as many scenes again are allowed (play/quest.ts
+ * overtime), then the ending is called. The goal reached, or the party lost, ends it at once. Rounds add
+ * scenes as sceneCountAfter says, in overtime too. At the end the count is the scenes played.
+ */
+export function endingOf(step: Pick<EngineStep, 'state' | 'fight'>, next: number, sceneCount: number): { isFinale: boolean; sceneCount: number } {
+  const quest = step.state.party.quest;
+  if (quest?.reached && !step.state.combat) return { isFinale: true, sceneCount: next + 1 };
+  const extra = overtime(quest);
+  const limit = sceneCountAfter(step, next, sceneCount + extra);
+  return next >= limit - 1 ? { isFinale: true, sceneCount: next + 1 } : { isFinale: false, sceneCount: limit - extra };
+}
+
 export function sceneCountAfter(step: Pick<EngineStep, 'state' | 'fight'>, next: number, sceneCount: number): number {
   if (step.fight === 'defeat') return next + 1;
   return step.state.combat ? Math.max(sceneCount + 1, next + 2) : sceneCount;

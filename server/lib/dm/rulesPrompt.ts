@@ -3,6 +3,7 @@
  * Empty for a game from before the engine.
  */
 import { ROAD_END, ROAD_EVENTS } from '../play/trek.ts';
+import type { QuestView } from '../play/quest.ts';
 import type { RulesContext, RulesResults } from './types.ts';
 
 export const RULES_INSTRUCTIONS = `
@@ -74,6 +75,14 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   they are still Hostile, they attack). A wandering vendor sells only the wares listed, at those prices: offer
   {"kind":"buy"} with their ids. After the last stretch, the next scene opens at the dungeon door, or in a
   tale told where its story begins.
+- THE QUEST: an adventure of a set length has a goal, sized to the party (the QUEST line). Its scene count is
+  a plan, not a limit: lay the goal's trail from the opening so the party can reach it in the planned scenes,
+  and make it the climax. In a dungeon the goal lies in the area named (deeper in, until the party finds it);
+  dealing with its foes there (won, driven off or talked down) reaches it. In a tale told, offer
+  {"kind":"goal"} as a choice when the party confronts it: the engine brings on its foes, and beating them or
+  driving them off reaches it. Wrong turns, rests and fights may take longer than planned; past the plan,
+  steer the party back to the goal (the engine calls the ending if it takes much longer). Once the goal is
+  reached, the next scene is the epilogue. An epilogue with the quest not reached tells how the goal slipped away.
 - Dungeon levels: the dungeon starts at the party's level and may go a level deeper behind a new door (the
   results say "The way leads deeper"); its monsters, traps and treasure are the engine's, for that level.
   Make the deeper level feel it: older stone, colder air, stranger signs.
@@ -156,6 +165,9 @@ const OPENING_ROAD = {
 export const openingNote = (rules: RulesContext | null): string =>
   (rules?.trek ? `${OPENING_ROAD[rules.trek.leadsTo]} The heroes are present; do not speak, feel, or choose for them. ` : '');
 
+const questLine = (q: QuestView): string =>
+  `QUEST: ${q.goal}${q.where ? ` (${q.where})` : ''}. ${q.reached ? 'Done: the next scene is the epilogue.' : 'Not reached yet.'}`;
+
 export function rulesBlock(rules: RulesContext | null): string {
   if (!rules) return '';
   return [
@@ -166,6 +178,7 @@ export function rulesBlock(rules: RulesContext | null): string {
     ...(rules.trek ? [roadLine(rules.trek)] : []),
     ...(rules.dungeon ? [dungeonLine(rules.dungeon)] : []),
     `Monsters for fights: ${rules.monsters.join(', ')}`,
+    ...(rules.quest ? [questLine(rules.quest)] : []),
   ].join('\n');
 }
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import * as charactersApi from '../api/characters.ts';
 import { supportedAppVersionHeader } from './app-version.ts';
+import { getStore } from './store/index.ts';
 import type { Character } from './types.ts';
 
 export type Handler = (request: Request) => Promise<Response>;
@@ -22,6 +23,13 @@ export async function call<T = any>(handler: Handler, path: string, opts: { play
 }
 
 /** Mirrors the vercel.json rewrite: the handler sees ?code=… */
+/** Takes the quest from a started game, as for one started before quests: its scene count is its end. */
+export async function withoutQuest(code: string): Promise<void> {
+  const game = (await getStore().getGame(code))!;
+  const { quest: _, ...party } = game.party!;
+  assert.ok(await getStore().updateGame(code, {}, { party }));
+}
+
 export const gamePath = (code: string, action?: string, query = '') => `/api/game${action ? `-${action}` : ''}?code=${code}${query}`;
 
 export async function makeCharacter(player: string, name: string, overrides: Record<string, unknown> = {}): Promise<Character> {

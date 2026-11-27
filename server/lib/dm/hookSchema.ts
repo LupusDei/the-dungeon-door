@@ -10,7 +10,7 @@ import { SAVE_CONDITIONS } from '../play/hooks.ts';
 const NONE = 'none';
 
 export const FlatHook = z.object({
-  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use', 'trap', 'hazard', 'parley', 'revive']),
+  kind: z.enum(['check', 'save', 'fight', 'rest', 'move', 'buy', 'sell', 'use', 'trap', 'hazard', 'parley', 'revive', 'goal']),
   ability: z.enum([NONE, 'str', 'dex', 'con', 'int', 'wis', 'cha']).describe('check or save: the ability; "none" otherwise'),
   skill: z.string().describe('check: an SRD skill id such as "athletics"; "" for a plain ability check and for other kinds'),
   tool: z.string().describe('check: a tool id such as "thieves-tools" when a tool does the work; "" otherwise'),

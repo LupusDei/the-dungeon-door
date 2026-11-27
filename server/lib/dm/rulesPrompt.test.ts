@@ -11,6 +11,7 @@ const ctx: RulesContext = {
   trek: null,
   dungeon: { kind: 'Lair', level: 1, area: 'Grand chamber', purpose: 'Throne room', exits: [{ id: 'r2', connection: 'locked-door', leadsTo: 'Vault' }, { id: 'x1', connection: 'open-passage', leadsTo: null }], waiting: null },
   monsters: ['ogre', 'goblin-warrior'],
+  quest: null,
   time: 'Day 1, 09:10',
   light: "dark; the party's light: Bryn's Torch (40 minutes left)",
 };
@@ -108,4 +109,13 @@ test('the DM is told how experience works: it may tag a choice, the engine sets 
   assert.match(RULES_INSTRUCTIONS, /no XP numbers in the story/);
   const results: RulesResults = { chosen: 'c', lines: ['Bryn: Persuasion 17 + 2 = 19 vs DC 15, success', '+25 XP: a clever parley (Bryn).'], success: true, fight: null };
   assert.ok(resultsBlock(results).split('\n').includes('+25 XP: a clever parley (Bryn).'), 'the awards are in the results it narrates');
+});
+
+test('the DM is told the quest: the goal, where it lies, and whether it is done; and how to pace and reach it', () => {
+  const quest = { kind: 'slay' as const, goal: 'Slay or drive off the Ogre', reached: false, where: 'in the Grand chamber' };
+  assert.equal(rulesBlock({ ...ctx, quest }).split('\n').at(-1), 'QUEST: Slay or drive off the Ogre (in the Grand chamber). Not reached yet.');
+  assert.equal(rulesBlock({ ...ctx, quest: { ...quest, where: null, reached: true } }).split('\n').at(-1), 'QUEST: Slay or drive off the Ogre. Done: the next scene is the epilogue.');
+  assert.ok(!rulesBlock(ctx).includes('QUEST'), 'no quest, no line');
+  assert.match(RULES_INSTRUCTIONS, /\{"kind":"goal"\}/);
+  assert.match(RULES_INSTRUCTIONS, /THE QUEST:/);
 });

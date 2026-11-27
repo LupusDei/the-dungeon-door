@@ -22,7 +22,7 @@ import * as gameApi from '../api/game.ts';
 import * as gamesApi from '../api/games.ts';
 import * as imageApi from '../api/image.ts';
 import * as portraitApi from '../api/portrait.ts';
-import { call, gamePath, makeCharacter } from './api.fixture.ts';
+import { call, gamePath, makeCharacter, withoutQuest } from './api.fixture.ts';
 import { settle } from './background.ts';
 import { setDice } from './game.ts';
 import { TREK_SCENES } from './play/trek.ts';
@@ -215,6 +215,7 @@ test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale
   assert.equal((await call(startApi.POST, gamePath(code, 'start'), { player: host, body: {} })).status, 409);
   assert.equal((await call(dmApi.POST, gamePath(code, 'dungeon-master'), { player: host, body: { dungeonMaster: 'bard' } })).status, 409);
   await settle();
+  await withoutQuest(code); // played to its scene count: quests are lib/play/quest-game.test.ts
 
   state = await view(code, host);
   assert.equal(state.status, 'voting');

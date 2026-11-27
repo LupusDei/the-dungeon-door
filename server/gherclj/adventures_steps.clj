@@ -25,7 +25,9 @@
 (defwhen "{hero} walks out of the adventure" quest.walks-out)
 
 (defthen "{count:int} scenes are still to come" quest.scenes-still-to-come)
+(defthen "{count:int} scene is still to come" quest.scenes-still-to-come)
 (defthen "the last scene is being played" quest.last-scene-is-being-played)
+(defthen "the scenes still to come are no longer counted" quest.no-longer-counted)
 (defthen "the adventure has no set length" quest.has-no-set-length)
 (defthen "the adventure is still going" quest.is-still-going)
 (defthen "the adventure has reached its end" quest.has-reached-its-end)
