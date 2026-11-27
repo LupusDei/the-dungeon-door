@@ -8,7 +8,7 @@ struct HomeView: View {
     @State private var forging = false
     @State private var newGame = false
     @State private var joining = false
-    @State private var hall = false
+    @State private var hall = AppConfig.showHallArgument
     @State private var revealed = false
     @State private var director = DragonDirector()
     /// Where the controls begin, so taps down there aren't taken for pokes.
