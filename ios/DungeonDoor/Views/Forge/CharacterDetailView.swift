@@ -1,18 +1,19 @@
 import SwiftUI
 
 /// A hero's page, which is their character sheet: who they are, their vitals, and the sheet's tabs.
-/// The backstory and the dungeon master's description live in the Story tab.
+/// The backstory and the dungeon master's description live in the Story tab. A hero in the Hall of
+/// Heroes (retired or fallen) is only looked at: no reforging, and the retired can be brought back.
 struct CharacterDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let character: Character
     @State private var tab = HeroSheetTab.launchDefault
     @State private var editing = false
-    @State private var confirmDelete = false
+    @State private var confirmRetire = false
     @State private var error: String?
 
     /// The latest copy, so edits show straight away.
-    private var hero: Character { model.characters.first { $0.id == character.id } ?? character }
+    private var hero: Character { model.hero(id: character.id) ?? character }
 
     var body: some View {
         ScrollView {
@@ -23,11 +24,18 @@ struct CharacterDetailView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 14)
                 if hero.isFallen {
+                    FallenCard(hero: hero)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 14)
                     TempleCard(hero: hero)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 14)
+                } else if hero.isRetired {
+                    RetiredCard(hero: hero)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 14)
                 }
-                if hero.bonusesOpen == true {
+                if hero.isActive && hero.bonusesOpen == true {
                     AbilityBonusCard(hero: hero)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 14)
@@ -53,22 +61,28 @@ struct CharacterDetailView: View {
         .screenChrome()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Reforge", systemImage: "hammer") { editing = true }
-                    Button("Retire hero", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                } label: { Image(systemName: "ellipsis.circle") }
+            if hero.isActive {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Reforge", systemImage: "hammer") { editing = true }
+                        Button("Retire hero", systemImage: "building.columns", role: .destructive) { confirmRetire = true }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
             }
         }
+        // Un-retired or raised from the Hall: back to the Hall, which no longer lists them.
+        .onChange(of: hero.isActive) { was, now in
+            if !was && now { dismiss() }
+        }
         .sheet(isPresented: $editing) { CharacterForgeView(editing: hero) }
-        .confirmationDialog("Retire \(hero.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .confirmationDialog("Retire \(hero.name)?", isPresented: $confirmRetire, titleVisibility: .visible) {
             Button("Retire", role: .destructive) {
                 Task {
-                    do { try await model.delete(hero); dismiss() } catch { self.error = error.localizedDescription }
+                    do { try await model.retire(hero); dismiss() } catch { self.error = error.localizedDescription }
                 }
             }
         } message: {
-            Text("Their portrait and story will be gone for good.")
+            Text("\(hero.name) leaves your roster for the Hall of Heroes, where you can bring them back.")
         }
     }
 
