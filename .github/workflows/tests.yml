@@ -1,0 +1,86 @@
+name: Tests
+
+# The release gate: typecheck, the unit tests and the Gherkin features in server/. Runs on every
+# push to main and every pull request, so a red main shows even when nothing ships, and is called
+# (workflow_call) by "Deploy server" and "TestFlight", whose release jobs need it to pass.
+#
+# Everything runs offline, with no secrets: DD_FAKE_AI=1 (the fake DM, fake painter and fake
+# narrator), no DATABASE_URL (the in-memory store), no Blob token (placeholder images). No scenario
+# depends on a live service, so none is tagged or skipped here.
+#
+# gherclj turns a scenario with a step it cannot match into a skipped test and still exits 0, so
+# this job fails on any skipped or todo scenario: a step that is not wired up is a failure here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Typecheck, unit tests, features
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+        shell: bash
+    env:
+      DD_FAKE_AI: '1'
+      BABASHKA_VERSION: 1.13.230
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # Babashka resolves gherclj (a git dependency in bb.edn) with tools.deps, which needs a JVM.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache gherclj and its dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: bb-deps-${{ env.BABASHKA_VERSION }}-${{ hashFiles('server/bb.edn') }}
+
+      - name: Install Babashka
+        run: |
+          curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install -o "$RUNNER_TEMP/bb-install"
+          bash "$RUNNER_TEMP/bb-install" --version "$BABASHKA_VERSION" --dir "$RUNNER_TEMP/bb"
+          echo "$RUNNER_TEMP/bb" >> "$GITHUB_PATH"
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Gherkin features
+        run: |
+          npm run features 2>&1 | tee "$RUNNER_TEMP/features.log"
+          summary=$(grep -E '^(ℹ|#) (tests|pass|fail|skipped|todo) [0-9]+' "$RUNNER_TEMP/features.log" || true)
+          if ! grep -qE '^(ℹ|#) pass [1-9]' <<<"$summary"; then
+            echo "::error::The Gherkin features ran no passing scenarios."
+            exit 1
+          fi
+          if grep -qE '^(ℹ|#) (fail|skipped|todo) [1-9]' <<<"$summary"; then
+            echo "::error::A Gherkin scenario failed, or was skipped because a step has no step definition. Every scenario must pass."
+            exit 1
+          fi

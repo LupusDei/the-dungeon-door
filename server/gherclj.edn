@@ -8,5 +8,9 @@
                    gherclj.party-chat-steps
                    gherclj.app-version-steps
                    gherclj.choice-window-steps
+                   gherclj.hall-of-heroes-steps
+                   gherclj.ability-bonuses-steps
+                   gherclj.adventures-steps
+                   gherclj.scene-picture-steps
                    gherclj.noncombat-xp-steps]
  :framework :typescript/node-test}

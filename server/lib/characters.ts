@@ -248,6 +248,23 @@ export async function assignAbilityBoost(playerId: string, characterId: unknown,
   return upgradeCharacter({ ...storable({ ...hero, sheet, updatedAt: now }) });
 }
 
+/**
+ * The sheet a table sends home, with the background increases the player placed at home while the hero was
+ * seated: the table plays the copy it seated, so without this the end of the adventure would undo them.
+ * Left as the table sent it when the placement no longer fits (its scores have since changed).
+ */
+export function homecoming(id: string, home: CharacterSheet | undefined, back: CharacterSheet): CharacterSheet {
+  const placed = home?.abilityBoost;
+  if (!placed || sameBoost(back.abilityBoost, placed)) return back;
+  let sheet: CharacterSheet;
+  try {
+    sheet = withChosenBoost(back, id, placed);
+  } catch {
+    return back;
+  }
+  return back.hp === back.maxHp ? { ...sheet, hp: sheet.maxHp } : sheet;
+}
+
 const ROSTERS = {
   active: (c: Character) => !c.retiredAt && !c.sheet.dead,
   retired: (c: Character) => !!c.retiredAt && !c.sheet.dead,

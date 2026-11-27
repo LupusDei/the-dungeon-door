@@ -69,7 +69,8 @@ private struct HallRow: View {
             HStack(spacing: 12) {
                 NavigationLink(value: hero) {
                     HStack(spacing: 12) {
-                        PortraitView(url: hero.portraitURL, symbol: HallText.symbol(hero, model.catalog), size: 56)
+                        // The row opens the hero's page; the picture opens large from there (as on the home screen).
+                        PortraitView(url: hero.portraitURL, symbol: HallText.symbol(hero, model.catalog), size: 56, opensViewer: false)
                             .saturation(fallen ? 0 : 1)
                             .opacity(fallen ? 0.7 : 1)
                         VStack(alignment: .leading, spacing: 3) {

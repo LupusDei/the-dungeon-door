@@ -26,6 +26,7 @@ import SwiftUI
 /// - `-openQuests YES` (with `-openHeroNamed`) opens that hero's quests from their page, and
 ///   `-openQuest <CODE|latest>` goes on to open that adventure's record.
 /// - `-newGame YES` opens the "A New Adventure" sheet (the hero picker) from the home screen.
+/// - `-showHall YES` opens the Hall of Heroes from the home screen.
 /// - `-scrollTo <choices|combat|bottom>` scrolls an open scene down to its choices, its fight or
 ///   its end; on a hero page or the forge's Sheet step, `-scrollTo bottom` scrolls to the end, and
 ///   a number from 0 to 1 (`-scrollTo 0.3`) opens the page that far down.
@@ -116,6 +117,7 @@ enum AppConfig {
     static var openQuestsArgument: Bool { UserDefaults.standard.bool(forKey: "openQuests") || openQuestArgument != nil }
     static var openQuestArgument: String? { argument("openQuest") }
     static var newGameArgument: Bool { UserDefaults.standard.bool(forKey: "newGame") }
+    static var showHallArgument: Bool { UserDefaults.standard.bool(forKey: "showHall") }
     static var scrollToArgument: String? { argument("scrollTo")?.lowercased() }
     static var playTabArgument: PlayTab? { argument("playTab").flatMap { PlayTab(rawValue: $0.lowercased()) } }
     static var playPaneArgument: PlaySheetPane? { argument("playPane").flatMap { PlaySheetPane(rawValue: $0.lowercased()) } }

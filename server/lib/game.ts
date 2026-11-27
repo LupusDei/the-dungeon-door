@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { renderImage, SCENE_STYLE } from './ai.ts';
 import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
-import { ownCharacter, storable, upgradeCharacter } from './characters.ts';
+import { homecoming, ownCharacter, storable, upgradeCharacter } from './characters.ts';
 import { deathIn, newlyFallen } from './fallen.ts';
 import { isPersonalCheck, knownActionIds, rulingForAbility, rulingForSkill, settleRuling, UNREADABLE } from './play/actions.ts';
 import { dieForAction, dieForCheck, rollPending, type PlayerDie } from './play/dice.ts';
@@ -1119,7 +1119,7 @@ async function sendHeroesHome(game: Game, rules: RulesState | null): Promise<voi
     const character = await store.getCharacter(characterId);
     if (!character) continue;
     const death = sheet.dead ? (character.death ?? deathIn(game, lastScene, sheet.name, rules.party.results ?? [], now)) : null;
-    await store.saveCharacter({ ...character, sheet, death, updatedAt: now });
+    await store.saveCharacter({ ...character, sheet: homecoming(characterId, character.sheet, sheet), death, updatedAt: now });
   }
 }
 
