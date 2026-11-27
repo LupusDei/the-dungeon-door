@@ -63,6 +63,10 @@
       "destination": "/api/game-advance?code=:code"
     },
     {
+      "source": "/api/games/:code/ending",
+      "destination": "/api/game-ending?code=:code"
+    },
+    {
       "source": "/api/games/:code/invites",
       "destination": "/api/game-invites?code=:code"
     },

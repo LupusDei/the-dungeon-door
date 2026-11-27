@@ -5,7 +5,7 @@ import SwiftUI
 struct LobbyView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
-    @State private var sceneCount = 4
+    @State private var sceneCount = AppConfig.lobbyScenesArgument ?? 4
     @State private var pickingDM = false
     /// The host's pick. Empty until they tap, so the default can follow the catalog as it loads.
     @State private var dungeon = ""
@@ -28,6 +28,9 @@ struct LobbyView: View {
 
     /// A fixed dungeon's map follows the length: up to 4 scenes is 5 rooms, 5 or 6 is 7, 7 or 8 is 9.
     private var rooms: Int { sceneCount <= 4 ? 5 : sceneCount <= 6 ? 7 : 9 }
+    /// The stepper's last stop, past the longest set length: no set length.
+    private static let noLimitStep = 9
+    private var noSetLength: Bool { sceneCount >= Self.noLimitStep }
 
     var body: some View {
         ScrollView {
@@ -214,12 +217,22 @@ struct LobbyView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Length").font(.display(16))
-                        Text("\(sceneCount) scenes, finale included").font(.caption).foregroundStyle(Palette.muted)
+                        Text(noSetLength ? "No set length" : "\(sceneCount) scenes, finale included")
+                            .font(.caption).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Stepper("Scenes", value: $sceneCount, in: 2...8).labelsHidden()
+                    // One step past the longest is no set length.
+                    Stepper("Scenes", value: $sceneCount, in: 2...Self.noLimitStep).labelsHidden()
+                        .accessibilityValue(noSetLength ? "No set length" : "\(sceneCount) scenes")
                 }
-                if let note = lengthNote(kind) {
+                if noSetLength {
+                    Label("It goes on for as long as the party likes. As host you call the ending from the Story tab; the scene being played is then the last.",
+                          systemImage: "infinity")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.parchment.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let note = lengthNote(kind) {
                     Label(note, systemImage: kind == "fixed" ? "map" : "info.circle")
                         .font(.footnote)
                         .foregroundStyle(Palette.parchment.opacity(0.8))
@@ -231,7 +244,8 @@ struct LobbyView: View {
             .padding(14)
             .card()
             Button {
-                Task { await session.begin(sceneCount: sceneCount, dungeon: kind) }
+                // 0 asks the server for no set length.
+                Task { await session.begin(sceneCount: noSetLength ? 0 : sceneCount, dungeon: kind) }
             } label: {
                 if session.busy { ProgressView().tint(Palette.ink) } else { Label("Open the door", systemImage: "door.left.hand.open") }
             }

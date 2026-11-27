@@ -107,6 +107,7 @@ struct PlayStoryPage: View {
             Text(scene?.title ?? state.title ?? "The door")
                 .font(.display(26, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
+            ScenesToGo(session: session)
         }
     }
 

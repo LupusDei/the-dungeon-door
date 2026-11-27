@@ -309,7 +309,12 @@ export interface GameState {
   status: GameStatus;
   dungeonMaster: string;
   title: string | null;
+  /** Scenes planned, the road and the epilogue included; 0 when the adventure has no set length. */
   sceneCount: number;
+  /** No set length: it goes on until the host calls the ending. */
+  openEnded: boolean;
+  /** Scenes with choices still to come after this one, before the epilogue. Null with no set length, and in the lobby. */
+  scenesLeft: number | null;
   /** In a rules game each character is the hero as it stands in the game (live sheet). */
   players: { playerId: string; character: Character; isHost: boolean; joinedAt: string; appVersion: string | null; outdated: boolean }[];
   scene: SceneView | null;
