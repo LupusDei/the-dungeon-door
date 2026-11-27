@@ -549,100 +549,79 @@ third choice's "Help *name*" only stabilize a dying ally. On anyone else, Help i
 and does nothing (`resolveNamedAction` in `play/legal.ts`). With one combatant acting at a time,
 there is no shared choice for heroes to help each other on.
 
-**In a fight it becomes the 5e Help action, declared in advance.** Helping happens on the
-helper's own turn and nowhere else. There is no "anyone want to help?" pause after someone acts,
-and no window for other players to chip in (section 2, "Turns never wait"). The helper spends
-their action naming an ally. The ally carries the Advantage until they use it or the helper's next
-turn begins:
+**In a fight it becomes the plain 5e Help action (Micah's decision).** On your own turn you
+spend your action and pick **an ally**, and **optionally a foe**. The ally's **next ability check
+or attack roll** before your next turn has Advantage. If you named a foe, the attack has to be
+against that foe. That is all there is to it: no coordination, nobody else is asked anything, and
+nothing waits (section 2, "Turns never wait"). There is no conditional or readied Help.
 
-| Form | Action id | Target | Effect | Ends |
-| --- | --- | --- | --- | --- |
-| Assist an attack | `help:attack` | an ally **and** a foe within 5 feet of the helper (the SRD's distance; a reach weapon does not lengthen it) | that ally's **next attack roll against that foe** has Advantage | used by that attack, or lapses at the start of the helper's next turn |
-| Assist a check | `help:check` | an ally, and a skill or tool **the helper is proficient in** | that ally's **next ability check with that skill** has Advantage | used by that check, or lapses at the start of the helper's next turn |
-| Stabilize | `help:stabilize` | a dying ally within 5 feet | a DC 10 Wisdom (Medicine) check, or a Healer's Kit, as today | at once |
+| You pick | What gets Advantage | Limits | Ends |
+| --- | --- | --- | --- |
+| an ally | that ally's next ability check or attack roll, against anyone | none | used by that roll, or lapses at the start of your next turn |
+| an ally and a foe | that ally's next ability check, or next attack roll against that foe | the foe is within 5 feet of you (the SRD's feint distance; a reach weapon does not lengthen it) | the same |
+| a dying ally | nothing: you try to stabilize them, a DC 10 Wisdom (Medicine) check or a Healer's Kit, as today | within 5 feet | at once |
 
-Naming the ally is narrower than SRD 5.2, where the attack Help goes to the next attack by *any*
-ally. Micah asked for the Advantage to sit on the ally, and naming one makes the marker, the log and
-the next player's choice unambiguous (open question 14).
-
-`common:help` stays as an alias so today's votes and the Map's buttons keep working. A dying
-target means stabilize. An ally means assist that ally: an attack against the foe in reach they
-are engaged with, or else a check with the helper's best-fitting skill.
+This is simpler than SRD 5.2 on purpose. The SRD splits Help into an attack form (any ally's next
+attack on a foe within 5 feet of you) and a check form (one skill you are proficient in). Here
+there is one form, the Advantage sits on the ally you name, and there is no skill to pick and no
+proficiency to check.
 
 **Rules details:**
+- The action id stays `common:help`. Its `targets` are each ally ("Corin") and each ally-and-foe
+  pair within reach ("Corin against the Ogre"), in the existing `{ id, name }` shape with
+  `picks: "one"`, so the API needs no new field. A dying ally's target means stabilize.
 - Help needs no d20 from the helper, so it resolves on the tap, and the next turn begins at once.
-  Nobody else is asked anything.
-- Each Help is one use. Two heroes helping Corin against the Ogre give Corin one attack with
-  Advantage (Advantage does not stack) and leave the second Help for Corin's next attack before it
-  lapses. Two Helps for two different allies give each of them one.
-- Corin's opportunity attack on that foe is an attack roll by Corin, and uses the Help.
-- A Help is discarded when its foe falls, when its ally drops, and when the fight ends. The helper
-  going down does not cancel it before their next turn.
+- It covers ability checks and attack rolls, not saving throws, as in 5e. Checks that come up in a
+  fight are Break Free, Hide, stabilizing and written checks.
+- One Help is used by one roll: whichever qualifying d20 test the ally makes first. An opportunity
+  attack by that ally counts.
+- Help does not stack. Two Helps on Corin give Corin's next roll Advantage once, and the second
+  Help waits for Corin's following roll until its helper's next turn.
+- A Help is discarded when its named foe falls, when its ally drops, and when the fight ends. The
+  helper going down does not cancel it before their next turn.
 - Advantage from Help joins any other source and cancels against Disadvantage, as the engine does
   now (`resolve.ts`). The extra d20 comes from the game's seeded RNG. The player's thrown face is
   always one of the two dice.
-- Checks that can come up in a fight: Break Free (Athletics or Acrobatics), Hide (Stealth),
-  stabilizing (Medicine) and written checks. `help:check` lists only allies and skills where the
-  helper is proficient, with those four first.
 - Monsters do not take the Help action, as they take none of the common actions today.
 
 **How it is chosen:**
-- **Turn panel and Sheet.** "Help" sits among the common actions. Each target is one pair in the
-  existing `{ id, name }` shape, so no new field is needed: `help:attack` lists "Corin against the
-  Ogre" for each ally and each foe within 5 feet of the helper, and `help:check` lists "Corin:
-  Athletics" for each ally and proficient skill. The turn panel's third quick action becomes "Help
-  Corin against the Ogre" when an ally is engaged with a foe in the helper's reach and no friend is
-  dying.
-- **Map.** An ally token's card gets **Help** when `help:attack` or `help:check` lists them. If the
-  ally could be helped against more than one foe, a second tap picks the foe.
-- **In your own words.** "I wave my torch in the Ogre's face so Corin can hit it" is classified
-  as `help:attack`. The classification returns the ally and the foe the words name; this fixes, for
-  Help, the TODO in `castAction` that drops named targets. When the words leave one out, the
-  engine picks: the foe in reach that ally is engaged with, or the ally engaged with that foe, or
-  for a check the ally who is Grappled or Restrained.
+- **Turn panel and Sheet.** "Help" sits among the common actions. A tap opens the list of allies,
+  each with "against…" choices for foes within 5 feet. The turn panel's third quick action becomes
+  "Help Corin against the Ogre" when an ally is engaged with a foe in the helper's reach and no
+  friend is dying.
+- **Map.** An ally token's card gets **Help**. A foe within 5 feet of the helper adds "Help *ally*
+  against it" for each ally engaged with that foe.
+- **In your own words.** "I wave my torch in the Ogre's face so Corin can hit it" is classified as
+  `common:help`, with the ally and the foe the words name. This fixes, for Help, the TODO in
+  `castAction` that drops named targets. When the words name no ally, the engine picks the ally
+  engaged with that foe, or else the one who is Grappled or Restrained.
 
 **How it is shown:**
 - **Log.** The helper's entry: "Bryn distracts the Ogre for Corin: Corin's next attack on it has
-  Advantage (until Bryn's next turn)." When it is used, Corin's die shows "Advantage · Bryn's help"
-  and the line reads "Corin attacks the Ogre with Mace, with Bryn's help: 8 and 16, 16 + 4 = 20 vs
-  AC 11, hit." If unused, a small line at the start of Bryn's next turn: "Bryn's help for Corin
-  lapses." The DM's beat gets the same lines, so it can tell the feint.
-- **HUD.** A gold hand **marker on the ally**: "Advantage vs Ogre · Bryn" or "Advantage on
-  Athletics · Bryn". A tap tells the rest. An attack Help also puts a faint outline on its foe, so the
-  table can see who is open. The marker goes when the Help is used or lapses. A new optional field
-  on each hero in `rules.combat.combatants` carries it:
-  `helped: [{ by: string; kind: "attack" | "check"; against: string | null; skill: string | null }]`
-  (`against` is the foe's id for an attack Help). It ends at the start of `by`'s next turn. The
-  log entry's `changes` add and remove it, so the HUD can flash it. The HUD agent only has to draw
-  the marker.
+  Advantage (until Bryn's next turn)." With no foe named: "Bryn helps Corin: Advantage on Corin's
+  next check or attack." When it is used, Corin's die shows "Advantage · Bryn's help" and the line
+  reads "Corin attacks the Ogre with Mace, with Bryn's help: 8 and 16, 16 + 4 = 20 vs AC 11, hit."
+  If unused, a small line at the start of Bryn's next turn: "Bryn's help for Corin lapses." The
+  DM's beat gets the same lines, so it can tell the feint.
+- **HUD.** A gold hand **marker on the ally**: "Advantage · Bryn", or "Advantage vs Ogre · Bryn".
+  A named foe gets a faint outline. The marker goes when the Help is used or lapses. A new optional
+  field on each hero in `rules.combat.combatants` carries it:
+  `helped: [{ by: string; against: string | null }]` (`against` is the foe's id when one was
+  named). It ends at the start of `by`'s next turn. The log entry's `changes` add and remove it, so
+  the HUD can flash it. The HUD agent only has to draw the marker.
 - **Turn panel.** On the helped ally's turn their actions say so: "Attack the Ogre with Mace ·
-  Advantage (Bryn's help)". The same note goes in that action's `detail`.
+  Advantage (Bryn's help)". The same note goes in that action's `detail`, and on checks such as
+  Break Free.
 
-**State.** `CombatState.helps?: { by: string; kind: 'attack' | 'check'; ally: string;
-against?: string; skill?: string }[]` in `games.combat` (no migration). `advance` in
-`rules/scene.ts` clears the helper's entries at the start of their turn, where it already clears
-`dodging`. The attack and check resolvers take the first matching entry for that ally and remove
-it.
-
-**Conditional help (a readied "if Bryn attacks the boss, I distract it").** Evaluated, and **not
-recommended**:
-- In 5e it is the Ready action: the helper names a trigger and a Help, and spends their reaction
-  when the trigger happens. The engine would resolve it by itself when the trigger fires, with no
-  prompt. So it would not break the no-wait rule.
-- But it adds almost nothing. A plain Help already lasts until the helper's next turn, and it
-  already names the ally and the foe. "If Bryn attacks the Ogre before my next turn, she has
-  Advantage" is exactly what declaring Help for Bryn against the Ogre does.
-- The only differences cost more than they give. A readied Help is kept when Bryn does something
-  else, so it could be spent on a later attack. In exchange it needs a trigger picker on the
-  phone, spends the helper's reaction, and lets the attack Help reach a foe that moved into the
-  helper's reach after their turn.
-- Recommendation: plain, named Help only. If readied actions come later (open question 4), their
-  fixed triggers cover attacks and spells, not Help.
+**State.** `CombatState.helps?: { by: string; ally: string; against?: string }[]` in
+`games.combat` (no migration). `advance` in `rules/scene.ts` clears the helper's entries at the
+start of their turn, where it already clears `dodging`. The attack and check resolvers take the
+ally's first matching entry and remove it.
 
 **Outside a fight it stays as it is.** Recommended: yes. Out of combat the party still decides
 together, and a party check with proficient companions giving Advantage is how 5.2 treats one
 hero leading with help. Nothing changes in `play/checks.ts`. A later "one hero helps another" out of
-combat can reuse `help:check` if the out-of-combat flow ever becomes per-hero.
+combat can reuse the same Help if the out-of-combat flow ever becomes per-hero.
 
 **Rounds mode** gets the same Help, because both modes run the same engine after phase 1. Within a
 round, a Help counts for an ally who acts after the helper, and otherwise carries into the next round
@@ -664,7 +643,7 @@ Each has a recommended answer. Agreeing with all of them is a fine reply.
    would turn a hit"), never as an interruption.
 4. **Readied actions?** Recommend **not in the first version.** Ready stays listed as today. Later,
    offer three fixed triggers ("attack the first foe that comes within reach", "cast at the first
-   foe that comes into range", "Dodge until hit"), each resolved by the engine when it fires.
+   foe that comes into range", "Dodge until hit"), each resolved by the engine when it fires. Help is never readied (question 14).
 5. **Initiative ties?** Recommend the engine's current rule (higher bonus, then the seed), with
    **heroes before monsters** on a full tie. SRD 5.2 leaves ties to the DM and the players. This
    keeps it automatic and slightly kind.
@@ -690,11 +669,9 @@ Each has a recommended answer. Agreeing with all of them is a fine reply.
     from the new state. They can plan in chat and look at the Sheet and Map.
 13. **Rounds mode.** Recommend keeping it only for old games and old apps, and removing it once no
     open game uses it.
-14. **Help against a foe: for one named ally, or the next ally to attack?** SRD 5.2 gives it to the
-    next attack by *any* ally. Recommend **a named ally**, as Micah described: the helper names
-    the ally and the foe, and the marker sits on that ally. The cost is that the Help is lost if
-    that ally does something else before the helper's next turn. That is clear, and it is the
-    player's call.
+14. **Help. Decided by Micah:** the plain 5e Help action only. Pick an ally, and optionally a
+    foe; the ally's next check or attack before your next turn has Advantage. No conditional or
+    readied Help, because it takes too much coordination.
 15. **Group helping outside combat?** Recommend **keeping it as it is**: the party's check, rolled
     by the best hero with Advantage from proficient companions.
 
@@ -830,53 +807,72 @@ Feature: Initiative combat
 
   # --- Help ----------------------------------------------------------------
 
-  Scenario: Help for an ally against a foe in reach gives that ally Advantage
+  Scenario: Help for an ally gives their next attack Advantage
     Given it is Bryn's turn
-    And the Ogre is within 5 feet of Bryn
-    When Bryn helps Corin against the Ogre
-    Then the log says Bryn distracts the Ogre for Corin
-    And Corin is marked as helped by Bryn against the Ogre
+    When Bryn helps Corin
+    Then the log says Bryn helps Corin
+    And Corin is marked as helped by Bryn
     And it is the next combatant's turn without a throw from Bryn
+    When Corin attacks Goblin Warrior 1
+    Then Corin's attack has Advantage from Bryn's help
+
+  Scenario: Help for an ally gives their next check Advantage
+    Given Corin is Grappled
+    And Bryn helped Corin
+    When Corin breaks free with Athletics
+    Then Corin's check has Advantage from Bryn's help
+
+  Scenario: Help naming a foe applies to attacks on that foe
+    Given the Ogre is within 5 feet of Bryn
+    And Bryn helped Corin against the Ogre
+    When Corin attacks Goblin Warrior 1
+    Then Corin's attack does not have Advantage
+    And Corin is still marked as helped against the Ogre
     When Corin attacks the Ogre
     Then Corin's attack has Advantage from Bryn's help
 
+  Scenario: A foe can be named only within 5 feet of the helper
+    Given the Ogre is 10 feet from Bryn
+    Then Help offers no "against the Ogre" target for Bryn
+
   Scenario: Helping asks nobody else anything
     Given it is Bryn's turn
-    When Bryn helps Corin against the Ogre
+    When Bryn helps Corin
     Then no player is asked for input
     And the next combatant's turn has begun
 
   Scenario: Help is for the ally it names
-    Given Bryn helped Corin against the Ogre
-    When Mira attacks the Ogre before Corin does
+    Given Bryn helped Corin
+    When Mira attacks Goblin Warrior 1
     Then Mira's attack does not have Advantage
-    And Corin is still marked as helped
 
-  Scenario: Help is not offered against a foe beyond 5 feet
-    Given the Ogre is 10 feet from Bryn
-    Then "help:attack" offers no help against the Ogre from Bryn
-
-  Scenario: A help is used by one attack
-    Given Bryn helped Corin against the Ogre
-    When Corin attacks the Ogre twice before Bryn's next turn
+  Scenario: A help is used by one roll
+    Given Bryn helped Corin
+    When Corin attacks twice before Bryn's next turn
     Then Corin's first attack has Advantage
     And Corin's second attack does not
     And Corin is no longer marked as helped
 
+  Scenario: Help does not cover saving throws
+    Given Bryn helped Corin
+    When Corin makes a Dexterity saving throw
+    Then the save does not have Advantage
+    And Corin is still marked as helped
+
   Scenario: Two helps for one ally do not stack
-    Given Bryn and Pip each helped Corin against the Ogre
-    When Corin attacks the Ogre
+    Given Bryn and Pip each helped Corin
+    When Corin attacks
     Then Corin's attack has Advantage once
     And Corin is still marked as helped by Pip
 
   Scenario: An unused help lapses at the start of the helper's next turn
-    Given Bryn helped Corin against the Ogre
-    And Corin did not attack the Ogre
+    Given Bryn helped Corin
+    And Corin made no check or attack
     When Bryn's next turn begins
     Then the log says Bryn's help for Corin lapses
     And Corin is no longer marked as helped
 
-  Scenario: A help is discarded when its foe falls
+  Scenario: A help is discarded when its named foe falls
     Given Bryn helped Corin against Goblin Warrior 1
     When Goblin Warrior 1 falls to someone else's spell
     Then no help is left on the fight
@@ -885,18 +881,6 @@ Feature: Initiative combat
     Given Bryn helped Corin against Goblin Warrior 1
     When Goblin Warrior 1 leaves Corin's reach and Corin's opportunity attack is made
     Then Corin's opportunity attack has Advantage from Bryn's help
-
-  Scenario: Help with a check gives the ally Advantage on that skill
-    Given Bryn is proficient in Athletics
-    And Corin is Grappled
-    When Bryn helps Corin with Athletics
-    Then Corin is marked as helped with Athletics
-    When Corin breaks free with Athletics
-    Then Corin's check has Advantage from Bryn's help
-
-  Scenario: Only a skill the helper is proficient in can be offered
-    Given Bryn is not proficient in Stealth
-    Then "help:check" offers no Stealth help from Bryn
 
   Scenario: Help on a dying ally stabilizes them
     Given Corin is dying within 5 feet of Bryn
@@ -1093,7 +1077,7 @@ changes for players until the flag is on. Sizes are rough: **S** is a few hundre
 | Phase | What ships | Gherkin scenarios | Size |
 | --- | --- | --- | --- |
 | **1. One turn at a time in the engine** | `play/initiative.ts`: `takeTurn(party, combat, heroAction \| null)` returns `{ party, combat, entries, candidate, ended }`. It is the body of `fightRound`'s loop with saves, concentration, morale and `lastingOnSheets` run per turn, plus `runMonsters` to the next hero. `fightRound` is rebuilt on it, so rounds mode still passes every existing test. End-of-turn condition saves. Moment candidates. No API change. | "Heroes go before monsters on a full tie", "A condition … end of the hero's own turn", "Foes may break in the middle of a round", "After ten rounds the foes flee" (rounds mode too) | M |
-| **1b. The Help action** | `help:attack`, `help:check`, `help:stabilize` in `play/legal.ts` (`common:help` as the alias), `CombatState.helps` with use and lapse in `rules/scene.ts` and the attack and check resolvers, the `helped` marker on `rules.combat.combatants`, the log lines. It works in rounds mode too, so it ships before the API work. `docs/api.md` first. | the Help block, except "Help in your own words names its ally and foe" (phase 6) | S–M |
+| **1b. The Help action** | `common:help` in `play/legal.ts` with ally and ally-against-foe targets (and stabilize for a dying ally), `CombatState.helps` with use and lapse in `rules/scene.ts` and the attack and check resolvers, the `helped` marker on `rules.combat.combatants`, the log lines. It works in rounds mode too, so it ships before the API work. `docs/api.md` first. | the Help block, except "Help in your own words names its ally and foe" (phase 6) | S–M |
 | **2. The fight API, engine lines only** | Migration (`combat_mode`, `combat_turn`, `combat_log`), both stores, `status: "fighting"`, `GameState.fight`, `POST /turn`, `/roll` with `turn`, `/advance` as skip, the poll's `logSince`/`logUpdates`, the clock and Dodge on expiry, monster `showAt` pacing, the fight as one scene, the end going to `nextScene` with a fight summary. The perception hooks (section 9): the null
 `audience` column and `perceives` on every read path. Behind `DD_INITIATIVE`. `docs/api.md` first. `npm run playtest` bots learn `/turn`. | Starting a fight, whose turn, a hero's action, monsters, the clock (not away), leaving the fight, polling, rounds mode | L |
 | **3. The app's Fight tab** | `GameSession` reads `fight` and `logSince`. A Fight tab: HUD on top (the other agent's view), the scroll, the turn panel and die, the waiting bar, monster beats by `showAt`, Sheet and Map sending `/turn`. `INITIATIVE_MIN_BUILD`, `MARKETING_VERSION` bump, TestFlight. Needs a Mac: untestable on a cloud agent. | none new (exercises phase 2) | L |
