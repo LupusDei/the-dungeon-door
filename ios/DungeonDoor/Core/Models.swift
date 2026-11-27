@@ -1963,6 +1963,8 @@ struct GameState: Codable, Hashable {
     /// Scenes with choices still to come after this one, before the ending: 0 on the last of them.
     /// Nil with no set length, in the lobby, and on a server from before it.
     var scenesLeft: Int? = nil
+    /// Where the current scene falls, the road from the tavern counted apart from the tale. Nil on a server from before it.
+    var progress: SceneProgress?
     let players: [GamePlayer]
     let scene: GameScene?
     var chronicle: [ChronicleEntry]?
@@ -1980,7 +1982,7 @@ struct GameState: Codable, Hashable {
     let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
-        case code, hostId, status, dungeonMaster, title, sceneCount, openEnded, scenesLeft, players, scene
+        case code, hostId, status, dungeonMaster, title, sceneCount, openEnded, scenesLeft, progress, players, scene
         case chronicle, messages, messageUpdates, typing, rules, turn, updatedAt
     }
 
@@ -2040,6 +2042,7 @@ extension GameState {
         sceneCount = try c.whole(.sceneCount)
         openEnded = try c.value(.openEnded, or: false)
         scenesLeft = try c.optionalWhole(.scenesLeft)
+        progress = try? c.decodeIfPresent(SceneProgress.self, forKey: .progress)
         players = try c.decode([GamePlayer].self, forKey: .players)
         scene = try c.decodeIfPresent(GameScene.self, forKey: .scene)
         chronicle = try c.decodeIfPresent([ChronicleEntry].self, forKey: .chronicle)
@@ -2050,6 +2053,26 @@ extension GameState {
         // A missing or unreadable window leaves the scene playable. The bars simply don't count.
         turn = try? c.decodeIfPresent(TurnWindow.self, forKey: .turn)
         updatedAt = try c.value(.updatedAt, or: "")
+    }
+}
+
+/// A stretch of the road ("road"), or a scene of the tale counted from its own first ("tale"), the epilogue its last.
+struct SceneProgress: Codable, Hashable {
+    let part: String
+    let scene: Int
+    /// Nil with no set length.
+    let of: Int?
+}
+
+extension GameState {
+    /// "On the road 1 of 2", then "Scene 1 of 4": the road never counts against the tale's scenes.
+    /// A server from before it counts every scene.
+    func sceneCounter(_ scene: GameScene) -> String {
+        if let p = progress, scene.index == self.scene?.index {
+            let of = p.of.map { " of \($0)" } ?? ""
+            return p.part == "road" ? "On the road \(p.scene)\(of)" : "Scene \(p.scene)\(of)"
+        }
+        return sceneCount > 0 ? "Scene \(scene.index + 1) of \(sceneCount)" : "Scene \(scene.index + 1)"
     }
 }
 

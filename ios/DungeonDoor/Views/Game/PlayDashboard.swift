@@ -301,7 +301,7 @@ private struct DashboardScenePanel: View {
             let level = dungeon.levelReached.map { " · Level \($0)" } ?? ""
             return "\(dungeon.kind)\(level) · \(DungeonNames.label(here))"
         }
-        return state.sceneCount > 0 ? "Scene \(scene.index + 1) of \(state.sceneCount)" : "Scene \(scene.index + 1)"
+        return state.sceneCounter(scene)
     }
 
     private var narration: some View {
