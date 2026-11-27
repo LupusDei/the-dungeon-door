@@ -11,6 +11,7 @@ import { type Ability, ABILITIES } from '../rules/abilities.ts';
 import { averageDice, parseDice } from '../rules/dice.ts';
 import { type Combatant, extraAttacks, heroCombatant, monsterCombatant } from '../rules/combatant.ts';
 import { conditionsOf, withCondition } from '../rules/conditions.ts';
+import { heldByConcentration, holdsOn } from '../rules/holds.ts';
 import type { Lasting } from '../rules/powers.ts';
 import { type LightLevel, monsterSight, sightOf } from '../rules/light.ts';
 import { awardXp, canLevelUp, levelUp, splitXp } from '../rules/leveling.ts';
@@ -315,7 +316,9 @@ const damageTold = (target: string, damage: number, hidden: Hidden) => (damage >
 
 /** What a spell did to one target: the HP it gave back (only heroes heal), or how it struck, with the damage to a hero. */
 const spellTold = (o: SpellOutcome, name: Names, hidden: Hidden): string =>
-  (o.healed > 0 ? `${name(o.target)} regains ${o.healed} HP` : `${name(o.target)} ${struck(o)}${damageTold(o.target, o.damage, hidden)}`);
+  (o.healed > 0
+    ? `${name(o.target)} regains ${o.healed} HP`
+    : `${name(o.target)} ${struck(o)}${damageTold(o.target, o.damage, hidden)}${o.conditions ? `: ${o.conditions.map(titled).join(' and ')}` : ''}`);
 const titled = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 /** What a hit's rider did: "Bryn fails the DC 10 CON save: Paralyzed.", "Bryn is Grappled.", "Bryn makes the DC 10 CON save." */
@@ -329,6 +332,7 @@ function riderLine(r: RiderOutcome, who: string): string {
 /** What a spell did to one target: hit or missed by an attack, saved or not, or struck by a dart. */
 const struck = (o: SpellOutcome): string => {
   if (o.attack) return o.attack.hit ? 'is hit' : 'is missed';
+  if (o.save?.success && o.save.roll === null) return 'is unaffected';
   return o.save ? (o.save.success ? 'saves' : 'fails the save') : 'is struck';
 };
 
@@ -351,6 +355,12 @@ const LINES: { [K in CombatEvent['kind']]: (e: Extract<CombatEvent, { kind: K }>
   recharge: ({ actor, power, roll }, name) => `${name(actor)}: ${power} is ready again (d6: ${roll}).`,
   deathSave: ({ actor, status }, name) => `${name(actor)} makes a death save: ${status}.`,
   skip: ({ actor }, name) => `${name(actor)} cannot act.`,
+  holdSave: ({ actor, spellId, ability, dc, roll, success, conditions }, name) => {
+    const spell = srd().spells.get(spellId)!.name;
+    const save = `(${ability.toUpperCase()} save ${roll ? roll.total : 'failed'} vs DC ${dc})`;
+    if (success) return `${name(actor)} shakes off ${spell} ${save}.`;
+    return `${name(actor)} is still held by ${spell}${conditions.length ? `: ${conditions.map(titled).join(' and ')}` : ''} ${save}.`;
+  },
   potion: ({ actor, item: id, healed }, name) => `${name(actor)} drinks a ${item(id).name} as a Bonus Action: ${healed} HP back.`,
   secondWind: ({ actor, healed }, name) => `${name(actor)} uses Second Wind as a Bonus Action: ${healed} HP back.`,
 };
@@ -360,7 +370,28 @@ function tell(before: CombatState, after: CombatState): string[] {
   const hidden: Hidden = (id) => after.combatants[id].side === 'foes';
   const events = after.log.slice(before.log.length).map((e) => (LINES[e.kind] as (x: CombatEvent, n: Names, h: Hidden) => string)(e, name, hidden));
   const fallen = Object.values(after.combatants).filter((c) => c.status === 'dead' && before.combatants[c.id].status !== 'dead');
-  return [...events, ...woundsTold(before, after), ...fallen.map((c) => `${c.name} falls.`)];
+  return [...events, ...woundsTold(before, after), ...holdsEnded(before, after), ...fallen.map((c) => `${c.name} falls.`)];
+}
+
+const holdKey = (h: { spellId: string; by: string }) => `${h.spellId}|${h.by}`;
+
+/** Holds that ended other than by a save (damage woke the sleeper, the caster lost concentration): "Goblin wakes from Sleep." */
+function holdsEnded(before: CombatState, after: CombatState): string[] {
+  const saved = new Set(after.log.slice(before.log.length).flatMap((e) => (e.kind === 'holdSave' && e.success ? [`${e.actor}|${e.spellId}`] : [])));
+  return Object.values(after.combatants).filter((c) => c.status !== 'dead' && before.combatants[c.id]).flatMap((c) => {
+    const now = new Set(holdsOn(c).map(holdKey));
+    return holdsOn(before.combatants[c.id])
+      .filter((h) => !now.has(holdKey(h)) && !saved.has(`${c.id}|${h.spellId}`))
+      .map((h) => (h.spellId === 'sleep' ? `${c.name} wakes from Sleep.` : `${c.name} is free of ${srd().spells.get(h.spellId)!.name}.`));
+  });
+}
+
+/** A concentration spell's holds end when its caster no longer concentrates on it (lost it, cast another, or fell). */
+function concentrationHolds(combat: CombatState, sheets: Record<string, CharacterSheet>): CombatState {
+  const concentrating = (id: string) => (sheets[id] ? sheets[id].spellcasting?.concentratingOn ?? null : undefined);
+  const concentration = (spellId: string) => srd().spells.get(spellId)?.concentration === true;
+  const combatants = Object.fromEntries(Object.entries(combat.combatants).map(([id, c]) => [id, holdsOn(c).length ? heldByConcentration(c, concentrating, concentration) : c]));
+  return { ...combat, combatants };
 }
 
 /** A foe still up whose wounds look different now: "Goblin Warrior is bloodied." (its hit points stay hidden). */
@@ -568,6 +599,7 @@ export function fightRound(party: PartyState, combat: CombatState, votes: Combat
   const shaken = morale(start, state);
   const marked = lastingOnSheets(start, shaken.combat, sheets);
   const kept = keepConcentration(start, marked.combat, marked.sheets);
-  const lines = [...freed.lines, ...tell(start, state), ...shaken.lines, ...tell(state, shaken.combat), ...kept.lines];
-  return settleFight(synced({ ...freed.party, sheets: kept.sheets }, kept.combat), kept.combat, lines, shaken.broke);
+  const loosed = concentrationHolds(kept.combat, kept.sheets);
+  const lines = [...freed.lines, ...tell(start, state), ...shaken.lines, ...tell(state, shaken.combat), ...kept.lines, ...holdsEnded(kept.combat, loosed)];
+  return settleFight(synced({ ...freed.party, sheets: kept.sheets }, loosed), loosed, lines, shaken.broke);
 }

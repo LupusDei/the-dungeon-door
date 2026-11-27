@@ -13,6 +13,7 @@ import { type Attack, type Combatant, extraAttacks, heroCombatant } from '../rul
 import { areaFromSelf, rangedShot, spellHits } from '../rules/bands.ts';
 import { feetBetween, occupancy, reachableSquares, type Square } from '../rules/grid.ts';
 import { conditionsOf } from '../rules/conditions.ts';
+import { canBeHeld, holdRule } from '../rules/holds.ts';
 import { held, paceOf, removeItem } from '../rules/inventory.ts';
 import { HEALING_POTIONS, item as itemInfo, items } from '../rules/items.ts';
 import { heal } from '../rules/resolve.ts';
@@ -159,15 +160,22 @@ function spellDetail(spell: SrdSpell, sheet: CharacterSheet): string {
         : `${dice} ${spell.damage.type}, ${ABILITY[spell.save ?? 'dex']} save DC ${casting.saveDc}${spell.halfOnSave ? ' for half' : ''}`;
     return `${how}.${slotNote(spell, sheet)}`;
   }
+  const holding = holdRule(spell.id);
+  if (holding && spell.save && casting) {
+    const what = holding.conditions.map((c) => c[0].toUpperCase() + c.slice(1)).join(' and ');
+    return `${ABILITY[spell.save]} save DC ${casting.saveDc} or ${what}.${slotNote(spell, sheet)}`;
+  }
   return spell.level === 0 ? 'A cantrip.' : `A level ${spell.level} spell.${slotNote(spell, sheet)}`;
 }
 
 function spellOffer(spell: SrdSpell, sheet: CharacterSheet, inFight: boolean, combat: CombatState | null, playerId: string): LegalAction {
   const healing = spell.healing !== null;
-  const harmful = spell.damage !== null && !healing;
+  const holding = spell.save !== null && !healing ? holdRule(spell.id) : undefined;
+  const harmful = (spell.damage !== null && !healing) || holding !== undefined;
   const me = combat?.combatants[playerId];
   const speed = paceOf(sheet);
-  const listed = !inFight ? [] : healing ? healTargets(combat, playerId) : harmful ? foesOf(combat, 'party') : [];
+  const foes = holding ? foesOf(combat, 'party').filter((t) => canBeHeld(combat!.combatants[t.id], holding)) : foesOf(combat, 'party');
+  const listed = !inFight ? [] : healing ? healTargets(combat, playerId) : harmful ? foes : [];
   const targets = !me || !combat ? listed : listed.filter((t) => canReach(combat, me, t.id, speed, (from) => {
     const who = combat.combatants[t.id];
     return !who || spellHits(from, who, spell);
@@ -466,7 +474,7 @@ function cast(sheet: CharacterSheet, spellId: string, targets: readonly string[]
     if (error instanceof RuleViolation) return told(combat, sheet, `${sheet.name} cannot cast ${spell.name}: ${error.message}.`);
     throw error;
   }
-  if (!spell.damage && !spell.healing) return told(combat, spent, `${sheet.name} casts ${spell.name}.`);
+  if (!spell.damage && !spell.healing && !(spell.save && holdRule(spellId))) return told(combat, spent, `${sheet.name} casts ${spell.name}.`);
   const casting = sheet.spellcasting!;
   const aimed = casted.beams > 1 ? fillBeams(targets, casted.beams) : [...targets];
   return {

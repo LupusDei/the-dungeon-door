@@ -755,6 +755,46 @@ of six rungs of **vigor** by the share of hit points left:
 - The DM's combat block gives the wound word for each foe, and its instructions say to show wounds in the
   story, never hit points.
 
+## The combat HUD
+
+Micah: players need to see at a glance whom to hit, who needs healing, and who is asleep.
+`play/hud.ts` builds `rules.combat.hud`: each hero's exact hit points, and each foe's **tier**, a simpler
+scale than the wound ladder, worked out on the server so a foe's hit points never leave it:
+
+| Tier | Hit points left |
+|------|-----------------|
+| Unhurt | all |
+| Hurt | below full, over half |
+| Bloodied | half or less, over a quarter |
+| Near death | a quarter or less, above 0 |
+| Down (shown "Dead") | 0: a foe at 0 HP is dead |
+
+Each combatant's conditions come with the spell behind them and how they end: what the combatant carries
+(`Combatant.conditions`, a hero's timed ones from its sheet), a spell's hold (below), a hero's
+concentration, and the Dodge.
+
+**Spells that hold a foe** (`rules/holds.ts`). A hero's Sleep, Hold Person, Hideous Laughter,
+Blindness/Deafness or Hypnotic Pattern is a real action in a fight (`spell:<id>`, at the foes it can take
+hold of). Each target saves; on a failure the spell puts a `Hold` on the combatant: the conditions it
+brought (not those it is immune to, nor those it had from elsewhere), who cast it, and how it ends.
+
+| Spell | Conditions | Ends |
+|-------|-----------|------|
+| Sleep | Incapacitated; a failed repeat save makes it Unconscious (asleep), saved against no more | any damage; the caster's concentration |
+| Hold Person (humanoids) | Paralyzed | a WIS save at the end of each of its turns; concentration |
+| Hideous Laughter | Prone, Incapacitated | a WIS save at the end of each of its turns; concentration |
+| Blindness/Deafness | Blinded | a CON save at the end of each of its turns |
+| Hypnotic Pattern | Charmed, Incapacitated | any damage; concentration |
+
+The repeat save happens at the end of the held creature's turn, which a held creature spends doing nothing
+(`scene.ts` endOfTurn, also when its turn is skipped). Damage that leaves it standing ends the holds harm
+breaks (`resolve.ts` takeDamage). After each round, holds whose caster no longer concentrates on the spell
+end (`fight.ts`). The round says so: "Cleo casts Sleep: Goblin Warrior fails the save: Incapacitated.",
+"Goblin Warrior is still held by Sleep: Unconscious (WIS save 4 vs DC 13).", "Goblin Warrior wakes from
+Sleep." A creature immune to Exhaustion does not sleep ("is unaffected"). Not modelled yet: waking a
+sleeper with an action, Hideous Laughter's save when hurt, Blindness/Deafness's Deafened, upcasting for more
+targets, and holds on heroes (monsters' conditions on heroes are the riders and powers above).
+
 ## For the app (the game layer on top)
 
 What the game adds around the engine so the app can show it (Justin's side; `docs/api.md` has the shapes):

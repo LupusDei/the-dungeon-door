@@ -3,7 +3,8 @@
  * are saving throws, healing heals. Targets are passed in; `targetsInRadius` picks them for the simple
  * radius shapes on a 5-foot grid. Concentration checks after damage. See docs/rules-design.md.
  */
-import type { Combatant } from './combatant.ts';
+import type { Combatant, Condition } from './combatant.ts';
+import { canBeHeld, hold, holdRule } from './holds.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { type AttackResult, type D20, type RollOptions, attackRoll, damageAfterDefenses, heal, savingThrow, takeDamage } from './resolve.ts';
 import type { Rng } from './rng.ts';
@@ -13,7 +14,11 @@ import { type AreaShape, type Srd, type SrdSpell, srd as bundledSrd } from './sr
 import { require } from './violation.ts';
 
 export interface Caster { combatant: Combatant; saveDc: number; attackBonus: number; modifier: number }
-export interface SpellOutcome { target: string; attack: AttackResult | null; save: { roll: D20 | null; success: boolean } | null; damage: number; healed: number }
+export interface SpellOutcome {
+  target: string; attack: AttackResult | null; save: { roll: D20 | null; success: boolean } | null; damage: number; healed: number;
+  /** The conditions a holding spell brought (holds.ts); absent when it brought none. */
+  conditions?: Condition[];
+}
 export interface SpellRolls {
   /** For the spell attack: a voter's natural d20, advantage, cover. */
   attack?: RollOptions;
@@ -87,6 +92,19 @@ function spellSaves(rng: Rng, caster: Caster, spell: SrdSpell, cast: Cast, targe
   return { outcomes: results.map((r) => r.outcome), targets: results.map((r) => r.target) };
 }
 
+/** A holding spell (holds.ts): each target saves; one that fails is held. A creature it cannot take hold of saves at once. */
+function spellHolds(rng: Rng, caster: Caster, spell: SrdSpell, targets: readonly Combatant[], options: RollOptions): Resolved {
+  const rule = holdRule(spell.id)!;
+  const results = targets.map((t) => {
+    const save = canBeHeld(t, rule) ? savingThrow(rng, t, spell.save!, caster.saveDc, options) : { roll: null, success: true };
+    if (save.success) return { outcome: { ...nothing(t.id), save }, target: t };
+    const held = hold(t, spell.id, caster.combatant.id, caster.saveDc, spell.save!);
+    const brought = held.conditions.filter((x) => !t.conditions.includes(x));
+    return { outcome: { ...nothing(t.id), save, ...(brought.length ? { conditions: brought } : {}) }, target: held };
+  });
+  return { outcomes: results.map((r) => r.outcome), targets: results.map((r) => r.target) };
+}
+
 /** Darts that never miss: each rolls its own damage against its target (several may share one, in turn). */
 function spellDarts(rng: Rng, spell: SrdSpell, cast: Cast, targets: readonly Combatant[], spare: readonly Combatant[]): Resolved {
   require(targets.length === cast.beams, `${spell.name} makes ${cast.beams} darts: give ${cast.beams} targets`);
@@ -104,12 +122,14 @@ function spellHealing(rng: Rng, caster: Caster, cast: Cast, targets: readonly Co
 
 /**
  * Resolves a cast (from castSpell) against its targets: a spell attack per beam, a sure hit per dart, a
- * saving throw per target against damage rolled once, or healing rolled once. A spell with none of these is the DM's.
+ * saving throw per target against damage rolled once, a holding spell's save per target (holds.ts), or healing
+ * rolled once. A spell with none of these is the DM's.
  */
 export function resolveSpell(rng: Rng, caster: Caster, cast: Cast, targets: readonly Combatant[], { attack = {}, save = {}, spare = [] }: SpellRolls = {}, data: Srd = bundledSrd()): Resolved {
   const spell = data.spells.get(cast.spellId)!;
   if (spell.attack && cast.damageDice) return spellAttacks(rng, caster, spell, cast, targets, spare, attack);
   if (spell.darts) return spellDarts(rng, spell, cast, targets, spare);
+  if (spell.save && holdRule(spell.id)) return spellHolds(rng, caster, spell, targets, save);
   if (spell.save) return spellSaves(rng, caster, spell, cast, targets, save);
   if (cast.healingDice) return spellHealing(rng, caster, cast, targets);
   return { outcomes: targets.map((t) => nothing(t.id)), targets: [...targets] };

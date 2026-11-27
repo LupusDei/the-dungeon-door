@@ -6,6 +6,7 @@ import { type Band, type Move, type Opening, engagedWith, isSquareMove, meleeClu
 import { type Battlefield, checkSquare, closestApproach, derivePlace, feetBetween, leavesReach, occupancy, openingSquares, reachableSquares, squareForBand, squaresMatchingPlaces, syncPlaces } from './grid.ts';
 import type { Combatant, Condition, Status } from './combatant.ts';
 import type { Power, Rider } from './powers.ts';
+import { afterRepeatSave, holdsOn } from './holds.ts';
 import { parseDice, rollDice } from './dice.ts';
 import { addCondition, type AttackResult, type Cover, type D20, damageAfterDefenses, attackRoll, deathSave, heal, rollD20, savingThrow, takeDamage } from './resolve.ts';
 import { type Rng, seededRng } from './rng.ts';
@@ -38,6 +39,8 @@ export type CombatEvent =
   | { kind: 'recharge'; round: number; actor: string; power: string; roll: number }
   | { kind: 'deathSave'; round: number; actor: string; status: Status }
   | { kind: 'skip'; round: number; actor: string }
+  /** The save a creature held by a spell repeats at the end of its turn (holds.ts). `conditions`: what the spell still holds it in; none once it ends. */
+  | { kind: 'holdSave'; round: number; actor: string; spellId: string; ability: string; dc: number; roll: D20 | null; success: boolean; conditions: Condition[] }
   /** A healing potion drunk as a Bonus Action before the turn's action. */
   | { kind: 'potion'; round: number; actor: string; item: string; healed: number }
   /** A fighter's Second Wind, a Bonus Action before the turn's action. */
@@ -98,9 +101,23 @@ function advance(state: CombatState, rng: Rng): CombatState {
     s = { ...s, dodging: s.dodging.filter((d) => d !== id), reacted: (s.reacted ?? []).filter((d) => d !== id), moved: (s.moved ?? []).filter((d) => d !== id) };
     const c = s.combatants[id];
     if (canAct(c)) return recharged(s, c, rng);
-    s = c.status === 'dying' ? afterDeathSave(s, id, rng) : withEvent(s, { kind: 'skip', round: s.round, actor: id }, c);
+    s = c.status === 'dying' ? afterDeathSave(s, id, rng) : endOfTurn(withEvent(s, { kind: 'skip', round: s.round, actor: id }, c), id, rng);
   }
   return s;
+}
+
+/** At the end of its turn a creature held by a spell repeats the save against each hold that allows one (holds.ts). */
+function endOfTurn(state: CombatState, id: string, rng: Rng): CombatState {
+  const c = state.combatants[id];
+  if (!c || c.status === 'dead') return state;
+  return holdsOn(c).filter((h) => h.save).reduce((s, h) => {
+    const me = s.combatants[id];
+    const { roll, success } = savingThrow(rng, me, h.save!.ability, h.save!.dc, {});
+    const after = afterRepeatSave(me, h, success);
+    const now = holdsOn(after).find((x) => x.spellId === h.spellId && x.by === h.by);
+    const event: CombatEvent = { kind: 'holdSave', round: s.round, actor: id, spellId: h.spellId, ability: h.save!.ability, dc: h.save!.dc, roll, success, conditions: now?.conditions ?? [] };
+    return withEvent(s, event, after);
+  }, state);
 }
 
 const rechargeOf = (p: Power) => (p.uses?.kind === 'recharge' ? p.uses.min : null);
@@ -388,8 +405,12 @@ export function act(state: CombatState, action: Action): CombatState {
     const next = advance(state, rng);
     return { ...next, rng: rng.state() };
   }
+  if (!canAct(actor)) {
+    const next = advance(endOfTurn(withEvent(state, { kind: 'skip', round: state.round, actor: actor.id }, actor), actor.id, rng), rng);
+    return { ...next, rng: rng.state() };
+  }
   const done = (ACTIONS[action.kind] as (s: CombatState, a: Combatant, x: Action, r: Rng) => CombatState)(state, actor, action, rng);
-  const next = advance(done, rng);
+  const next = advance(done.outcome === 'ongoing' ? endOfTurn(done, actor.id, rng) : done, rng);
   return { ...next, rng: rng.state() };
 }
 

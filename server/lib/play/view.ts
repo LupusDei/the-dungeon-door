@@ -4,7 +4,8 @@
  */
 import { questView, type QuestView } from './quest.ts';
 import { passiveScore } from '../rules/checks.ts';
-import { conditionsOf, type TimedCondition } from '../rules/conditions.ts';
+import { conditionsOf } from '../rules/conditions.ts';
+import { type CombatHud, combatHud, endsOf } from './hud.ts';
 import { heroResistances } from '../rules/defenses.ts';
 import { load, paceOf } from '../rules/inventory.ts';
 import { items } from '../rules/items.ts';
@@ -124,14 +125,7 @@ export interface XpAwardView {
   reasons: { reason: XpReason; label: string; xp: number }[];
 }
 
-const WHEN: { [K in TimedCondition['until']['kind']]: (u: Extract<TimedCondition['until'], { kind: K }>) => string } = {
-  time: (u) => (u.left >= 3600 ? counted(Math.ceil(u.left / 360) / 10, 'hour') : counted(Math.ceil(u.left / 60), 'minute')),
-  'long-rest': () => 'until a long rest',
-  save: (u) => `DC ${u.dc} ${u.ability.toUpperCase()} save to end`,
-  escape: (u) => `DC ${u.dc} ${u.skill.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')} to break free`,
-};
-const ends = (c: TimedCondition) => (WHEN[c.until.kind] as (u: TimedCondition['until']) => string)(c.until);
-const conditionViews = (s: CharacterSheet) => conditionsOf(s).map((c) => ({ condition: c.condition, ends: ends(c) }));
+const conditionViews = (s: CharacterSheet) => conditionsOf(s).map((c) => ({ condition: c.condition, ends: endsOf(c) }));
 /** "poisoned (1 hours), restrained (DC 10 Athletics to break free)". */
 const conditionsLine = (s: CharacterSheet) => conditionViews(s).map((c) => `${c.condition} (${c.ends})`).join(', ');
 
@@ -159,6 +153,8 @@ export interface RulesView {
       /** A hero: feet they can move this turn. */
       speedFeet?: number;
     } & Health)[];
+    /** The fight at a glance (play/hud.ts): heroes' hit points, foes' tiers (never their hit points), and what holds each. */
+    hud: CombatHud;
   };
   /** The road from the tavern to the dungeon door, while the party is on it; then null. */
   trek: TrekView | null;
@@ -238,6 +234,7 @@ export function rulesView(state: RulesState, results: string[]): RulesView {
           square: c.square ?? null,
           ...(c.side === 'party' ? { speedFeet: party.sheets[c.id] ? movingAt(party.sheets[c.id]) : (c.speed ?? 30) } : {}),
         })),
+        hud: combatHud(combat, party.sheets),
       };
     })(),
     trek: trekView(state),

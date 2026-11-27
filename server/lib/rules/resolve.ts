@@ -5,6 +5,7 @@
 import type { Ability } from './abilities.ts';
 import type { Combatant, Condition } from './combatant.ts';
 import { parseDice, rollDice } from './dice.ts';
+import { harmed } from './holds.ts';
 import type { Rng } from './rng.ts';
 import { require } from './violation.ts';
 
@@ -74,13 +75,14 @@ const struckAtZero = (target: Combatant, amount: number, critical: boolean): Com
 
 /**
  * Applies damage already adjusted for defenses: monsters die at 0 HP, heroes fall and make death saves. The dead
- * stay dead; a monster is never dying (one left so by an older rule dies at the next blow).
+ * stay dead; a monster is never dying (one left so by an older rule dies at the next blow). Damage that leaves
+ * it standing wakes it from Sleep and ends any other hold that harm breaks (holds.ts).
  */
 export function takeDamage(target: Combatant, amount: number, critical: boolean): Combatant {
   if (amount <= 0 || target.status === 'dead') return target;
   if (target.hp === 0) return struckAtZero(target, amount, critical);
   const hp = target.hp - amount;
-  if (hp > 0) return { ...target, hp };
+  if (hp > 0) return { ...harmed(target), hp };
   if (target.side === 'foes' || -hp >= target.maxHp) return dead(target);
   return { ...addCondition(target, 'unconscious'), hp: 0, status: 'dying', deathSaves: { successes: 0, failures: 0 } };
 }

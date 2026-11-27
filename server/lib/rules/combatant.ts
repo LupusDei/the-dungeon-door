@@ -9,6 +9,7 @@ import type { CharacterSheet } from './sheet.ts';
 import { type Srd, type SrdWeapon, srd as bundledSrd } from './srd.ts';
 
 import type { Condition } from './conditions.ts';
+import type { Hold } from './holds.ts';
 
 export { CONDITIONS, type Condition } from './conditions.ts';
 
@@ -69,6 +70,10 @@ export interface Combatant {
   speed?: number;
   /** What its wounds look like (rules/wounds.ts): undead, construct or ooze; absent for flesh. Monsters only. */
   body?: Exclude<Body, 'flesh'>;
+  /** A monster's SRD type ("humanoid", "fey", "undead"); absent for a hero, who is a humanoid. */
+  creatureType?: string;
+  /** Spells holding it in a condition (holds.ts): what each brought and how it ends. Absent for none. */
+  holds?: Hold[];
 }
 
 /** Undead, constructs and oozes never break, and their wounds are told in their own words. */
@@ -128,7 +133,7 @@ export function monsterCombatant(id: string, m: Monster): Combatant {
     id, name: m.name, side: 'foes', ac: m.ac, hp: m.hp, maxHp: m.hp, speed: m.speed,
     initiative: abilityModifier(m.abilities.dex), saveBonuses: { ...m.saveBonuses }, attacks: m.attacks,
     resistances: m.resistances, vulnerabilities: m.vulnerabilities, immunities: m.immunities, conditionImmunities: m.conditionImmunities,
-    ...fresh(), xp: m.xp, ...unbreakable(bodyOf(m.type)),
+    ...fresh(), xp: m.xp, ...unbreakable(bodyOf(m.type)), creatureType: m.type,
     ...(m.multiattack.length ? { multiattack: m.multiattack } : {}),
     ...(m.powers.length ? { powers: m.powers } : {}),
     ...(m.disengages ? { disengages: true as const } : {}),

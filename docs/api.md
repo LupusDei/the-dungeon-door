@@ -539,6 +539,31 @@ RulesView {                          // SRD 5.2 (2024 rules)
                                       // share. Servers before this sent vigor (6 unhurt to 0) instead, and
                                       // servers before wounds a foe's hp and maxHp. Round lines tell hits
                                       // on a foe without damage numbers ("hit."); a hero's keep them.
+    hud: {                            // the fight at a glance (lib/play/hud.ts), both sides in initiative
+                                      // order. Absent from older servers.
+      party: [{ id: string; name: string; hp: number; maxHp: number   // a hero's exact hit points
+                status: "up" | "dying" | "stable" | "dead"; conditions: HudCondition[] }]
+      foes:  [{ id: string; name: string
+                tier: "unhurt" | "hurt" | "bloodied" | "near-death" | "down"
+                label: string                // "Unhurt", "Hurt", "Bloodied", "Near death"; "Dead" when slain
+                status: "up" | "dying" | "stable" | "dead"; conditions: HudCondition[] }]
+                                      // a foe never has hp or maxHp: the server works out its tier from the
+                                      // share of hit points left. unhurt: full. hurt: below full. bloodied:
+                                      // half or less (the 2024 term). near-death: a quarter or less. down: 0
+                                      // (a foe at 0 HP is dead). A dead foe's conditions are [].
+    }
+  }
+  HudCondition {                      // one thing on a combatant
+    id: string                        // an SRD condition ("incapacitated", "paralyzed", "prone", "blinded",
+                                      // "charmed", "unconscious", "poisoned", "restrained", …), or:
+                                      // "asleep" (Sleep's Unconscious: asleep, not fallen), "concentrating"
+                                      // (a hero holding a spell), "dodging" (until its next turn)
+    label: string                     // "Asleep", "Paralyzed", "Concentrating", "Dodging"
+    source: string | null             // the spell behind it ("Sleep", "Hold Person"); for "concentrating",
+                                      // the spell held
+    ends: string | null               // how it ends, when the engine knows: "10 minutes", "DC 12 CON save
+                                      // to end", "Ends with a DC 13 WIS save at the end of its turns, any
+                                      // damage or the caster losing concentration"
   }
   trek: null | {                      // the road from the tavern, while the party is on it (any kind of game)
     stretch: number; of: number       // stretch 1 of 2 (each a scene)
