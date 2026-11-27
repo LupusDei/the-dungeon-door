@@ -27,6 +27,11 @@ struct CharacterDetailView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 14)
                 }
+                if hero.bonusesOpen == true {
+                    AbilityBonusCard(hero: hero)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 14)
+                }
                 HeroSheetView(character: hero, tab: $tab)
                 if hero.sheet == nil {
                     // No sheet to hold the Story tab yet: their words still belong on the page.

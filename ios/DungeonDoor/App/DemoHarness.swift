@@ -543,7 +543,8 @@ enum DemoData {
         Character(id: id, ownerId: owner, name: name, race: race, characterClass: classId,
                   gender: gender, temperament: temperament, alignment: alignment,
                   backstory: backstory, description: description, appearance: appearance,
-                  portraitUrl: portrait, sheet: sheet, attacks: attacks, createdAt: now, updatedAt: now)
+                  portraitUrl: portrait, sheet: sheet, attacks: attacks, bonusesOpen: nil,
+                  createdAt: now, updatedAt: now)
     }
 
     private static func sheet(name: String, level: Int, xp: Int, classId: String, species: String, background: String,
@@ -555,7 +556,7 @@ enum DemoData {
         return CharacterSheet(
             version: 1, name: name, level: level, xp: xp, classId: classId, speciesId: species,
             backgroundId: background, subclassId: nil, size: "medium", speed: speed,
-            abilityScores: scores, proficiencyBonus: proficiency, maxHp: maxHp, hp: hp, armorClass: ac,
+            abilityScores: scores, abilityBoost: nil, proficiencyBonus: proficiency, maxHp: maxHp, hp: hp, armorClass: ac,
             hitDiceSpent: 0, exhaustion: 0, savingThrows: saves,
             saveBonuses: AbilityScores(str: save("str"), dex: save("dex"), con: save("con"),
                                        int: save("int"), wis: save("wis"), cha: save("cha")),

@@ -34,8 +34,15 @@ struct APIClient: Sendable {
 
     /// Upserts a hero. `backgroundId` builds (or, at level 1, rebuilds) the sheet on that background;
     /// nil keeps the sheet the hero has, or lets the server pick a background for a new one.
-    func save(_ character: Character, backgroundId: String?) async throws -> Character {
-        try await send("PUT", "api/characters", body: CharacterDraft(character, backgroundId: backgroundId))
+    /// `boost` is where that background's ability increases go.
+    func save(_ character: Character, backgroundId: String?, boost: AbilityBoost?) async throws -> Character {
+        try await send("PUT", "api/characters", body: CharacterDraft(character, backgroundId: backgroundId, boost: boost))
+    }
+
+    /// Places the background's ability increases once, on a hero the forge built whose scores are still that.
+    func assignBonuses(characterId: String, boost: AbilityBoost) async throws -> Character {
+        struct Body: Encodable { let characterId: String; let boost: AbilityBoost }
+        return try await send("POST", "api/characters/ability-boost", body: Body(characterId: characterId, boost: boost))
     }
 
     func delete(characterId: String) async throws {
@@ -52,10 +59,17 @@ struct APIClient: Sendable {
 
     /// The level-1 sheet a save would build for this hero; nothing is stored. The id seeds the
     /// build, so the preview is the hero that will be saved.
-    func sheet(id: String, name: String, race: String, characterClass: String, backgroundId: String?) async throws -> SheetPreview {
-        struct Body: Encodable { let id: String; let name: String; let race: String; let characterClass: String; let backgroundId: String? }
+    func sheet(id: String, name: String, race: String, characterClass: String, backgroundId: String?, boost: AbilityBoost?) async throws -> SheetPreview {
+        struct Body: Encodable {
+            let id: String
+            let name: String
+            let race: String
+            let characterClass: String
+            let backgroundId: String?
+            let boost: AbilityBoost?
+        }
         return try await send("POST", "api/sheet",
-                              body: Body(id: id, name: name, race: race, characterClass: characterClass, backgroundId: backgroundId))
+                              body: Body(id: id, name: name, race: race, characterClass: characterClass, backgroundId: backgroundId, boost: boost))
     }
 
     func forgePortrait(for character: Character, previousAppearance: String?, note: String?) async throws -> PortraitResult {

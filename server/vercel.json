@@ -11,6 +11,10 @@
       "destination": "/api/character-revive"
     },
     {
+      "source": "/api/characters/ability-boost",
+      "destination": "/api/character-ability-boost"
+    },
+    {
       "source": "/api/games/:code/join",
       "destination": "/api/game-join?code=:code"
     },

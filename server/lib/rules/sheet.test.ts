@@ -8,6 +8,12 @@ test('a sheet survives a trip through JSON and the parser unchanged', () => {
   assert.deepEqual(parseCharacterSheet(JSON.parse(JSON.stringify(SAMPLE))), SAMPLE);
 });
 
+test('a sheet remembers the ability bonuses the player placed, and an old sheet has none', () => {
+  const boost = { kind: 'twoOne' as const, plusTwo: 'str' as const, plusOne: 'con' as const };
+  assert.deepEqual(parseCharacterSheet({ ...SAMPLE, abilityBoost: boost }).abilityBoost, boost);
+  assert.equal(parseCharacterSheet(SAMPLE).abilityBoost, undefined);
+});
+
 test('a caster sheet keeps its spellcasting', () => {
   const caster = { ...SAMPLE, spellcasting: { ability: 'wis', saveDc: 13, attackBonus: 5, slots: [2, 0, 0, 0, 0, 0, 0, 0, 0], cantrips: ['guidance'], prepared: ['bless'], expended: [1, 0, 0, 0, 0, 0, 0, 0, 0], concentratingOn: 'bless' } };
   assert.deepEqual(parseCharacterSheet(caster), caster);

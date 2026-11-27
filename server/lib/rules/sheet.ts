@@ -12,6 +12,12 @@ export const MAX_LEVEL = 20;
 export const MAX_EXHAUSTION = 6;
 const ability = z.enum(ABILITIES);
 const score = int.min(1).max(30);
+
+/** The player's placement of a background's ability increases (SRD 5.2): +2 and +1, or +1 to each of the three. */
+export const AbilityBoostSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('twoOne'), plusTwo: ability, plusOne: ability }),
+  z.object({ kind: z.literal('oneOneOne') }),
+]);
 const perAbility = <T extends z.ZodType>(value: T) => z.object({ str: value, dex: value, con: value, int: value, wis: value, cha: value });
 
 export const CharacterSheetSchema = z.object({
@@ -26,6 +32,11 @@ export const CharacterSheetSchema = z.object({
   size: z.enum(['Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan']),
   speed: int.positive(),
   abilityScores: perAbility(score),
+  /**
+   * The player's placement of the background's ability increases. Absent when the server placed them
+   * and the player has not chosen (the scores are still that placement while `bonusesOpen` is true).
+   */
+  abilityBoost: AbilityBoostSchema.optional(),
   /** The six 4d6-drop-lowest results in roll order, when the scores were rolled. */
   abilityRolls: z.array(int).length(6).nullable(),
   proficiencyBonus: int,

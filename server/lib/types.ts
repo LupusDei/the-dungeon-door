@@ -24,12 +24,17 @@ export interface Character {
   sheet: CharacterSheet;
   /** What the hero can attack with, worked out from the sheet on every read (lib/attacks.ts). */
   attacks: AttackView[];
+  /**
+   * The forge placed the background's ability increases, and the scores are still exactly those, so the
+   * player may place them once. Worked out on read, not stored.
+   */
+  bonusesOpen: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 /** A character as stored: heroes saved before the rules engine have no sheet (and may be a half-orc or half-elf). */
-export type StoredCharacter = Omit<Character, 'sheet' | 'attacks'> & { sheet?: CharacterSheet };
+export type StoredCharacter = Omit<Character, 'sheet' | 'attacks' | 'bonusesOpen'> & { sheet?: CharacterSheet };
 
 export type GameStatus = 'lobby' | 'preparing' | 'voting' | 'resolving' | 'ended';
 export type ChoiceId = 'a' | 'b' | 'c';
