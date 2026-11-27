@@ -9,5 +9,7 @@
                    gherclj.app-version-steps
                    gherclj.choice-window-steps
                    gherclj.hall-of-heroes-steps
-                   gherclj.ability-bonuses-steps]
+                   gherclj.ability-bonuses-steps
+                   gherclj.adventures-steps
+                   gherclj.scene-picture-steps]
  :framework :typescript/node-test}
