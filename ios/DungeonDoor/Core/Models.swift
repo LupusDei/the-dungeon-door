@@ -609,11 +609,70 @@ struct CharacterDraft: Encodable {
     }
 }
 
-/// Someone the player has shared a game with, by the hero they last played beside them.
+/// A person the player has shared a game with (docs/api.md, Companion). A person, not a hero: the
+/// hero they last played may have died or retired since, so only `heroes` are offered to invite.
 struct Companion: Codable, Hashable, Identifiable {
+    /// One of their heroes who can go now: alive and not retired.
+    struct Hero: Codable, Hashable, Identifiable {
+        let id: String
+        var name = ""
+        var race = ""
+        var characterClass = ""
+        var level = 1
+        var portraitUrl: String? = nil
+
+        var portraitURL: URL? { portraitUrl.flatMap(URL.init(string:)) }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            name = try c.value(.name, or: "")
+            race = try c.value(.race, or: "")
+            characterClass = try c.value(.characterClass, or: "")
+            level = try c.whole(.level, or: 1)
+            portraitUrl = try c.decodeIfPresent(String.self, forKey: .portraitUrl)
+        }
+    }
+
     let playerId: String
-    let name: String
+    /// What to call them: the player's own name for them, else the name they gave themselves, else
+    /// "<the hero they played>'s player".
+    var name: String
+    /// Whose word `name` is: "you", "them", or nil when nobody has named them.
+    var namedBy: String? = nil
+    /// The hero they last played beside this player, who may be dead or retired now. For recognising
+    /// the person, never for inviting.
+    var playedAs = ""
+    /// Their heroes who can go now. Empty when none can: they are still invited as a person.
+    var heroes: [Hero] = []
+    /// False on a server from before companions listed heroes: nothing is known of their roster.
+    var listsHeroes = false
     var id: String { playerId }
+
+    /// The player named them, so the name can be taken back.
+    var namedByYou: Bool { namedBy == "you" }
+
+    private enum CodingKeys: String, CodingKey { case playerId, name, namedBy, playedAs, heroes }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playerId = try c.decode(String.self, forKey: .playerId)
+        name = try c.value(.name, or: "A companion")
+        namedBy = try c.decodeIfPresent(String.self, forKey: .namedBy)
+        playedAs = try c.value(.playedAs, or: "")
+        listsHeroes = c.contains(.heroes)
+        heroes = try c.value(.heroes, or: [])
+    }
+}
+
+/// The player as a person: the id their app made, and the name they go by (docs/api.md, GET /api/me).
+struct Me: Codable, Hashable {
+    var name: String? = nil
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+    }
 }
 
 /// One of the player's adventures, as a hero's page lists it (docs/api.md, "Past adventures"). The
@@ -714,16 +773,48 @@ struct Adventure: Codable, Hashable, Identifiable {
 
 /// An invitation to a party still gathering in its lobby.
 struct Invitation: Codable, Hashable, Identifiable {
+    /// The hero of this player's that was asked for.
+    struct Asked: Codable, Hashable {
+        let id: String
+        var name = ""
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            name = try c.value(.name, or: "")
+        }
+    }
+
     let code: String
+    /// The hero of whoever invited.
     let fromName: String
+    /// That person, as this player knows them; nil when nobody has named them.
+    var fromPlayerName: String? = nil
+    /// The hero asked for, when one was and it can still go.
+    var hero: Asked? = nil
     /// The heroes already in the party, by name.
     var party: [String] = []
     var id: String { code }
+
+    /// Who invites: the person when they have a name, else their hero.
+    var from: String { fromPlayerName ?? fromName }
+
+    /// The hero asked for, in words; nil when the invitation is for whichever hero they bring.
+    var asks: String? { hero.map { "Asks for \($0.name)" } }
+
+    /// Who is there already, and the door code.
+    var detail: String {
+        // A person's invitation names their hero among the party; a hero's own invitation need not repeat it.
+        let there = fromPlayerName == nil ? party.filter { $0 != fromName } : party
+        return there.isEmpty ? "Door code \(code)" : "With \(there.formatted(.list(type: .and))) · door code \(code)"
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         code = try c.decode(String.self, forKey: .code)
         fromName = try c.value(.fromName, or: "A companion")
+        fromPlayerName = try c.decodeIfPresent(String.self, forKey: .fromPlayerName)
+        hero = try? c.decodeIfPresent(Asked.self, forKey: .hero)
         party = try c.value(.party, or: [])
     }
 }

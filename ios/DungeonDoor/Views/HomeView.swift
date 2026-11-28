@@ -67,8 +67,9 @@ struct HomeView: View {
         .sheet(isPresented: $newGame) { NewGameView() }
         .sheet(isPresented: $joining) { JoinGameView() }
         .sheet(isPresented: $hall) { HallOfHeroesView() }
-        .sheet(item: Binding(get: { model.joinCode.map(DoorCode.init) }, set: { if $0 == nil { model.joinCode = nil } })) {
-            JoinGameView(code: $0.code)
+        .sheet(item: Binding(get: { model.joinCode.map(DoorCode.init) }, set: { if $0 == nil { model.joinCode = nil } })) { door in
+            // An invitation that asks for one of this player's heroes opens with that hero picked.
+            JoinGameView(code: door.code, invitation: model.invitations.first { $0.code == door.code })
         }
         // A tapped notification: an invitation opens the way in, anything else its game.
         .onChange(of: PushCenter.shared.tapped, initial: true) { _, news in
@@ -331,11 +332,6 @@ private struct InvitationCard: View {
     let join: () -> Void
     let decline: () -> Void
 
-    private var others: String {
-        let rest = invitation.party.filter { $0 != invitation.fromName }
-        return rest.isEmpty ? "Door code \(invitation.code)" : "With \(rest.formatted(.list(type: .and))) · door code \(invitation.code)"
-    }
-
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "envelope.open.fill")
@@ -344,10 +340,16 @@ private struct InvitationCard: View {
                 .frame(width: 30)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(invitation.fromName) invites you")
+                Text("\(invitation.from) invites you")
                     .font(.display(16))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(others)
+                if let asks = invitation.asks {
+                    Text(asks)
+                        .font(.serif(.footnote, weight: .semibold))
+                        .foregroundStyle(Palette.gold)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(invitation.detail)
                     .font(.caption)
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -368,7 +370,7 @@ private struct InvitationCard: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Decline \(invitation.fromName)\u{2019}s invitation")
+            .accessibilityLabel("Decline \(invitation.from)\u{2019}s invitation")
         }
         .padding(12)
         .glassCard()

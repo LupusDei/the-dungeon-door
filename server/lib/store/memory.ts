@@ -1,7 +1,7 @@
 import { DEFAULT_TELLING } from '../telling.ts';
 import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
-import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { CompanionRecord, GameExpectation, GamePatch, Invite, InviteRecord, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 interface GameData {
   game: Game;
@@ -25,6 +25,9 @@ export class MemoryStore implements Store {
   private revised = new Set<string>();
   private typing = new Map<string, { playerId: string; name: string; until: string }[]>();
   private invites: Invite[] = [];
+  private playerNames = new Map<string, string>();
+  /** What each player calls the others: `${playerId} ${companionId}` → name. */
+  private companionNames = new Map<string, string>();
 
   async getCharacter(id: string) {
     await tick();
@@ -342,16 +345,47 @@ export class MemoryStore implements Store {
 
   async listCompanions(playerId: string, limit = 30) {
     await tick();
-    const met = new Map<string, Companion>();
+    const met = new Map<string, CompanionRecord>();
     for (const { game } of this.games.values()) {
       if (!game.players.some((p) => p.playerId === playerId)) continue;
       for (const p of game.players) {
         if (p.playerId === playerId) continue;
         const known = met.get(p.playerId);
-        if (!known || known.lastPlayedAt < game.updatedAt) met.set(p.playerId, { playerId: p.playerId, name: p.character.name, lastPlayedAt: game.updatedAt });
+        if (!known || known.lastPlayedAt < game.updatedAt) met.set(p.playerId, { playerId: p.playerId, playedAs: p.character.name, lastPlayedAt: game.updatedAt });
       }
     }
     return [...met.values()].sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt)).slice(0, limit);
+  }
+
+  async listCharactersOf(ownerIds: readonly string[]) {
+    await tick();
+    return [...this.characters.values()]
+      .filter((c) => ownerIds.includes(c.ownerId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((c) => structuredClone(c));
+  }
+
+  async getPlayerNames(playerIds: readonly string[]) {
+    await tick();
+    return Object.fromEntries(playerIds.flatMap((id) => (this.playerNames.has(id) ? [[id, this.playerNames.get(id)!]] : [])));
+  }
+
+  async setPlayerName(playerId: string, name: string | null) {
+    await tick();
+    if (name === null) this.playerNames.delete(playerId);
+    else this.playerNames.set(playerId, name);
+  }
+
+  async listCompanionNames(playerId: string) {
+    await tick();
+    const mine = `${playerId} `;
+    return Object.fromEntries([...this.companionNames].filter(([key]) => key.startsWith(mine)).map(([key, name]) => [key.slice(mine.length), name]));
+  }
+
+  async setCompanionName(playerId: string, companionId: string, name: string | null) {
+    await tick();
+    if (name === null) this.companionNames.delete(`${playerId} ${companionId}`);
+    else this.companionNames.set(`${playerId} ${companionId}`, name);
   }
 
   async listGameCodes(playerId: string, limit = 40) {
@@ -366,21 +400,22 @@ export class MemoryStore implements Store {
 
   async addInvite(invite: Invite) {
     await tick();
-    if (this.invites.some((i) => i.code === invite.code && i.toPlayerId === invite.toPlayerId)) return false;
-    this.invites.push({ ...invite });
-    return true;
+    const known = this.invites.find((i) => i.code === invite.code && i.toPlayerId === invite.toPlayerId);
+    if (known) known.characterId = invite.characterId;
+    else this.invites.push({ ...invite });
+    return !known;
   }
 
   async listInvites(toPlayerId: string) {
     await tick();
     return this.invites
       .filter((i) => i.toPlayerId === toPlayerId)
-      .map((i): InviteView | null => {
+      .map((i): InviteRecord | null => {
         const game = this.games.get(i.code)?.game;
         if (!game || game.status !== 'lobby' || game.players.some((p) => p.playerId === toPlayerId)) return null;
         return { ...i, party: game.players.map((p) => p.character.name) };
       })
-      .filter((i): i is InviteView => i !== null)
+      .filter((i): i is InviteRecord => i !== null)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 

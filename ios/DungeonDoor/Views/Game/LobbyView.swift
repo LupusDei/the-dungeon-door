@@ -11,10 +11,9 @@ struct LobbyView: View {
     @State private var dungeon = ""
     /// The host's pick of how the game is told. Empty until they tap, as above.
     @State private var telling = ""
-    /// Players this one has adventured with, who can be invited by name.
+
+    /// The people this player has adventured with, who can be called to this door (Companions.swift).
     @State private var companions: [Companion] = []
-    /// Companions invited from this lobby, by player id.
-    @State private var invited: Set<String> = []
 
     private var state: GameState { session.state }
     /// The kinds of game this server can start. None on a server that only tells stories.
@@ -51,7 +50,7 @@ struct LobbyView: View {
             VStack(alignment: .leading, spacing: 26) {
                 codeCard
                 party
-                companionsToCall
+                CompanionsToCall(session: session, companions: $companions)
                 dungeonMaster
                 chatPeek
                 if model.catalog?.push == true { NotificationsRow() }
@@ -65,65 +64,6 @@ struct LobbyView: View {
         .defaultScrollAnchor(AppConfig.launchScrollAnchor)
         .sheet(isPresented: $pickingDM) { dmSheet }
         .task { companions = (try? await model.api.companions()) ?? [] }
-    }
-
-    /// Companions who are not here yet, each a tap away from an invitation. Nothing for a player
-    /// who has not adventured with anyone, or once the party is full.
-    @ViewBuilder private var companionsToCall: some View {
-        let here = Set(state.players.map(\.playerId))
-        let absent = companions.filter { !here.contains($0.playerId) }.prefix(6)
-        if !absent.isEmpty && state.players.count < 6 {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Call your companions")
-                VStack(spacing: 0) {
-                    ForEach(Array(absent.enumerated()), id: \.element.id) { index, companion in
-                        if index > 0 {
-                            Rectangle().fill(Palette.gold.opacity(0.14)).frame(height: 1).padding(.leading, 14)
-                        }
-                        HStack(spacing: 10) {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Palette.muted)
-                                .frame(width: 22)
-                                .accessibilityHidden(true)
-                            Text(companion.name).font(.serif(.body, weight: .semibold))
-                            Spacer(minLength: 8)
-                            if invited.contains(companion.playerId) {
-                                Label("Invited", systemImage: "checkmark")
-                                    .font(.serif(.footnote, weight: .semibold))
-                                    .foregroundStyle(Palette.verdigris)
-                            } else {
-                                Button("Invite") { Task { await invite(companion) } }
-                                    .font(.serif(.footnote, weight: .semibold))
-                                    .foregroundStyle(Palette.gold)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .overlay { Capsule().strokeBorder(Palette.gold.opacity(0.6), lineWidth: 1) }
-                                    .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .frame(minHeight: 46)
-                    }
-                }
-                .card()
-                Text(model.catalog?.push == true
-                     ? "They get a notification and find your door on their home screen."
-                     : "They find your door on their home screen.")
-                    .font(.caption)
-                    .foregroundStyle(Palette.muted)
-            }
-        }
-    }
-
-    private func invite(_ companion: Companion) async {
-        do {
-            try await model.api.invite(session.code, playerId: companion.playerId)
-            invited.insert(companion.playerId)
-        } catch {
-            session.error = error.localizedDescription
-        }
     }
 
     private var codeCard: some View {
@@ -175,6 +115,7 @@ struct LobbyView: View {
                 .card()
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
+            YourNameRow()
         }
         .animation(.snappy, value: state.players.map(\.playerId))
     }

@@ -31,13 +31,13 @@ export interface GameExpectation {
   sceneIndex?: number;
 }
 
-/** Someone the player has shared a game with, by the hero they last played beside them. */
-export interface Companion { playerId: string; name: string; lastPlayedAt: string }
+/** Someone the player has shared a game with, and the hero they last played beside them (who may have died since). */
+export interface CompanionRecord { playerId: string; playedAs: string; lastPlayedAt: string }
 
-/** An invitation to a party still in its lobby. */
-export interface Invite { code: string; toPlayerId: string; fromPlayerId: string; fromName: string; createdAt: string }
-/** An invitation as the invited player sees it: with who is in the party already. */
-export interface InviteView extends Invite { party: string[] }
+/** An invitation to a party still in its lobby. `characterId`: the hero of the invited player's that was asked for. */
+export interface Invite { code: string; toPlayerId: string; fromPlayerId: string; fromName: string; characterId: string | null; createdAt: string }
+/** An invitation as stored, with who is in the party already. */
+export interface InviteRecord extends Invite { party: string[] }
 
 export interface NewMessage {
   kind: MessageKind;
@@ -148,12 +148,25 @@ export interface Store {
   listTyping(code: string, now: string): Promise<TypingNotice[]>;
 
   /** The players this one has shared a game with, most recent first. */
-  listCompanions(playerId: string, limit?: number): Promise<Companion[]>;
+  listCompanions(playerId: string, limit?: number): Promise<CompanionRecord[]>;
+  /** Every hero these players own, newest first: the living, the dead and the retired alike. */
+  listCharactersOf(ownerIds: readonly string[]): Promise<StoredCharacter[]>;
+  /** The names these players gave themselves, by player id. A player without one is absent. */
+  getPlayerNames(playerIds: readonly string[]): Promise<Record<string, string>>;
+  /** The name a player goes by; null clears it. */
+  setPlayerName(playerId: string, name: string | null): Promise<void>;
+  /** This player's own names for other players, by their player id. */
+  listCompanionNames(playerId: string): Promise<Record<string, string>>;
+  /** What this player calls another; null forgets it. */
+  setCompanionName(playerId: string, companionId: string, name: string | null): Promise<void>;
   /** The codes of the games this player still has a seat in, most recently played first. */
   listGameCodes(playerId: string, limit?: number): Promise<string[]>;
-  /** Records an invitation. False when that player is already invited to that game. */
+  /**
+   * Records an invitation. False when that player was already invited to that game: the invitation then
+   * keeps its place and takes this one's `characterId`.
+   */
   addInvite(invite: Invite): Promise<boolean>;
   /** The player's invitations to games still in the lobby that they have not joined, newest first. */
-  listInvites(toPlayerId: string): Promise<InviteView[]>;
+  listInvites(toPlayerId: string): Promise<InviteRecord[]>;
   removeInvite(code: string, toPlayerId: string): Promise<void>;
 }

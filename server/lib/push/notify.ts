@@ -148,10 +148,15 @@ export function pushChat(game: Game, message: Message): void {
   });
 }
 
-/** An invitation to a party in its lobby. No grace: the home screen does not watch for these. */
-export function pushInvite(code: string, toPlayerId: string, fromName: string): void {
+/**
+ * An invitation to a party in its lobby. `from` is who invites, as the invited player knows them (a person's
+ * name, else their hero); `hero` is the hero of the invited player's that was asked for, if one was.
+ * No grace: the home screen does not watch for these.
+ */
+export function pushInvite(code: string, toPlayerId: string, from: string, hero: string | null = null): void {
+  const asks = hero ? `, and asks for ${hero}` : '';
   inBackground(`invite ${code}`, () => notify(toPlayerId, {
-    kind: 'invite', code, title: 'An invitation', body: clip(`${fromName} invites you to a new adventure. Door code ${code}.`, 170), grace: false,
+    kind: 'invite', code, title: 'An invitation', body: clip(`${from} invites you to a new adventure${asks}. Door code ${code}.`, 170), grace: false,
   }));
 }
 

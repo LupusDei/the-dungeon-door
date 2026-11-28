@@ -25,6 +25,9 @@ final class AppModel {
     private(set) var invitations: [Invitation] = []
     /// A door code to knock on, from a tapped invitation. The home screen opens the join sheet with it.
     var joinCode: String?
+    /// The name this player goes by, as the people they have adventured with see it. Nil until they
+    /// give one. Kept on the device too, so the lobby shows it before the server answers.
+    private(set) var myName: String?
     /// True once the first refresh has come back (or failed), so launch arguments know the roster is as fresh as it gets.
     private(set) var didRefresh = false
     #if DEBUG
@@ -38,6 +41,19 @@ final class AppModel {
         catalog = Self.load(Catalog.self, from: "catalog.json")
         reference = Self.load(Reference.self, from: "reference.json")
         arrange(Self.load([Character].self, from: "characters-\(playerId).json") ?? [])
+        myName = UserDefaults.standard.string(forKey: myNameKey)
+    }
+
+    private var myNameKey: String { "dd.myName.\(playerId)" }
+
+    private func remember(_ me: Me) {
+        myName = me.name
+        UserDefaults.standard.set(me.name, forKey: myNameKey)
+    }
+
+    /// Names this player for their companions. An empty name goes back to none.
+    func setMyName(_ name: String) async throws {
+        remember(try await api.setMyName(name.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 
     /// Every hero this player has, wherever they are.
@@ -92,6 +108,7 @@ final class AppModel {
             Self.store(fresh, to: "reference.json")
         }
         await refreshInvitations()
+        if let me = try? await api.me() { remember(me) }
         didRefresh = true
     }
 

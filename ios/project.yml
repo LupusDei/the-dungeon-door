@@ -9,7 +9,7 @@ settings:
     DEVELOPMENT_TEAM: 2BRYAM5Q52
     SWIFT_VERSION: "5.0"
     # Public version (CFBundleShortVersionString). ship.sh does not bump this.
-    MARKETING_VERSION: "0.16"
+    MARKETING_VERSION: "0.17"
     # Local build number (CFBundleVersion). TestFlight replaces it at upload: fastlane bump_build
     # sets it to one past the newest TestFlight build, in the temporary worktree, and does not
     # write that number back here. The server's MIN_APP_BUILD compares against the shipped number.
@@ -69,6 +69,7 @@ targets:
       - path: DungeonDoor/Core/ReturnKey.swift
       - path: DungeonDoor/Core/TurnOrder.swift
       - path: DungeonDoor/Core/TurnResult.swift
+      - path: DungeonDoor/Core/CompanionCall.swift
       - path: DungeonDoor/Views/Game/PlayTurn.swift
       - path: DungeonDoor/Core/Models.swift
       - path: DungeonDoor/Core/SRD.swift

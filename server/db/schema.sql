@@ -205,4 +205,23 @@ CREATE TABLE IF NOT EXISTS invites (
   PRIMARY KEY (game_code, to_player)
 );
 CREATE INDEX IF NOT EXISTS invites_to_idx ON invites (to_player, created_at DESC);
+-- The hero of the invited player's that the invitation asks for; null when it asks for the person alone.
+ALTER TABLE invites ADD COLUMN IF NOT EXISTS character_id text;
+
+-- People. There are no accounts: a player is the id their app made (x-dd-player). `name` is the name they
+-- go by, which the players they have shared a game with see (lib/invites.ts). No row, or a null name: unnamed.
+CREATE TABLE IF NOT EXISTS players (
+  player_id  text PRIMARY KEY,
+  name       text,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- What one player calls another: their own name for a companion, seen by nobody else.
+CREATE TABLE IF NOT EXISTS companion_names (
+  player_id    text NOT NULL,
+  companion_id text NOT NULL,
+  name         text NOT NULL,
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (player_id, companion_id)
+);
 CREATE INDEX IF NOT EXISTS game_players_player_idx ON game_players (player_id);

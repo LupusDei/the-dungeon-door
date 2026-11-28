@@ -19,6 +19,7 @@ import * as voteApi from '../../api/game-vote.ts';
 import * as gameApi from '../../api/game.ts';
 import * as gamesApi from '../../api/games.ts';
 import * as invitesApi from '../../api/invites.ts';
+import * as meApi from '../../api/me.ts';
 import { call, gamePath, makeCharacter } from '../api.fixture.ts';
 import { settle } from '../background.ts';
 import { setDice } from '../game.ts';
@@ -267,8 +268,8 @@ test('a player invites a companion: a push, an invitation on their home screen, 
   sender.sent.length = 0;
   now += 30 * MIN;
   const [bryn, corin, ilsa] = players;
-  const { body: met } = await call<{ companions: { playerId: string; name: string }[] }>(companionsApi.GET, '/api/companions', { player: bryn });
-  assert.deepEqual(met.companions.map((c) => c.name).sort(), ['Corin', 'Ilsa']);
+  const { body: met } = await call<{ companions: { playerId: string; name: string; playedAs: string }[] }>(companionsApi.GET, '/api/companions', { player: bryn });
+  assert.deepEqual(met.companions.map((c) => [c.playedAs, c.name]).sort(), [['Corin', "Corin's player"], ['Ilsa', "Ilsa's player"]]);
   // A new party: Bryn invites Corin.
   const { body: next } = await call<GameState>(gamesApi.POST, '/api/games', { player: bryn, body: { characterId: heroes[0].id } });
   const invited = await call<{ ok: boolean; alreadyInvited: boolean }>(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: corin } });
@@ -295,6 +296,27 @@ test('a player invites a companion: a push, an invitation on their home screen, 
   assert.deepEqual((await call<{ invites: unknown[] }>(invitesApi.GET, '/api/invites', { player: ilsa })).body.invites, []);
   assert.equal((await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: corin } })).status, 409, 'already in the party');
   await settle();
+});
+
+test('an invitation names the person who sent it and the hero asked for', async () => {
+  const { code, players, heroes } = await lobby();
+  await start(code, players[0]);
+  sender.sent.length = 0;
+  now += 30 * MIN;
+  const [bryn, corin, ilsa] = players;
+  await call(meApi.PUT, '/api/me', { player: bryn, method: 'PUT', body: { name: 'Justin' } });
+  const { body: next } = await call<GameState>(gamesApi.POST, '/api/games', { player: bryn, body: { characterId: heroes[0].id } });
+  // Corin is asked for by name; asking again for no hero changes the invitation and pushes nothing.
+  await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: corin, characterId: heroes[1].id } });
+  await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: corin } });
+  // Ilsa has her own name for whoever plays Bryn: her push uses it.
+  await call(companionsApi.PUT, '/api/companions', { player: ilsa, method: 'PUT', body: { playerId: bryn, name: 'Jus' } });
+  await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: ilsa } });
+  await settle();
+  assert.deepEqual(pushes().sort(), [
+    ['02', 'invite', `Justin invites you to a new adventure, and asks for Corin. Door code ${next.code}.`],
+    ['03', 'invite', `Jus invites you to a new adventure. Door code ${next.code}.`],
+  ]);
 });
 
 test('the catalog says whether this server pushes: only once it holds a push key', async () => {

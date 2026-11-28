@@ -265,8 +265,11 @@ export function homecoming(id: string, home: CharacterSheet | undefined, back: C
   return back.hp === back.maxHp ? { ...sheet, hp: sheet.maxHp } : sheet;
 }
 
+/** Fit to go on an adventure: alive and not retired. */
+export const canGo = (c: Character): boolean => !c.retiredAt && !c.sheet.dead;
+
 const ROSTERS = {
-  active: (c: Character) => !c.retiredAt && !c.sheet.dead,
+  active: canGo,
   retired: (c: Character) => !!c.retiredAt && !c.sheet.dead,
   dead: (c: Character) => c.sheet.dead === true,
   all: () => true,

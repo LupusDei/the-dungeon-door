@@ -213,9 +213,15 @@ struct JoinGameView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var code: String
 
-    /// `code`: a door code already known (from an invitation).
-    init(code: String = "") {
+    /// The invitation this sheet answers, if any: it may ask for one of the player's heroes.
+    private let invitation: Invitation?
+
+    /// `code`: a door code already known (from an invitation). The hero the invitation asks for
+    /// is picked to begin with; the player may still bring another.
+    init(code: String = "", invitation: Invitation? = nil) {
         _code = State(initialValue: String(code.uppercased().prefix(6)))
+        _heroId = State(initialValue: invitation?.hero?.id)
+        self.invitation = invitation
     }
     @State private var heroId: String?
     @State private var working = false
@@ -253,6 +259,13 @@ struct JoinGameView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionLabel("Your hero")
                         HeroPicker(selection: $heroId)
+                        if let invitation, let asked = invitation.hero {
+                            Text("\(invitation.from) asked for \(asked.name). You can bring another.")
+                                .font(.footnote.italic())
+                                .foregroundStyle(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("asked-for")
+                        }
                     }
                     ErrorLine(text: error)
                 }

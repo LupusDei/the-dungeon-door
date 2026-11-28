@@ -2,7 +2,7 @@ import { storedTelling } from '../telling.ts';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, Reaction, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
-import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
+import type { CompanionRecord, GameExpectation, GamePatch, Invite, InviteRecord, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
 
 type Row = Record<string, any>;
 
@@ -483,7 +483,44 @@ export class PostgresStore implements Store {
        GROUP BY o.player_id ORDER BY last_played DESC LIMIT $2`,
       [playerId, limit],
     );
-    return rows.map((r): Companion => ({ playerId: r.player_id, name: r.name, lastPlayedAt: iso(r.last_played) }));
+    return rows.map((r): CompanionRecord => ({ playerId: r.player_id, playedAs: r.name, lastPlayedAt: iso(r.last_played) }));
+  }
+
+  async listCharactersOf(ownerIds: readonly string[]) {
+    if (ownerIds.length === 0) return [];
+    const rows = await this.q('SELECT data FROM characters WHERE owner_id = ANY($1) ORDER BY created_at DESC', [[...ownerIds]]);
+    return rows.map((r) => r.data as StoredCharacter);
+  }
+
+  async getPlayerNames(playerIds: readonly string[]) {
+    if (playerIds.length === 0) return {};
+    const rows = await this.q('SELECT player_id, name FROM players WHERE player_id = ANY($1) AND name IS NOT NULL', [[...playerIds]]);
+    return Object.fromEntries(rows.map((r) => [r.player_id as string, r.name as string]));
+  }
+
+  async setPlayerName(playerId: string, name: string | null) {
+    await this.q(
+      `INSERT INTO players (player_id, name, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (player_id) DO UPDATE SET name = EXCLUDED.name, updated_at = now()`,
+      [playerId, name],
+    );
+  }
+
+  async listCompanionNames(playerId: string) {
+    const rows = await this.q('SELECT companion_id, name FROM companion_names WHERE player_id = $1', [playerId]);
+    return Object.fromEntries(rows.map((r) => [r.companion_id as string, r.name as string]));
+  }
+
+  async setCompanionName(playerId: string, companionId: string, name: string | null) {
+    if (name === null) {
+      await this.q('DELETE FROM companion_names WHERE player_id = $1 AND companion_id = $2', [playerId, companionId]);
+      return;
+    }
+    await this.q(
+      `INSERT INTO companion_names (player_id, companion_id, name, updated_at) VALUES ($1, $2, $3, now())
+       ON CONFLICT (player_id, companion_id) DO UPDATE SET name = EXCLUDED.name, updated_at = now()`,
+      [playerId, companionId, name],
+    );
   }
 
   async listGameCodes(playerId: string, limit = 40) {
@@ -496,17 +533,19 @@ export class PostgresStore implements Store {
   }
 
   async addInvite(invite: Invite) {
+    // xmax is 0 on a row this statement inserted, and the updating transaction's id on one it changed.
     const rows = await this.q(
-      `INSERT INTO invites (game_code, to_player, from_player, from_name, created_at) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (game_code, to_player) DO NOTHING RETURNING game_code`,
-      [invite.code, invite.toPlayerId, invite.fromPlayerId, invite.fromName, invite.createdAt],
+      `INSERT INTO invites (game_code, to_player, from_player, from_name, character_id, created_at) VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (game_code, to_player) DO UPDATE SET character_id = EXCLUDED.character_id
+       RETURNING (xmax = 0) AS added`,
+      [invite.code, invite.toPlayerId, invite.fromPlayerId, invite.fromName, invite.characterId, invite.createdAt],
     );
-    return rows.length > 0;
+    return rows[0]?.added === true;
   }
 
   async listInvites(toPlayerId: string) {
     const rows = await this.q(
-      `SELECT i.game_code, i.from_player, i.from_name, i.created_at,
+      `SELECT i.game_code, i.from_player, i.from_name, i.character_id, i.created_at,
          COALESCE((SELECT json_agg(p.character->>'name' ORDER BY p.joined_at) FROM game_players p WHERE p.game_code = i.game_code), '[]') AS party
        FROM invites i JOIN games g ON g.code = i.game_code
        WHERE i.to_player = $1 AND g.status = 'lobby'
@@ -514,8 +553,9 @@ export class PostgresStore implements Store {
        ORDER BY i.created_at DESC LIMIT 20`,
       [toPlayerId],
     );
-    return rows.map((r): InviteView => ({
-      code: r.game_code, toPlayerId, fromPlayerId: r.from_player, fromName: r.from_name, createdAt: iso(r.created_at), party: r.party as string[],
+    return rows.map((r): InviteRecord => ({
+      code: r.game_code, toPlayerId, fromPlayerId: r.from_player, fromName: r.from_name, characterId: r.character_id ?? null,
+      createdAt: iso(r.created_at), party: r.party as string[],
     }));
   }
 

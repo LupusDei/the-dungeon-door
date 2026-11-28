@@ -105,16 +105,47 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
   The token then takes this player's pushes; a token belongs to the last player to register it. Send it at
   each launch. 400 for a token that is not hex or another environment.
 - `DELETE /api/devices` body `{ token }` → `{ ok: true }`. The device takes no more pushes.
-- `GET /api/companions` → `{ companions: [{ playerId, name, lastPlayedAt }] }`: the players the caller has
-  shared a game with, most recent first, each by the hero they last played beside the caller. There are no
-  accounts or friend lists; these are the people a player can invite.
-- `POST /api/games/{code}/invites` body `{ playerId }` → `{ ok: true, alreadyInvited: boolean }`. Anyone in a
-  party still in its lobby invites one of their companions. The invited player gets a push (once per game)
-  and the invitation. 403 for someone who is not the caller's companion, or a caller not in the game; 409 once
-  the adventure has begun, or for someone already in the party.
-- `GET /api/invites` → `{ invites: [{ code, fromPlayerId, fromName, createdAt, party: string[] }] }`: the
-  caller's invitations to parties still in the lobby that they have not joined, newest first. `party` names
-  the heroes already there. Joining with the code (`POST /api/games/{code}/join`) uses the invitation up.
+- `GET /api/me` → `{ playerId, name: string | null }`: the caller, and the name they go by. There are no
+  accounts: a player is the id their app made, and the name is what the people they have played with see.
+- `PUT /api/me` body `{ name }` → the same. 1–24 characters once trimmed; `""` or `null` clears it. 400 for a
+  longer one or one that is not text.
+- `GET /api/companions` → `{ companions: Companion[] }`: the people the caller has shared a game with, most
+  recent first. There are no friend lists; these are the people a player can invite. A companion is a
+  person, not a hero: the hero they last played may have died or retired since, and they can still be invited.
+
+  ```
+  Companion {
+    playerId: string
+    name: string                     // what to call them: the name the caller gave them (PUT /api/companions),
+                                     // else the name they gave themselves (PUT /api/me), else "<playedAs>'s player"
+    namedBy: "you" | "them" | null   // whose word `name` is; null when nobody has named them
+    playedAs: string                 // the hero they last played beside the caller. For recognising the person:
+                                     // that hero may be dead or retired, and is not offered for that reason
+    lastPlayedAt: string
+    heroes: [{ id, name, race, characterClass, level, portraitUrl: string | null }]
+                                     // their heroes who can go now: alive and not retired, newest first, at
+                                     // most 6. Never a dead or retired one. Empty when none can go: they are
+                                     // still invited as a person, and forge a hero to join
+  }
+  ```
+- `PUT /api/companions` body `{ playerId, name }` → `{ companions }`, the list again. The caller's own name
+  for a companion, seen by nobody else; `""` or `null` forgets it. 403 for someone who is not the caller's
+  companion; 400 for a name over 24 characters.
+- `POST /api/games/{code}/invites` body `{ playerId, characterId? }` → `{ ok: true, alreadyInvited: boolean }`.
+  Anyone in a party still in its lobby invites one of their companions: the person, or with `characterId`
+  the person and one of their heroes by name. The hero is asked for, not required: the invited player's join
+  screen opens on it, and they may bring another. The invited player gets a push (once per game) and the
+  invitation. Inviting them again changes the hero asked for (none, without `characterId`) and pushes nothing.
+  403 for someone who is not the caller's companion, or a caller not in the game; 404 for a hero that is not
+  that player's; 409 `"<name> is dead"` or `"<name> is retired"` for a hero who cannot go, once the
+  adventure has begun, or for someone already in the party.
+- `GET /api/invites` → `{ invites: [{ code, fromPlayerId, fromName, fromPlayerName: string | null,
+  hero: { id, name } | null, createdAt, party: string[] }] }`: the caller's invitations to parties still in
+  the lobby that they have not joined, newest first. `fromName` is the hero of whoever invited;
+  `fromPlayerName` is that person, named as a companion is (the caller's name for them, else their own), or
+  null when nobody has named them. `hero` is the hero of the caller's that was asked for, when one was and it
+  can still go. `party` names the heroes already there. Joining with the code
+  (`POST /api/games/{code}/join`) uses the invitation up.
 - `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
 
 ## Past adventures

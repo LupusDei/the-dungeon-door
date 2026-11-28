@@ -280,10 +280,30 @@ struct APIClient: Sendable {
         return w.companions
     }
 
-    /// Invites a companion to a party in its lobby.
-    func invite(_ code: String, playerId: String) async throws {
-        struct Body: Encodable { let playerId: String }
-        let _: OK = try await send("POST", "api/games/\(code)/invites", body: Body(playerId: playerId))
+    /// The player's own name for a companion, seen by nobody else. An empty name forgets it.
+    func name(companion playerId: String, _ name: String) async throws -> [Companion] {
+        struct Body: Encodable { let playerId: String; let name: String }
+        struct Wrapper: Decodable { let companions: [Companion] }
+        let w: Wrapper = try await send("PUT", "api/companions", body: Body(playerId: playerId, name: name))
+        return w.companions
+    }
+
+    /// The name this player goes by, as their companions see it. Nil until they give one.
+    func me() async throws -> Me {
+        try await send("GET", "api/me")
+    }
+
+    /// Sets the name this player goes by. An empty name clears it.
+    func setMyName(_ name: String) async throws -> Me {
+        struct Body: Encodable { let name: String }
+        return try await send("PUT", "api/me", body: Body(name: name))
+    }
+
+    /// Invites a companion to a party in its lobby: the person, or with `characterId` the person and
+    /// one of their heroes by name.
+    func invite(_ code: String, playerId: String, characterId: String? = nil) async throws {
+        struct Body: Encodable { let playerId: String; let characterId: String? }
+        let _: OK = try await send("POST", "api/games/\(code)/invites", body: Body(playerId: playerId, characterId: characterId))
     }
 
     func invitations() async throws -> [Invitation] {
