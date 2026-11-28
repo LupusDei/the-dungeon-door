@@ -274,6 +274,17 @@ are explained by `GET /api/reference`.
   house art style and the character's race/class/etc., generates a portrait, stores it in Blob.
   `note` is an optional tweak ("make the armour darker") applied on top of `previousAppearance`
   for re-rolls. Slow (10–40 s); the app shows a forging animation.
+  - A first painting omits `previousAppearance`: the look is written fresh from the character
+    (its `description` included). A remake (repaint) sends the hero's current `appearance` as
+    `previousAppearance` and the player's optional `note`; with no note the details are freshened.
+    A revision keeps everything but the note, so when the player has rewritten `description` since
+    the last painting the app paints fresh (no `previousAppearance`) from the new words. There is no
+    limit on remakes.
+  - Painting saves nothing. Nothing about a stored hero changes until the app sends the new
+    `appearance` and `portraitUrl` with `PUT /api/characters`; a failed or abandoned painting leaves
+    the hero as it was (the picture itself is not deleted, and old portraits are not kept as a history).
+  - A game keeps each hero as they joined (`players[].character`), so a portrait saved after the
+    adventure has begun does not change the seated hero or later scene pictures.
 - `PUT /api/characters` body `Character` plus optional `backgroundId` and optional `boost` (`AbilityBoost`;
   ownerId and `sheet` are ignored; ownerId is taken from `x-dd-player`) → `Character`. Upsert by id; only
   the owner can update. `boost` may be null, which is the same as leaving it out.

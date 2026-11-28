@@ -11,6 +11,8 @@ struct HeroIdentityHeader: View {
     var showsName = true
     /// The hero's standing in a game in progress: its XP is newer than the saved sheet's.
     var live: HeroStanding? = nil
+    /// Set on the page of an active hero the player owns: a Repaint button under the portrait.
+    var onRepaint: (() -> Void)? = nil
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -51,6 +53,20 @@ struct HeroIdentityHeader: View {
                 Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
+            // Outside the combined element above, so VoiceOver reaches it as a button of its own.
+            if let onRepaint {
+                Button(action: onRepaint) {
+                    Label("Repaint", systemImage: "paintbrush.fill")
+                        .font(.serif(.footnote, weight: .semibold))
+                        .foregroundStyle(Palette.gold)
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: portraitSize, minHeight: 36)
+                        .background(Palette.surface, in: .capsule)
+                        .overlay { Capsule().strokeBorder(Palette.gold.opacity(0.6)) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Repaint portrait")
+            }
             if let live {
                 ExperienceBar(level: live.level, xp: live.xp, questXp: live.questXp)
             } else if let sheet = character.sheet {

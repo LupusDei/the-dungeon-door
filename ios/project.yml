@@ -70,6 +70,7 @@ targets:
       - path: DungeonDoor/Core/TurnOrder.swift
       - path: DungeonDoor/Core/TurnResult.swift
       - path: DungeonDoor/Core/CompanionCall.swift
+      - path: DungeonDoor/Core/PortraitRemake.swift
       - path: DungeonDoor/Views/Game/PlayTurn.swift
       - path: DungeonDoor/Core/Models.swift
       - path: DungeonDoor/Core/SRD.swift
