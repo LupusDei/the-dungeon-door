@@ -192,9 +192,10 @@ struct PlayActBar: View {
     var choose: () -> Void
 
     private var scene: GameScene? { session.state.scene }
-    private var chosen: String? {
+    /// What this hero declared, as one action with who it is aimed at and what it rolls.
+    private var chosen: Declared? {
         guard let scene else { return nil }
-        return PlayTurn.chosenLine(scene: scene, playerId: session.playerId)
+        return PlayTurn.declared(in: scene, playerId: session.playerId)
     }
     private var canSend: Bool {
         PlayTurn.canSend(status: session.state.status, scene: scene, busy: session.busy)
@@ -236,11 +237,22 @@ struct PlayActBar: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Chosen").font(.serif(.caption2, weight: .semibold)).foregroundStyle(Palette.muted)
-                    Text(chosen)
+                    Text(chosen.title)
                         .font(.serif(.subheadline, weight: .bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
+                    if !chosen.under.isEmpty {
+                        // The whole of it: who it is aimed at, what it rolls, and the player's own words.
+                        Text(chosen.under)
+                            .font(.serif(.caption2))
+                            .foregroundStyle(Palette.muted)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                            .accessibilityIdentifier("chosen-context")
+                    }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("chosen-action")
                 Spacer(minLength: 0)
                 if canSend {
                     Button("Change", action: choose)

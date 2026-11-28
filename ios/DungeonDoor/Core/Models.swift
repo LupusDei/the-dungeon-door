@@ -876,6 +876,10 @@ struct Choice: Codable, Hashable, Identifiable {
     /// What the rules engine will do with it: "Athletics check, DC 12", "Fight: 2 Goblin Warriors",
     /// "Short rest". Nil for a plain story choice, and on a fight's own three.
     var rules: String?
+    /// In a fight only: the kind of action this choice stands for ("Attack", "Cast a spell",
+    /// "Dodge"). `label` and `detail` are what a plain pick of it does; a weapon or spell the player
+    /// names for themselves is the same kind of action. Nil outside a fight and on an older server.
+    var heading: String? = nil
 }
 
 extension Choice {
@@ -885,6 +889,7 @@ extension Choice {
         label = try c.value(.label, or: "")
         detail = try c.value(.detail, or: "")
         rules = try c.decodeIfPresent(String.self, forKey: .rules).flatMap { $0.isEmpty ? nil : $0 }
+        heading = try c.decodeIfPresent(String.self, forKey: .heading).flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 

@@ -4,7 +4,7 @@ import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { homecoming, ownCharacter, storable, upgradeCharacter } from './characters.ts';
 import { deathIn, newlyFallen } from './fallen.ts';
-import { attackStartsFight, isPersonalCheck, knownActionIds, rulingForAbility, rulingForSkill, settleRuling, UNREADABLE } from './play/actions.ts';
+import { aimWritten, attackStartsFight, isPersonalCheck, knownActionIds, rulingForAbility, rulingForSkill, settleRuling, UNREADABLE } from './play/actions.ts';
 import { foesNamed, startsFight } from './play/hooks.ts';
 import { briefChoice, isStreamlined, storedTelling, streamlinedDraft, tellingOf } from './telling.ts';
 import { dieForAction, dieForCheck, rollPending, type PlayerDie } from './play/dice.ts';
@@ -19,6 +19,7 @@ import { TREK_SCENES } from './play/trek.ts';
 import { confrontationChoices, type RulesState } from './play/turn.ts';
 import { rulesContext, rulesView, type RulesView } from './play/view.ts';
 import { checkVote, legalActions } from './play/legal.ts';
+import { srd } from './rules/srd.ts';
 import { anyonesChoices, canAct, yourChoices } from './play/your-turn.ts';
 import { sceneHeading } from './dm/pacing.ts';
 import { getDungeonMaster } from './dm/registry.ts';
@@ -722,9 +723,18 @@ export async function castAction(code: string, playerId: string, sceneIndex: unk
   }
   if (ruling.kind === 'known' && settled.choiceId) {
     const named = legal.find((a) => a.id === ruling.action);
-    // TODO: a written line that names a target should pass that target. Until then an action that
-    // needs one is stored as its letter, which still plays today's default (best weapon, best spell, Dodge).
-    const asAction = named && named.picks === 'none' && named.kind !== 'choice' ? { actionId: named.id, targets: [] } : null;
+    // The words are that action, not the letter it plays as: the weapon or spell they name is the one used.
+    // One that needs a target is aimed at whoever the words name, else as the engine aims (play/actions.ts,
+    // aimWritten). Only an action that can reach nobody is left to its letter, which moves the hero closer.
+    const fight = liveCombat(game);
+    const hurt = (id: string) => {
+      const who = fight?.combatants[id];
+      return who && who.maxHp > 0 ? who.hp / who.maxHp : 1;
+    };
+    const area = named?.kind === 'spell' && (srd().spells.get(named.id.slice('spell:'.length))?.area ?? null) !== null;
+    const aim = named && named.kind !== 'choice' ? aimWritten(named, written, hurt, area) : null;
+    const checked = named && aim ? checkVote(legal, named.id, aim) : null;
+    const asAction = named && checked?.ok ? { actionId: named.id, targets: checked.targets } : null;
     const die = sheet && named ? dieForAction(sheet, named) : null;
     // The words stay with the pick: the table sees them beside it, and the DM reads them when the scene is told.
     const vote = await getStore().castVote(code, sceneIndex, playerId, settled.choiceId, dice.d20(), asAction, null, { text: written }, die);

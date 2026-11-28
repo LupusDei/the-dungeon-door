@@ -4,7 +4,7 @@ import { heroSheet } from '../characters.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { adjudicateCheck, attackStartsFight, choiceFor, DAMAGE_BY_SEVERITY, DC_BY_TIER, knownActionIds, REFUSED, settleRuling, UNREADABLE, takeThird, thirdChoice, thirdWords } from './actions.ts';
+import { adjudicateCheck, aimWritten, attackStartsFight, choiceFor, DAMAGE_BY_SEVERITY, DC_BY_TIER, knownActionIds, REFUSED, settleRuling, UNREADABLE, takeThird, thirdChoice, thirdWords } from './actions.ts';
 import { scriptedRng } from '../rules/rng.ts';
 import { COMBAT_CHOICES, fightRound, startFight } from './fight.ts';
 import { yourChoices } from './your-turn.ts';
@@ -197,4 +197,29 @@ test('in a round, a held hero voting for the third choice spends its turn breaki
   const round = fightRound(start.party, patch(start.combat, { 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
   assert.ok(round.lines.some((l) => l.startsWith('Bryn breaks free')), round.lines.join('\n'));
   assert.equal(round.party.sheets.p1.conditions?.length ?? 0, 0);
+});
+
+test('a written action is aimed at whoever the words name, else at the most wounded it can reach', () => {
+  const goblin = { id: 'foe-1', name: 'Goblin Warrior 1' };
+  const second = { id: 'foe-2', name: 'Goblin Warrior 2' };
+  const wolf = { id: 'foe-3', name: 'Wolf' };
+  const hp: Record<string, number> = { 'foe-1': 1, 'foe-2': 0.4, 'foe-3': 0.7 };
+  const hurt = (id: string) => hp[id];
+  const one = { picks: 'one' as const, targets: [goblin, second, wolf] };
+  assert.deepEqual(aimWritten(one, 'I loose an arrow at the wolf', hurt), ['foe-3'], 'a word of its name that the others lack');
+  assert.deepEqual(aimWritten(one, 'I shoot Goblin Warrior 1 in the back', hurt), ['foe-1'], 'the whole name, number and all');
+  assert.deepEqual(aimWritten(one, 'I shoot a goblin', hurt), ['foe-2'], 'two goblins and no number: the more wounded of the two');
+  assert.deepEqual(aimWritten(one, 'I shoot the wolves', hurt), ['foe-3'], 'a plural still names it');
+  assert.deepEqual(aimWritten(one, 'I shoot', hurt), ['foe-2'], 'no one named: the most wounded');
+  assert.deepEqual(aimWritten(one, 'I shoot the dragon', hurt), ['foe-2'], 'someone who is not there: the most wounded');
+  assert.deepEqual(aimWritten({ picks: 'one', targets: [goblin, second] }, 'I stab the goblin warrior', hurt), ['foe-2'], 'a word they all share tells none apart');
+  assert.deepEqual(aimWritten({ picks: 'none', targets: [] }, 'I dodge', hurt), [], 'an action that takes no target');
+  assert.equal(aimWritten({ picks: 'one', targets: [] }, 'I shoot the wolf', hurt), null, 'it can reach nobody');
+
+  const darts = { picks: 'many' as const, targets: [goblin, second, wolf], limit: 3 };
+  assert.deepEqual(aimWritten(darts, 'Magic missile', hurt), ['foe-2'], 'darts with no one named go at the most wounded; the rest follow');
+  assert.deepEqual(aimWritten(darts, 'Magic missile at the wolf and goblin warrior 1', hurt), ['foe-3', 'foe-1'], 'those named, most wounded first');
+  const blast = { picks: 'many' as const, targets: [goblin, second, wolf], limit: 2 };
+  assert.deepEqual(aimWritten(blast, 'I cast thunderwave', hurt, true), ['foe-2', 'foe-3'], 'an area catches as many as it may, most wounded first');
+  assert.deepEqual(aimWritten(blast, 'Thunderwave on every goblin', hurt, true), ['foe-2', 'foe-1'], 'and those named when some are');
 });

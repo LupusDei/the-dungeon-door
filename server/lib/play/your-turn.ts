@@ -25,11 +25,19 @@ export const canAct = (combat: CombatState | null, playerId: string): boolean =>
 /** "+5", "-1": the way a sheet writes a bonus. */
 const signed = (n: number) => (n < 0 ? `${n}` : `+${n}`);
 
-const view = (choices: readonly { label: string; detail: string }[]): ChoiceView[] =>
-  choices.map((c, i) => ({ id: CHOICE_IDS[i], label: c.label, detail: c.detail, rules: null }));
+/**
+ * What each of a round's choices stands for, whatever this hero would do with it: a weapon or a spell the
+ * player picks for themselves (from the app's wheels, or in their own words) is still an attack or a spell,
+ * and the app shows it on that choice. The third is its own label (Dodge, Break Free, Help).
+ */
+export const ATTACK = 'Attack';
+export const CAST = 'Cast a spell';
+
+const view = (choices: readonly { label: string; detail: string; heading: string }[]): ChoiceView[] =>
+  choices.map((c, i) => ({ id: CHOICE_IDS[i], label: c.label, detail: c.detail, rules: null, heading: c.heading }));
 
 /** The round's choices as written for everyone: for a player whose hero cannot act. */
-export const anyonesChoices = (): ChoiceView[] => view(COMBAT_CHOICES);
+export const anyonesChoices = (): ChoiceView[] => view(COMBAT_CHOICES.map((c, i) => ({ ...c, heading: [ATTACK, CAST, c.label][i] })));
 
 function strike(combat: CombatState, me: Combatant) {
   const weapon = bestWeapon(me);
@@ -103,5 +111,7 @@ export function yourChoices(combat: CombatState, sheet: CharacterSheet, playerId
   const bonus = bonusNote(me, sheet);
   const third = thirdWords(thirdChoice(combat, sheet, playerId), combat, sheet, COMBAT_CHOICES[2]);
   const second = heal(combat, sheet, me) ?? (spell ? cast(spell, sheet, aim(spell, combat, me, sheet)) : attack);
-  return view([attack, second, third].map((c) => ({ ...c, detail: c.detail + bonus })));
+  // A hero with no spell strikes for Cast too: that choice is an attack, and says so.
+  const headings = [ATTACK, second === attack ? ATTACK : CAST, third.label];
+  return view([attack, second, third].map((c, i) => ({ ...c, detail: c.detail + bonus, heading: headings[i] })));
 }

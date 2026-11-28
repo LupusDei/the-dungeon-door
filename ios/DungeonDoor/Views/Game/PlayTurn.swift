@@ -13,26 +13,56 @@ struct TableOffer: Identifiable {
     let action: LegalAction?
     let choice: Choice?
 
+    /// In a fight: the kind of action the card stands for ("Attack", "Cast a spell", "Dodge").
+    /// Its label and detail are then only what a plain tap does. Nil for a plot choice.
+    var heading: String? = nil
+
     static func list(in scene: GameScene) -> [TableOffer] {
-        let choices = scene.offers.isEmpty ? scene.choices : scene.offers
-        return choices.map { choice in
+        PlayTurn.cards(in: scene).map { choice in
             TableOffer(id: "choice:\(choice.id)", label: choice.label, detail: choice.detail,
                        note: choice.rules, available: true, reason: nil, kind: "choice",
-                       action: nil, choice: choice)
+                       action: nil, choice: choice, heading: choice.heading)
         }
     }
 
+    /// The card holds the caller's pick. A weapon or spell they named for themselves is on the card
+    /// of its kind; anything else of their own is on no card, and never on one that says another deed.
     func isChosen(in scene: GameScene, playerId: String) -> Bool {
-        if let mine = scene.myAction?.id, mine == id { return true }
-        if let vote = scene.votes.first(where: { $0.playerId == playerId }) {
-            if let actionId = vote.actionId, actionId == id { return true }
-            if choice?.id == vote.choiceId { return true }
-            if id == "choice:\(vote.choiceId)" { return true }
-        }
-        if let letter = scene.myVote {
-            if choice?.id == letter || id == "choice:\(letter)" { return true }
-        }
-        return false
+        PlayTurn.declared(in: scene, playerId: playerId)?.card == id
+    }
+
+    /// What the card says under its heading: the caller's own pick when it is this kind of action,
+    /// else what a plain tap of the card does. `name` is nil when the heading already says it (Dodge).
+    func line(for declared: Declared?) -> (name: String?, detail: String) {
+        guard let heading else { return (nil, detail) }
+        let own = declared.flatMap { $0.card == id && $0.named ? $0 : nil }
+        let name = PlayTurn.short(own?.title ?? label)
+        let same = name.compare(heading, options: .caseInsensitive) == .orderedSame
+        return (same ? nil : name, own?.context ?? detail)
+    }
+}
+
+/// What a hero has declared this turn, reduced to one action and everything known about it. A tap
+/// on a card, a pick from a wheel, a tap on the map and the player's own words all end up here, so
+/// every part of the screen says the same thing about the turn.
+struct Declared: Equatable {
+    /// The action, as the hero's own list names it: "Cast Ray of Frost", "Attack with Dagger",
+    /// "Dash"; a plot choice's label; or the player's words for a check of their own.
+    var title: String
+    /// Who it is aimed at and what it rolls: "At Goblin Minion. +5 to hit, 1d8 cold." Empty when
+    /// there is nothing to add.
+    var context: String = ""
+    /// The player's own words that came with it. Nil when it was a tap.
+    var words: String? = nil
+    /// The card it belongs to (a `TableOffer` id, "choice:b"). Nil when it is none of the cards.
+    var card: String? = nil
+    /// An action of the hero's own (a weapon, a spell, an item, a move, a skill), named by the
+    /// player, and not a plain pick of a card.
+    var named = false
+
+    /// Everything under the title, on one line: the context, then the player's words.
+    var under: String {
+        [context, words.map { "\u{201C}\($0)\u{201D}" } ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
     }
 }
 
@@ -47,27 +77,86 @@ enum PlayTurn {
         status == .voting && scene?.canAct == true && scene?.isFinale != true && !busy
     }
 
+    /// The cards on the Story page: the scene's choices (`offers` on a server that sends them).
+    static func cards(in scene: GameScene) -> [Choice] {
+        scene.offers.isEmpty ? scene.choices : scene.offers
+    }
+
+    /// What the caller has declared this turn, as one action (see `Declared`). Nil until they choose.
+    /// `playerId` is the caller: their vote in the list is read first, then what the scene says of
+    /// the caller alone (`myAction`, `myVote`, `myFreeform`).
+    static func declared(in scene: GameScene, playerId: String) -> Declared? {
+        let vote = scene.votes.first { $0.playerId == playerId }
+        let id = vote.map { $0.actionId ?? "choice:\($0.choiceId)" } ?? scene.myAction?.id ?? scene.myVote.map { "choice:\($0)" }
+        guard let id else {
+            // A check of the hero's own, in the player's words: there is no action to reduce it to.
+            guard let written = scene.myFreeform, !written.text.isEmpty else { return nil }
+            return Declared(title: written.text)
+        }
+        let targets = vote?.targets ?? scene.myAction?.targets ?? []
+        let said = (vote?.intent ?? scene.myAction?.intent).flatMap { $0.isEmpty ? nil : $0 }
+        if id.hasPrefix("choice:") {
+            let letter = String(id.dropFirst("choice:".count))
+            let choice = cards(in: scene).first { $0.id == letter } ?? scene.choices.first { $0.id == letter }
+            // In a fight the vote carries what that hero is doing; elsewhere the choice's own label.
+            let title = [vote?.label, choice?.label].compactMap { $0 }.first { !$0.isEmpty } ?? "Chosen"
+            let context = [choice?.detail ?? "", choice?.rules ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
+            return Declared(title: title, context: context, words: said, card: id)
+        }
+        guard let action = scene.actions.first(where: { $0.id == id }) else {
+            return Declared(title: vote?.label.flatMap { $0.isEmpty ? nil : $0 } ?? "Chosen", words: said, named: true)
+        }
+        // A skill's words are what the hero attempts with it; they may only be on the written check.
+        let attempt = said ?? (action.kind == "skill" ? scene.myFreeform?.text : nil)
+        let words = attempt.flatMap { $0.isEmpty || $0.compare(action.label, options: .caseInsensitive) == .orderedSame ? nil : $0 }
+        return Declared(title: action.label, context: context(of: action, targets: targets), words: words,
+                        card: card(for: action, in: scene), named: true)
+    }
+
+    /// Who an action is aimed at, then what it rolls: "At Goblin Minion. +5 to hit, 1d8 cold."
+    static func context(of action: LegalAction, targets: [String]) -> String {
+        var seen = Set<String>()
+        let names = targets.filter { seen.insert($0).inserted }.compactMap { id in action.targets.first { $0.id == id }?.name }
+        let detail = action.detail.trimmingCharacters(in: .whitespaces)
+        guard !names.isEmpty else { return detail }
+        // A blow or a hurled spell is at someone; a healing spell, a potion or a hand is on them.
+        let at = action.kind == "attack" || (action.kind == "spell" && !detail.hasPrefix("Heals"))
+        let who = "\(at ? "At" : "On") \(ListFormatter.localizedString(byJoining: names))."
+        return detail.isEmpty ? who : "\(who) \(detail)"
+    }
+
+    /// The card an action of the hero's own belongs to, in a fight. The same deed under the same
+    /// name is that card (Dodge from the wheel is Dodge; the very spell a plain tap casts). Else the
+    /// card that stands for its kind, when the server says what the cards stand for (`heading`): an
+    /// attack is the attack card and a spell the spell card, whichever weapon or spell it is. Nil
+    /// for anything else, and outside a fight: a skill or an item beside the plot's choices is the
+    /// hero's own, and picks none of them.
+    static func card(for action: LegalAction, in scene: GameScene) -> String? {
+        guard scene.combat else { return nil }
+        let cards = cards(in: scene)
+        if let same = cards.first(where: { $0.label.compare(action.label, options: .caseInsensitive) == .orderedSame }) {
+            return "choice:\(same.id)"
+        }
+        let first = cards.first { $0.id == "a" }
+        if action.kind == "attack" || action.id == "common:attack" { return first?.heading == nil ? nil : "choice:a" }
+        // A hero with no spell to hurl is offered the same blow twice: that second card is no spell.
+        if action.kind == "spell", let second = cards.first(where: { $0.id == "b" }), let heading = second.heading, heading != first?.heading {
+            return "choice:b"
+        }
+        return nil
+    }
+
+    /// "Cast Ray of Frost" is "Ray of Frost" under a heading that already says cast.
+    static func short(_ label: String) -> String {
+        for lead in ["Attack with ", "Cast "] where label.hasPrefix(lead) && label.count > lead.count {
+            return String(label.dropFirst(lead.count))
+        }
+        return label
+    }
+
     /// The line under Act once this hero has chosen: the action, the letter, or the words they wrote.
     static func chosenLine(scene: GameScene, playerId: String) -> String? {
-        if let mine = scene.myAction, let action = scene.actions.first(where: { $0.id == mine.id }) {
-            let extra = mine.intent ?? (action.kind == "skill" ? scene.myFreeform?.text : nil)
-            if let extra, !extra.isEmpty, extra.compare(action.label, options: .caseInsensitive) != .orderedSame {
-                return "\(action.label) — \(extra)"
-            }
-            return action.label
-        }
-        if let vote = scene.votes.first(where: { $0.playerId == playerId }) {
-            if let label = vote.label, !label.isEmpty { return label }
-            if let actionId = vote.actionId, let action = scene.actions.first(where: { $0.id == actionId }) {
-                return action.label
-            }
-            if let choice = scene.choices.first(where: { $0.id == vote.choiceId }), !choice.label.isEmpty {
-                return choice.label
-            }
-            return "Chosen"
-        }
-        if let written = scene.myFreeform, !written.text.isEmpty { return written.text }
-        return nil
+        declared(in: scene, playerId: playerId)?.title
     }
 
     /// The caller's own words, when the server counted them as a pick of one of the scene's choices:

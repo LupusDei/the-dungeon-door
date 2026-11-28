@@ -194,6 +194,41 @@ export function attackStartsFight(settled: Settled, fights: readonly string[], i
   return { spent: true, ruling: { kind: 'known', action: fight }, choiceId: choiceFor(fight), narration: null };
 }
 
+/** A word of a creature's name that can tell it from another: not a number, and not a scrap. */
+const nameWords = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 3);
+
+/** "wolf" as a player may write several of them: wolfs, wolves. */
+const plurals = (word: string) => [`${word}s`, `${word}es`, ...(word.endsWith('f') ? [`${word.slice(0, -1)}ves`] : [])];
+
+/**
+ * Who a written action is aimed at, when the action needs someone and the words are all there is to go on.
+ * `targets` are the ones the action can reach (a legal action's own list). Whoever the words name comes
+ * first: a whole name ("Goblin Warrior 2"), else a word of a name that some of them lack ("the wolf").
+ * Named or not, the most wounded come first (`hurt`: the share of hit points left), which is the engine's
+ * own aim. One is returned for an action that takes one; for one that takes several, those the words name,
+ * or all it may take when it is an area, or the first alone (its other darts follow). Empty when the
+ * action takes no target, null when it needs one and can reach nobody.
+ */
+export function aimWritten(
+  action: { picks: 'none' | 'one' | 'many'; targets: readonly { id: string; name: string }[]; limit?: number },
+  text: string,
+  hurt: (id: string) => number,
+  area = false,
+): string[] | null {
+  if (action.picks === 'none') return [];
+  if (action.targets.length === 0) return null;
+  const words = text.toLowerCase();
+  const said = new Set(words.split(/[^a-z0-9]+/));
+  const byWounds = [...action.targets].sort((a, b) => hurt(a.id) - hurt(b.id));
+  const whole = byWounds.filter((t) => words.includes(t.name.toLowerCase()));
+  const partly = byWounds.filter((t) => nameWords(t.name).some((w) => said.has(w) || plurals(w).some((p) => said.has(p))));
+  const named = whole.length ? whole : partly.length < byWounds.length ? partly : [];
+  if (action.picks === 'one') return [(named[0] ?? byWounds[0]).id];
+  const limit = action.limit ?? byWounds.length;
+  const aimed = named.length ? named : area ? byWounds : byWounds.slice(0, 1);
+  return aimed.slice(0, limit).map((t) => t.id);
+}
+
 /** The DM's classification, checked. Anything the engine cannot read becomes an impossible action. */
 export function settleRuling(raw: unknown, allowed: readonly string[]): Settled {
   if (!raw || typeof raw !== 'object') return unreadable();

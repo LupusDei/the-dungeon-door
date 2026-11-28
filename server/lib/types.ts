@@ -150,6 +150,12 @@ export interface StoredChoice extends Choice {
 /** A choice as the API shows it: the hook as a label ("Athletics check, DC 12"). */
 export interface ChoiceView extends Choice {
   rules: string | null;
+  /**
+   * In a combat round only: the kind of action this choice stands for ("Attack", "Cast a spell", "Dodge").
+   * `label` and `detail` say what a plain pick of it does for the caller's hero now; a weapon or spell the
+   * player names themselves is still this kind of action (play/your-turn.ts).
+   */
+  heading?: string;
 }
 
 export interface StoredScene {

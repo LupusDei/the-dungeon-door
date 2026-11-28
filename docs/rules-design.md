@@ -429,9 +429,12 @@ The classification is one of three:
 - **A known action.** It maps onto an id from this hero's legal actions (scene.actions): a weapon, a
   spell, a common action such as Dodge, or one of the three choices (choice:a and so on). knownActionIds
   is those available ids. choiceFor is the only place an id becomes a choice letter (an attack is a, a
-  spell is b, anything else known is c). An id that needs a target is stored as the letter: the
-  classification does not name who. TODO: pass a target the words name. A later kind (a move) has no
-  letter until choiceFor learns it.
+  spell is b, anything else known is c). The vote is stored with the id as well as the letter, so the
+  weapon or spell the words name is the one used, not the round's default. An id that needs a target is
+  aimed by the engine, since the classification does not name who (aimWritten): at whoever the words
+  name among those the action can reach, else at the most wounded of them, the same aim a plain Attack
+  or Cast takes. Only an action that can reach nobody is left to its bare letter. A later kind (a move)
+  has no letter until choiceFor learns it.
 - **A check.** An ability, or a skill, a tier, and an effect category. Tiers are the 5e ones: easy DC 10,
   medium DC 15, hard DC 20. A natural 20 or 1 is not automatic, same as any other check. The player's d20
   is the one rolled for a vote, and the line is posted with the other dice.
@@ -452,6 +455,16 @@ Effect categories, on a successful check:
 A classification the engine cannot read (unknown skill, missing tier, a number where a word belongs) is
 treated as impossible, so a bad reply cannot spend the turn or invent a result. The known-action id has
 to be one of today's.
+
+### A fight's three choices are kinds of action
+
+**Original.** In a round each hero is offered Attack, Cast and a third (Dodge, Break Free or Help), written
+for that hero: what a plain pick of each will do now (`play/your-turn.ts`). Those words are the engine's
+pick, not the only way to take the choice. Each choice carries a `heading` ("Attack", "Cast a spell", the
+third's label), and a weapon or spell the player names for themselves, on the app's wheels or in words
+the dungeon master took for one, is that kind of action: it is stored with its own id and the letter of
+its kind, and it is what the engine plays. The app shows the player's own pick under the heading and never
+marks the engine's default as picked for it (docs/app-tabs.md).
 
 ### A written attack outside a fight
 

@@ -135,9 +135,9 @@ test('a skill from the sheet is a check, and words beside a plot choice stay wit
 });
 
 /** The fake DM, its first choice a fight with a goblin ("Strike first"). */
-const fightingDM = (): DungeonMaster => {
+const fightingDM = (monsters = ['goblin-warrior']): DungeonMaster => {
   const withFight = <T extends { choices: { label: string; detail: string; rules?: unknown }[] }>(scene: T): T =>
-    ({ ...scene, choices: [{ label: 'Strike first', detail: 'Before they stir.', rules: { kind: 'fight', monsters: ['goblin-warrior'] } }, ...scene.choices.slice(1)] });
+    ({ ...scene, choices: [{ label: 'Strike first', detail: 'Before they stir.', rules: { kind: 'fight', monsters } }, ...scene.choices.slice(1)] });
   return {
     ...fakeDungeonMaster,
     openingScene: async (ctx) => withFight(await fakeDungeonMaster.openingScene(ctx)),
@@ -242,4 +242,51 @@ test('a die the player throws earns full XP; one the host’s advance throws for
   assert.deepEqual([theirs.name, theirs.idle, theirs.xp], ['Hero 2', true, Math.floor(mine.xp / 2)]);
   const hero = state.rules!.party.find((h) => h.playerId === host)!;
   assert.deepEqual([hero.xp, hero.questXp, hero.nextLevelXp], [mine.xp, mine.xp, 300]);
+});
+
+test('in a fight, a spell written in the player\'s own words is that spell and not the round\'s default, aimed at the foe they name', async () => {
+  registerDungeonMaster('chronicler', fightingDM());
+  const [p1, p2] = [randomUUID(), randomUUID()];
+  const sorcerer = await makeCharacter(p1, 'Nillort', { race: 'human', characterClass: 'sorcerer' });
+  const fighter = await makeCharacter(p2, 'Bryn', { race: 'human', characterClass: 'fighter' });
+  // The forge deals spells by the hero's id: give this one two it can hurl across a room, whatever it drew.
+  const stored = (await getStore().getCharacter(sorcerer.id))!;
+  await getStore().saveCharacter({ ...stored, sheet: { ...stored.sheet!, spellcasting: { ...stored.sheet!.spellcasting!, cantrips: ['ray-of-frost', 'fire-bolt'], prepared: ['magic-missile'] } } });
+  const { body: door } = await call<GameState>(gamesApi.POST, '/api/games', { player: p1, body: { characterId: sorcerer.id } });
+  const code = door.code;
+  await call(joinApi.POST, gamePath(code, 'join'), { player: p2, body: { characterId: fighter.id } });
+  await call(startApi.POST, gamePath(code, 'start'), { player: p1, body: { sceneCount: 4 } });
+  await settle();
+  for (const p of [p1, p2]) await call(voteApi.POST, gamePath(code, 'vote'), { player: p, body: { sceneIndex: 0, choiceId: 'a' } });
+  await settle();
+
+  const round = (await view(code, p1)).scene!;
+  assert.equal(round.combat, true, 'the fight is on');
+  // The round's three choices say what kind of action each is, and what a plain pick of it would do.
+  assert.deepEqual(round.choices.map((c) => [c.id, c.heading]), [['a', 'Attack'], ['b', 'Cast a spell'], ['c', 'Dodge']]);
+  assert.equal(round.choices[1].label, 'Cast Magic Missile', 'a plain pick of the spell choice casts the engine\'s best');
+  const frost = round.actions.find((a) => a.id === 'spell:ray-of-frost')!;
+  assert.ok(frost.available, `Ray of Frost can be cast: ${frost.reason}`);
+  const goblin = frost.targets.find((t) => t.name === 'Goblin Warrior')!;
+
+  const write = (text: string) => call<Acted>(actionApi.POST, gamePath(code, 'action'), { player: p1, body: { sceneIndex: round.index, text } });
+  const cast = await write('I cast ray of frost at the goblin');
+  assert.deepEqual([cast.body.action.spent, cast.body.action.ruling, cast.body.action.choiceId], [true, 'known', 'b'], 'a spell plays as the spell choice');
+  assert.deepEqual(cast.body.scene!.myAction, { id: 'spell:ray-of-frost', targets: [goblin.id], intent: 'I cast ray of frost at the goblin' }, 'the spell they named, at the foe they named');
+  const mine = cast.body.scene!.votes.find((v) => v.playerId === p1)!;
+  assert.deepEqual([mine.choiceId, mine.actionId, mine.label, mine.intent], ['b', 'spell:ray-of-frost', 'Cast Ray of Frost', 'I cast ray of frost at the goblin'], 'the table reads the same');
+  assert.ok(cast.body.scene!.myDie, 'an attack spell has its d20 to throw');
+
+  // Words that name no one are aimed as the engine aims; the spell is still theirs.
+  const unaimed = await write('I cast fire bolt');
+  assert.deepEqual(unaimed.body.scene!.myAction, { id: 'spell:fire-bolt', targets: [goblin.id], intent: 'I cast fire bolt' });
+
+  // Played out, the round casts what was written: their spell, not the one a plain pick would have cast.
+  await write('I cast ray of frost at the goblin');
+  await call(rollApi.POST, gamePath(code, 'roll'), { player: p1, body: { sceneIndex: round.index } });
+  await call(voteApi.POST, gamePath(code, 'vote'), { player: p2, body: { sceneIndex: round.index, choiceId: 'c' } });
+  await settle();
+  const told = (await view(code, p1)).messages.filter((m) => m.kind === 'system').map((m) => m.text).join('\n');
+  assert.match(told, /Ray of Frost/, 'the engine cast Ray of Frost');
+  assert.doesNotMatch(told, /Magic Missile/, 'and not the spell a plain pick would have cast');
 });

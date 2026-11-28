@@ -18,5 +18,6 @@
                    gherclj.combat-hud-steps
                    gherclj.turn-result-steps
                    gherclj.streamlined-steps
-                   gherclj.companions-steps]
+                   gherclj.companions-steps
+                   gherclj.fight-choices-steps]
  :framework :typescript/node-test}

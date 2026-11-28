@@ -5,7 +5,7 @@ import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
 import { startFight } from './fight.ts';
-import { canAct, yourChoices } from './your-turn.ts';
+import { anyonesChoices, canAct, yourChoices } from './your-turn.ts';
 
 const fighter = heroSheet({ id: 'f', name: 'Bryn', race: 'human', characterClass: 'fighter' });
 const wizard = heroSheet({ id: 'w', name: 'Cleo', race: 'elf', characterClass: 'wizard' });
@@ -84,4 +84,19 @@ test('the choices name the foe the hero will really aim at: past one immune to i
   const blast = mage(['fireball'], [4, 3, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const three = fight({ p1: wizard }, ['goblin-warrior', 'goblin-warrior', 'goblin-warrior']);
   assert.match(yourChoices(patch(three, { 'foe-1': { hp: 1, immunities: ['fire'] }, 'foe-2': { hp: 2 }, 'foe-3': { hp: 3 } }), blast, 'p1')[1].detail, /, at Goblin Warrior 2,/, 'centred on the most wounded foe it can hurt');
+});
+
+test('each choice of a round is headed by the kind of action it stands for', () => {
+  const sorcerer = heroSheet({ id: 's', name: 'Nillort', race: 'human', characterClass: 'sorcerer' });
+  const casting = yourChoices(fight({ p1: sorcerer }), sorcerer, 'p1');
+  assert.deepEqual(casting.map((c) => [c.id, c.heading, c.label]), [['a', 'Attack', 'Attack with Dagger'], ['b', 'Cast a spell', 'Cast Magic Missile'], ['c', 'Dodge', 'Dodge']]);
+  // A hero with no spell to hurl strikes for Cast too, and that choice is headed as the attack it is.
+  const striking = yourChoices(fight({ p1: fighter }), fighter, 'p1');
+  assert.deepEqual(striking.map((c) => c.heading), ['Attack', 'Attack', 'Dodge']);
+  assert.equal(striking[1].label, striking[0].label);
+  // The third is headed by what it is for this hero now.
+  const held: CharacterSheet = { ...fighter, conditions: [{ condition: 'restrained', until: { kind: 'escape', ability: 'str', skill: 'athletics', dc: 12 } }] };
+  assert.equal(yourChoices(fight({ p1: held }), held, 'p1')[2].heading, 'Break Free');
+  // A player whose hero cannot act reads the round as anyone would.
+  assert.deepEqual(anyonesChoices().map((c) => [c.heading, c.label]), [['Attack', 'Attack'], ['Cast a spell', 'Cast'], ['Dodge', 'Dodge']]);
 });

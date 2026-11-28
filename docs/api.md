@@ -441,8 +441,10 @@ Scene {
   voiceUrl: string | null            // the default narrator's reading: `voices[catalog.defaultNarrator]`, for
                                      // apps from before the voice picker
   choices: [{ id: "a"|"b"|"c", label: string, detail: string,
-              rules: string | null }]  // e.g. "Athletics check, DC 12", "Fight: Goblin Warrior (weak) — low";
+              rules: string | null,  // e.g. "Athletics check, DC 12", "Fight: Goblin Warrior (weak) — low";
                                      // two or three; empty for the epilogue. Still the letters a vote may name.
+              heading?: string }]    // in a combat round only: the kind of action the choice stands for
+                                     // ("Attack", "Cast a spell", "Dodge"); see "Written for you" below
   actions: LegalAction[]             // this caller's hero, this turn. Weapons, spells they know or have
                                      // prepared, usable items, each skill (kind "skill", id "skill:athletics"),
                                      // class features with uses, and the common
@@ -912,11 +914,16 @@ Reaction {
     `"impossible"` (a bad classification counts as impossible): the turn is not used, `narration`
     says why, and the player may still vote or write another action. A system message carries the
     same refusal.
-  - `"known"` maps onto an id from this hero's `scene.actions` and is stored as that vote
-    (`action.choiceId` is the letter that id plays as: an attack is `"a"`, a spell `"b"`, anything
-    else `"c"`, and `choice:a` is `"a"`). One that needs no target is stored with that `actionId`.
-    One that needs a target is stored as the letter: the classification does not name who. The d20
-    is rolled the same way a vote's is, and kept if the player rewrites the action or switches to a vote.
+  - `"known"` maps onto an id from this hero's `scene.actions` and is stored as that vote, with that
+    `actionId` (`action.choiceId` is the letter that id plays as: an attack is `"a"`, a spell `"b"`,
+    anything else `"c"`, and `choice:a` is `"a"`). The weapon or spell the words name is the one used,
+    never the round's default. An action that needs a target is aimed by the engine, since the
+    classification does not name who: at whoever the words name among those the action can reach (a
+    whole name, "Goblin Warrior 2", or a word of a name that tells it from the others, "the wolf"), else
+    at the most wounded of them, which is how the engine aims a plain pick. An area spell with no one
+    named catches as many as it may. Only an action that can reach nobody is stored as the bare letter,
+    which moves the hero closer. The d20 is rolled the same way a vote's is, and kept if the player
+    rewrites the action or switches to a vote.
     The player's words are kept with the vote: `scene.votes[].intent` and `scene.myAction.intent`.
   - Outside a fight, an attack is a pick of the choice that starts a fight, when one is on offer
     (a choice whose `rules` reads "Fight: …"): `"known"`, with that choice's letter in
@@ -1110,7 +1117,15 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
     only heroes dead 10 days or less by the game clock.
   - **Written for you.** In a combat round each caller gets their own `choices`: the same three ids, with
     `label` and `detail` saying what their hero will do ("Attack with Greatsword" / "+5 to hit, 2d6+3
-    slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them. An area spell names
+    slashing, at Goblin Warrior 2"; "Cast Fire Bolt" / …). `rules` is null on them. Each also has a
+    `heading`, the kind of action it stands for: "Attack", "Cast a spell" (or "Attack" again for a hero
+    with no spell to hurl, whose second choice is the same blow), and the third's own label ("Dodge",
+    "Break Free", "Help Bryn"). `label` and `detail` are only what a plain pick of that choice does. A
+    vote that names an action of the caller's own (`actionId`, from the app's wheels or from words the
+    dungeon master took for one) carries the letter of its kind, an attack `"a"` and a spell `"b"`, and
+    is still that weapon or spell: show it under the heading as the caller's pick, in place of the
+    default, and never mark the default as picked for it. Any other named action carries `"c"` and is
+    the third choice only when it is the same deed (Dodge named as `common:dodge`). An area spell names
     every foe it will catch ("3d6 fire, Dexterity save DC 12 for half, at Goblin Warrior 2 and Goblin
     Warrior 1."), and a hero about to use Second Wind or drink a potion is told so on all three (the
     detail ends " First uses Second Wind." or " First drinks a Potion of Healing.").

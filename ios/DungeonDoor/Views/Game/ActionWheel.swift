@@ -233,6 +233,7 @@ struct ActionWheel: View {
                     .accessibilityHidden(ring.visibility(angle) <= 0.6)
                     .accessibilityLabel(option.spoken)
                     .accessibilityHint(option.enabled ? "" : (option.reason ?? "Not now"))
+                    .accessibilityIdentifier("wheel-\(option.id)")
                 }
             }
             .contentShape(Rectangle())

@@ -342,7 +342,7 @@ struct PlayStoryPage: View {
                 SectionLabel("What do you do?")
                 if !brief {
                     Text(inCombat
-                         ? "Your action this round. For a particular weapon, spell or item, use the wheels under these."
+                         ? "Your action this round. Each card says what a plain tap of it does; for another weapon, spell or item, use the wheels under them, and the card shows yours."
                          : "Pick one. The party goes with the choice most heroes pick, and where it calls for a roll, those who picked it make it.")
                         .font(.serif(.caption))
                         .foregroundStyle(Palette.muted)
@@ -351,7 +351,49 @@ struct PlayStoryPage: View {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, offer in
                     choiceButton(offer, index: index)
                 }
+                ownPick
             }
+        }
+    }
+
+    /// What the caller has declared this turn, reduced to one action (PlayTurn.declared).
+    private var declared: Declared? {
+        scene.flatMap { PlayTurn.declared(in: $0, playerId: session.playerId) }
+    }
+
+    /// An action of the hero's own that is none of the cards (Dash, Hide, a potion, a skill, a move):
+    /// it gets a row of its own under them, so the list always holds the pick, and holds it once.
+    @ViewBuilder private var ownPick: some View {
+        if let declared, declared.named, declared.card == nil {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Palette.ink)
+                    .frame(width: 30, height: 30)
+                    .background(Palette.gold, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(declared.title)
+                        .font(.serif(.body, weight: .semibold))
+                        .foregroundStyle(Palette.parchment)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !declared.under.isEmpty {
+                        Text(declared.under)
+                            .font(.serif(.footnote))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Label(inCombat ? "Your pick" : "Your own action, beside the party\u{2019}s pick", systemImage: "checkmark.circle.fill")
+                        .font(.serif(.caption, weight: .bold))
+                        .foregroundStyle(Palette.verdigris)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .background(Palette.surface, in: .rect(cornerRadius: 12))
+            .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.gold, lineWidth: 1.5) }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("own-pick")
         }
     }
 
@@ -361,8 +403,15 @@ struct PlayStoryPage: View {
     }
 
     private func choiceButton(_ offer: TableOffer, index: Int) -> some View {
-        let picked = scene.map { offer.isChosen(in: $0, playerId: session.playerId) } ?? false
-        let words = picked ? counted.flatMap { $0.offer == offer.id ? $0.words : nil } : nil
+        let mine = declared
+        let picked = mine?.card == offer.id
+        // The player's own words, when the pick came from them: counted as this card, or taken for
+        // a weapon or spell of this kind.
+        let words = picked ? (counted.flatMap { $0.offer == offer.id ? $0.words : nil } ?? (mine?.named == true ? mine?.words : nil)) : nil
+        // In a fight the card is a kind of action: under its heading, the hero's own weapon or spell
+        // when that is the pick, else what a plain tap does.
+        let line = offer.line(for: mine)
+        let title = offer.heading ?? offer.label
         return Button {
             guard let choice = offer.choice else { return }
             Task { await session.vote(choice) }
@@ -375,13 +424,20 @@ struct PlayStoryPage: View {
                     .background(picked ? Palette.gold : Palette.raised, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(offer.label)
+                    Text(title)
                         .font(.serif(.body, weight: .semibold))
                         .foregroundStyle(Palette.parchment)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    if !offer.detail.isEmpty {
-                        Text(offer.detail)
+                    if let name = line.name {
+                        Text(name)
+                            .font(.serif(.subheadline, weight: .semibold))
+                            .foregroundStyle(Palette.gold)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !line.detail.isEmpty {
+                        Text(line.detail)
                             .font(.serif(.footnote))
                             .foregroundStyle(Palette.muted)
                             .multilineTextAlignment(.leading)
@@ -420,7 +476,7 @@ struct PlayStoryPage: View {
         .buttonStyle(.plain)
         .disabled(!canSend)
         .opacity(canSend || picked ? 1 : 0.6)
-        .accessibilityLabel([offer.label, offer.detail, offer.note ?? "", picked ? "your pick" : "",
+        .accessibilityLabel([title, line.name ?? "", line.detail, offer.note ?? "", picked ? "your pick" : "",
                              words.map { "from your words: \($0)" } ?? ""]
             .filter { !$0.isEmpty }.joined(separator: ". "))
         .accessibilityHint(picked ? "" : "Picks this")
@@ -519,7 +575,7 @@ struct PlayStoryPage: View {
             SectionLabel(offers.isEmpty ? "What do you do?" : "Or in your own words")
             if !brief {
                 Text(inCombat
-                     ? "Say what you do instead, and name a skill if you are using one. The dungeon master judges it and you roll for it."
+                     ? "Say it your way. A weapon, spell or action of yours that you name is that one, aimed at whoever you name. Anything else the dungeon master judges, and you roll for it."
                      : "Say it your way: the dungeon master judges it and you roll for it. It is your own action beside the party's pick, unless it matches a choice above: then it counts as picking that choice, and an attack counts as picking the fight.")
                     .font(.serif(.caption))
                     .foregroundStyle(Palette.muted)
@@ -540,6 +596,14 @@ struct PlayStoryPage: View {
                     .foregroundStyle(Palette.gold)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("words-counted")
+            }
+            if let declared, declared.named, declared.words != nil {
+                // Words the dungeon master took for one of the hero's own actions: say which, in full.
+                Text("Taken as: \([declared.title, declared.context].filter { !$0.isEmpty }.joined(separator: ". "))")
+                    .font(.serif(.footnote).italic())
+                    .foregroundStyle(Palette.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("words-taken")
             }
             if scene?.myAction == nil, let written = scene?.myFreeform, !written.text.isEmpty {
                 Text("Written: \(written.text)")

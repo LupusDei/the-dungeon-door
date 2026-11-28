@@ -56,7 +56,12 @@ the card replaces the row, and there is no second strip under the Act bar.
 
 Act is one chip. Choose jumps to Story and scrolls to the choices. After a pick or a written
 action, the chip shows what was chosen, and Change jumps back to the choices. A new choice
-replaces the old one until the scene resolves. A pick of one of the plot's choices shows no die
+replaces the old one until the scene resolves. What was chosen is always one action, said in full
+(`PlayTurn.declared`): the action as the hero's own list names it ("Cast Ray of Frost"), then who
+it is aimed at and what it rolls ("At Goblin Minion. +5 to hit, 1d8 cold."), then the player's
+own words if it came from them. A tap on a card, a pick from a wheel, a tap on the map and
+written words are all reduced to that one action, and the chip, the cards and the line under the
+text box all read from it, so they cannot disagree. A pick of one of the plot's choices shows no die
 (its d20 counts only if that choice wins and calls for a roll); an action of the hero's own shows
 the die they threw. While a d20 is in the player's hand (`scene.myDie`) the chip is that die and
 nothing else: "Throw your d20", what it is for, and a Throw button, on every tab.
@@ -72,12 +77,25 @@ character. Then, in this order:
   one (`POST /vote`); another tap changes the pick. The party goes with the choice most heroes
   pick. In a fight the cards are the hero's plain moves (Attack, Cast, a third that fits the
   moment), and the two quick-action wheels sit under them for a particular weapon, spell or item.
+- **A fight's cards are kinds of action.** Each card is headed by what it stands for
+  (`choice.heading`: "Attack", "Cast a spell", "Dodge"), and under the heading says what a plain
+  tap of it does for this hero now ("Magic Missile", "3 darts … at Goblin Minion"). A weapon or
+  spell the player picks for themselves, from a wheel or in their own words, is that kind of
+  action: the card of its kind becomes the pick and shows *their* weapon or spell, who it is aimed
+  at and what it rolls, in place of the plain tap's. The card never shows the plain tap's action
+  as picked for another one. An action that is none of the cards (Dash, Hide, a potion, a move; a
+  skill beside the plot's choices) gets a row of its own under them, so the list always holds the
+  pick, once. On a server that sends no `heading`, a card is marked only for the very action it
+  names, and any other gets that row.
 - **Or in your own words** is `POST /action`. The dungeon master judges it and the player rolls
   for it. The page says plainly that it is the hero's own action beside the party's pick, and
   does not decide which way the party goes, with one exception it also states: words that match
   one of the choices count as picking it, and an attack counts as picking the fight. When that
   happens the choice's card shows "Your pick" with the player's words under it, and a line under
   the box says which choice the words were counted as (`scene.myAction.intent` on a `choice:` id).
+  In a fight, words that name a weapon, spell or action of the hero's own are that action, aimed
+  at whoever they name: the line under the box says what they were taken as, in full ("Taken as:
+  Cast Ray of Frost. At Goblin Minion. +5 to hit, 1d8 cold."), and the card of its kind shows it.
 - **Your die**, when `scene.myDie` is set, is a d20 the player taps or flicks (or throws from the
   Act chip). The face is the one the server rolled when they declared. If they have not thrown
   when the choice window ends, the server throws it and their XP for the turn is halved.
