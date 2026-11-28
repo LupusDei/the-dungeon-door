@@ -635,11 +635,14 @@ struct Companion: Codable, Hashable, Identifiable {
     }
 
     let playerId: String
-    /// What to call them: the player's own name for them, else the name they gave themselves, else
-    /// "<the hero they played>'s player".
+    /// What to call them: the name they gave themselves, which is their name; else the player's
+    /// nickname for them; else "<the hero they played>'s player".
     var name: String
     /// Whose word `name` is: "you", "them", or nil when nobody has named them.
     var namedBy: String? = nil
+    /// The player's own nickname for them, seen by nobody else. It never replaces a name they gave
+    /// themselves: it is shown beside it.
+    var nickname: String? = nil
     /// The hero they last played beside this player, who may be dead or retired now. For recognising
     /// the person, never for inviting.
     var playedAs = ""
@@ -649,16 +652,19 @@ struct Companion: Codable, Hashable, Identifiable {
     var listsHeroes = false
     var id: String { playerId }
 
-    /// The player named them, so the name can be taken back.
-    var namedByYou: Bool { namedBy == "you" }
+    /// The nickname, when it says something the name does not: beside a name they gave themselves.
+    var shownNickname: String? {
+        nickname.flatMap { $0.isEmpty || $0.compare(name, options: .caseInsensitive) == .orderedSame ? nil : $0 }
+    }
 
-    private enum CodingKeys: String, CodingKey { case playerId, name, namedBy, playedAs, heroes }
+    private enum CodingKeys: String, CodingKey { case playerId, name, namedBy, nickname, playedAs, heroes }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         playerId = try c.decode(String.self, forKey: .playerId)
         name = try c.value(.name, or: "A companion")
         namedBy = try c.decodeIfPresent(String.self, forKey: .namedBy)
+        nickname = try c.decodeIfPresent(String.self, forKey: .nickname).flatMap { $0.isEmpty ? nil : $0 }
         playedAs = try c.value(.playedAs, or: "")
         listsHeroes = c.contains(.heroes)
         heroes = try c.value(.heroes, or: [])

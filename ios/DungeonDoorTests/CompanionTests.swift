@@ -20,7 +20,7 @@ final class CompanionTests: XCTestCase {
         let micah = try XCTUnwrap(met.first)
         XCTAssertEqual(micah.name, "Slagette's player")
         XCTAssertNil(micah.namedBy)
-        XCTAssertFalse(micah.namedByYou)
+        XCTAssertNil(micah.nickname)
         XCTAssertEqual(micah.playedAs, "Slagette")
         XCTAssertEqual(micah.heroes.map(\.name), ["Brannoch", "Ilse"], "the fallen Slagette is not among them")
         XCTAssertEqual(micah.heroes[0].level, 3)
@@ -38,15 +38,25 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(CompanionCall.caption(for: met[0]), "No hero ready to go: they can forge one to join.")
     }
 
-    func testANameTheyGaveThemselvesComesWithWhoTheyPlayed() throws {
+    func testTheirOwnNameIsTheirNameAndANicknameSitsBesideIt() throws {
         let met = try companions(#"""
-        [{ "playerId": "p4", "name": "Robin", "namedBy": "them", "playedAs": "Wren", "heroes": [{ "id": "c9", "name": "Wren", "characterClass": "ranger", "level": 2 }] },
-         { "playerId": "p5", "name": "Micah", "namedBy": "you", "playedAs": "Slagette", "heroes": [] }]
+        [{ "playerId": "p4", "name": "Robin", "namedBy": "them", "nickname": null, "playedAs": "Wren", "heroes": [{ "id": "c9", "name": "Wren", "characterClass": "ranger", "level": 2 }] },
+         { "playerId": "p5", "name": "Slagyr", "namedBy": "them", "nickname": "Micah", "playedAs": "Slagette", "heroes": [] },
+         { "playerId": "p6", "name": "Bob", "namedBy": "you", "nickname": "Bob", "playedAs": "Fardock", "heroes": [] }]
         """#)
         XCTAssertEqual(CompanionCall.caption(for: met[0]), "Played Wren beside you.")
-        XCTAssertTrue(met[1].namedByYou)
-        XCTAssertEqual(CompanionCall.caption(for: met[1]), "No hero ready to go: they can forge one to join.", "a name the player chose needs no reminder")
-        XCTAssertEqual(CompanionCall.namingMessage(for: met[1]), "They played Slagette beside you. Only you see this name. Leave it empty to take it back.")
+        XCTAssertNil(met[0].shownNickname)
+        // They named themselves: that is the name, and the player's nickname is shown beside it.
+        XCTAssertEqual(met[1].name, "Slagyr")
+        XCTAssertEqual(met[1].shownNickname, "Micah")
+        XCTAssertEqual(CompanionCall.namingMessage(for: met[1]),
+                       "They played Slagette beside you. Only you see a nickname. Their own name, Slagyr, stays their name. Leave it empty to take it back.")
+        // Nobody else has named them: the nickname is what they are called, and is not said twice.
+        XCTAssertEqual(met[2].name, "Bob")
+        XCTAssertEqual(met[2].nickname, "Bob")
+        XCTAssertNil(met[2].shownNickname)
+        XCTAssertEqual(CompanionCall.caption(for: met[2]), "No hero ready to go: they can forge one to join.", "a name the player chose needs no reminder")
+        XCTAssertEqual(CompanionCall.namingMessage(for: met[2]), "They played Fardock beside you. Only you see a nickname. Leave it empty to take it back.")
     }
 
     func testThoseAlreadyInThePartyAreNotCalledAndSixAreShown() throws {

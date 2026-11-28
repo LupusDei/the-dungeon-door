@@ -6,7 +6,7 @@ export async function GET(request: Request): Promise<Response> {
   return handle(async () => ({ companions: await companionsOf(requirePlayer(request)) }));
 }
 
-/** PUT /api/companions { playerId, name } → { companions }: the caller's own name for one of them. */
+/** PUT /api/companions { playerId, name } → { companions }: the caller's nickname for one of them. */
 export async function PUT(request: Request): Promise<Response> {
   return handle(async () => {
     const playerId = requirePlayer(request);

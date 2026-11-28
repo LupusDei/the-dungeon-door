@@ -309,13 +309,13 @@ test('an invitation names the person who sent it and the hero asked for', async 
   // Corin is asked for by name; asking again for no hero changes the invitation and pushes nothing.
   await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: corin, characterId: heroes[1].id } });
   await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: corin } });
-  // Ilsa has her own name for whoever plays Bryn: her push uses it.
+  // Ilsa has a nickname for whoever plays Bryn. They have a name of their own, so her push says that.
   await call(companionsApi.PUT, '/api/companions', { player: ilsa, method: 'PUT', body: { playerId: bryn, name: 'Jus' } });
   await call(inviteApi.POST, gamePath(next.code, 'invites'), { player: bryn, body: { playerId: ilsa } });
   await settle();
   assert.deepEqual(pushes().sort(), [
     ['02', 'invite', `Justin invites you to a new adventure, and asks for Corin. Door code ${next.code}.`],
-    ['03', 'invite', `Jus invites you to a new adventure. Door code ${next.code}.`],
+    ['03', 'invite', `Justin invites you to a new adventure. Door code ${next.code}.`],
   ]);
 });
 

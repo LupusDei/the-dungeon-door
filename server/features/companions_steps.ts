@@ -90,6 +90,14 @@ export class CompanionsSteps {
     assert.equal(this.companion().namedBy, by);
   }
 
+  nicknameIs(name: string): void {
+    assert.equal(this.companion().nickname, name);
+  }
+
+  noNickname(): void {
+    assert.equal(this.companion().nickname, null);
+  }
+
   canBring(names: string): void {
     assert.deepEqual(this.companion().heroes, namesOf(names).sort());
   }

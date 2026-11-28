@@ -29,7 +29,7 @@ export interface Op {
 }
 
 export interface View {
-  companions: { name: string; namedBy: string | null; playedAs: string; heroes: string[] }[];
+  companions: { name: string; namedBy: string | null; nickname: string | null; playedAs: string; heroes: string[] }[];
   /** The companion's invitations. */
   invites: { fromName: string; fromPlayerName: string | null; hero: string | null }[];
   /** How the last naming or invitation was answered. */
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
   const mine = await call<{ companions: Companion[] }>(companionsApi.GET, '/api/companions', { player: ME });
   const theirs = await call<{ invites: InviteView[] }>(invitesApi.GET, '/api/invites', { player: THEM });
   const view: View = {
-    companions: mine.body.companions.map((c) => ({ name: c.name, namedBy: c.namedBy, playedAs: c.playedAs, heroes: c.heroes.map((h) => h.name).sort() })),
+    companions: mine.body.companions.map((c) => ({ name: c.name, namedBy: c.namedBy, nickname: c.nickname, playedAs: c.playedAs, heroes: c.heroes.map((h) => h.name).sort() })),
     invites: theirs.body.invites.map((i) => ({ fromName: i.fromName, fromPlayerName: i.fromPlayerName, hero: i.hero?.name ?? null })),
     last,
   };

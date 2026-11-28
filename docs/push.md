@@ -18,8 +18,8 @@ A player who is looking at the game hears nothing about it. The app fetches the 
 while it is open, so a push about a game waits eight seconds before it goes, and a fetch by that player in
 the meantime cancels it. An invitation does not wait: the home screen does not watch for them.
 
-An invitation names whoever sent it as the invited player knows them: the name that player gave them, else
-the name they gave themselves, else their hero in the party (docs/api.md, Companion). "and asks for …" is
+An invitation names whoever sent it as the invited player knows them: the name they gave themselves, else
+the invited player's nickname for them, else their hero in the party (docs/api.md, Companion). "and asks for …" is
 there only when the invitation asks for one of the invited player's heroes.
 
 Only players with a registered device are pushed (`POST /api/devices`, docs/api.md).

@@ -27,9 +27,11 @@ enum CompanionCall {
         "\(asked ? "Asked for" : "Ask for") \(hero.name), \(className), level \(hero.level)"
     }
 
-    /// What naming a companion explains: who they are, and that the name is the player's alone.
+    /// What giving a nickname explains: who they are, that it is the player's alone, and that it
+    /// does not replace a name they gave themselves.
     static func namingMessage(for companion: Companion) -> String {
         let who = companion.playedAs.isEmpty ? "" : "They played \(companion.playedAs) beside you. "
-        return "\(who)Only you see this name. Leave it empty to take it back."
+        let theirs = companion.namedBy == "them" ? " Their own name, \(companion.name), stays their name." : ""
+        return "\(who)Only you see a nickname.\(theirs) Leave it empty to take it back."
     }
 }

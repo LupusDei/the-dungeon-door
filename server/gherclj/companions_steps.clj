@@ -24,6 +24,8 @@
 
 (defthen "my companions are called \"{names:string}\"" subject.companions-are-called)
 (defthen "that companion was named by {who}" subject.was-named-by)
+(defthen "my nickname for that companion is \"{name:string}\"" subject.nickname-is)
+(defthen "I have no nickname for that companion" subject.no-nickname)
 (defthen "that companion can bring {names:string}" subject.can-bring)
 (defthen "they are invited" subject.they-are-invited)
 (defthen "they were already invited" subject.they-were-already-invited)

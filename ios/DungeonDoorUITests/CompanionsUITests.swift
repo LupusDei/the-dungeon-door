@@ -69,13 +69,28 @@ final class CompanionsUITests: XCTestCase {
         bring(brannoch)
         save("companions-people")
 
-        // Naming the person: mine alone, and at once.
-        let pencil = button("label == %@", "Name Slagette's player")
+        // A nickname for the person: mine alone, and at once. They have given no name, so it is
+        // what they are called.
+        let pencil = button("label == %@", "Give Slagette's player a nickname")
         bring(pencil)
         pencil.tap()
-        answer("What do you call them?", with: "Micah")
-        XCTAssertTrue(app.staticTexts["Micah"].waitForExistence(timeout: 10), "named")
+        answer("A nickname for them", with: "Micah")
+        XCTAssertTrue(app.staticTexts["Micah"].waitForExistence(timeout: 10), "nicknamed")
         XCTAssertFalse(unnamed.exists)
+
+        // Someone who gave themselves a name keeps it: a nickname sits beside it, in quotes.
+        if app.staticTexts["Robin"].exists {
+            let other = button("label == %@", "Give Robin a nickname")
+            // Robin's row is the last, at the screen's edge under the chat bar: up into the clear first.
+            app.swipeUp()
+            XCTAssertTrue(other.waitForExistence(timeout: 5) && other.isHittable, "the pencil beside Robin")
+            save("companions-before-nickname")
+            other.tap()
+            answer("A nickname for them", with: "Bird")
+            XCTAssertTrue(app.staticTexts["your nickname for them: Bird"].waitForExistence(timeout: 10), "the nickname, beside their name")
+            XCTAssertTrue(app.staticTexts["Robin"].exists, "their own name is still their name")
+            save("companions-nickname")
+        }
 
         // Asking for one of their heroes invites the person, and marks the hero. Ilse is not the
         // hero their join screen would pick by itself, so the ask shows there.

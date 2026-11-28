@@ -5,7 +5,9 @@ Feature: Companions are people
   played: that hero may have died or been retired since. The list names
   the person and offers only their heroes who can still go, and an
   invitation is to the person, with or without one of those heroes by
-  name.
+  name. The name a person gives themselves is their name. A nickname
+  another player gives them is that player's alone, and stands in for a
+  name only while the person has given none.
 
   Background:
     Given I adventured beside a player whose hero was Slagette
@@ -13,6 +15,7 @@ Feature: Companions are people
   Scenario: A companion nobody has named is known by the hero they played
     Then my companions are called "Slagette's player"
     And that companion was named by nobody
+    And I have no nickname for that companion
     And that companion can bring Slagette
 
   Scenario: A fallen hero is not offered, and the person is still invited
@@ -40,18 +43,25 @@ Feature: Companions are people
     Then my companions are called "Micah"
     And that companion was named by them
 
-  Scenario: My own name for a companion comes first
-    Given that companion goes by "Slagyr"
+  Scenario: A nickname stands in while a companion has given no name
     When I call that companion "Micah"
     Then my companions are called "Micah"
     And that companion was named by me
+    And my nickname for that companion is "Micah"
 
-  Scenario: Forgetting my name for a companion gives theirs back
+  Scenario: A nickname does not replace the name a companion gave themselves
+    Given that companion goes by "Slagyr"
+    When I call that companion "Micah"
+    Then my companions are called "Slagyr"
+    And that companion was named by them
+    And my nickname for that companion is "Micah"
+
+  Scenario: Forgetting a nickname leaves the companion's own name
     Given that companion goes by "Slagyr"
     And I call that companion "Micah"
     When I call that companion ""
     Then my companions are called "Slagyr"
-    And that companion was named by them
+    And I have no nickname for that companion
 
   Scenario: An invitation can ask for one hero
     Given that companion also has the heroes Brannoch and Ilse

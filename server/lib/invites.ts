@@ -3,8 +3,10 @@
  * people a player can invite are their companions, the players they have shared a game with.
  *
  * A companion is a person, not a hero. The hero they last played may have died or retired since, so the
- * list names the person (by the name the caller gave them, the name they gave themselves, or failing both
- * "<that hero>'s player") and offers only their heroes who can go now. An invitation is to the person, and
+ * list names the person and offers only their heroes who can go now. The name a person gives themselves
+ * is their name. Another player may also give them a nickname, which is that player's alone: it is shown
+ * beside the name, and stands in for it only while the person has given none. Failing both they are
+ * "<that hero>'s player". An invitation is to the person, and
  * may ask for one of those heroes. It tells the invited player's devices (lib/push) and shows on their home
  * screen until the party sets out, they join, or they decline.
  */
@@ -30,6 +32,8 @@ export interface Companion {
   playerId: string;
   name: string;
   namedBy: 'you' | 'them' | null;
+  /** The caller's own nickname for them, seen by nobody else. Null when the caller has given none. */
+  nickname: string | null;
   playedAs: string;
   lastPlayedAt: string;
   heroes: CompanionHero[];
@@ -82,8 +86,10 @@ async function asPeople(playerId: string, records: readonly CompanionRecord[]): 
   const fit = heroes.map(upgradeCharacter).filter(canGo);
   return records.map((r): Companion => ({
     playerId: r.playerId,
-    name: mine[r.playerId] ?? theirs[r.playerId] ?? `${r.playedAs}'s player`,
-    namedBy: mine[r.playerId] ? 'you' : theirs[r.playerId] ? 'them' : null,
+    // Their own name is their name. A nickname stands in only while they have given none.
+    name: theirs[r.playerId] ?? mine[r.playerId] ?? `${r.playedAs}'s player`,
+    namedBy: theirs[r.playerId] ? 'them' : mine[r.playerId] ? 'you' : null,
+    nickname: mine[r.playerId] ?? null,
     playedAs: r.playedAs,
     lastPlayedAt: r.lastPlayedAt,
     heroes: fit.filter((c) => c.ownerId === r.playerId).slice(0, HEROES_SHOWN).map(asHero),
@@ -97,7 +103,7 @@ export async function companionsOf(playerId: string): Promise<Companion[]> {
 
 const isCompanion = async (playerId: string, other: string) => (await getStore().listCompanions(playerId, 200)).some((c) => c.playerId === other);
 
-/** PUT /api/companions { playerId, name }: the caller's own name for a companion. */
+/** PUT /api/companions { playerId, name }: the caller's nickname for a companion. */
 export async function nameCompanion(playerId: string, companionId: unknown, name: unknown): Promise<Companion[]> {
   if (!isUUID(companionId)) throw badRequest('playerId must be a player id');
   const cleaned = personName(name);
@@ -117,11 +123,11 @@ async function heroAskedFor(owner: string, characterId: unknown): Promise<Charac
   return hero;
 }
 
-/** What `reader` calls `player`: the reader's own name for them, else the name they gave themselves. */
+/** Who `player` is to `reader`: the name they gave themselves, else the reader's nickname for them. */
 async function nameFor(reader: string, player: string): Promise<string | null> {
   const store = getStore();
   const [mine, theirs] = await Promise.all([store.listCompanionNames(reader), store.getPlayerNames([player])]);
-  return mine[player] ?? theirs[player] ?? null;
+  return theirs[player] ?? mine[player] ?? null;
 }
 
 /**
@@ -159,7 +165,7 @@ export async function invitesFor(playerId: string): Promise<InviteView[]> {
     const hero = i.characterId ? fit.find((c) => c.id === i.characterId) : undefined;
     return {
       code: i.code, fromPlayerId: i.fromPlayerId, fromName: i.fromName,
-      fromPlayerName: mine[i.fromPlayerId] ?? theirs[i.fromPlayerId] ?? null,
+      fromPlayerName: theirs[i.fromPlayerId] ?? mine[i.fromPlayerId] ?? null,
       hero: hero ? { id: hero.id, name: hero.name } : null,
       createdAt: i.createdAt, party: i.party,
     };

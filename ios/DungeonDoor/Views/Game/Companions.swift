@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The people this player has adventured with who are not here yet. A companion is a person: the
 /// row invites them, whichever hero they bring, and each of their heroes who can go is a tap away
-/// to ask for by name. A hero who has died or retired is never offered. Nothing for a player who
+/// to ask for by name. The name they gave themselves is their name; a pencil gives them a nickname
+/// that only this player sees, shown beside it. A hero who has died or retired is never offered. Nothing for a player who
 /// has not adventured with anyone, or once the party is full.
 ///
 /// The lobby loads the list and keeps it: this view is empty until there is someone to call, and
@@ -39,8 +40,8 @@ struct CompanionsToCall: View {
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .alert("What do you call them?", isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } }), presenting: naming) { companion in
-                TextField("Their name", text: $typed)
+            .alert("A nickname for them", isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } }), presenting: naming) { companion in
+                TextField("Nickname", text: $typed)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                 Button("Save") { Task { await name(companion, typed) } }
@@ -73,8 +74,16 @@ struct CompanionsToCall: View {
                         Text(companion.name)
                             .font(.serif(.body, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
+                        if let nickname = companion.shownNickname {
+                            // Their own name is their name; the player's nickname sits beside it.
+                            Text("\u{201C}\(nickname)\u{201D}")
+                                .font(.serif(.subheadline).italic())
+                                .foregroundStyle(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel("your nickname for them: \(nickname)")
+                        }
                         Button {
-                            typed = companion.namedByYou ? companion.name : ""
+                            typed = companion.nickname ?? ""
                             naming = companion
                         } label: {
                             Image(systemName: "pencil")
@@ -84,7 +93,7 @@ struct CompanionsToCall: View {
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Name \(companion.name)")
+                        .accessibilityLabel("Give \(companion.name) a nickname")
                         .accessibilityIdentifier("name-\(companion.playerId)")
                     }
                     if let caption = CompanionCall.caption(for: companion) {

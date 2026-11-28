@@ -65,7 +65,7 @@ test('a companion is a person: their living heroes, never the dead or retired', 
   await call(retireApi.POST, '/api/characters/retire', { player: them, body: { characterId: heroes.Ilse.id } });
   const [only, ...rest] = await companions(me);
   assert.deepEqual(rest, []);
-  assert.deepEqual([only.playerId, only.name, only.namedBy, only.playedAs], [them, "Slagette's player", null, 'Slagette']);
+  assert.deepEqual([only.playerId, only.name, only.namedBy, only.nickname, only.playedAs], [them, "Slagette's player", null, null, 'Slagette']);
   assert.deepEqual(only.heroes.map((h) => [h.id, h.name, h.race, h.characterClass, h.level, h.portraitUrl]), [
     [heroes.Brannoch.id, 'Brannoch', 'dwarf', 'cleric', 1, heroes.Brannoch.portraitUrl],
   ]);
@@ -78,16 +78,21 @@ test('a companion lists at most six heroes, newest first', async () => {
   assert.equal(only.heroes.length, HEROES_SHOWN);
 });
 
-test('names: mine for them first, then theirs, and mine is mine alone', async () => {
+test('names: their own name is their name; my nickname is mine alone and stands in only while they have none', async () => {
   const { me, them } = await met('Slagette');
+  // Nobody has named them: a nickname of mine is what I call them.
+  const nicknamed = await call<{ companions: Companion[] }>(companionsApi.PUT, '/api/companions', { player: me, method: 'PUT', body: { playerId: them, name: 'Micah' } });
+  assert.deepEqual(nicknamed.body.companions.map((c) => [c.name, c.namedBy, c.nickname]), [['Micah', 'you', 'Micah']]);
+  // They name themselves: that is their name, and my nickname stays beside it.
   await call(meApi.PUT, '/api/me', { player: them, method: 'PUT', body: { name: 'Slagyr' } });
-  assert.deepEqual((await companions(me)).map((c) => [c.name, c.namedBy]), [['Slagyr', 'them']]);
-  const named = await call<{ companions: Companion[] }>(companionsApi.PUT, '/api/companions', { player: me, method: 'PUT', body: { playerId: them, name: 'Micah' } });
-  assert.deepEqual(named.body.companions.map((c) => [c.name, c.namedBy]), [['Micah', 'you']]);
-  // They see me by my hero: my name for them is not their name for me, nor shown to them.
-  assert.deepEqual((await companions(them)).map((c) => [c.name, c.namedBy]), [["Bryn's player", null]]);
-  assert.equal((await call(meApi.GET, '/api/me', { player: them })).body.name, 'Slagyr');
-  // A stranger is nobody's companion to name.
+  assert.deepEqual((await companions(me)).map((c) => [c.name, c.namedBy, c.nickname]), [['Slagyr', 'them', 'Micah']]);
+  // They see me by my hero: my nickname for them is not their name for me, nor shown to them.
+  assert.deepEqual((await companions(them)).map((c) => [c.name, c.namedBy, c.nickname]), [["Bryn's player", null, null]]);
+  assert.equal((await call(meApi.GET, '/api/me', { player: them })).body.name, 'Slagyr', 'a nickname does not change who they are');
+  // Forgotten, only their name is left.
+  await call(companionsApi.PUT, '/api/companions', { player: me, method: 'PUT', body: { playerId: them, name: '' } });
+  assert.deepEqual((await companions(me)).map((c) => [c.name, c.namedBy, c.nickname]), [['Slagyr', 'them', null]]);
+  // A stranger is nobody's companion to nickname.
   const stranger = randomUUID();
   assert.equal((await call(companionsApi.PUT, '/api/companions', { player: me, method: 'PUT', body: { playerId: stranger, name: 'Who' } })).status, 403);
   assert.equal((await call(companionsApi.PUT, '/api/companions', { player: me, method: 'PUT', body: { playerId: 'nobody', name: 'Who' } })).status, 400);
@@ -117,12 +122,13 @@ test('an invitation may ask for a hero: theirs, alive and not retired', async ()
   await settle();
 });
 
-test('the invited player reads who invited them as they know them', async () => {
+test('the invited player reads who invited them by their own name, or by a nickname while they have none', async () => {
   const { me, them, door } = await met('Slagette');
-  await call(meApi.PUT, '/api/me', { player: me, method: 'PUT', body: { name: 'Justin' } });
   await call(inviteApi.POST, gamePath(door, 'invites'), { player: me, body: { playerId: them } });
-  assert.deepEqual((await invitations(them)).map((i) => [i.fromName, i.fromPlayerName]), [['Bryn', 'Justin']]);
+  assert.deepEqual((await invitations(them)).map((i) => [i.fromName, i.fromPlayerName]), [['Bryn', null]], 'nobody has named whoever plays Bryn');
   await call(companionsApi.PUT, '/api/companions', { player: them, method: 'PUT', body: { playerId: me, name: 'Jus' } });
-  assert.deepEqual((await invitations(them)).map((i) => i.fromPlayerName), ['Jus']);
+  assert.deepEqual((await invitations(them)).map((i) => i.fromPlayerName), ['Jus'], 'their nickname for me, while I have no name');
+  await call(meApi.PUT, '/api/me', { player: me, method: 'PUT', body: { name: 'Justin' } });
+  assert.deepEqual((await invitations(them)).map((i) => i.fromPlayerName), ['Justin'], 'my own name is my name');
   await settle();
 });

@@ -116,9 +116,13 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
   ```
   Companion {
     playerId: string
-    name: string                     // what to call them: the name the caller gave them (PUT /api/companions),
-                                     // else the name they gave themselves (PUT /api/me), else "<playedAs>'s player"
+    name: string                     // what to call them: the name they gave themselves (PUT /api/me), which
+                                     // is their name; else the caller's nickname for them; else
+                                     // "<playedAs>'s player"
     namedBy: "you" | "them" | null   // whose word `name` is; null when nobody has named them
+    nickname: string | null          // the caller's own nickname for them (PUT /api/companions), seen by
+                                     // nobody else. It never replaces a name they gave themselves: show it
+                                     // beside `name` when it differs
     playedAs: string                 // the hero they last played beside the caller. For recognising the person:
                                      // that hero may be dead or retired, and is not offered for that reason
     lastPlayedAt: string
@@ -128,9 +132,9 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
                                      // still invited as a person, and forge a hero to join
   }
   ```
-- `PUT /api/companions` body `{ playerId, name }` → `{ companions }`, the list again. The caller's own name
+- `PUT /api/companions` body `{ playerId, name }` → `{ companions }`, the list again. The caller's nickname
   for a companion, seen by nobody else; `""` or `null` forgets it. 403 for someone who is not the caller's
-  companion; 400 for a name over 24 characters.
+  companion; 400 for a nickname over 24 characters.
 - `POST /api/games/{code}/invites` body `{ playerId, characterId? }` → `{ ok: true, alreadyInvited: boolean }`.
   Anyone in a party still in its lobby invites one of their companions: the person, or with `characterId`
   the person and one of their heroes by name. The hero is asked for, not required: the invited player's join
@@ -142,8 +146,8 @@ what waits, is in docs/push.md. A push carries `kind` ("turn", "combat", "chat" 
 - `GET /api/invites` → `{ invites: [{ code, fromPlayerId, fromName, fromPlayerName: string | null,
   hero: { id, name } | null, createdAt, party: string[] }] }`: the caller's invitations to parties still in
   the lobby that they have not joined, newest first. `fromName` is the hero of whoever invited;
-  `fromPlayerName` is that person, named as a companion is (the caller's name for them, else their own), or
-  null when nobody has named them. `hero` is the hero of the caller's that was asked for, when one was and it
+  `fromPlayerName` is that person, named as a companion is (the name they gave themselves, else the caller's
+  nickname for them), or null when nobody has named them. `hero` is the hero of the caller's that was asked for, when one was and it
   can still go. `party` names the heroes already there. Joining with the code
   (`POST /api/games/{code}/join`) uses the invitation up.
 - `DELETE /api/invites?code=` → `{ ok: true }`. Declines one.
