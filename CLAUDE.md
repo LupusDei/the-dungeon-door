@@ -112,8 +112,8 @@ and **slagyr-assistant**. For work that comes from any of them (the owner asking
    reachable in the app.
 2. **Gates.** `npm run typecheck && npm test && npm run features` pass in `server/`: typecheck, the
    unit tests and the Gherkin features, with no scenario skipped. Every behavior change comes with a
-   Gherkin scenario in `server/features/` that pins it down. The app builds; what changed on
-   screen was looked at on the simulator. When `server/lib/dm/` or what the dungeon master is told
+   Gherkin scenario in `server/features/` that pins it down. The app passes the app gate below: built, run on the
+   simulator, screenshotted, and every shot looked at. When `server/lib/dm/` or what the dungeon master is told
    changed, `npm run dm:check` passes too: six real text calls (about seven cents) that prove the
    model accepts the schema and writes hooks the engine takes. The fake DM cannot show that.
 3. **Commit and push** `main` (`git push origin main`, as its own command).
@@ -147,6 +147,34 @@ released.
 This repository opts in to the Beads "team-maintainer" profile for the team above: commit and push
 are part of finishing the work.
 
+## The app gate: build it, run it, screenshot it, look
+
+Every agent, on every change that touches `ios/` or changes what the server sends the app, proves the
+app works on this Mac before calling the work done or pushing it. Tests passing and "it compiles" are
+not enough; nobody ships a screen nobody looked at.
+
+1. **Build.** `cd ios && ./run.sh -apiBase http://localhost:3000` (with `cd server && npm run dev`
+   running) or `./run.sh` against production. It must print `BUILD SUCCEEDED` with no `error:` lines;
+   fix new warnings in code you touched. The app's unit tests pass too:
+   `xcodebuild test -project DungeonDoor.xcodeproj -scheme DungeonDoor -destination "platform=iOS Simulator,id=$SIM"`.
+2. **Run.** Launch it on the simulator and get to every screen the change touches, by tapping
+   through or with the debug launch arguments in `ios/DungeonDoor/Core/AppConfig.swift`. When layout
+   changed, check an iPad simulator as well as the iPhone; when the change has a Mac target, run that
+   too.
+3. **Screenshot.** Capture each changed screen, before and after where that helps:
+   `xcrun simctl io $SIM screenshot ios/build/screenshots/<what-it-shows>.png` (gitignored).
+4. **Look.** Open every screenshot and check it against what the change should do: the new thing is
+   there and right, text is not clipped or overlapping, nothing shows a placeholder, a spinner that
+   never ends or an error, and the screen still matches the theme (`UI/Theme.swift`). A shot that
+   shows a problem is a failed gate: fix it, rebuild and shoot again.
+5. **Report.** The hand-off lists each screenshot path and what it showed, and says which screens or
+   devices were not checked and why.
+
+An agent that cannot run Xcode and the simulator (a cloud session, a contributor without a Mac) does
+not push app changes to `main` as finished: it says plainly that the app is unverified, and the owner's
+agent runs this gate before the change ships. Pushing an unverified app change is shipping while a gate
+fails.
+
 ## Build & Test
 
 Server (Node 22+), from `server/`:
@@ -168,7 +196,7 @@ App (needs macOS with Xcode and XcodeGen), from `ios/`:
 ```
 
 A cloud agent without Xcode cannot build or run the app. Keep to `server/` and `docs/` there, or
-say plainly that an app change is untested.
+say plainly that an app change is untested (see "The app gate" above).
 
 ## Conventions
 
