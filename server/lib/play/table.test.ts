@@ -247,14 +247,24 @@ test('a story choice tagged by the DM pays its tag; a fight tagged a milestone p
   assert.equal('reward' in choiceView(story[0]), false, 'the tag is the engine’s, not shown to the players');
 });
 
-test('a hero whose die the clock threw earns half; a round of a fight earns nothing more than the fight’s own XP', () => {
+test('a hero whose die the clock threw earns half; a round of a fight earns a little for the action, with no line for it', () => {
   const story = [storedChoice({ id: 'a', label: 'Go on', detail: '' }, null)];
   const idle = engineStep({ party: two, combat: null, dungeon: null }, voted(story, [{ playerId: 'p1', choiceId: 'a', roll: 9 }, { playerId: 'p2', choiceId: 'a', roll: 3, autoRolled: true }]), resolution(['a'], [['p1', 'a', 9], ['p2', 'a', 3]]));
   assert.deepEqual(idle.state.party.results, ['+5 XP: taking part (Bryn).', '+2 XP: taking part, halved: their die was left to the clock (Cleo).']);
   const { party: p, combat } = startFight(two, ['goblin-warrior']);
   const round = engineStep({ party: p, combat, dungeon: null }, voted([], [{ playerId: 'p1', choiceId: 'c', roll: 10 }]), resolution(['c'], [['p1', 'c', 10]]));
   assert.ok(!round.state.party.results!.some((l) => l.startsWith('+')), round.state.party.results!.join(' | '));
-  assert.equal(round.state.party.earned!.p1, 0, 'but Bryn took part');
+  assert.equal(round.state.party.earned!.p1, 1, 'Bryn dodged: in the fight, 2% of a unit');
+  assert.deepEqual(round.state.party.xpAwards, [{ playerId: 'p1', idle: false, xp: 1, reasons: [{ reason: 'in-fight', xp: 1 }] }]);
+  assert.equal(round.state.party.earned!.p2 ?? 0, 0, 'Cleo declared nothing this round');
+  // The result card says it under the hero, in the dice log's words.
+  assert.deepEqual(round.result!.heroes.map((h) => [h.name, h.xp]), [
+    ['Bryn', { total: 1, idle: false, reasons: [{ reason: 'in-fight', label: 'in the fight', xp: 1 }], chance: null }],
+    ['Cleo', null],
+  ]);
+  assert.deepEqual(idle.result!.heroes.map((h) => [h.name, h.xp?.total, h.xp?.idle, h.xp?.reasons.map((r) => r.label)]), [
+    ['Bryn', 5, false, ['taking part']], ['Cleo', 2, true, ['taking part']],
+  ]);
 });
 
 test('new ground in a dungeon: the party enters a room it has not seen', () => {

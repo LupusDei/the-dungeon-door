@@ -11,6 +11,7 @@ import { seededRng } from '../rules/rng.ts';
 import type { ChoiceId, StoredChoice } from '../types.ts';
 import { adjudicateCheck, type CheckRuling } from './actions.ts';
 import { checksOf, dcOf, groupRoll, type TurnCheck } from './checks.ts';
+import type { HeroDie } from './odds.ts';
 import { arrival, claimTreasure, clearRoom, dungeonLevel, enter, foeLevels, foesMet, habitatOf, partyLevel, waitingFoes, withAttitude } from './delve.ts';
 import { shakeOff } from './conditions.ts';
 import { provisions } from './provisions.ts';
@@ -41,7 +42,11 @@ export type { TurnCheck } from './checks.ts';
  * rolled: for the party's choice (its check, save, parley or trap) and for a hero's own written action.
  * Each has the line it produced, so play/result.ts can tell the dice lines from the rest.
  */
-export interface RulesTurn extends RulesState { lines: string[]; success: boolean | null; fight: FightNews; rolled: HeroRoll[]; checks: TurnCheck[] }
+export interface RulesTurn extends RulesState {
+  lines: string[]; success: boolean | null; fight: FightNews; rolled: HeroRoll[]; checks: TurnCheck[];
+  /** A round of a fight: the d20s that decided each hero's action, with the chance each had (play/odds.ts). Empty outside a fight, where `checks` has them. */
+  dice: HeroDie[];
+}
 
 /** The most-voted choice; a tie goes to the choice whose voters rolled highest, then to the first. */
 export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballot[]): ChoiceId | null {
@@ -49,8 +54,8 @@ export function pickChoice(leaders: readonly ChoiceId[], ballots: readonly Ballo
   return leaders.reduce<ChoiceId | null>((top, id) => (top === null || best(id) > best(top) ? id : top), null);
 }
 
-const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null, rolled: HeroRoll[] = [], checks: TurnCheck[] = []): RulesTurn =>
-  ({ ...s, lines, success, fight, rolled, checks });
+const done = (s: RulesState, lines: string[] = [], success: boolean | null = null, fight: FightNews = null, rolled: HeroRoll[] = [], checks: TurnCheck[] = [], dice: HeroDie[] = []): RulesTurn =>
+  ({ ...s, lines, success, fight, rolled, checks, dice });
 
 /** Whoever the harm left at 0 HP is dying, and is settled; whoever it killed may be Revivified on the spot. */
 function harmed(before: PartyState, t: { party: PartyState; lines: string[] }): { party: PartyState; lines: string[] } {
@@ -104,9 +109,9 @@ function combatRound(s: RulesState, combat: CombatState, ballots: readonly Ballo
   };
   const round = fightRound(s.party, combat, votes);
   const after = { ...s, party: round.party, combat: round.ended ? null : round.combat };
-  if (round.ended === null || round.ended === 'defeat') return done(after, round.lines, null, round.ended);
+  if (round.ended === null || round.ended === 'defeat') return done(after, round.lines, null, round.ended, [], [], round.dice);
   const cleared = clearHere(after, round.lines);
-  return done(loud(cleared.state), cleared.lines, null, round.ended);
+  return done(loud(cleared.state), cleared.lines, null, round.ended, [], [], round.dice);
 }
 
 /** A fight ended or a trap went off: wanderers may have heard. */

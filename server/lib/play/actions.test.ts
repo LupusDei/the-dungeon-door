@@ -160,6 +160,8 @@ test('kicking the brazier is a check: the engine sets the DC and the damage, in 
   });
   assert.ok(round.lines.some((l) => /Bryn \("I kick the brazier onto the goblins"\): Athletics 15 \+ 5 = 20 vs DC 15, success/.test(l)), round.lines.join('\n'));
   assert.ok(round.combat.combatants['foe-1'].hp < foe.hp);
+  // The round hands the check up as the hero's die, with the chance it had: +5 against DC 15 is a 10 or better.
+  assert.deepEqual(round.dice.filter((d) => d.playerId === 'p1'), [{ playerId: 'p1', success: true, chance: 0.55 }]);
 });
 
 test('a written check comes back in numbers too, with what a success did; its line is unchanged', () => {
@@ -197,6 +199,11 @@ test('in a round, a held hero voting for the third choice spends its turn breaki
   const round = fightRound(start.party, patch(start.combat, { 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } });
   assert.ok(round.lines.some((l) => l.startsWith('Bryn breaks free')), round.lines.join('\n'));
   assert.equal(round.party.sheets.p1.conditions?.length ?? 0, 0);
+  // Breaking free is a check, and the round hands it up as the hero's die: against DC -50 it could not fail.
+  assert.deepEqual(round.dice.filter((d) => d.playerId === 'p1'), [{ playerId: 'p1', success: true, chance: 1 }]);
+  // Dodge rolls nothing: no die.
+  const calm = fight(fighter);
+  assert.deepEqual(fightRound(calm.party, patch(calm.combat, { 'foe-1': { attacks: harmless } }), { p1: { choiceId: 'c', roll: 10 } }).dice.filter((d) => d.playerId === 'p1'), []);
 });
 
 test('a written action is aimed at whoever the words name, else at the most wounded it can reach', () => {

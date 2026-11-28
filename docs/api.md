@@ -569,6 +569,20 @@ TurnResult {                         // one resolved turn, for the app's result 
     rolls: TurnRoll[]                // the d20s rolled for this hero this turn, in the order rolled; often empty
     lines: string[]                  // the engine's own lines that begin with this hero's name, dice lines
                                      // included (and their "Opportunity Attack: …" lines)
+    xp?: null | {                    // what this hero earned this turn and why ("Experience from actions",
+                                     // below): null when they earned nothing (did not act, down, dead);
+                                     // absent from servers older than this. The fight's own XP (split when it
+                                     // ends) and the adventure's-end award are not here: they are lines
+      total: number
+      idle: boolean                  // their die was left to the clock: every amount here is already halved
+      reasons: [{ reason: string; label: string; xp: number }]
+                                     // as in `rules.xpAwards`: "taking part", then what their action earned
+                                     // by its odds ("a long shot that landed"), then what the party shared
+      chance: number | null          // for the reason their action earned: the chance, from 0 to 1 and before
+                                     // the roll, of the result that happened (0.1 for a long shot that
+                                     // landed, 0.05 for a miss only a natural 1 could bring). Null when no
+                                     // d20 decided it (a pick that rolled nothing, Dodge, a potion)
+    }
   }]
   notes: string[]                    // what else the turn did, in the engine's words: every line of `rules.results`
                                      // that is not one of the scene's "+N XP" lines, nor a dice line already
@@ -733,15 +747,21 @@ RulesView {                          // SRD 5.2 (2024 rules)
   results: string[]                   // the engine's dice lines for the last resolved scene
   levelUps: [{ playerId: string; name: string; from: number; to: number }]   // who levelled up at the
                                       // quest's end (set with the epilogue; empty until then)
-  xpAwards: [{ playerId: string; name: string; xp: number   // XP each hero earned outside a fight in the
-               idle: boolean          // last resolved scene (see "Experience without a fight"). idle: the
-                                      // server threw their die for them, so every amount is halved.
-               reasons: [{ reason: "took-part" | "success" | "brave-failure" | "trap" | "puzzle" | "social"
-                                   | "discovery" | "new-ground" | "chapter" | "deeper" | "quest";
-                           label: string      // "a clever parley": the words the dice log uses
-                           xp: number }] }]   // empty for none and for a round of a fight; absent from older
-                                      // servers. The same awards are lines in results ("+25 XP: a clever
-                                      // parley (Bryn, Cleo).") and in the chat.
+  xpAwards: [{ playerId: string; name: string; xp: number   // XP each hero earned in the last resolved
+               idle: boolean          // scene or round (see "Experience without a fight" and "Experience
+                                      // from actions"). idle: the server threw their die for them, so every
+                                      // amount is halved.
+               reasons: [{ reason: "took-part" | "sure-thing" | "success" | "against-odds" | "long-shot"
+                                   | "brave-failure" | "hard-lesson" | "sure-slip" | "in-fight"
+                                   | "trap" | "puzzle" | "social" | "discovery" | "new-ground"
+                                   | "chapter" | "deeper" | "quest";
+                                              // a later server may add reasons: show `label`, do not switch on it
+                           label: string      // "a clever parley", "a long shot that landed": the dice log's words
+                           xp: number }] }]   // empty for none; absent from older servers. A round of a fight
+                                      // now has awards too (servers before "Experience from actions" sent
+                                      // none for a round). The same awards are lines in results ("+25 XP: a
+                                      // clever parley (Bryn, Cleo).") and in the chat, except a round's
+                                      // smallest ("in the fight"), which is paid without a line.
   time: { seconds: number; label: string }   // the adventure's clock, from 8 in the morning of day 1:
                                       // "Day 1, 08:40". A choice takes ten minutes, a rest its length.
   light: {
@@ -1026,6 +1046,20 @@ numbers (see docs/rules-design.md and docs/dungeon-master.md).
   milestone at the adventure's end. The amounts scale with the hero's level and are in
   [docs/rules-design.md](rules-design.md#experience-without-a-fight). They are in `rules.xpAwards`, as lines
   in `rules.results` and the chat, and on each hero's `xp`, `questXp` and `nextLevelXp`.
+- **Experience from actions.** Every action a hero declares earns XP, and how much depends on how likely
+  its result was. The engine works the chance out from numbers it already has (the bonus, the DC or armour
+  class, Advantage or Disadvantage; for a spell a foe saves against, the chance the foe fails), and the
+  dungeon master names none of it. Outside a fight the d20 rolled for the hero is paid by its odds in place
+  of the flat "a success" or "a brave failure": a sure thing (9 chances in 10 or better) earns very little,
+  a success against the odds (1 in 4 or worse) twice a plain success, a long shot that landed (1 in 10 or
+  worse) four times; a failure that should not have happened earns more than a plain one too ("a hard
+  lesson", "a sure thing that slipped"). A long shot that fails is the expected result and stays "a brave
+  failure". In a fight every hero who acts earns a little each round ("in the fight"), and the same
+  surprises earn a quarter of what they do outside one; the fight still pays its own XP when it ends. An
+  action with several d20s (two attacks, a spell on several foes) is paid once, for the most telling die;
+  a reaction is not an action. Each hero's award for the turn, with its reasons in words and the chance of
+  what happened, is on the turn's result (`TurnResult.heroes[].xp`), and in `rules.xpAwards`. The shares
+  are in [docs/rules-design.md](rules-design.md#experience-from-actions).
 - **Levelling up at the quest's end.** When the next scene is the epilogue, each living hero who took part
   gets the adventure's-end XP, then levels up as far as its XP reaches (2024 thresholds, average hit
   points). The lines are in `rules.results` and the chat, `rules.levelUps` lists who levelled up, and the

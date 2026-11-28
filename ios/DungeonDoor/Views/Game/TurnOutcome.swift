@@ -340,6 +340,22 @@ private struct HeroResult: View {
                             .foregroundStyle(Palette.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    // What the turn taught them, once their dice have landed: the amount, then every
+                    // reason in the dice log's words, with the chance their roll's result had.
+                    if let xp = hero.xp {
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Image(systemName: xp.surprising ? "sparkles" : "star.fill")
+                                .font(.system(.caption2, weight: .bold))
+                                .foregroundStyle(Palette.gold)
+                                .accessibilityHidden(true)
+                            (Text(xp.amount).font(.serif(.caption, weight: .bold)).foregroundStyle(Palette.gold)
+                                + Text(xp.why.isEmpty ? "" : " · \(xp.why)").font(.serif(.caption)).foregroundStyle(Palette.parchment.opacity(xp.surprising ? 0.95 : 0.8)))
+                                .monospacedDigit()
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(xp.spoken)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

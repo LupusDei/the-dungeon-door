@@ -172,7 +172,7 @@ export interface RulesView {
   results: string[];
   /** Who levelled up at the quest's end (empty until then). */
   levelUps: { playerId: string; name: string; from: number; to: number }[];
-  /** The XP each hero earned outside a fight in the last resolved scene (empty for none, and for a round of a fight). */
+  /** The XP each hero earned in the last resolved scene or round of a fight (empty for none). */
   xpAwards: XpAwardView[];
   /** Seconds since the adventure began, and the clock ("Day 1, 08:40"). */
   time: { seconds: number; label: string };

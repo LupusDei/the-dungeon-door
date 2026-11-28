@@ -609,14 +609,16 @@ each get their own amounts.
 - Only heroes who **declared** earn in a scene. A hero who did not earns nothing. A hero whose die the
   server **threw for them** (the choice window ran out, or the host advanced first: `votes.auto_rolled`)
   earns **half** of each amount, rounded down.
-- A hero gets at most one of *a success* or *a brave failure* a scene. The shared reasons (trap, parley,
-  new ground, a tag) go to every hero who declared, and the same reason twice in a scene pays once.
+- A hero gets at most one award for their dice a scene: *a success* or *a brave failure*, or what the
+  odds made of it ("Experience from actions" below). The shared reasons (trap, parley, new ground, a tag)
+  go to every hero who declared, and the same reason twice in a scene pays once.
 - **Caps.** Everything but a milestone is held to **one unit per hero per scene**. A chapter milestone
   (*a chapter closed* or *deeper into the dungeon*) is paid on top, **at most one a scene and one every
   three scenes**. *The adventure's end* goes to every living hero who took part in the quest (declared in
   a scene, or fought).
-- **Fights pay their own XP.** A round of a fight earns nothing more, and a tag on a fight, an Engage or
-  a Run pays nothing. A choice that starts a fight pays its tag nothing either.
+- **Fights pay their own XP.** A tag on a fight, an Engage or a Run pays nothing, and a choice that starts
+  a fight pays its tag nothing either. A round of a fight earns each hero who acted a little for the
+  action itself: see "Experience from actions" below.
 - **The engine owns the numbers.** The DM only tags a choice it offers (`reward`: `discovery`, `social`,
   `puzzle`, `milestone` or `none`). The tag pays when the party takes the choice and its dice did not fail
   (no dice, or a success). Anything else in the field is no tag.
@@ -631,7 +633,10 @@ each get their own amounts.
 **The pace.** A default game is the road (two scenes) and four scenes of the tale, so five scenes are
 played before the epilogue. A typical scene without a fight pays about a third of a unit (taking part, a
 roll that mostly comes good, a tag or an event every other scene), and the end one unit: about 2.75 units
-a quest, with no fight at all.
+a quest, with no fight at all. That is the plan's arithmetic. Games run past their plan (the scene count
+is a plan, and the quest ends when its goal is met), so a quest pays more than the table below: measured
+with the bots on 2026-11-27, a four-scene tale plays about ten scenes and pays about 205 XP a hero. The
+measured table is under "Experience from actions".
 
 | Level | XP a no-fight quest | XP to the next level | Quests |
 | --- | --- | --- | --- |
@@ -643,6 +648,99 @@ a quest, with no fight at all.
 A longer game levels faster, a shorter one slower; fights add their own XP on top. From level 3 the 2024
 thresholds outgrow the budgets, so fights carry more of the climb. `lib/play/xp.test.ts` holds the pace:
 a no-fight quest of the default length takes a level-1 hero to level 2 in two or three quests.
+
+## Experience from actions
+
+**The owner's ask:** *"I like the idea of heroes gaining experience from their actions. Sometimes an
+unlikely success gains lots of experience, sometimes an unlikely failure gains lots of experience. But
+sometimes actions gain very little experience. But I think every action could give experience."*
+`play/odds.ts` works out how likely a result was; `play/xp.ts` pays for it. **Original** (CC0): 5e has no
+rule for this.
+
+**Every action earns, and how much goes by how likely its result was.** For each d20 that decided a hero's
+action the engine already has the bonus, the DC or armour class, and whether it was rolled with Advantage
+or Disadvantage. From those:
+
+- *The chance of success* p: the face needed is the target less the bonus, and p is the faces that reach it
+  out of twenty. Advantage makes it 1 − (1 − p)²; Disadvantage p². An attack roll is held between 1 in 20
+  and 19 in 20, because a natural 1 misses and a natural 20 hits; a check or a save is not.
+- *The chance of what happened* q: p for a success, 1 − p for a failure.
+- A spell a foe saves against is the caster's die: their success is the foe's failure, at the chance the
+  foe had of failing.
+
+q puts the result in a band, and the band is the reason on the award. Shares are of the hero's unit, as
+everywhere above; taking part (10%) is paid as before, beside it.
+
+| What happened | Its chance q | Reason (line label) | Share | L1 | L2 | L3 | L5 | In a round | L1 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| succeeded, as good as certain | 9 in 10 or better | a sure thing | 5% | 3 | 5 | 8 | 25 | in the fight, 2% | 1 |
+| succeeded | between | a success | 20% | 10 | 20 | 30 | 100 | in the fight, 2% | 1 |
+| succeeded | 1 in 4 or worse | against the odds | 40% | 20 | 40 | 60 | 200 | 10% | 5 |
+| succeeded | 1 in 10 or worse | a long shot that landed | 80% | 40 | 80 | 120 | 400 | 20% | 10 |
+| failed | better than 1 in 4 | a brave failure | 10% | 5 | 10 | 15 | 50 | in the fight, 2% | 1 |
+| failed | 1 in 4 or worse | a hard lesson | 30% | 15 | 30 | 45 | 150 | 7.5% | 4 |
+| failed | 1 in 10 or worse | a sure thing that slipped | 60% | 30 | 60 | 90 | 300 | 15% | 8 |
+| no d20 (a pick that rolls nothing, Dodge, Dash, a move, an item, healing, darts that never miss) | | (taking part only) | | | | | | in the fight, 2% | 1 |
+
+Worked, at level 1 outside a fight (add 5 for taking part): DC 15 with +5 is 55%, so a success is 10 and a
+failure 5, as it always was. DC 10 with +5 is 80%: a success 10, a failure *a hard lesson*, 15. DC 10 with
++9 cannot fail: *a sure thing*, 3. DC 20 with +1 is 10%: a success *a long shot that landed*, 40, and a
+failure 5. In a fight: AC 15 with +5 pays 1 either way; a miss at AC 12 with +6 (75% to hit) pays 4; a hit
+that needed a natural 20 pays 10; a miss that only a natural 1 could bring pays 8.
+
+**What an unlikely failure is.** It is failing what should have succeeded: the failure itself was the
+unlikely result, and the hero learns from the surprise. It earns three quarters of the success at the same
+odds (30% against 40%, 60% against 80%). A long shot that *fails* is the result that was expected, so it
+stays *a brave failure*, with no more for having tried. Two reasons: the long shot is already paid when it
+lands (40% or 80%), so trying one is worth about what a plain roll is; and paying for failing one would
+reward always attempting the impossible. The less likely result earns more whichever way it fell, and the
+result everyone expected earns what it earned before, so the pace of a quest does not move.
+
+**The rules.**
+- **One award an action.** A hero with several d20s in a turn (two attacks, a spell on several foes, their
+  own check and the party's save) is paid once, for the die that earns most. A reaction is not an action:
+  an opportunity attack earns nothing.
+- **Rounds are a quarter.** A fight pays its own XP when it ends, and a round is six seconds of it. Every
+  hero who could act and declared earns *in the fight* (2%), and a surprise earns a quarter of its share
+  in place of that. Nothing is shared or tagged in a round. A surprise is a line in the dice log; *in the
+  fight* is paid without one, so the log is not filled with it. The most a round can pay is 20%, so a fight
+  of ten rounds, the longest there is, cannot pay more than two units and in practice pays a few percent of
+  one a round.
+- **Who earns.** As before: a hero who declared. One whose die the clock threw earns half. A hero who is
+  down or dead earns nothing; in a round a vote from a hero who cannot act changes nothing and earns
+  nothing. An action refused as impossible is not a declared action. A turn the dungeon master fumbled is
+  played again from the state before it, so it is paid once.
+- **Where the dice come from.** Outside a fight, the turn's checks (`play/checks.ts` TurnCheck: bonus, DC,
+  mode). In a round, the engine's own log (`rules/scene.ts` CombatEvent): a weapon attack or spell attack
+  against armour class, and a foe's save against a hero's spell; and the checks made in `play/` (a written
+  action, Break Free, a Medicine check to stabilize). A save nobody rolled (an immune foe, one that cannot
+  save) is no die. An attack's record keeps its faces and not how it was rolled, so two different faces
+  are read as Advantage or Disadvantage and two equal faces as a plain roll.
+- **The engine owns the numbers.** The dungeon master names none of this and is not asked. It hears the
+  awards as lines, as before.
+- **Visible.** `rules.xpAwards` and the turn's result (`TurnResult.heroes[].xp`) give each hero's award,
+  reason by reason in the words above, with the chance of what happened; the app shows it under each hero
+  on the result card ("+45 XP · a long shot that landed (+40, a 10% chance), taking part (+5)").
+
+**The pace**, measured. Bots played forty games of each kind through the real handlers, before and after,
+with the same seeded dice, so the games are the same games and the difference is the rule: four level-1
+heroes (fighter, wizard, rogue, cleric), the fake dungeon master, the party taking the choice that rolls
+when one is offered, and in a fight Attack and Cast by turns. XP is per hero, for the whole adventure,
+fights and the adventure's end included.
+
+| Game | Scenes played | Fights, rounds | XP before | XP after | Change |
+| --- | --- | --- | --- | --- | --- |
+| a tale told, 4 scenes | 10.3 | 0.2, 0.3 | 205.1 | 206.4 | +0.6% |
+| a tale told, 6 scenes | 14.6 | 0.4, 0.6 | 276.9 | 279.5 | +0.9% |
+| a tale told, 8 scenes | 18.5 | 0.3, 0.5 | 348.9 | 352.1 | +0.9% |
+| a fixed dungeon, 6 scenes | 14.6 | 0.4, 0.6 | 311.2 | 312.5 | +0.4% |
+| a tale with a fight on offer every scene, 6 scenes | 26.3 | 7.5, 17.7 | 315.1 | 330.9 | +5.0% |
+
+A game plays more scenes than it is asked for (the road, and overtime while the quest is open), which is
+why these are above the estimate in "Experience without a fight". The rule moves the pace by under one
+percent where there is little fighting, and by five where there is a fight in every scene; the levels
+gained were the same in every row but one, where a tenth of a level more. `lib/play/xp.test.ts` holds the
+shares and the no-fight pace (a level-1 hero reaches level 2 in two or three quests).
 
 ## Range bands
 

@@ -170,7 +170,8 @@ test('a fight: rounds of Attack, Cast and Dodge add scenes; the won fight gives 
   assert.ok(state.rules!.results.some((l) => /^Victory! 10 XP, 5 each\.$/.test(l)));
   assert.equal(state.sceneCount, index + 2, 'each round was a scene');
   assert.equal(state.status, 'voting', 'the story goes on after the fight');
-  assert.equal(state.rules!.party[0].xp, before + 5, 'the fight’s XP; its rounds earn no more');
+  const rounds = index - 3;
+  assert.equal(state.rules!.party[0].xp, before + 5 + rounds, 'the fight’s XP, and 1 XP a round for acting in it: a hit that was likely is no surprise');
 
   await voteAll(code, players, index, 'b');
   state = await view(code, host);

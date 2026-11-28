@@ -127,6 +127,10 @@ words, not the rules (docs/api.md, "A streamlined game"). Its Story page is shor
   words of their own, being down) has the engine's own line. Under those, what the turn changed
   (five lines at most; "and N more" opens the rest), and the dungeon master's one sentence. "Every
   roll" opens the full result card. It is drawn from `chronicle.last.result` (`TurnResult.briefLines`).
+  Its last line is what the heroes earned (`TurnResult.briefXp`): each hero's amount, with the
+  reason when it was more than taking part ("Nillort +45 XP (a long shot that landed), Slagariel
+  +10 XP (a brave failure)"), or said once when everyone earned the same ("+5 XP each for taking
+  part"). The result card has every reason.
 - The scene's line: `scene.narration`, two sentences at most, and what the heroes said in character.
 - The painting as a band (3:1). A tap opens it whole.
 - **What do you do?** and **Or in your own words**: the same cards, box and rules as a full game,
@@ -155,6 +159,14 @@ dungeon master is still writing) it becomes the result:
   against the number to beat and the verdict as a word and a mark (Succeeded, Failed, Hit,
   Missed). A die the table rolled for a hero says so; a die left to the clock says it cost half
   the XP. A hero who did not act, or could not, is still there and says that;
+- under each hero, once their dice have landed, what the turn earned them and why
+  (`TurnResult.heroes[].xp`, "Experience from actions" in docs/rules-design.md): the amount, then
+  every reason in the dice log's words, most telling first, each with its share, and for the
+  reason their d20 earned the chance its result had: "+45 XP · a long shot that landed (+40, a 10%
+  chance), taking part (+5)", "+1 XP · in the fight", "+4 XP · a hard lesson (a 25% chance)". A
+  surprise is marked with sparks, the rest with a star. Nothing is shown for a hero who earned
+  nothing, or on a server that sends no `xp`. The fight's own XP and the adventure's end are
+  lines among what the turn changed, as before;
 - what the turn changed, in the engine's own lines, and the dungeon master's telling once it is
   written.
 

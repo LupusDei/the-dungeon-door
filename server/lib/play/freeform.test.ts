@@ -94,6 +94,7 @@ test('an impossible action does not spend the turn, and a bad classification fal
   assert.equal(moon.body.status, 'voting');
   assert.equal(moon.body.scene!.myVote, null);
   assert.ok(moon.body.messages.some((m) => m.kind === 'system' && m.text.includes('That cannot be done.')));
+  assert.deepEqual([moon.body.rules!.party[0].xp, moon.body.rules!.xpAwards], [0, []], 'an action that was refused is not a declared action: it earns nothing');
 
   const again = await call<GameState & { action: { ruling: string; choiceId: string } }>(
     actionApi.POST, gamePath(code, 'action'), { player: host, body: { sceneIndex: 0, text: 'Charge straight in' } },

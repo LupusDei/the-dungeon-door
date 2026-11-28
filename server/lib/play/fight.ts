@@ -32,6 +32,7 @@ import type { ChoiceId } from '../types.ts';
 import { adjudicateCheck, takeThird, type CheckRuling } from './actions.ts';
 import { resolveNamedAction, skipsBonusHeal } from './legal.ts';
 import { keepConcentration } from './concentration.ts';
+import { dieOfCheck, diceOfRound, type HeroDie } from './odds.ts';
 import { shakeOff } from './conditions.ts';
 import { afterFight } from './dying.ts';
 import { type Break, morale } from './morale.ts';
@@ -49,7 +50,8 @@ export type FightEnd = 'victory' | 'defeat' | 'fled';
 /** A letter vote, a named legal action, a move, or a written check (`freeform`) already classified. The roll is the hero's d20. */
 export type CombatVote = { choiceId: ChoiceId; roll: number; actionId?: string; targets?: readonly string[]; text?: string; freeform?: CheckRuling; move?: Move };
 export type CombatVotes = Readonly<Record<string, CombatVote>>;
-export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null }
+/** `dice`: the d20s that decided each hero's action this round, with the chance each had (play/odds.ts); what the round's XP goes by (play/xp.ts). */
+export interface Round { party: PartyState; combat: CombatState; lines: string[]; ended: FightEnd | null; dice: HeroDie[] }
 
 /** Duplicate monsters are numbered: "Goblin Warrior 1", "Goblin Warrior 2". */
 /** Who cannot see in this light fights Blinded (5.2: darkness makes a creature effectively Blinded). */
@@ -459,7 +461,8 @@ const synced = (party: PartyState, combat: CombatState): PartyState => ({
   sheets: Object.fromEntries(Object.entries(party.sheets).map(([id, s]) => [id, Object.hasOwn(combat.combatants, id) ? { ...s, hp: combat.combatants[id].hp } : s])),
 });
 
-interface Turn { action: Action; state: CombatState; sheets: Record<string, CharacterSheet> }
+/** `die`: a check the hero's action rolled outside the engine's log (a written action, Break Free, a Medicine check to stabilize). */
+interface Turn { action: Action; state: CombatState; sheets: Record<string, CharacterSheet>; die?: HeroDie }
 
 const SECOND_WIND = 'second-wind';
 const windLeft = (sheet: CharacterSheet) => resourcesOf(sheet).some((r) => r.id === SECOND_WIND && r.left > 0);
@@ -518,7 +521,8 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
     const foeId = caught(here.state, here.state.combatants[id].side, 1)[0];
     const done = adjudicateCheck(rng, here.sheets[id], vote.text, vote.freeform, vote.roll, foeId ? here.state.combatants[foeId] : null);
     const combatants = done.foe ? { ...here.state.combatants, [done.foe.id]: done.foe } : here.state.combatants;
-    return { action: { kind: 'other', text: done.text }, state: { ...here.state, rng: rng.state(), combatants }, sheets: here.sheets };
+    const die = dieOfCheck({ playerId: id, success: done.success, bonus: done.bonus, dc: done.dc, mode: done.mode });
+    return { action: { kind: 'other', text: done.text }, state: { ...here.state, rng: rng.state(), combatants }, sheets: here.sheets, die };
   }
   if (vote.actionId) {
     const taken = resolveNamedAction(here.state, here.sheets[id], id, vote.actionId, vote.targets ?? [], vote.roll);
@@ -526,14 +530,14 @@ function turnAction(state: CombatState, sheets: Record<string, CharacterSheet>, 
   }
   if (vote.choiceId === 'c') {
     const third = takeThird(here.state, here.sheets[id], id);
-    return { action: third.action, state: third.combat, sheets: { ...here.sheets, [id]: third.sheet } };
+    return { action: third.action, state: third.combat, sheets: { ...here.sheets, [id]: third.sheet }, ...(third.die ? { die: third.die } : {}) };
   }
   const { action, sheet } = heroAction(here.state, here.sheets[id], id, vote.choiceId, vote.roll);
   return { action, state: here.state, sheets: { ...here.sheets, [id]: sheet } };
 }
 
 /** However it ends, the fallen are settled (stabilized by a friend, or left to their death saves) and the slain stay dead, unless a party caster Revivifies them. */
-function settleFight(party: PartyState, combat: CombatState, lines: string[], broke: Break | null): Round {
+function settleFight(party: PartyState, combat: CombatState, lines: string[], broke: Break | null): Omit<Round, 'dice'> {
   const ended = endOf(combat, broke);
   if (ended === null) return { party, combat, lines, ended };
   const won = {
@@ -591,15 +595,20 @@ export function fightRound(party: PartyState, combat: CombatState, votes: Combat
   }));
   let state = { ...start, combatants };
   let sheets = freed.party.sheets;
+  const checked: HeroDie[] = [];
   while (state.outcome === 'ongoing' && state.round === start.round) {
     const turn = turnAction(state, sheets, votes);
+    if (turn.die) checked.push(turn.die);
     sheets = turn.sheets;
     state = act(turn.state, turn.action);
   }
+  // The heroes' dice this round: what the engine logged (attacks, spell attacks, a foe's save against a hero's spell) and the checks made here.
+  const isHero = (id: string) => Object.hasOwn(freed.party.sheets, id);
+  const dice = [...diceOfRound(state.log.slice(start.log.length), isHero, (id) => freed.party.sheets[id]?.spellcasting?.saveDc ?? null), ...checked];
   const shaken = morale(start, state);
   const marked = lastingOnSheets(start, shaken.combat, sheets);
   const kept = keepConcentration(start, marked.combat, marked.sheets);
   const loosed = concentrationHolds(kept.combat, kept.sheets);
   const lines = [...freed.lines, ...tell(start, state), ...shaken.lines, ...tell(state, shaken.combat), ...kept.lines, ...holdsEnded(kept.combat, loosed)];
-  return settleFight(synced({ ...freed.party, sheets: kept.sheets }, loosed), loosed, lines, shaken.broke);
+  return { ...settleFight(synced({ ...freed.party, sheets: kept.sheets }, loosed), loosed, lines, shaken.broke), dice };
 }

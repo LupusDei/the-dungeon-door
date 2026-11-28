@@ -132,7 +132,7 @@ function questDone(t: RulesTurn, quest: Quest): RulesTurn {
   return { ...t, party: loot.party, lines: [...t.lines, `The quest is done: ${goalText(quest)}.`, ...loot.lines] };
 }
 
-const said = (s: RulesState, line: string): RulesTurn => ({ ...s, lines: [line], success: null, fight: null, rolled: [], checks: [] });
+const said = (s: RulesState, line: string): RulesTurn => ({ ...s, lines: [line], success: null, fight: null, rolled: [], checks: [], dice: [] });
 
 /** A tale told: the DM's goal hook brings on the goal's foes. */
 export function confrontGoal(s: RulesState): RulesTurn {
@@ -141,7 +141,7 @@ export function confrontGoal(s: RulesState): RulesTurn {
   if (quest.reached) return said(s, 'The quest is already done.');
   if (s.dungeon || quest.at !== null) return said(s, 'The quest’s goal is in the dungeon, not here.');
   const started = startFight(withQuest(s.party, { ...quest, fighting: true }), quest.foes, lightLevel(s));
-  return { ...s, party: started.party, combat: started.combat, lines: started.lines, success: null, fight: 'started', rolled: [], checks: [] };
+  return { ...s, party: started.party, combat: started.combat, lines: started.lines, success: null, fight: 'started', rolled: [], checks: [], dice: [] };
 }
 
 /** The scenes past the plan the party has to reach the goal: as many again while it is open; none once reached or called. */

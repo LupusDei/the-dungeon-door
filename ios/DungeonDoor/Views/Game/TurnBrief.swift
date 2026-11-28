@@ -93,6 +93,25 @@ struct TurnBrief: View {
             }
             .buttonStyle(.plain)
         }
+        // What the heroes earned by it, on one line. The result card has every reason.
+        if let earned = turn.briefXp {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "star.fill")
+                    .font(.system(.caption2, weight: .bold))
+                    .imageScale(.small) // a star is wider than the marks above it: small, it keeps their column
+                    .foregroundStyle(Palette.gold)
+                    .frame(width: 14)
+                    .accessibilityHidden(true)
+                Text(earned)
+                    .font(.serif(.footnote, weight: .semibold))
+                    .foregroundStyle(Palette.gold)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Experience: \(earned)")
+            .accessibilityIdentifier("what-they-earned")
+        }
     }
 
     private func title(_ turn: TurnResult) -> some View {

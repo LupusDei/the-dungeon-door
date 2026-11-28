@@ -96,12 +96,13 @@ Feature: Experience without a fight
     Then the dice log says "+5 XP: taking part (Bryn)."
     And the dice log does not mention "a chapter closed"
 
-  Scenario: A round of a fight earns nothing outside the fight's own XP
+  Scenario: A round of a fight earns only a little for the action, and has no line for it
     Given a level 1 party of "Bryn"
     And the party is in a fight
     When "Bryn" declares and rolls 9
     And the scene is resolved
     Then the dice log has no XP
+    And "Bryn" now has 1 XP
 
   Scenario: A chapter milestone is paid on top of the rest
     Given a level 1 party of "Bryn"

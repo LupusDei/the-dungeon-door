@@ -19,5 +19,6 @@
                    gherclj.turn-result-steps
                    gherclj.streamlined-steps
                    gherclj.companions-steps
-                   gherclj.fight-choices-steps]
+                   gherclj.fight-choices-steps
+                   gherclj.action-xp-steps]
  :framework :typescript/node-test}

@@ -149,6 +149,7 @@ test('a turn the DM fumbles shows no result while the table chooses again; resol
   assert.deepEqual([state.status, state.scene!.index, state.scene!.result, state.chronicle.length], ['voting', 0, null, 0], 'votes are open again: no result is shown');
   assert.ok(first, 'though the engine had played the turn before the DM fumbled');
   assert.equal((await getStore().getGame(code))!.scenes[0].result, null, 'the old dice are put away: the votes may change');
+  assert.deepEqual(state.rules!.party.map((h) => h.xp), [0, 0], 'and nothing is paid for a turn that will be played again');
 
   fumble = false;
   await call(advanceApi.POST, gamePath(code, 'advance'), { player: host });
@@ -157,6 +158,9 @@ test('a turn the DM fumbles shows no result while the table chooses again; resol
   assert.equal(state.scene!.index, 1);
   assert.deepEqual(state.chronicle[0].result, first, 'the engine is seeded: the same votes give the same result');
   assert.deepEqual(first.heroes.map((h) => [h.playerId, h.did]), players.map((p) => [p, 'choice']));
+  // The replayed turn is paid once: what the result says each hero earned is all they have.
+  assert.ok(first.heroes.every((h) => h.xp && h.xp.total > 0), JSON.stringify(first.heroes.map((h) => h.xp)));
+  assert.deepEqual(state.rules!.party.map((h) => h.xp), first.heroes.map((h) => h.xp!.total));
 });
 
 test('a game without the rules engine has no result', async () => {

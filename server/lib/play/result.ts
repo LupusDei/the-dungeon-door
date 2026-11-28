@@ -14,6 +14,7 @@ import { checkName, isPersonalCheck } from './actions.ts';
 import { helpLine, type TurnCheck } from './checks.ts';
 import type { RulesHook } from './hooks.ts';
 import type { RulesState, RulesTurn } from './turn.ts';
+import { XP_LABELS, type XpAward, type XpReason } from './xp.ts';
 import { canAct } from './your-turn.ts';
 
 /** One d20 rolled for a hero this turn. */
@@ -62,6 +63,21 @@ export interface HeroResult {
   rolls: TurnRoll[];
   /** The engine's lines that are about this hero: those that begin with their name, their dice lines included. */
   lines: string[];
+  /** What the hero earned this turn and why (play/xp.ts); null when they earned nothing. Absent on a turn stored before this. */
+  xp?: HeroXp | null;
+}
+
+/**
+ * One hero's XP for the turn, in the words the dice log uses. `chance`: for the reason their d20 earned, the
+ * chance its result had (0 to 1), or null when no d20 decided it. The fight's own XP and the adventure's-end
+ * award are not here: they are lines.
+ */
+export interface HeroXp {
+  total: number;
+  /** Their die was left to the clock: every amount is already halved. */
+  idle: boolean;
+  reasons: { reason: XpReason; label: string; xp: number }[];
+  chance: number | null;
 }
 
 export interface ChoiceResult {
@@ -105,6 +121,8 @@ export interface TurnFacts {
   turn: Pick<RulesTurn, 'lines' | 'success' | 'checks'>;
   /** A combat round: what each hero's action is called ("Attack with Shortbow"), by player id. */
   actions?: Readonly<Record<string, string>>;
+  /** What each hero earned this turn (play/xp.ts sceneXp); none given, nobody is shown earning. */
+  awards?: readonly XpAward[];
 }
 
 /**
@@ -225,8 +243,19 @@ function heroOf(f: TurnFacts, player: TurnFacts['players'][number], names: Reado
       byClock: vote?.autoRolled === true,
       rolls: rolled.map((r) => r.roll),
       lines: f.turn.lines.filter((line) => ownersOf(line, names).includes(playerId)),
+      xp: xpOf(f.awards?.find((a) => a.playerId === playerId)),
     },
     dice: rolled.flatMap((r) => r.lines),
+  };
+}
+
+/** A hero's award as the result shows it: each reason with the dice log's words for it. */
+function xpOf(award: XpAward | undefined): HeroXp | null {
+  if (!award || award.xp <= 0) return null;
+  return {
+    total: award.xp, idle: award.idle,
+    reasons: award.reasons.map((r) => ({ reason: r.reason, label: XP_LABELS[r.reason], xp: r.xp })),
+    chance: award.chance ?? null,
   };
 }
 

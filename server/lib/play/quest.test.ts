@@ -18,7 +18,7 @@ const levels = [1, 1];
 const fixed = (planned: number, seed = 42) => planQuest(seed, levels, planned, startDungeon('fixed', seed, levels, planned));
 const party = (quest?: Quest): PartyState => ({ version: 1, rng: 1, sheets: {}, ...(quest ? { quest } : {}) });
 const turn = (quest: Quest, dungeon: DungeonState | null, fight: RulesTurn['fight'] = null): RulesTurn =>
-  ({ party: party(quest), combat: null, dungeon, lines: [], success: null, fight, rolled: [], checks: [] });
+  ({ party: party(quest), combat: null, dungeon, lines: [], success: null, fight, rolled: [], checks: [], dice: [] });
 
 test('a fixed map: the goal is the path room the planned scenes reach, the way to it the shortest', () => {
   assert.equal(fixed(4).quest.at, 'r2', 'the door scene, two rooms on, the goal, then the epilogue: 4 scenes');

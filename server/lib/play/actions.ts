@@ -17,6 +17,7 @@ import type { CharacterSheet } from '../rules/sheet.ts';
 import { CHOICE_IDS, type ChoiceId } from '../types.ts';
 import { signed } from './checks.ts';
 import { ABILITY_NAMES, SAVE_CONDITIONS, titleCase, type SaveCondition } from './hooks.ts';
+import { dieOfCheck, type HeroDie } from './odds.ts';
 
 type Escape = Extract<TimedCondition['until'], { kind: 'escape' }>;
 export type Third =
@@ -53,33 +54,44 @@ export function thirdWords(third: Third, combat: CombatState, sheet: CharacterSh
 const updated = (combat: CombatState, rng: Rng, ...changed: Combatant[]): CombatState =>
   ({ ...combat, rng: rng.state(), combatants: { ...combat.combatants, ...Object.fromEntries(changed.map((c) => [c.id, c])) } });
 
+/** The check a third choice made, as the die it was (play/odds.ts): what the hero's action earns goes by its odds. */
+const dieOf = (id: string, check: { bonus: number; mode: Mode; total: number }, dc: number): HeroDie =>
+  dieOfCheck({ playerId: id, success: check.total >= dc, bonus: check.bonus, dc, mode: check.mode });
+
 function breakFree(combat: CombatState, sheet: CharacterSheet, id: string, third: Extract<Third, { kind: 'break-free' }>) {
   const rng = seededRng(combat.rng);
   const { ability, skill, dc } = third.until;
-  const total = abilityCheck(rng, sheet, { ability, skill }).total;
+  const check = abilityCheck(rng, sheet, { ability, skill });
+  const { total } = check;
+  const die = dieOf(id, check, dc);
   const roll = `(${titled(skill)} ${total} vs DC ${dc})`;
-  if (total < dc) return { combat: updated(combat, rng), sheet, text: `${sheet.name} strains against being ${title(third.condition)} but cannot break free ${roll}.` };
+  if (total < dc) return { combat: updated(combat, rng), sheet, die, text: `${sheet.name} strains against being ${title(third.condition)} but cannot break free ${roll}.` };
   const me = combat.combatants[id];
   const free = { ...me, conditions: me.conditions.filter((c) => c !== third.condition), carried: (me.carried ?? []).filter((c) => c !== third.condition) };
-  return { combat: updated(combat, rng, free), sheet: withoutCondition(sheet, third.condition), text: `${sheet.name} breaks free ${roll}.` };
+  return { combat: updated(combat, rng, free), sheet: withoutCondition(sheet, third.condition), die, text: `${sheet.name} breaks free ${roll}.` };
 }
 
-function stabilize(combat: CombatState, sheet: CharacterSheet, third: Extract<Third, { kind: 'stabilize' }>) {
+function stabilize(combat: CombatState, sheet: CharacterSheet, id: string, third: Extract<Third, { kind: 'stabilize' }>) {
   const rng = seededRng(combat.rng);
   const friend = combat.combatants[third.target];
-  const total = hasKit(sheet) ? null : abilityCheck(rng, sheet, { ability: 'wis', skill: 'medicine' }).total;
+  const check = hasKit(sheet) ? null : abilityCheck(rng, sheet, { ability: 'wis', skill: 'medicine' });
+  const total = check ? check.total : null;
+  const die = check ? dieOf(id, check, STABILIZE_DC) : undefined;
   const how = total === null ? 'with a Healer\u2019s Kit' : `(Medicine ${total} vs DC ${STABILIZE_DC})`;
-  if (total !== null && total < STABILIZE_DC) return { combat: updated(combat, rng), sheet, text: `${sheet.name} tries to stabilize ${friend.name} ${how}, but cannot.` };
+  if (total !== null && total < STABILIZE_DC) return { combat: updated(combat, rng), sheet, die, text: `${sheet.name} tries to stabilize ${friend.name} ${how}, but cannot.` };
   const stable: Combatant = { ...friend, status: 'stable', deathSaves: { successes: 0, failures: 0 } };
-  return { combat: updated(combat, rng, stable), sheet, text: `${sheet.name} stabilizes ${friend.name} ${how}.` };
+  return { combat: updated(combat, rng, stable), sheet, die, text: `${sheet.name} stabilizes ${friend.name} ${how}.` };
 }
 
-/** The third choice taken: Dodge, or the check made now and told; either way it is the hero's action. */
-export function takeThird(combat: CombatState, sheet: CharacterSheet, id: string): { action: Action; combat: CombatState; sheet: CharacterSheet } {
+/**
+ * The third choice taken: Dodge, or the check made now and told; either way it is the hero's action. `die`:
+ * the d20 a check rolled, with the chance it had; absent for Dodge and for a Healer's Kit, which roll none.
+ */
+export function takeThird(combat: CombatState, sheet: CharacterSheet, id: string): { action: Action; combat: CombatState; sheet: CharacterSheet; die?: HeroDie } {
   const third = thirdChoice(combat, sheet, id);
   if (third.kind === 'dodge') return { action: { kind: 'dodge' }, combat, sheet };
-  const done = third.kind === 'break-free' ? breakFree(combat, sheet, id, third) : stabilize(combat, sheet, third);
-  return { action: { kind: 'other', text: done.text }, combat: done.combat, sheet: done.sheet };
+  const done = third.kind === 'break-free' ? breakFree(combat, sheet, id, third) : stabilize(combat, sheet, id, third);
+  return { action: { kind: 'other', text: done.text }, combat: done.combat, sheet: done.sheet, ...(done.die ? { die: done.die } : {}) };
 }
 
 // ---- a player writes their own action (docs/rules-design.md, "Freeform turns") ----

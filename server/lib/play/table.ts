@@ -23,6 +23,7 @@ import { meetOnTheRoad, planTrek, type Trek } from './trek.ts';
 import { overtime, planQuest, questClosed } from './quest.ts';
 import { pickChoice, playTurn, type FightNews, type FreeformBallot, type RulesState, type RulesTurn } from './turn.ts';
 import { type Deeds, questXp, sceneXp, type XpEvent, xpTag } from './xp.ts';
+import { dieOfCheck } from './odds.ts';
 import { canAct, yourChoices } from './your-turn.ts';
 
 export const DUNGEON_MODES = ['none', 'fixed', 'explore'] as const;
@@ -171,7 +172,7 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
   const result = resultOf(() => turnResult({
     scene, players: tableOf(state, players), before: state, picks: ballots, tally: resolution.tally, leaders: resolution.leaders,
     chosen: inFight ? null : chosen, rules: choice ? choiceView(choice, foeLevels(state.party, state.dungeon)).rules : null,
-    turn, actions: actionLabels(state, scene),
+    turn, actions: actionLabels(state, scene), awards: xp.awards,
   }));
   return {
     state: { party: { ...xp.party, results: lines }, combat: turn.combat, dungeon: turn.dungeon },
@@ -190,8 +191,21 @@ export function engineStep(state: RulesState, scene: StoredScene, resolution: Re
 const FIGHTING: readonly RulesHook['kind'][] = ['fight', 'engage', 'run'];
 
 /** What the heroes did this scene that earns XP outside a fight (play/xp.ts). */
+/**
+ * The d20s that decided the heroes' actions, each with the chance it had (play/odds.ts). Outside a fight they
+ * are the turn's checks; a roll the turn counted without its numbers is kept, and paid plainly. In a round
+ * they are the fight's own (play/fight.ts).
+ */
+function rollsOf(turn: RulesTurn, round: boolean): Deeds['rolls'] {
+  if (round) return turn.dice;
+  const known = turn.checks.map(dieOfCheck);
+  return [...known, ...turn.rolled.filter((r) => !known.some((k) => k.playerId === r.playerId))];
+}
+
 function deedsOf(before: RulesState, turn: RulesTurn, scene: StoredScene, choice: StoredChoice | null, round: boolean): Deeds {
-  const actors = scene.votes.map((v) => ({ playerId: v.playerId, idle: v.autoRolled === true }));
+  // In a round only a hero who could act has an action: a vote from one who is down changes nothing, and earns nothing.
+  const acted = scene.votes.filter((v) => !round || canAct(before.combat, v.playerId));
+  const actors = acted.map((v) => ({ playerId: v.playerId, idle: v.autoRolled === true }));
   const hook = choice?.hook ?? null;
   const events: XpEvent[] = [];
   if ((hook?.kind === 'trap' || hook?.kind === 'move') && turn.success === true) events.push('trap');
@@ -202,7 +216,7 @@ function deedsOf(before: RulesState, turn: RulesTurn, scene: StoredScene, choice
     if (dungeonLevel(turn.dungeon) > dungeonLevel(before.dungeon)) events.push('deeper');
   }
   const paid = choice?.reward && !(hook && FIGHTING.includes(hook.kind)) && turn.fight === null && turn.success !== false;
-  return { sceneIndex: scene.index, actors, rolls: turn.rolled, events, tag: paid ? choice.reward! : null, round };
+  return { sceneIndex: scene.index, actors, rolls: rollsOf(turn, round), events, tag: paid ? choice.reward! : null, round };
 }
 
 /**

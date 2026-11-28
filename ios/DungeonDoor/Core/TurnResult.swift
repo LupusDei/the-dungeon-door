@@ -117,11 +117,118 @@ struct TurnHero: Codable, Hashable, Identifiable {
     var rolls: [TurnRoll] = []
     /// The engine's own lines that begin with this hero's name.
     var lines: [String] = []
+    /// What they earned this turn and why. Nil when they earned nothing, and on a server from
+    /// before experience from actions.
+    var xp: TurnXp? = nil
 
     var id: String { playerId }
     var deed: Deed { Deed(rawValue: did) ?? .nothing }
 
-    enum CodingKeys: String, CodingKey { case playerId, name, did, choiceId, label, text, byClock, rolls, lines }
+    enum CodingKeys: String, CodingKey { case playerId, name, did, choiceId, label, text, byClock, rolls, lines, xp }
+}
+
+/// What a hero earned in a turn, and why (docs/api.md, `TurnResult.heroes[].xp`): each reason in
+/// the dice log's words, and for the reason their d20 earned, the chance its result had.
+struct TurnXp: Codable, Hashable {
+    struct Reason: Codable, Hashable {
+        /// "took-part", "long-shot", "trap"… A later server may send one the app has not seen: the
+        /// label is what is shown.
+        var reason = ""
+        /// "a long shot that landed".
+        var label = ""
+        var xp = 0
+
+        init(reason: String, label: String, xp: Int) {
+            self.reason = reason
+            self.label = label
+            self.xp = xp
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            reason = try c.value(.reason, or: "")
+            label = try c.value(.label, or: "")
+            xp = (try? c.whole(.xp)) ?? 0
+        }
+    }
+
+    var total = 0
+    /// Their die was left to the clock: every amount here is already halved.
+    var idle = false
+    var reasons: [Reason] = []
+    /// From 0 to 1: the chance, before the roll, of the result their d20 was paid for. Nil when no
+    /// d20 decided what they earned (a pick that rolled nothing, Dodge, a potion).
+    var chance: Double? = nil
+
+    init(total: Int, idle: Bool = false, reasons: [Reason], chance: Double? = nil) {
+        self.total = total
+        self.idle = idle
+        self.reasons = reasons
+        self.chance = chance
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        total = (try? c.whole(.total)) ?? 0
+        idle = try c.value(.idle, or: false)
+        reasons = (try? c.decode([Reason].self, forKey: .reasons)) ?? []
+        chance = try? c.decodeIfPresent(Double.self, forKey: .chance)
+    }
+
+    /// The reasons a d20 earns, by the chance its result had. `chance` belongs to whichever is here.
+    private static let rolled: Set<String> = ["sure-thing", "success", "against-odds", "long-shot", "brave-failure", "hard-lesson", "sure-slip"]
+    /// The results that were not the likely one.
+    private static let surprises: Set<String> = ["against-odds", "long-shot", "hard-lesson", "sure-slip"]
+
+    /// The most telling first: the largest amounts, and for equal amounts what the hero did before
+    /// what everyone gets for taking part.
+    var told: [Reason] {
+        reasons.enumerated().sorted { a, b in
+            if a.element.xp != b.element.xp { return a.element.xp > b.element.xp }
+            let (first, second) = (a.element.reason == "took-part", b.element.reason == "took-part")
+            return first != second ? second : a.offset < b.offset
+        }.map(\.element)
+    }
+
+    /// The reason that says most about the turn: "a long shot that landed".
+    var headline: String { told.first?.label ?? "" }
+
+    /// The award was for a result that was not the likely one.
+    var surprising: Bool { reasons.contains { Self.surprises.contains($0.reason) } }
+
+    /// "+45 XP".
+    var amount: String { "+\(total) XP" }
+
+    /// "a 10% chance", "it could not fail": how likely the result their d20 was paid for had been.
+    var odds: String? {
+        guard let chance, chance > 0 else { return nil }
+        if chance >= 0.995 { return "it could not fail" }
+        return "a \(max(1, Int((chance * 100).rounded())))% chance"
+    }
+
+    /// Why, in full: "a long shot that landed (+40, a 10% chance), taking part (+5)". One reason
+    /// needs no amount of its own: "in the fight", "a hard lesson (a 25% chance)".
+    var why: String {
+        let alone = reasons.count == 1
+        return told.map { reason in
+            let chance = Self.rolled.contains(reason.reason) ? odds : nil
+            let notes = [alone ? nil : "+\(reason.xp)", chance].compactMap { $0 }
+            return notes.isEmpty ? reason.label : "\(reason.label) (\(notes.joined(separator: ", ")))"
+        }.joined(separator: ", ")
+    }
+
+    /// "+45 XP · a long shot that landed (+40, a 10% chance), taking part (+5)".
+    var line: String { why.isEmpty ? amount : "\(amount) · \(why)" }
+
+    /// The same for VoiceOver: "45 XP: a long shot that landed, 40, a 10% chance; taking part, 5".
+    var spoken: String {
+        let alone = reasons.count == 1
+        let parts = told.map { reason -> String in
+            let chance = Self.rolled.contains(reason.reason) ? odds : nil
+            return ([reason.label] + [alone ? nil : "\(reason.xp)", chance].compactMap { $0 }).joined(separator: ", ")
+        }
+        return parts.isEmpty ? "\(total) XP" : "\(total) XP: \(parts.joined(separator: "; "))"
+    }
 }
 
 extension TurnHero {
@@ -136,6 +243,8 @@ extension TurnHero {
         byClock = try c.value(.byClock, or: false)
         rolls = ((try? c.decode([Lossy<TurnRoll>].self, forKey: .rolls)) ?? []).compactMap(\.value)
         lines = (try? c.decode([String].self, forKey: .lines)) ?? []
+        // Null, absent or unreadable: nothing is shown, and the rest of the hero still is.
+        xp = (try? c.decodeIfPresent(TurnXp.self, forKey: .xp)).flatMap { $0 }.flatMap { $0.total > 0 ? $0 : nil }
     }
 }
 
@@ -401,6 +510,21 @@ extension TurnResult {
 
     /// What the turn changed, beyond the dice above: the engine's other lines.
     var briefChanges: [String] { otherNotes }
+
+    /// What the heroes earned, on one line, for a streamlined page: "Nillort +45 XP (a long shot
+    /// that landed), Slagariel +5 XP". When everyone earned the same for the same reason it is said
+    /// once: "+5 XP each for taking part". Nil when nobody earned, and on a server that sends none.
+    var briefXp: String? {
+        let earned = inOrder.compactMap { hero in hero.xp.map { (hero.name, $0) } }
+        guard let first = earned.first else { return nil }
+        let same = earned.allSatisfy { $0.1.total == first.1.total && $0.1.headline == first.1.headline && $0.1.reasons.count == 1 }
+        if earned.count > 1, same { return "\(first.1.amount) each for \(first.1.headline)" }
+        return earned.map { name, xp in
+            // What everyone gets for showing up needs no telling beside a name; what the hero did does.
+            let plain = xp.reasons.count == 1 && xp.reasons[0].reason == "took-part"
+            return plain || xp.headline.isEmpty ? "\(name) \(xp.amount)" : "\(name) \(xp.amount) (\(xp.headline))"
+        }.joined(separator: ", ")
+    }
 
     /// "Maud moves to engage the wasp." under Maud's name reads "moves to engage the wasp."
     private static func without(_ name: String, in line: String) -> String {

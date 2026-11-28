@@ -29,7 +29,7 @@ export interface PartyState {
   levelUps?: LevelUp[];
   /** XP each hero has earned on this adventure, fights and all (play/xp.ts); a hero is listed once they take part. Absent: none yet. */
   earned?: Record<string, number>;
-  /** The XP each hero earned outside a fight in the last resolved scene (play/xp.ts); absent or empty: none. */
+  /** The XP each hero earned in the last resolved scene or round of a fight (play/xp.ts); absent or empty: none. */
   xpAwards?: XpAward[];
   /** The scene index of the last chapter milestone (play/xp.ts CHAPTER_EVERY); absent: none yet. */
   chapterAt?: number;

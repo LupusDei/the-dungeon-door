@@ -97,7 +97,9 @@ THE RULES ENGINE (SRD 5.2, the 2024 rules)
   engine's lines already include any written action, quoting their words: colour that result, and do not add
   speech, feelings, or deeds beyond the words they wrote.
 - Experience: the engine gives the heroes XP for what they do outside fights too: a little for each hero who
-  acts in a scene, more for a check that comes good (and some for a brave failure), for a trap overcome, a
+  acts in a scene, more for a check that comes good (and some for a brave failure), most when a roll goes
+  against the odds (its results name it: "a long shot that landed", "a sure thing that slipped", and you may
+  tell that moment as the surprise it was), for a trap overcome, a
   parley won, new ground in a dungeon, and a milestone at the adventure's end. Tag a choice's "reward" when
   taking it would be a discovery (a secret, a hidden place, lost lore), social (winning someone over), a
   puzzle (a riddle, a mechanism, a lock of wits) or a milestone (it closes a chapter of the story; rarely,
