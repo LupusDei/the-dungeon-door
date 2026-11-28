@@ -9,6 +9,7 @@ struct CharacterDetailView: View {
     let character: Character
     @State private var tab = HeroSheetTab.launchDefault
     @State private var editing = false
+    @State private var repainting = false
     @State private var confirmRetire = false
     @State private var error: String?
     /// `-openQuests YES`: straight on to this hero's quests (screenshot checks).
@@ -17,11 +18,14 @@ struct CharacterDetailView: View {
     /// The latest copy, so edits show straight away.
     private var hero: Character { model.hero(id: character.id) ?? character }
 
+    /// Only an active hero of the player's own; the Hall of Heroes is looked at, not repainted.
+    private var canRepaint: Bool { hero.isActive && hero.ownerId == model.playerId }
+
     var body: some View {
         ScrollView {
             // A lazy stack so the sheet's vitals and tabs can pin under the bar while the rest scrolls.
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                HeroIdentityHeader(character: hero)
+                HeroIdentityHeader(character: hero, onRepaint: canRepaint ? { repainting = true } : nil)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 14)
@@ -70,6 +74,7 @@ struct CharacterDetailView: View {
             if hero.isActive {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        Button("Repaint portrait", systemImage: "paintbrush") { repainting = true }
                         Button("Reforge", systemImage: "hammer") { editing = true }
                         Button("Retire hero", systemImage: "building.columns", role: .destructive) { confirmRetire = true }
                     } label: { Image(systemName: "ellipsis.circle") }
@@ -81,6 +86,7 @@ struct CharacterDetailView: View {
             if !was && now { dismiss() }
         }
         .sheet(isPresented: $editing) { CharacterForgeView(editing: hero) }
+        .sheet(isPresented: $repainting) { PortraitRepaintSheet(hero: hero) }
         .navigationDestination(isPresented: $launchQuests) { HeroQuestsView(hero: hero) }
         .confirmationDialog("Retire \(hero.name)?", isPresented: $confirmRetire, titleVisibility: .visible) {
             Button("Retire", role: .destructive) {

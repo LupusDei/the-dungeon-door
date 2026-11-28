@@ -48,6 +48,8 @@ struct CharacterForgeView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var tweak = ""
+    /// The portrait step's painting. `hero.appearance` and `hero.portraitUrl` take it only on save.
+    @State private var painting: PortraitRemake
     private let isEditing: Bool
     /// A hero above level 1 keeps the species, class and background it grew up with: the server
     /// refuses to rebuild its sheet.
@@ -68,7 +70,9 @@ struct CharacterForgeView: View {
 
     /// `draft` is a new hero with some of the forge already filled in (the `-forgeNew` argument).
     init(editing existing: Character? = nil, draft: Character? = nil, startingAt step: Step = .identity) {
-        _hero = State(initialValue: existing ?? draft ?? Character.blank(ownerId: AppConfig.playerId))
+        let start = existing ?? draft ?? Character.blank(ownerId: AppConfig.playerId)
+        _hero = State(initialValue: start)
+        _painting = State(initialValue: PortraitRemake(start))
         _step = State(initialValue: step)
         // `-forgeBackground <id>` picks a background as the forge opens (screenshot checks).
         let level = existing?.sheet?.level ?? 1
@@ -367,18 +371,17 @@ struct CharacterForgeView: View {
 
     private func portrait(_ catalog: Catalog) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            ZStack {
-                if forging {
-                    ForgingView()
-                        .aspectRatio(1, contentMode: .fit)
-                        .card()
-                } else {
-                    PortraitView(url: hero.portraitURL,
-                                 symbol: catalog.classes.first { $0.id == hero.characterClass }?.symbol ?? "person.fill",
-                                 size: 300)
-                }
+            // The picture and Repaint come first, so both are on screen above the pinned save.
+            PortraitCanvas(url: painting.shown.portraitUrl.flatMap(URL.init(string:)),
+                           symbol: catalog.classes.first { $0.id == hero.characterClass }?.symbol ?? "person.fill",
+                           forging: forging)
+            if painting.awaitingChoice { PortraitChoiceNote() }
+
+            RepaintControls(painting: painting, note: $tweak, busy: forging || saving) {
+                Task { await forge() }
             }
-            .frame(maxWidth: .infinity)
+
+            ErrorLine(text: error)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(hero.name).font(.display(26, weight: .bold))
@@ -389,7 +392,7 @@ struct CharacterForgeView: View {
                     .font(.proseSmall).foregroundStyle(Palette.muted)
             }
 
-            if let appearance = hero.appearance {
+            if let appearance = painting.shown.appearance {
                 VStack(alignment: .leading, spacing: 6) {
                     SectionLabel("As the dungeon master sees them")
                     Text(appearance).font(.proseSmall.italic())
@@ -397,27 +400,6 @@ struct CharacterForgeView: View {
                 .padding(14)
                 .card()
             }
-
-            if hero.portraitUrl != nil {
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("Not quite right?")
-                    TextField("Darker armour, an older face, a raven on the shoulder…", text: $tweak, axis: .vertical)
-                        .font(.prose)
-                        .returnIsDone($tweak)
-                        .padding(12)
-                        .card()
-                }
-            }
-
-            ErrorLine(text: error)
-
-            Button {
-                Task { await forge() }
-            } label: {
-                Label(hero.portraitUrl == nil ? "Forge portrait" : "Reforge portrait", systemImage: "flame.fill")
-            }
-            .buttonStyle(hero.portraitUrl == nil ? .gilded : .gildedOutline)
-            .disabled(forging || saving)
         }
     }
 
@@ -425,19 +407,26 @@ struct CharacterForgeView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if let previous = neighbour(-1) {
+            if step == .portrait && painting.awaitingChoice {
+                PortraitChoiceBar(disabled: forging || saving,
+                                  backToLast: { withAnimation { painting.backToLast() } },
+                                  keepNew: { withAnimation { painting.keepNew() } })
+            } else if let previous = neighbour(-1) {
                 Button("Back") { withAnimation { step = previous } }
                     .buttonStyle(.gildedOutline)
                     .frame(maxWidth: 120)
             }
             if step == .portrait {
-                Button {
-                    Task { await seal() }
-                } label: {
-                    if saving { ProgressView().tint(Palette.ink) } else { Text(hero.portraitUrl == nil ? "Seal without portrait" : "Seal hero") }
+                if !painting.awaitingChoice {
+                    Button {
+                        Task { await seal() }
+                    } label: {
+                        if saving { ProgressView().tint(Palette.ink) } else { Label(painting.saveLabel, systemImage: "checkmark.seal.fill") }
+                    }
+                    .buttonStyle(.gilded)
+                    .disabled(forging || saving)
+                    .accessibilityHint("Saves the hero and closes the forge.")
                 }
-                .buttonStyle(.gilded)
-                .disabled(forging || saving)
             } else {
                 Button("Next") {
                     if let next = neighbour(1) { withAnimation { step = next } }
@@ -478,15 +467,10 @@ struct CharacterForgeView: View {
         error = nil
         defer { forging = false }
         do {
-            let note = tweak.trimmingCharacters(in: .whitespacesAndNewlines)
-            let result = try await model.api.forgePortrait(
-                for: hero,
-                previousAppearance: hero.portraitUrl == nil ? nil : hero.appearance,
-                note: note.isEmpty ? nil : note)
-            withAnimation {
-                hero.appearance = result.appearance
-                hero.portraitUrl = result.portraitUrl
-            }
+            let look = hero.description
+            let asked = painting.request(description: look, note: tweak)
+            let result = try await model.api.forgePortrait(for: hero, previousAppearance: asked.previousAppearance, note: asked.note)
+            withAnimation { painting.painted(result, from: look) }
             tweak = ""
         } catch {
             self.error = "The forge sputtered: \(error.localizedDescription)"
@@ -502,7 +486,7 @@ struct CharacterForgeView: View {
             // The background on show is the one to build on. A levelled hero sends none: its sheet stays.
             let picked = locked || shownBackground.isEmpty ? nil : shownBackground
             let placed = locked ? nil : boost
-            _ = try await model.save(hero, backgroundId: picked, boost: placed)
+            _ = try await model.save(painting.applied(to: hero), backgroundId: picked, boost: placed)
             dismiss()
         } catch {
             self.error = "Couldn't save \(hero.name): \(error.localizedDescription)"
@@ -551,31 +535,5 @@ private struct StepTrack: View {
         .animation(.snappy, value: current)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(position) of \(steps.count): \(current.title)")
-    }
-}
-
-/// Shown while the portrait is generated (10–40 s), so the wait feels like part of the game.
-private struct ForgingView: View {
-    private let lines = [
-        "Stoking the forge…", "Consulting the bards…", "Grinding pigments from dragon scale…",
-        "The dungeon master squints at your hero…", "Painting by candlelight…", "Varnishing the canvas…",
-    ]
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 3)) { context in
-            let tick = Int(context.date.timeIntervalSinceReferenceDate / 3)
-            VStack(spacing: 18) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(LinearGradient(colors: [Palette.gold, Palette.ember], startPoint: .top, endPoint: .bottom))
-                    .symbolEffect(.pulse, options: .repeating)
-                Text(lines[tick % lines.count])
-                    .font(.prose.italic())
-                    .foregroundStyle(Palette.muted)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut, value: tick)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
     }
 }
