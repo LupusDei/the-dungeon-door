@@ -43,13 +43,14 @@ final class CompanionsUITests: XCTestCase {
         }
     }
 
-    /// Types into the alert on screen and saves it.
-    private func answer(_ title: String, with words: String) {
+    /// Types into the alert on screen and saves it. `shot` names a picture of the alert as it stands.
+    private func answer(_ title: String, with words: String, shot: String? = nil) {
         let alert = app.alerts[title]
         XCTAssertTrue(alert.waitForExistence(timeout: 5), "the alert \(title)")
         let field = alert.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(words)
+        if let shot { save(shot) }
         alert.buttons["Save"].tap()
     }
 
@@ -75,20 +76,30 @@ final class CompanionsUITests: XCTestCase {
         bring(pencil)
         pencil.tap()
         answer("A nickname for them", with: "Micah")
-        XCTAssertTrue(app.staticTexts["Micah"].waitForExistence(timeout: 10), "nicknamed")
+        XCTAssertTrue(app.staticTexts["Micah, your nickname for them"].waitForExistence(timeout: 10), "nicknamed, and shown as a nickname")
         XCTAssertFalse(unnamed.exists)
 
         // Someone who gave themselves a name keeps it: a nickname sits beside it, in quotes.
         if app.staticTexts["Robin"].exists {
             let other = button("label == %@", "Give Robin a nickname")
-            // Robin's row is the last, at the screen's edge under the chat bar: up into the clear first.
-            app.swipeUp()
+            // Robin's row is the last. On a phone it sits at the screen's edge under the chat bar, where
+            // a tap would land on the bar: up into the clear first. A tablet shows it already.
+            let screen = app.windows.firstMatch.frame.height
+            var tries = 4
+            while other.exists, other.frame.midY > screen * 0.7, tries > 0 {
+                let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+                from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+                tries -= 1
+            }
             XCTAssertTrue(other.waitForExistence(timeout: 5) && other.isHittable, "the pencil beside Robin")
             save("companions-before-nickname")
             other.tap()
-            answer("A nickname for them", with: "Bird")
+            answer("A nickname for them", with: "Bird", shot: "companions-nickname-dialog")
             XCTAssertTrue(app.staticTexts["your nickname for them: Bird"].waitForExistence(timeout: 10), "the nickname, beside their name")
             XCTAssertTrue(app.staticTexts["Robin"].exists, "their own name is still their name")
+            // Down a little, so the row is clear of the navigation bar for the picture.
+            let middle = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            middle.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)))
             save("companions-nickname")
         }
 

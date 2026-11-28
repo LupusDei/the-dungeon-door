@@ -71,9 +71,12 @@ struct CompanionsToCall: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(companion.name)
+                        // Quotes mark a nickname of the player's own, wherever it stands: here in
+                        // place of a name they have not given, or beside the one they have.
+                        Text(companion.namedBy == "you" ? "\u{201C}\(companion.name)\u{201D}" : companion.name)
                             .font(.serif(.body, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityLabel(companion.namedBy == "you" ? "\(companion.name), your nickname for them" : companion.name)
                         if let nickname = companion.shownNickname {
                             // Their own name is their name; the player's nickname sits beside it.
                             Text("\u{201C}\(nickname)\u{201D}")
