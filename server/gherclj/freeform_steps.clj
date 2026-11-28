@@ -10,12 +10,14 @@
 
 (defgiven "a fight is underway" subject.fight-underway)
 (defgiven "no fight is underway" subject.no-fight)
+(defgiven "the scene offers a fight as choice {choice:string}" subject.fight-on-offer)
 
 (defwhen "the player writes {text:string}" subject.player-writes)
 (defwhen "the player names their weapon" subject.player-writes-their-attack)
 (defwhen "the dungeon master returns something unreadable" subject.unreadable)
 
 (defthen "the action maps to today's choice {choice:string}" subject.maps-to)
+(defthen "the action maps to no choice" subject.maps-to-no-choice)
 (defthen "the turn is spent" subject.turn-is-spent)
 (defthen "the turn is not spent" subject.turn-is-not-spent)
 (defthen "the check is against DC {dc:int}" subject.against-dc)

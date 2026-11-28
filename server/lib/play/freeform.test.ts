@@ -134,6 +134,78 @@ test('a skill from the sheet is a check, and words beside a plot choice stay wit
   assert.match(done.rules!.results.join('\n'), /Athletics/);
 });
 
+/** The fake DM, its first choice a fight with a goblin ("Strike first"). */
+const fightingDM = (): DungeonMaster => {
+  const withFight = <T extends { choices: { label: string; detail: string; rules?: unknown }[] }>(scene: T): T =>
+    ({ ...scene, choices: [{ label: 'Strike first', detail: 'Before they stir.', rules: { kind: 'fight', monsters: ['goblin-warrior'] } }, ...scene.choices.slice(1)] });
+  return {
+    ...fakeDungeonMaster,
+    openingScene: async (ctx) => withFight(await fakeDungeonMaster.openingScene(ctx)),
+    nextScene: async (ctx, resolution) => withFight(await fakeDungeonMaster.nextScene(ctx, resolution)),
+  };
+};
+
+type Acted = GameState & { action: { spent: boolean; ruling: string; roll: number | null; choiceId: string | null } };
+const write = (code: string, player: string, text: string) => call<Acted>(actionApi.POST, gamePath(code, 'action'), { player, body: { sceneIndex: 0, text } });
+
+test('an attack written outside a fight is a pick of the fight on offer: two who attack outvote the one who talks, and the fight starts', async () => {
+  registerDungeonMaster('chronicler', fightingDM());
+  const { code, players } = await table(3);
+  const [p1, p2, p3] = players;
+  assert.match((await view(code, p1)).scene!.choices[0].rules!, /^Fight: Goblin Warrior/);
+
+  const shot = await write(code, p1, 'I shoot the goblin');
+  assert.deepEqual([shot.body.action.spent, shot.body.action.ruling, shot.body.action.choiceId], [true, 'known', 'a'], 'the DM took the attack for the fight');
+  assert.equal(shot.body.scene!.myVote, 'a');
+  assert.deepEqual(shot.body.scene!.myAction, { id: 'choice:a', targets: [], intent: 'I shoot the goblin' }, 'the words stay beside the pick');
+  assert.equal(shot.body.scene!.myFreeform, null, 'it is not a check of the hero\'s own');
+  assert.equal(shot.body.scene!.myDie, null, 'and there is no d20 to throw for it');
+  assert.deepEqual(shot.body.scene!.freeforms, []);
+
+  // The fake DM calls a kick a check with damage. Outside a fight that would land on no one, so the engine counts it as the fight too.
+  const kicked = await write(code, p2, 'I kick the brazier onto the goblins');
+  assert.deepEqual([kicked.body.action.spent, kicked.body.action.ruling, kicked.body.action.choiceId], [true, 'known', 'a']);
+  assert.deepEqual(kicked.body.scene!.votes.map((v) => [v.playerId, v.choiceId, v.intent]), [[p1, 'a', 'I shoot the goblin'], [p2, 'a', 'I kick the brazier onto the goblins']]);
+
+  await call(voteApi.POST, gamePath(code, 'vote'), { player: p3, body: { sceneIndex: 0, choiceId: 'c' } });
+  await settle();
+  const state = await view(code, p3);
+  assert.equal(state.chronicle[0].choiceLabel, 'Strike first', 'two picks to one');
+  assert.ok(state.rules!.combat, 'the fight has started');
+  assert.equal(state.scene!.combat, true);
+  const result = state.chronicle[0].result!;
+  assert.deepEqual([result.choice!.id, result.choice!.backers, result.choice!.tally], ['a', [p1, p2], { a: 2, b: 0, c: 1 }]);
+  assert.deepEqual(result.heroes.map((h) => [h.did, h.choiceId, h.text]), [
+    ['choice', 'a', 'I shoot the goblin'], ['choice', 'a', 'I kick the brazier onto the goblins'], ['choice', 'c', undefined],
+  ]);
+});
+
+test('a written attack is one pick like any other: outvoted, the party does not fight', async () => {
+  registerDungeonMaster('chronicler', fightingDM());
+  const { code, players } = await table(3);
+  const [p1, p2, p3] = players;
+  await write(code, p1, 'I attack the goblin');
+  for (const p of [p2, p3]) await call(voteApi.POST, gamePath(code, 'vote'), { player: p, body: { sceneIndex: 0, choiceId: 'b' } });
+  await settle();
+  const state = await view(code, p1);
+  assert.equal(state.chronicle[0].choiceLabel, 'Find a quieter way');
+  assert.equal(state.rules!.combat, null, 'no fight');
+  assert.deepEqual(state.chronicle[0].result!.heroes.map((h) => [h.did, h.choiceId]), [['choice', 'a'], ['choice', 'b'], ['choice', 'b']]);
+});
+
+test('with no fight on offer a written attack stays a check, and a written look around is a check even when a fight is', async () => {
+  const { code, host } = await table(1);
+  const acted = await write(code, host, 'I attack the shadows');
+  assert.deepEqual([acted.body.action.ruling, acted.body.action.choiceId], ['check', null], 'nothing on offer starts a fight');
+
+  setStore(new MemoryStore());
+  registerDungeonMaster('chronicler', fightingDM());
+  const other = await table(1);
+  const looked = await write(other.code, other.host, 'I look for tracks in the mud');
+  assert.deepEqual([looked.body.action.ruling, looked.body.action.choiceId], ['check', null], 'a check that hurts no one is the hero\'s own action');
+  assert.equal(looked.body.scene!.myVote, null);
+});
+
 test('a classification the engine cannot read does not spend the turn', async () => {
   const dm: DungeonMaster = {
     openingScene: (ctx) => fakeDungeonMaster.openingScene(ctx),

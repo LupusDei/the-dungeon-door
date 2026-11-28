@@ -43,6 +43,16 @@ test('the fake DM classifies a written action without inventing a number', () =>
   assert.equal(JSON.stringify(kick).match(/\d/g), null, 'no digits');
 });
 
+test('outside a fight the fake DM takes an attack for the choice that starts a fight, when one is on offer', () => {
+  const choices = [{ id: 'choice:a', label: 'Calm the wolf' }, { id: 'choice:c', label: 'Strike before they stir', fight: 'Wolf, Giant Rat' }];
+  const request = { characterName: 'Bryn', text: 'I shoot the rat', inCombat: false, actions: ['choice:a', 'choice:c', 'skill:athletics'], choices };
+  assert.deepEqual([classifyFreeform(request).kind, classifyFreeform(request).action], ['known', 'choice:c']);
+  assert.equal(classifyFreeform({ ...request, text: 'I look for tracks' }).kind, 'check', 'not an attack');
+  assert.equal(classifyFreeform({ ...request, choices: choices.map(({ id, label }) => ({ id, label })) }).kind, 'check', 'no fight on offer');
+  assert.equal(classifyFreeform({ ...request, inCombat: true }).kind, 'check', 'in a fight an attack is not a plot choice');
+  assert.equal(classifyFreeform({ ...request, actions: ['choice:a'] }).kind, 'check', 'a choice the hero cannot take is not offered');
+});
+
 test('on the road it tells the road and never offers a way on; it buys from a vendor and talks to foes met', async () => {
   const trek = { stretch: 1, of: 2, terrain: 'a forest road', event: 'quiet' as const, leadsTo: 'door' as const, wares: [], waiting: null };
   const quiet = await fakeDungeonMaster.openingScene(ctx({ ...rules, trek }));

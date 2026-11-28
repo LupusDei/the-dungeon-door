@@ -311,7 +311,10 @@ extension TurnHero {
     var deedLine: String {
         switch deed {
         case .choice:
-            return "Picked: \(label ?? "a choice")"
+            // Words beside a pick: typed and counted as this choice (an attack, for the fight), or sent with it.
+            let picked = "Picked: \(label ?? "a choice")"
+            if let text, !text.isEmpty { return "\(picked) (“\(text)”)" }
+            return picked
         case .own:
             if let text, !text.isEmpty { return "“\(text)”" }
             return label ?? "Their own action"

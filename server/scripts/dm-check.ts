@@ -1,7 +1,8 @@
 /**
  * A real-model check of the dungeon master with the rules engine in its prompt: an opening for a story game,
- * an opening for a mapped dungeon, and the next scene after the engine resolved a choice. Text only (three
- * calls, about five cents of the owner's AI Gateway credit), no paintings.
+ * an opening for a mapped dungeon, the next scene after the engine resolved a choice, and two written actions
+ * classified (an attack outside a fight, which is the choice that starts one, and a look around, which is not).
+ * Text only (five calls, about six cents of the owner's AI Gateway credit), no paintings.
  *
  * Run it before a release whenever lib/dm/ or what the DM is told has changed: the fake DM cannot tell you
  * that the real one refuses the schema or ignores the hooks.
@@ -13,6 +14,7 @@ import { archetype } from '../lib/catalog.ts';
 import { heroSheet } from '../lib/characters.ts';
 import { llmDungeonMaster } from '../lib/dm/llm.ts';
 import type { DMContext, PartyMember, Resolution } from '../lib/dm/types.ts';
+import { attackStartsFight, settleRuling } from '../lib/play/actions.ts';
 import { hookLabel, parseHook } from '../lib/play/hooks.ts';
 import { engineStep, newRules } from '../lib/play/table.ts';
 import { rulesContext } from '../lib/play/view.ts';
@@ -69,3 +71,25 @@ for (const mode of ['none', 'fixed'] as const) {
 
 console.log(`\nThe dungeon master answered three times. ${hooks} choices carry a hook the engine accepts; ${dropped} hooks were dropped.`);
 if (hooks === 0) { console.error('No choice carried a usable hook: the DM is not driving the engine.'); process.exit(1); }
+
+// Written actions (classifyAction), as game.ts asks: outside a fight, with one choice that starts a fight.
+const ids = ['choice:a', 'choice:b', 'choice:c', 'skill:perception', 'skill:athletics', 'ability:str'];
+const offer = [
+  { id: 'choice:a', label: 'Calm the hungry wolf' },
+  { id: 'choice:b', label: 'Slip past through the mist' },
+  { id: 'choice:c', label: 'Strike before they stir', fight: 'Wolf, Giant Rat' },
+  { id: 'skill:perception', label: 'Perception' }, { id: 'skill:athletics', label: 'Athletics' }, { id: 'ability:str', label: 'Strength' },
+];
+const table: DMContext = { archetype: archetype('chronicler'), adventureTitle: 'The Ford', party, history: [], sceneIndex: 1, sceneCount: 6, recentChat: [], rules: rulesContext(newRules(players, 'none', 11, 6)) };
+let misread = 0;
+for (const { text, fight } of [{ text: 'I hurl a fire bolt at the wolf', fight: true }, { text: 'I look for tracks in the mud', fight: false }]) {
+  const raw = await llmDungeonMaster.classifyAction!(table, { characterName: 'Mirel', text, inCombat: false, actions: ids, choices: offer });
+  const read = settleRuling(raw, ids);
+  const settled = attackStartsFight(read, ['choice:c'], false);
+  const said = read.ruling.kind === 'known' ? `known ${read.ruling.action}` : read.ruling.kind === 'check' ? `check (${read.ruling.skill ?? read.ruling.ability}, ${read.ruling.tier}, effect ${read.ruling.effect.category})` : 'impossible';
+  const picked = settled.ruling.kind === 'known' && settled.ruling.action === 'choice:c';
+  const ok = settled.spent && picked === fight;
+  if (!ok) misread++;
+  console.log(`\n=== WRITTEN ACTION: "${text}"\n  the DM: ${said}\n  the engine: ${picked ? 'a pick of "Strike before they stir"' : settled.spent ? 'the hero\'s own action' : 'not spent'}${picked && read.ruling.kind !== 'known' ? ' (the engine\'s own rule: the DM called it a check)' : ''}  =>  ${ok ? 'as it should be' : 'WRONG'}`);
+}
+if (misread) { console.error('A written action was not read as the rules say: an attack outside a fight is the choice that starts one, and nothing else is.'); process.exit(1); }

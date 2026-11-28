@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { heroSheet } from '../lib/characters.ts';
 import { classifyFreeform } from '../lib/dm/fake.ts';
-import { adjudicateCheck, DAMAGE_BY_SEVERITY, knownActionIds, settleRuling, type CheckRuling, type Settled } from '../lib/play/actions.ts';
+import { adjudicateCheck, attackStartsFight, DAMAGE_BY_SEVERITY, knownActionIds, settleRuling, type CheckRuling, type Settled } from '../lib/play/actions.ts';
 import { fightRound, startFight } from '../lib/play/fight.ts';
 import { legalActions, type LegalInput } from '../lib/play/legal.ts';
 import type { LegalAction } from '../lib/types.ts';
@@ -22,6 +22,8 @@ export class FreeformSteps {
   private combat: CombatState | null = null;
   private foeHp = 0;
   private settled: Settled | null = null;
+  /** The ids of the choices that start a fight if the party takes them. */
+  private fights: string[] = [];
   private log = '';
   private dice = '';
 
@@ -32,6 +34,7 @@ export class FreeformSteps {
 
   fightUnderway(): void {
     this.inCombat = true;
+    this.fights = [];
     this.sheet = this.hero();
     const started = startFight({ version: 1, rng: 1, sheets: { p1: this.sheet } }, ['goblin-warrior']);
     this.combat = started.combat;
@@ -41,9 +44,15 @@ export class FreeformSteps {
 
   noFight(): void {
     this.inCombat = false;
+    this.fights = [];
     this.combat = null;
     this.sheet = this.hero();
     this.legal = this.list();
+  }
+
+  /** One of the scene's choices starts a fight with a goblin. */
+  fightOnOffer(choice: string): void {
+    this.fights = [`choice:${choice}`];
   }
 
   private list(): LegalAction[] {
@@ -66,8 +75,9 @@ export class FreeformSteps {
 
   playerWrites(text: string): void {
     const actions = knownActionIds(this.legal);
-    const choices = this.legal.filter((a) => a.available).map((a) => ({ id: a.id, label: a.label }));
-    this.settled = settleRuling(classifyFreeform({ characterName: 'Bryn', text, inCombat: this.inCombat, actions, choices }), actions);
+    const choices = this.legal.filter((a) => a.available).map((a) => ({ id: a.id, label: a.label, ...(this.fights.includes(a.id) ? { fight: 'Goblin Warrior' } : {}) }));
+    const read = settleRuling(classifyFreeform({ characterName: 'Bryn', text, inCombat: this.inCombat, actions, choices }), actions);
+    this.settled = attackStartsFight(read, this.fights, this.inCombat);
     this.dice = '';
     this.log = '';
     if (this.settled.ruling.kind !== 'check') return;
@@ -82,6 +92,10 @@ export class FreeformSteps {
 
   mapsTo(choice: string): void {
     assert.equal(this.settled!.choiceId, choice);
+  }
+
+  mapsToNoChoice(): void {
+    assert.equal(this.settled!.choiceId, null);
   }
 
   turnIsSpent(): void {

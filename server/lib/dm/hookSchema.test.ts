@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { z } from 'zod';
 import { parseHook } from '../play/hooks.ts';
 import { FlatHook, hookFromFlat } from './hookSchema.ts';
-import { DM_SCHEMAS } from './llm.ts';
+import { DM_SCHEMAS, offered } from './llm.ts';
 
 /** A hook as the model must write it: every field present, the unused ones empty. */
 const EMPTY = {
@@ -68,4 +68,9 @@ test('every choice the model writes carries an XP tag, "none" for most; the engi
     assert.deepEqual(choice.properties.reward.enum, ['none', 'discovery', 'social', 'puzzle', 'milestone'], name);
     assert.ok(choice.required.includes('reward'), `${name}: not nullable, so it adds no union-typed field`);
   }
+});
+
+test('the classifier reads which choice starts a fight, and with whom', () => {
+  assert.equal(offered({ id: 'choice:a', label: 'Strike the wasp first', fight: 'Giant Wasp, Swarm of Bats' }), '(choice:a) Strike the wasp first [starts a fight with Giant Wasp, Swarm of Bats]');
+  assert.equal(offered({ id: 'choice:b', label: 'Parley with the hive' }), '(choice:b) Parley with the hive');
 });

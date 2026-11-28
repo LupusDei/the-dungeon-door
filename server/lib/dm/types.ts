@@ -173,8 +173,12 @@ export interface ActionRequest {
   inCombat: boolean;
   /** Ids the text may map onto (today's actions). */
   actions: readonly string[];
-  /** The choices on offer, so a known action can name one. */
-  choices: { id: string; label: string }[];
+  /**
+   * The choices on offer, so a known action can name one. `fight` is on a choice that starts a fight when the
+   * party takes it: the creatures it fights ("Giant Wasp, Swarm of Bats"). Outside a fight, an attack written
+   * in the player's own words is that choice.
+   */
+  choices: { id: string; label: string; fight?: string }[];
 }
 
 export interface DungeonMaster {

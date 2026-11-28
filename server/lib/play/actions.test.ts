@@ -4,7 +4,7 @@ import { heroSheet } from '../characters.ts';
 import type { Combatant } from '../rules/combatant.ts';
 import type { CombatState } from '../rules/scene.ts';
 import type { CharacterSheet } from '../rules/sheet.ts';
-import { adjudicateCheck, choiceFor, DAMAGE_BY_SEVERITY, DC_BY_TIER, knownActionIds, REFUSED, settleRuling, UNREADABLE, takeThird, thirdChoice, thirdWords } from './actions.ts';
+import { adjudicateCheck, attackStartsFight, choiceFor, DAMAGE_BY_SEVERITY, DC_BY_TIER, knownActionIds, REFUSED, settleRuling, UNREADABLE, takeThird, thirdChoice, thirdWords } from './actions.ts';
 import { scriptedRng } from '../rules/rng.ts';
 import { COMBAT_CHOICES, fightRound, startFight } from './fight.ts';
 import { yourChoices } from './your-turn.ts';
@@ -117,6 +117,25 @@ test('a written action maps onto the hero\'s legal actions, and a bad classifica
   const check = settleRuling(kickFlat, knownActionIds(offered));
   assert.equal(check.spent, true);
   assert.equal(check.ruling.kind, 'check');
+});
+
+test('outside a fight, a written check that would hurt or afflict someone is a pick of the fight on offer', () => {
+  const allowed = ['choice:a', 'choice:b', 'choice:c', 'skill:athletics'];
+  const kick = settleRuling(kickFlat, allowed);
+  const started = attackStartsFight(kick, ['choice:c'], false);
+  assert.deepEqual(started, { spent: true, ruling: { kind: 'known', action: 'choice:c' }, choiceId: 'c', narration: null });
+  const trip = settleRuling({ kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'condition', condition: 'prone', save: 'dex' }, allowed);
+  assert.equal(attackStartsFight(trip, ['choice:a'], false).choiceId, 'a', 'a condition forced on someone is an attack too');
+  assert.equal(attackStartsFight(kick, ['choice:b', 'choice:c'], false).choiceId, 'b', 'with two fights on offer, the first');
+
+  assert.equal(attackStartsFight(kick, [], false), kick, 'no fight on offer: the check stands');
+  assert.equal(attackStartsFight(kick, ['choice:c'], true), kick, 'in a fight the check lands on a foe, as before');
+  const look = settleRuling({ kind: 'check', ability: 'wis', skill: 'perception', tier: 'easy', effect: 'none' }, allowed);
+  assert.equal(attackStartsFight(look, ['choice:c'], false), look, 'a check that hurts no one is the hero\'s own action');
+  const known = settleRuling({ kind: 'known', action: 'choice:b' }, allowed);
+  assert.equal(attackStartsFight(known, ['choice:c'], false), known, 'words that are another choice stay that choice');
+  const refused = settleRuling({ kind: 'impossible', narration: 'The moon is too far.' }, allowed);
+  assert.equal(attackStartsFight(refused, ['choice:c'], false), refused, 'an impossible action is still not spent');
 });
 
 test('kicking the brazier is a check: the engine sets the DC and the damage, in a fight and out of one', () => {

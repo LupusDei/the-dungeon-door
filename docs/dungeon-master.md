@@ -110,7 +110,7 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - The LLM DM's schema takes a flat hook with no nullable fields (`lib/dm/hookSchema.ts`): the model
     fills what its kind uses and leaves the rest empty ("", 0, [], "none"), because providers refuse a
     schema with many nullable fields (Anthropic: more than 16 is a 400 and no game can start). A test
-    counts them; `npm run dm:check` asks the real model (text only, about five cents) and is the only
+    counts them; `npm run dm:check` asks the real model (text only, about six cents) and is the only
     thing that proves a schema or prompt change works. The fake DM offers an Athletics check
     (or the first exit), a Perception check and a Persuasion check (a parley when foes wait in the
     room), and never starts a fight itself.
@@ -147,6 +147,11 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   engine sets them (easy 10, medium 15, hard 20; damage by severity; a condition's save at that same DC).
   Impossible, and a classification the engine cannot read, is narrated as a no and the turn is not spent.
   The dice line quotes the player's words; narrate it with the other results.
+  Outside a fight, an attack starts the fight: a choice in `request.choices` that starts one carries
+  `fight` (the creatures it fights), and words that set out to hurt, seize or afflict a creature there
+  are that choice (a known action, its `choice:` id), not a check. The engine holds the same line: a
+  check with damage or a condition, written outside a fight while such a choice is on offer, is counted
+  as a pick of it (docs/rules-design.md, "A written attack outside a fight").
 
 ## Rules the engine enforces (so you don't have to)
 

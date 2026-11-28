@@ -180,6 +180,20 @@ const isSeverity = (value: string): value is Severity => SEVERITIES.includes(val
 const unreadable = (): Settled => ({ spent: false, ruling: { kind: 'impossible', narration: UNREADABLE }, choiceId: null, narration: UNREADABLE });
 const refused = (narration: string): Settled => ({ spent: false, ruling: { kind: 'impossible', narration }, choiceId: null, narration });
 
+/**
+ * Outside a fight, an attack starts the fight: words that set out to hurt or afflict a creature count as a
+ * pick of the choice on offer that fights (docs/rules-design.md, "A written attack outside a fight"). The DM
+ * is told to answer "known" with that choice. This catches the reply that still makes it a check with damage
+ * or a condition, which outside a fight lands on no one. `fights` are the ids of the available choices that
+ * start a fight, in the order offered; the first is taken. With none on offer the check stands.
+ */
+export function attackStartsFight(settled: Settled, fights: readonly string[], inCombat: boolean): Settled {
+  if (inCombat || !settled.spent || settled.ruling.kind !== 'check' || settled.ruling.effect.category === 'none') return settled;
+  const fight = fights.find((id) => choiceFor(id) !== null);
+  if (!fight) return settled;
+  return { spent: true, ruling: { kind: 'known', action: fight }, choiceId: choiceFor(fight), narration: null };
+}
+
 /** The DM's classification, checked. Anything the engine cannot read becomes an impossible action. */
 export function settleRuling(raw: unknown, allowed: readonly string[]): Settled {
   if (!raw || typeof raw !== 'object') return unreadable();

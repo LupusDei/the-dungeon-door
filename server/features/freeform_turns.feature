@@ -26,6 +26,34 @@ Feature: Freeform turns
     And the damage dice are "2d6"
     And the dice log contains "vs DC 15"
 
+  Scenario: An attack written outside a fight is a pick of the fight on offer
+    Given no fight is underway
+    And the scene offers a fight as choice "c"
+    When the player writes "I shoot the goblin"
+    Then the turn is spent
+    And the action maps to today's choice "c"
+
+  Scenario: A written check that would hurt someone is a pick of the fight on offer too
+    Given no fight is underway
+    And the scene offers a fight as choice "c"
+    When the player writes "I kick the brazier onto the goblins"
+    Then the turn is spent
+    And the action maps to today's choice "c"
+
+  Scenario: A written action that hurts no one stays the hero's own, even with a fight on offer
+    Given no fight is underway
+    And the scene offers a fight as choice "c"
+    When the player writes "I look for tracks in the mud"
+    Then the turn is spent
+    And the action maps to no choice
+    And the check is against DC 10
+
+  Scenario: With no fight on offer a written attack stays the hero's own check
+    Given no fight is underway
+    When the player writes "I shoot the goblin"
+    Then the turn is spent
+    And the action maps to no choice
+
   Scenario: An impossible action does not spend the turn
     Given no fight is underway
     When the player writes "I fly to the moon"

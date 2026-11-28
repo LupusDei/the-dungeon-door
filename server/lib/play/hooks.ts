@@ -53,6 +53,10 @@ interface Edge { advantage?: boolean | null; disadvantage?: boolean | null }
 
 export type RollHook = Extract<RulesHook, { kind: 'check' | 'save' }>;
 
+/** A hook that starts a fight when the party takes its choice: new foes, or the foes already met. */
+export type FightHook = Extract<RulesHook, { kind: 'fight' | 'engage' }>;
+export const startsFight = (hook: RulesHook | null | undefined): hook is FightHook => hook?.kind === 'fight' || hook?.kind === 'engage';
+
 const MAX_DC = 30;
 const dc = z.number().int().min(1).max(MAX_DC);
 const ability = z.enum(ABILITIES);

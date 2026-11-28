@@ -4,7 +4,8 @@ import { runInBackground } from './background.ts';
 import { archetype, DEFAULT_DUNGEON_MASTER, isValid, nameOf } from './catalog.ts';
 import { homecoming, ownCharacter, storable, upgradeCharacter } from './characters.ts';
 import { deathIn, newlyFallen } from './fallen.ts';
-import { isPersonalCheck, knownActionIds, rulingForAbility, rulingForSkill, settleRuling, UNREADABLE } from './play/actions.ts';
+import { attackStartsFight, isPersonalCheck, knownActionIds, rulingForAbility, rulingForSkill, settleRuling, UNREADABLE } from './play/actions.ts';
+import { foesNamed, startsFight } from './play/hooks.ts';
 import { dieForAction, dieForCheck, rollPending, type PlayerDie } from './play/dice.ts';
 import { TURN_SECONDS, turnWindow } from './play/turn-clock.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
@@ -676,6 +677,9 @@ export async function castAction(code: string, playerId: string, sceneIndex: unk
   const inCombat = game.combat !== null;
   const legal = actionsFor(game, scene, playerId);
   const allowed = knownActionIds(legal);
+  // The choices that start a fight if the party takes them. Outside a fight, a written attack is a pick of the first.
+  const fights = new Map(inCombat ? [] : scene.choices.flatMap((c): [string, string][] =>
+    (startsFight(c.hook) && allowed.includes(`choice:${c.id}`) ? [[`choice:${c.id}`, foesNamed(c.hook.monsters)]] : [])));
   let raw: unknown = null;
   const dm = getDungeonMaster(game.dungeonMaster);
   if (dm.classifyAction) {
@@ -685,13 +689,13 @@ export async function castAction(code: string, playerId: string, sceneIndex: unk
         text: written,
         inCombat,
         actions: allowed,
-        choices: legal.filter((a) => a.available).map((a) => ({ id: a.id, label: a.label })),
+        choices: legal.filter((a) => a.available).map((a) => ({ id: a.id, label: a.label, ...(fights.has(a.id) ? { fight: fights.get(a.id)! } : {}) })),
       });
     } catch (error) {
       console.warn(`classifying an action in ${code} failed:`, error);
     }
   }
-  const settled = settleRuling(raw, allowed);
+  const settled = attackStartsFight(settleRuling(raw, allowed), [...fights.keys()], inCombat);
   if (!settled.spent) {
     await system(code, `${player.character.name}: ${settled.narration}`);
     return { ...(await viewGame(code, playerId)), action: outcome(written, settled, null) };
@@ -719,7 +723,8 @@ export async function castAction(code: string, playerId: string, sceneIndex: unk
     // needs one is stored as its letter, which still plays today's default (best weapon, best spell, Dodge).
     const asAction = named && named.picks === 'none' && named.kind !== 'choice' ? { actionId: named.id, targets: [] } : null;
     const die = sheet && named ? dieForAction(sheet, named) : null;
-    const vote = await getStore().castVote(code, sceneIndex, playerId, settled.choiceId, dice.d20(), asAction, null, null, die);
+    // The words stay with the pick: the table sees them beside it, and the DM reads them when the scene is told.
+    const vote = await getStore().castVote(code, sceneIndex, playerId, settled.choiceId, dice.d20(), asAction, null, { text: written }, die);
     if (!vote) throw conflict('voting on that scene has closed');
     await settleDice(code, origin);
     await resolveIfAllVoted(code, sceneIndex, origin);

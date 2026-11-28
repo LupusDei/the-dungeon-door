@@ -84,11 +84,19 @@ const RulingSchema = z.object({
 
 const CLASSIFY = `Classify the player's written action. You never invent a number: no DC, no dice, no damage amount, no bonus.
 - kind "known" when the text is one of the action ids you are given, or clearly the same as one choice on offer. Put that id in action.
+- Outside a fight, an attack starts the fight. A choice on offer that would start one is marked [starts a fight with ...].
+  When the text sets out to hurt, seize or afflict any of those creatures (a weapon, a spell, a shove, fire), it is kind
+  "known" with that choice's id, never a check: the party fights if most heroes pick it. With no such choice on offer it
+  is a check as usual.
 - kind "check" when it could succeed or fail. Name the ability, a skill id or "", a tier (easy, medium or hard) and an effect.
   effect "none" when success is its own reward. effect "damage" names a severity (light, moderate or severe) and a damage type.
   effect "condition" names an SRD condition other than exhaustion, and the ability of the save.
 - kind "impossible" when the fiction cannot allow it (not merely when it is difficult). narration is one sentence with no numbers. Their turn is not spent.
 Leave every field you do not use as "" or "none".`;
+
+/** A choice as the classifier reads it: "(choice:a) Strike the wasp first [starts a fight with Giant Wasp]". */
+export const offered = (c: { id: string; label: string; fight?: string }): string =>
+  `(${c.id}) ${c.label}${c.fight ? ` [starts a fight with ${c.fight}]` : ''}`;
 
 /** What the model is asked to fill, for the test that keeps them within providers' limits. */
 export const DM_SCHEMAS = { opening: OpeningSchema, next: NextSchema, finale: FinaleSchema };
@@ -251,7 +259,7 @@ export const llmDungeonMaster: DungeonMaster = {
       prompt: `${request.characterName} writes: "${request.text}"\n` +
         `This is ${request.inCombat ? 'a combat round' : 'not a fight'}.\n` +
         `Actions the text may map onto: ${listed || '(none)'}.\n` +
-        `Choices on offer: ${request.choices.map((c) => `(${c.id}) ${c.label}`).join('; ') || '(none)'}.`,
+        `Choices on offer: ${request.choices.map(offered).join('; ') || '(none)'}.`,
       output: Output.object({ schema: RulingSchema }),
     });
     return output;

@@ -72,10 +72,14 @@ function road(ctx: DMContext, opening: string): string | null {
 
 const empty = { action: '', ability: 'none', skill: '', tier: 'none', effect: 'none', severity: 'none', damageType: '', condition: 'none', save: 'none', narration: '' };
 
+/** Words the offline DM takes for an attack on someone. */
+const ATTACKS = /\b(attack|strike|shoot|stab|slash|smite|fight)\b/;
+
 /**
  * The offline classification. "I fly to the moon" cannot be done. A word that is one of today's actions,
- * or that repeats a choice's label, maps onto it. Kicking, shoving or a brazier is a medium Athletics
- * check with moderate damage. Anything else is an easy Perception check with no effect.
+ * or that repeats a choice's label, maps onto it. Outside a fight, an attack is the choice on offer that
+ * starts a fight. Kicking, shoving or a brazier is a medium Athletics check with moderate damage (which the
+ * engine also counts as that choice, outside a fight). Anything else is an easy Perception check with no effect.
  */
 export function classifyFreeform(request: ActionRequest): Record<string, string> {
   const text = request.text.trim();
@@ -86,6 +90,8 @@ export function classifyFreeform(request: ActionRequest): Record<string, string>
   const byLabel = [...request.choices].sort((a, b) => b.label.length - a.label.length)
     .find((c) => c.label.length > 0 && lower.includes(c.label.toLowerCase()));
   if (byLabel && request.actions.includes(byLabel.id)) return { ...empty, kind: 'known', action: byLabel.id };
+  const fight = request.inCombat ? undefined : request.choices.find((c) => c.fight && request.actions.includes(c.id));
+  if (fight && ATTACKS.test(lower)) return { ...empty, kind: 'known', action: fight.id };
   if (/kick|brazier|shove|hurl|smash|throw/.test(lower)) {
     return { ...empty, kind: 'check', ability: 'str', skill: 'athletics', tier: 'medium', effect: 'damage', severity: 'moderate', damageType: 'bludgeoning' };
   }

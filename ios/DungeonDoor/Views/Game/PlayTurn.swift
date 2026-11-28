@@ -70,6 +70,21 @@ enum PlayTurn {
         return nil
     }
 
+    /// The caller's own words, when the server counted them as a pick of one of the scene's choices:
+    /// an attack written while a fight is on offer, or words that say what a choice says. The words
+    /// ride with the pick as its intent. Nil after a tap on a card (no words), and for a written
+    /// action that stayed the hero's own (that one is `myFreeform`).
+    static func wordsCounted(in scene: GameScene, playerId: String) -> (offer: String, words: String)? {
+        if let mine = scene.myAction, mine.id.hasPrefix("choice:"), let words = mine.intent, !words.isEmpty {
+            return (mine.id, words)
+        }
+        if let vote = scene.votes.first(where: { $0.playerId == playerId }), vote.actionId == nil,
+           let words = vote.intent, !words.isEmpty {
+            return ("choice:\(vote.choiceId)", words)
+        }
+        return nil
+    }
+
     static func roll(scene: GameScene, playerId: String) -> Int? {
         if let vote = scene.votes.first(where: { $0.playerId == playerId }) { return face(of: vote, in: scene) }
         return scene.myFreeform?.roll

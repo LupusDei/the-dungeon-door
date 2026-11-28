@@ -109,6 +109,21 @@ final class TurnResultTests: XCTestCase {
         XCTAssertEqual(TurnResult.listed(["Bryn", "Mira", "Dax"]), "Bryn, Mira and Dax")
     }
 
+    func testWordsCountedAsAPickAreShownBesideIt() throws {
+        let turn = try decode("""
+        { "sceneIndex": 3,
+          "choice": { "id": "a", "label": "Strike the wasp first", "rules": "Fight: Giant Wasp, Swarm of Bats", "backers": ["x", "y"], "tally": { "a": 2, "b": 1 } },
+          "heroes": [
+            { "playerId": "x", "name": "Rastigar", "did": "choice", "choiceId": "a", "label": "Strike the wasp first", "text": "Attack the wasp with burning hands" },
+            { "playerId": "y", "name": "Slagette", "did": "choice", "choiceId": "a", "label": "Strike the wasp first" },
+            { "playerId": "z", "name": "Fardock", "did": "choice", "choiceId": "b", "label": "Parley with the hive" }
+          ] }
+        """)
+        XCTAssertEqual(turn.heroes[0].deedLine, "Picked: Strike the wasp first (“Attack the wasp with burning hands”)")
+        XCTAssertEqual(turn.heroes[1].deedLine, "Picked: Strike the wasp first")
+        XCTAssertEqual(turn.pickLine(), "Picked by Rastigar and Slagette. Fardock picked another.")
+    }
+
     func testATurnWithNoPickSaysSo() throws {
         let turn = try decode("""
         { "sceneIndex": 5, "choice": null,

@@ -114,7 +114,7 @@ and **slagyr-assistant**. For work that comes from any of them (the owner asking
    unit tests and the Gherkin features, with no scenario skipped. Every behavior change comes with a
    Gherkin scenario in `server/features/` that pins it down. The app builds; what changed on
    screen was looked at on the simulator. When `server/lib/dm/` or what the dungeon master is told
-   changed, `npm run dm:check` passes too: three real text calls (about five cents) that prove the
+   changed, `npm run dm:check` passes too: five real text calls (about six cents) that prove the
    model accepts the schema and writes hooks the engine takes. The fake DM cannot show that.
 3. **Commit and push** `main` (`git push origin main`, as its own command).
 4. **Migrate and deploy** happen on the push, in GitHub Actions (`.github/workflows/deploy-server.yml`):

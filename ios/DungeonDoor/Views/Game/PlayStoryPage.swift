@@ -244,8 +244,14 @@ struct PlayStoryPage: View {
         }
     }
 
+    /// The player's own words, when they were counted as a pick of one of the cards.
+    private var counted: (offer: String, words: String)? {
+        scene.flatMap { PlayTurn.wordsCounted(in: $0, playerId: session.playerId) }
+    }
+
     private func choiceButton(_ offer: TableOffer, index: Int) -> some View {
         let picked = scene.map { offer.isChosen(in: $0, playerId: session.playerId) } ?? false
+        let words = picked ? counted.flatMap { $0.offer == offer.id ? $0.words : nil } : nil
         return Button {
             guard let choice = offer.choice else { return }
             Task { await session.vote(choice) }
@@ -282,6 +288,13 @@ struct PlayStoryPage: View {
                             .font(.serif(.caption, weight: .bold))
                             .foregroundStyle(Palette.verdigris)
                     }
+                    if let words {
+                        Text("From your words: “\(words)”")
+                            .font(.serif(.caption).italic())
+                            .foregroundStyle(Palette.muted)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -296,7 +309,8 @@ struct PlayStoryPage: View {
         .buttonStyle(.plain)
         .disabled(!canSend)
         .opacity(canSend || picked ? 1 : 0.6)
-        .accessibilityLabel([offer.label, offer.detail, offer.note ?? "", picked ? "your pick" : ""]
+        .accessibilityLabel([offer.label, offer.detail, offer.note ?? "", picked ? "your pick" : "",
+                             words.map { "from your words: \($0)" } ?? ""]
             .filter { !$0.isEmpty }.joined(separator: ". "))
         .accessibilityHint(picked ? "" : "Picks this")
         .accessibilityIdentifier("choice-\(offer.choice?.id ?? offer.id)")
@@ -394,7 +408,7 @@ struct PlayStoryPage: View {
             SectionLabel(offers.isEmpty ? "What do you do?" : "Or in your own words")
             Text(inCombat
                  ? "Say what you do instead, and name a skill if you are using one. The dungeon master judges it and you roll for it."
-                 : "Say it your way: the dungeon master judges it and you roll for it. It is your own action, beside the party's pick, so it does not decide which way the party goes.")
+                 : "Say it your way: the dungeon master judges it and you roll for it. It is your own action beside the party's pick, unless it matches a choice above: then it counts as picking that choice, and an attack counts as picking the fight.")
                 .font(.serif(.caption))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -407,6 +421,13 @@ struct PlayStoryPage: View {
             Button("Send this action", action: sendFreeform)
             .buttonStyle(.gilded)
             .disabled(!canSendFreeform)
+            if let counted, let offer = offers.first(where: { $0.id == counted.offer }) {
+                Text("Your words count as picking: \(offer.label)")
+                    .font(.serif(.footnote).italic())
+                    .foregroundStyle(Palette.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("words-counted")
+            }
             if scene?.myAction == nil, let written = scene?.myFreeform, !written.text.isEmpty {
                 Text("Written: \(written.text)")
                     .font(.serif(.footnote).italic())

@@ -453,6 +453,27 @@ A classification the engine cannot read (unknown skill, missing tier, a number w
 treated as impossible, so a bad reply cannot spend the turn or invent a result. The known-action id has
 to be one of today's.
 
+### A written attack outside a fight
+
+**Original.** Outside a fight, an attack starts the fight. When one of the scene's choices starts a fight
+(a `fight` hook, or `engage` with foes already met) and a player writes an attack instead of picking it
+("Attack the wasp with burning hands" while "Strike the wasp first" is on offer), the words count as a
+pick of that choice. Two things make it so:
+
+- The DM is told which choice starts a fight and with whom (`request.choices[].fight`), and to answer
+  with that choice's id as a known action, never a check.
+- The engine does not rely on that. attackStartsFight (`play/actions.ts`) turns a check whose effect is
+  damage or a condition into the same pick, since outside a fight that effect lands on no one. With two
+  fights on offer it takes the first. A check with no effect (looking, climbing, listening) stays the
+  hero's own action.
+
+It is one pick, no more: the party goes with the most-picked choice, and a tie goes to the highest d20
+among the tied choice's backers, as for any vote. A lone attacker outvoted by two who talk does not
+start the fight. The words are kept with the pick, so the table sees them beside it and the DM reads
+them when the scene is told. With no fight on offer, a written attack is a check as before. The attack
+itself is not carried into the fight's first round: once initiative is rolled, each hero chooses their
+action for the round.
+
 ## Phase 5: dungeon levels, fights that fit, XP at the quest's end
 
 Robert's design: *"Dungeons start at level one, and all monsters, treasures, and traps should be appropriate

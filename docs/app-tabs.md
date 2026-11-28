@@ -74,7 +74,10 @@ character. Then, in this order:
   moment), and the two quick-action wheels sit under them for a particular weapon, spell or item.
 - **Or in your own words** is `POST /action`. The dungeon master judges it and the player rolls
   for it. The page says plainly that it is the hero's own action beside the party's pick, and
-  does not decide which way the party goes.
+  does not decide which way the party goes, with one exception it also states: words that match
+  one of the choices count as picking it, and an attack counts as picking the fight. When that
+  happens the choice's card shows "Your pick" with the player's words under it, and a line under
+  the box says which choice the words were counted as (`scene.myAction.intent` on a `choice:` id).
 - **Your die**, when `scene.myDie` is set, is a d20 the player taps or flicks (or throws from the
   Act chip). The face is the one the server rolled when they declared. If they have not thrown
   when the choice window ends, the server throws it and their XP for the turn is halved.

@@ -854,6 +854,12 @@ Reaction {
     else `"c"`, and `choice:a` is `"a"`). One that needs no target is stored with that `actionId`.
     One that needs a target is stored as the letter: the classification does not name who. The d20
     is rolled the same way a vote's is, and kept if the player rewrites the action or switches to a vote.
+    The player's words are kept with the vote: `scene.votes[].intent` and `scene.myAction.intent`.
+  - Outside a fight, an attack is a pick of the choice that starts a fight, when one is on offer
+    (a choice whose `rules` reads "Fight: …"): `"known"`, with that choice's letter in
+    `action.choiceId`. This holds whether the dungeon master names the choice or calls the words a
+    check with damage or a condition. It is one pick like any other: the party still goes with the
+    most-picked choice. With no such choice on offer the words are a `"check"`, as below.
   - `"check"` is an ability check. The dungeon master names a skill or ability, a tier (easy,
     medium, hard) and an effect category; the engine sets the DC (10, 15, 20), the damage dice and
     the save. It is stored on the vote as `freeform` and counts as having acted, but it does not
