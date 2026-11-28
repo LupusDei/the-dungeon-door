@@ -1,4 +1,5 @@
 /** Shapes shared by the API (see docs/api.md) and the store. All timestamps are ISO-8601 strings. */
+import type { Telling } from './telling.ts';
 import type { AttackView } from './attacks.ts';
 import type { RulesHook } from './play/hooks.ts';
 import type { SceneProgress } from './play/progress.ts';
@@ -189,6 +190,8 @@ export interface Game {
   hostId: string;
   status: GameStatus;
   dungeonMaster: string;
+  /** How the game is told (lib/telling.ts), set as the door opens. Absent on a game from before tellings: the full story. */
+  telling?: Telling;
   title: string | null;
   sceneCount: number;
   /** Index of the current scene, -1 before the opening scene exists. */
@@ -350,6 +353,8 @@ export interface GameState {
   hostId: string;
   status: GameStatus;
   dungeonMaster: string;
+  /** How the game is told: "full", or "streamlined" (the same game in a line or two). Fixed when the door opens. */
+  telling: Telling;
   title: string | null;
   /** Scenes planned, the road and the epilogue included; 0 when the adventure has no set length. */
   sceneCount: number;

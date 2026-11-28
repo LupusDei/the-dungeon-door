@@ -1,8 +1,9 @@
 /**
  * A real-model check of the dungeon master with the rules engine in its prompt: an opening for a story game,
- * an opening for a mapped dungeon, the next scene after the engine resolved a choice, and two written actions
- * classified (an attack outside a fight, which is the choice that starts one, and a look around, which is not).
- * Text only (five calls, about six cents of the owner's AI Gateway credit), no paintings.
+ * an opening for a mapped dungeon, the next scene after the engine resolved a choice, that same scene asked for
+ * as a streamlined game (lib/telling.ts: the brief schema, and how long the model writes when told to be brief),
+ * and two written actions classified (an attack outside a fight, which is the choice that starts one, and a look
+ * around, which is not). Text only (six calls, about seven cents of the owner's AI Gateway credit), no paintings.
  *
  * Run it before a release whenever lib/dm/ or what the DM is told has changed: the fake DM cannot tell you
  * that the real one refuses the schema or ignores the hooks.
@@ -17,6 +18,7 @@ import type { DMContext, PartyMember, Resolution } from '../lib/dm/types.ts';
 import { attackStartsFight, settleRuling } from '../lib/play/actions.ts';
 import { hookLabel, parseHook } from '../lib/play/hooks.ts';
 import { engineStep, newRules } from '../lib/play/table.ts';
+import { briefChoice, sentencesOf, STREAMLINED, streamlinedDraft, wordCount } from '../lib/telling.ts';
 import { rulesContext } from '../lib/play/view.ts';
 import type { GamePlayer, StoredScene } from '../lib/types.ts';
 
@@ -67,9 +69,21 @@ for (const mode of ['none', 'fixed'] as const) {
   console.log(`\nTHE ENGINE (${pick.label}): ${step.resolution.rules!.lines.join(' | ') || 'no dice'}`);
   const next = await llmDungeonMaster.nextScene({ ...ctx, adventureTitle: opening.adventureTitle, sceneIndex: 1, history: [past], rules: rulesContext(step.state) }, step.resolution);
   show('NEXT SCENE', next);
+
+  // The same turn, asked for as a streamlined game: what the model writes, and what the engine lets through.
+  const brief = await llmDungeonMaster.nextScene({ ...ctx, telling: 'streamlined', adventureTitle: opening.adventureTitle, sceneIndex: 1, history: [past], rules: rulesContext(step.state) }, step.resolution);
+  const held = streamlinedDraft(brief, { narration: 'What do you do?', outcome: 'The action plays out.' });
+  show('NEXT SCENE, STREAMLINED (as the engine lets it through)', { ...held, choices: brief.choices.map(briefChoice) });
+  const size = (text: string) => `${sentencesOf(text).length} sentences, ${wordCount(text)} words`;
+  console.log(`  the DM wrote: outcome ${size(brief.outcome)} (asked: 1 sentence, 25 words; held to ${STREAMLINED.outcome.words}); ` +
+    `narration ${size(brief.narration)} (asked: 2 sentences, 35 words; held to ${STREAMLINED.narration.words}); ` +
+    `labels of ${brief.choices.map((c) => wordCount(c.label)).join(', ')} words; details of ${brief.choices.map((c) => wordCount(c.detail)).join(', ')} words; ` +
+    `quip ${brief.quip ? `"${brief.quip}" (dropped)` : 'empty'}`);
+  const cut = held.narration !== brief.narration.replace(/\s+/g, ' ').trim() || held.outcome !== brief.outcome.replace(/\s+/g, ' ').trim();
+  console.log(cut ? '  The engine had to cut it: the model ran past the limits it was given.' : '  The model kept to the limits; the engine cut nothing.');
 }
 
-console.log(`\nThe dungeon master answered three times. ${hooks} choices carry a hook the engine accepts; ${dropped} hooks were dropped.`);
+console.log(`\nThe dungeon master answered four times. ${hooks} choices carry a hook the engine accepts; ${dropped} hooks were dropped.`);
 if (hooks === 0) { console.error('No choice carried a usable hook: the DM is not driving the engine.'); process.exit(1); }
 
 // Written actions (classifyAction), as game.ts asks: outside a fight, with one choice that starts a fight.

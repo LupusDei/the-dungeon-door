@@ -67,6 +67,8 @@ DM team can add archetypes without an app release.
   "alignments":   [{ "id": "chaotic-good", "name": "Chaotic Good" }],
   "backgrounds":  [{ "id": "sage", "name": "Sage", "blurb": "…", "abilities": ["con", "int", "wis"] }],
   "dungeons":     [{ "id": "none", "name": "A tale told", "blurb": "…", "symbol": "book.pages.fill" }],
+  "tellings":     [{ "id": "full", "name": "Full story", "blurb": "…", "symbol": "text.book.closed.fill" },
+                   { "id": "streamlined", "name": "Streamlined", "blurb": "…", "symbol": "bolt.fill" }],
   "dungeonMasters": [{
     "id": "chronicler", "name": "The Chronicler", "tagline": "…", "description": "…",
     "symbol": "book.closed", "accent": "#C9A227"
@@ -82,6 +84,10 @@ A background's `abilities` are the three scores it can raise. The player puts +2
 another, or +1 on each (SRD 5.2; no score above 20).
 `dungeons` are the kinds of game a host can start (the `dungeon` of `POST …/start`): `none`, `fixed`
 and `explore`, in the order to show them.
+`tellings` are the ways a game can be told (the `telling` of `POST …/start`), in the order to show them;
+the first is the default. `full` is the game as it has always been. `streamlined` is the same game, with
+the same rules, dice and dangers, told in a line or two: see "A streamlined game" below. Absent on a
+server from before tellings: the app then offers no picker and every game is told in full.
 `narrators` are the voices a scene can be read aloud in (the `voice` of `POST …/narration`), in the order
 to show them; `defaultNarrator` is the one used when a request names none. New voices need no app release.
 `push` is true when this server sends push notifications (it holds the push key; see docs/push.md). The app
@@ -332,6 +338,9 @@ GameState {
                                      // dungeon master is writing the next turn. The app shows a loading
                                      // state until status returns to "voting" or "ended".
   dungeonMaster: string              // catalog dungeonMasters id
+  telling: "full" | "streamlined"    // how the game is told (catalog tellings id), fixed when the door opens.
+                                     // "full" in the lobby and for every game from before tellings. Absent on
+                                     // an older server: read it as "full"
   title: string | null               // DM-named adventure title, set when the game starts
   sceneCount: number                 // scenes planned (default 4, including the finale); 0 when the adventure
                                      // has no set length. A fight's rounds add to it as they are made
@@ -792,7 +801,7 @@ Reaction {
   narrator keeps those words, and an in-character emote is kept as a deed. Out-of-character chat is not.
   A whisper is not, even when its voice is `"in"`.
 - `POST /api/games/{code}/dungeon-master` body `{ dungeonMaster }` → `GameState`. Host only, lobby only.
-- `POST /api/games/{code}/start` body `{ sceneCount?, dungeon? }` → `GameState` with status `preparing`.
+- `POST /api/games/{code}/start` body `{ sceneCount?, dungeon?, telling? }` → `GameState` with status `preparing`.
   Host only. Refused while any seated player is outdated (see App versions): 426 when the caller
   themselves must update, 409 `party_outdated` naming the others when the caller is current. The game
   stays in the lobby. `sceneCount` 2–8, or `0` for no set length: the adventure then goes on until its host
@@ -804,6 +813,18 @@ Reaction {
   (`rules.trek`), to the dungeon door (`rules.dungeon` is null until the door) or, in a tale told, to
   where the tale begins, so its `sceneCount` is two more than asked for. Foes on the road who bar the way
   give Engage, Run and Parley, as in a room.
+  `telling`: `"full"` (default) or `"streamlined"`; anything else is a 400. It is stored on the game
+  and cannot be changed once the door is open.
+
+  **A streamlined game** is a full game told briefly. Nothing about play changes: the same choices
+  with the same hooks, the same dice, fights, typed actions and `TurnResult`. What changes is how much
+  is written, and the server holds it whatever the dungeon master writes:
+  - `scene.narration` is at most two sentences (40 words): what stands before the party now.
+  - a resolved scene's `outcome` (`chronicle[].outcome`) is one sentence (28 words): what physically happened.
+  - a choice's `label` is at most six words and its `detail` is one short clause or `""`. The choices the
+    engine writes itself (Engage, Run and Parley; a fight's Attack, Cast and third choice) are as always.
+  - the dungeon master's aside (the `dm` chat line after a scene) is not posted. The outcome still is.
+  The app draws such a game on a shorter Story page that leads with what happened (docs/app-tabs.md).
 - `POST /api/games/{code}/vote` body `{ sceneIndex, choiceId, move?, text? }` or `{ sceneIndex, actionId, targets?, move?, text? }` → `GameState`.
   `choiceId` is still `"a"`, `"b"` or `"c"`. `actionId` is an id from `scene.actions`, and `targets` are ids
   from that action (omit them when `picks` is `"none"`; one id when `"one"`; one or more, up to `limit`,

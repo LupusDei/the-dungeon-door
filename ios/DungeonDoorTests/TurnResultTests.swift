@@ -154,6 +154,71 @@ final class TurnResultTests: XCTestCase {
         XCTAssertEqual(turn.otherNotes, ["Giant Wasp attacks Rastigar with Sting: 20 (total 24) vs AC 11, critical hit for 19."])
     }
 
+    // MARK: The turn in a few lines (a streamlined game)
+
+    func testInAFewLinesATurnIsItsChoiceAndEachDieThatCounted() throws {
+        let turn = try decode(parley)
+        XCTAssertEqual(turn.briefTitle, "Parley with the hive")
+        let lines = turn.briefLines
+        XCTAssertEqual(lines.map(\.hero), ["Fardock", "Rastigar", "Slagette"], "whoever rolled for the party's choice first")
+        XCTAssertEqual(lines.map(\.text), ["Persuasion 17 − 1 = 16 vs DC 15", "Dexterity 13 + 1 = 14 vs DC 15", "Dexterity 20 + 2 = 22 vs DC 15"])
+        XCTAssertEqual(lines.map(\.verdict), ["Succeeded", "Failed", "Succeeded"])
+        XCTAssertEqual(lines.map(\.success), [true, false, true])
+        XCTAssertEqual(lines[2].detail, "Improvised damage 2 slashing")
+        XCTAssertEqual(lines[1].spoken, "Rastigar: Dexterity 13 + 1 = 14 vs DC 15, failed")
+        XCTAssertEqual(turn.briefChanges, ["The Giant Wasp, Swarm of Bats let the party be."])
+        XCTAssertEqual(Set(lines.map(\.id)).count, 3, "each line has its own id")
+    }
+
+    func testAHeroWhoOnlyPickedAChoiceHasNoLineOfTheirOwn() throws {
+        let turn = try decode("""
+        { "sceneIndex": 1,
+          "choice": { "id": "a", "label": "Follow the open passage", "backers": ["x", "y"], "tally": { "a": 2 } },
+          "heroes": [{ "playerId": "x", "name": "Xan", "did": "choice", "choiceId": "a", "label": "Follow the open passage" },
+                     { "playerId": "y", "name": "Yul", "did": "choice", "choiceId": "a", "label": "Follow the open passage" },
+                     { "playerId": "z", "name": "Zed", "did": "nothing" }],
+          "notes": ["The party moves on to the Guard Room."] }
+        """)
+        XCTAssertEqual(turn.briefTitle, "Follow the open passage")
+        XCTAssertEqual(turn.briefLines, [], "nothing was rolled: the title and what it changed say it all")
+        XCTAssertEqual(turn.briefChanges, ["The party moves on to the Guard Room."])
+    }
+
+    func testInAFewLinesARoundIsEachAttackAndWhatElseAHeroDid() throws {
+        let turn = try decode("""
+        { "sceneIndex": 8, "combat": true, "choice": null,
+          "heroes": [
+            { "playerId": "s", "name": "Slagette", "did": "action", "label": "Attack with Shortsword",
+              "lines": ["Slagette attacks Swarm of Bats with Shortsword: 10 (total 14) vs AC 12, hit."],
+              "rolls": [{ "for": "attack", "name": "Shortsword", "natural": 10, "bonus": 4, "total": 14,
+                          "against": { "kind": "ac", "value": 12 }, "success": true, "detail": "hit for 6" }] },
+            { "playerId": "c", "name": "Cleo", "did": "action", "label": "Cast Sacred Flame",
+              "lines": ["Cleo casts Sacred Flame: Giant Wasp fails its Dexterity save and takes 5 radiant."] },
+            { "playerId": "d", "name": "Dax", "did": "action", "label": "Dodge" },
+            { "playerId": "r", "name": "Rastigar", "did": "down" },
+            { "playerId": "w", "name": "Wren", "did": "own", "text": "I cut the rope" }
+          ],
+          "notes": ["Slagette attacks Swarm of Bats with Shortsword: 10 (total 14) vs AC 12, hit.",
+                    "Giant Wasp attacks Cleo with Sting: 9 (total 13) vs AC 16, miss."] }
+        """)
+        XCTAssertEqual(turn.briefTitle, "The round")
+        let lines = turn.briefLines
+        XCTAssertEqual(lines.map(\.hero), ["Slagette", "Cleo", "Dax", "Rastigar", "Wren"])
+        XCTAssertEqual(lines.map(\.text), [
+            "Shortsword 10 + 4 = 14 vs AC 12",
+            "casts Sacred Flame: Giant Wasp fails its Dexterity save and takes 5 radiant.",
+            "Dodge", "Down", "“I cut the rope”",
+        ])
+        XCTAssertEqual(lines.map(\.verdict), ["Hit", nil, nil, nil, nil])
+        XCTAssertEqual(turn.briefChanges, ["Giant Wasp attacks Cleo with Sting: 9 (total 13) vs AC 16, miss."], "a hero's own line is not told twice")
+    }
+
+    func testATurnWithNoPickIsTitledAsTheResultScreenTitlesIt() throws {
+        let turn = try decode(#"{ "sceneIndex": 5, "choice": null, "heroes": [{ "playerId": "x", "name": "Xan", "did": "own", "text": "Help Fardock" }] }"#)
+        XCTAssertEqual(turn.briefTitle, "Each hero went their own way")
+        XCTAssertEqual(turn.briefLines.map(\.text), ["“Help Fardock”"])
+    }
+
     func testAHeroTheAppCannotReadIsDroppedAndTheRestStillShow() throws {
         let turn = try decode("""
         { "sceneIndex": 2, "heroes": [{ "name": "No id" }, { "playerId": "x", "name": "Xan", "did": "a deed from a later server" }] }

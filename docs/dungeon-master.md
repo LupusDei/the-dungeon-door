@@ -49,6 +49,8 @@ interface DungeonMaster {
   is the player speaking as their hero, the same promise as a scene's `roleplay`: those words are listed
   under IN CHARACTER with the lines from `POST …/speak`. Answer them. Do not rewrite them. Your own quips
   have `voice` null.
+- `telling` — how the game is told (`lib/telling.ts`): absent or `"full"` is the game as it has always
+  been; `"streamlined"` is a table that asked for much less to read. See "A streamlined game" below.
 
 `Resolution` (the vote you are resolving): `votes` (with rolls), `tally` per choice, `leaders` (the
 most-voted choice ids — more than one on a tie) and `abstained` (characters who didn't vote because the
@@ -110,7 +112,7 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   - The LLM DM's schema takes a flat hook with no nullable fields (`lib/dm/hookSchema.ts`): the model
     fills what its kind uses and leaves the rest empty ("", 0, [], "none"), because providers refuse a
     schema with many nullable fields (Anthropic: more than 16 is a 400 and no game can start). A test
-    counts them; `npm run dm:check` asks the real model (text only, about six cents) and is the only
+    counts them; `npm run dm:check` asks the real model (text only, about seven cents) and is the only
     thing that proves a schema or prompt change works. The fake DM offers an Athletics check
     (or the first exit), a Perception check and a Persuasion check (a parley when foes wait in the
     room), and never starts a fight itself.
@@ -152,6 +154,28 @@ The engine owns the numbers; you propose and narrate. For a game from before the
   are that choice (a known action, its `choice:` id), not a check. The engine holds the same line: a
   check with damage or a condition, written outside a fight while such a choice is on offer, is counted
   as a pick of it (docs/rules-design.md, "A written attack outside a fight").
+
+## A streamlined game
+
+The host may open the door on a streamlined game (`telling: "streamlined"` at `POST …/start`, shown in
+the catalog's `tellings`). It is the same game: the same choices with the same hooks, the same dice and
+fights, the same written actions. Only the telling is short, and every word of it is what happened or
+what to do next. When `ctx.telling` is `"streamlined"`, write:
+
+- `outcome`: one sentence of what physically happened (asked: 25 words; the engine holds 28).
+- `narration`: two short sentences at most of what stands before the party now (asked: 35 words; the
+  engine holds 40). No scene-setting, and no question handed back: the choices follow at once.
+- each choice: a `label` of 2–4 words (held to 6) and a `detail` that is empty, or the risk in a clause
+  (held to its first clause, 10 words).
+- no `quip`. `imagePrompt` and `featuredCharacters` are as always: the scene is still painted.
+
+The engine does not rely on you for this. Where your words enter the game (`inTheirOwnWords` and
+`choicesOf` in `lib/game.ts`) a streamlined game keeps the first sentences that fit and cuts the rest
+(`streamlinedDraft`, `briefChoice`), drops a trailing "What do you do?", and posts no quip. So a custom
+DM that ignores `ctx.telling` still yields a streamlined game, only with its sentences cut where they
+fall. The LLM DM is given a brief schema and a last block of instructions (`STREAMLINED_INSTRUCTIONS`
+in `dm/llm.ts`) that overrides every length before it; the fake DM writes one line. A full game is
+untouched: its prompt is word for word what it was.
 
 ## Rules the engine enforces (so you don't have to)
 

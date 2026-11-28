@@ -164,8 +164,9 @@ final class GameSession {
     }
 
     /// Opens the door. `dungeon` is the kind of game (a catalog dungeons id); nil tells a story.
-    func begin(sceneCount: Int, dungeon: String?) async {
-        await run { self.absorb(try await self.api.start(self.code, sceneCount: sceneCount, dungeon: dungeon)) }
+    /// `telling` is how it is told (a catalog tellings id); nil is the full story.
+    func begin(sceneCount: Int, dungeon: String?, telling: String? = nil) async {
+        await run { self.absorb(try await self.api.start(self.code, sceneCount: sceneCount, dungeon: dungeon, telling: telling)) }
     }
 
     func vote(_ choice: Choice) async {

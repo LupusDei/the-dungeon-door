@@ -193,6 +193,12 @@ export const DUNGEONS: (Option & { symbol: string })[] = [
   { id: 'explore', name: 'Explore the deep', symbol: 'flashlight.on.fill', blurb: 'A dungeon that grows where you go: each door opens on a room nobody has seen, the dungeon master included. Deadly: a hero who dies stays dead unless the party can pay to raise them.' },
 ];
 
+/** How a game can be told, by the `telling` of POST …/start (lib/telling.ts). The first is the default. */
+export const TELLINGS: (Option & { symbol: string })[] = [
+  { id: 'full', name: 'Full story', symbol: 'text.book.closed.fill', blurb: 'The dungeon master tells each scene in full: the place, who is there, and what your choices set in motion.' },
+  { id: 'streamlined', name: 'Streamlined', symbol: 'bolt.fill', blurb: 'Much less to read. Each turn says what happened and what stands before you, in a line or two, then goes straight to the choices and the dice. The same rules and the same dangers.' },
+];
+
 export function publicCatalog() {
   return {
     races: RACES,
@@ -202,6 +208,7 @@ export function publicCatalog() {
     alignments: ALIGNMENTS,
     backgrounds: [...srd().backgrounds.values()].map(({ id, name, abilities }) => ({ id, name, blurb: BACKGROUND_BLURBS[id] ?? '', abilities })),
     dungeons: DUNGEONS,
+    tellings: TELLINGS,
     dungeonMasters: DUNGEON_MASTERS.map(({ id, name, tagline, description, symbol, accent }) => ({
       id, name, tagline, description, symbol, accent,
     })),

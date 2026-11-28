@@ -5,6 +5,7 @@ import { FlatHook, hookFromFlat } from './hookSchema.ts';
 import { keptWords, PLAYER_VOICE, roleplayBlock } from './playerVoice.ts';
 import { adventureLength, isClimax, sceneLabel } from './pacing.ts';
 import { openingNote, RULES_INSTRUCTIONS, resultsBlock, rulesBlock } from './rulesPrompt.ts';
+import { isStreamlined } from '../telling.ts';
 import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, PastScene, Resolution } from './types.ts';
 
 /**
@@ -13,58 +14,75 @@ import type { DMContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Pa
  * implementation for any archetype in ./registry.ts.
  */
 
-const Choice = z.object({
-  label: z.string().describe('What the party does, 2–6 words, imperative ("Storm the gatehouse")'),
-  detail: z.string().describe('One enticing sentence about the approach and its risk'),
-  rules: FlatHook.nullable().describe('The dice behind this choice (rules-engine games only), or null for pure story'),
-  reward: z.enum(['none', 'discovery', 'social', 'puzzle', 'milestone']).describe(
-    'What taking this choice would be, for experience: discovery (a secret, a hidden place, lost lore), social (winning ' +
-    'someone over), puzzle (a riddle, a mechanism, a lock of wits), milestone (it closes a chapter of the story), or none (most choices)',
-  ),
-});
+/** The reward tag, the same in every telling. */
+const reward = z.enum(['none', 'discovery', 'social', 'puzzle', 'milestone']).describe(
+  'What taking this choice would be, for experience: discovery (a secret, a hidden place, lost lore), social (winning ' +
+  'someone over), puzzle (a riddle, a mechanism, a lock of wits), milestone (it closes a chapter of the story), or none (most choices)',
+);
+const rules = FlatHook.nullable().describe('The dice behind this choice (rules-engine games only), or null for pure story');
+const imagePrompt = z.string().describe(
+  'A concrete visual description of ONE moment to paint: setting, lighting, action, and what the heroes are ' +
+  'doing. The whole party is in the picture, every hero of it (the painter is given each one\'s look), so ' +
+  'frame a moment that has room for them all. 40–80 words. No text or lettering in the image.',
+);
+const featuredCharacters = z.array(z.string()).describe(
+  'Names of the party members nearest the viewer in the picture. The rest of the party is painted behind them.',
+);
+const chosenChoiceId = z.enum(['a', 'b', 'c']).describe('The choice the party went with — one of the most-voted (you break ties)');
+const CHOICES = 'Two or three choices that move the plot. Not filler, and not a list of attacks, spells, or moves';
 
-const sceneFields = {
-  title: z.string().describe('Scene title, 2–6 words'),
-  narration: z.string().describe(
-    '2–4 short paragraphs separated by blank lines, at most ~180 words. The world, NPCs, monsters, and the ' +
-    'physical result of the chosen action. Hand the moment back ("What do you say?"). No invented hero speech, ' +
-    'feelings or deeds. Whimsical world and item detail is welcome.',
-  ),
-  imagePrompt: z.string().describe(
-    'A concrete visual description of ONE moment to paint: setting, lighting, action, and what the heroes are ' +
-    'doing. The whole party is in the picture, every hero of it (the painter is given each one\'s look), so ' +
-    'frame a moment that has room for them all. 40–80 words. No text or lettering in the image.',
-  ),
-  featuredCharacters: z.array(z.string()).describe(
-    'Names of the party members nearest the viewer in the picture. The rest of the party is painted behind them.',
-  ),
-  quip: z.string().describe('One short line from you, the DM, for the table chat (max ~25 words). Your voice, never a hero\'s'),
-};
+/**
+ * What the model is asked to fill. The fields are the same in every telling; what each is told to hold
+ * differs. `brief` is a streamlined game (lib/telling.ts): a line or two where a full game has paragraphs.
+ */
+function schemasFor(brief: boolean) {
+  const Choice = z.object({
+    label: z.string().describe(brief
+      ? 'What the party does, 2–4 words, imperative ("Storm the gatehouse")'
+      : 'What the party does, 2–6 words, imperative ("Storm the gatehouse")'),
+    detail: z.string().describe(brief
+      ? '"" (empty) when the label says it all. Otherwise the risk in at most 8 words'
+      : 'One enticing sentence about the approach and its risk'),
+    rules,
+    reward,
+  });
+  const sceneFields = {
+    title: z.string().describe(brief ? 'Scene title, 2–4 words' : 'Scene title, 2–6 words'),
+    narration: z.string().describe(brief
+      ? 'At most TWO short sentences, 35 words in all: what stands before the party now (who or what is here, what ' +
+        'bars the way or is at stake). No scene-setting, weather, history or mood, no question handed back, and no ' +
+        'invented hero speech, feelings or deeds.'
+      : '2–4 short paragraphs separated by blank lines, at most ~180 words. The world, NPCs, monsters, and the ' +
+        'physical result of the chosen action. Hand the moment back ("What do you say?"). No invented hero speech, ' +
+        'feelings or deeds. Whimsical world and item detail is welcome.'),
+    imagePrompt,
+    featuredCharacters,
+    quip: z.string().describe(brief
+      ? '"" (empty). A streamlined game has no aside from you'
+      : 'One short line from you, the DM, for the table chat (max ~25 words). Your voice, never a hero\'s'),
+  };
+  const resolutionFields = {
+    outcome: z.string().describe(brief
+      ? 'What the chosen action did, in ONE sentence of at most 25 words: the physical result. No atmosphere, and ' +
+        'no new decisions, feelings or dialogue for the heroes'
+      : 'What the chosen action did, in 1–3 sentences: the physical result and how NPCs or monsters react. ' +
+        'No new decisions, feelings or dialogue for the heroes'),
+    chosenChoiceId,
+  };
+  return {
+    opening: z.object({
+      adventureTitle: z.string().describe('An evocative name for the whole adventure, 2–6 words'),
+      ...sceneFields,
+      choices: z.array(Choice).min(2).max(3).describe(CHOICES),
+    }),
+    next: z.object({ ...resolutionFields, ...sceneFields, choices: z.array(Choice).min(2).max(3).describe(CHOICES) }),
+    finale: z.object({ ...resolutionFields, ...sceneFields }),
+  };
+}
 
-const resolutionFields = {
-  outcome: z.string().describe(
-    'What the chosen action did, in 1–3 sentences: the physical result and how NPCs or monsters react. ' +
-    'No new decisions, feelings or dialogue for the heroes',
-  ),
-  chosenChoiceId: z.enum(['a', 'b', 'c']).describe('The choice the party went with — one of the most-voted (you break ties)'),
-};
-
-const OpeningSchema = z.object({
-  adventureTitle: z.string().describe('An evocative name for the whole adventure, 2–6 words'),
-  ...sceneFields,
-  choices: z.array(Choice).min(2).max(3).describe('Two or three choices that move the plot. Not filler, and not a list of attacks, spells, or moves'),
-});
-
-const NextSchema = z.object({
-  ...resolutionFields,
-  ...sceneFields,
-  choices: z.array(Choice).min(2).max(3).describe('Two or three choices that move the plot. Not filler, and not a list of attacks, spells, or moves'),
-});
-
-const FinaleSchema = z.object({
-  ...resolutionFields,
-  ...sceneFields,
-});
+const FULL = schemasFor(false);
+const BRIEF = schemasFor(true);
+const schemasOf = (ctx: DMContext) => (isStreamlined(ctx.telling) ? BRIEF : FULL);
 
 /** A written action, classified. No numbers: empty fields are "" or "none", never null. */
 const NONE = 'none';
@@ -98,8 +116,32 @@ Leave every field you do not use as "" or "none".`;
 export const offered = (c: { id: string; label: string; fight?: string }): string =>
   `(${c.id}) ${c.label}${c.fight ? ` [starts a fight with ${c.fight}]` : ''}`;
 
-/** What the model is asked to fill, for the test that keeps them within providers' limits. */
-export const DM_SCHEMAS = { opening: OpeningSchema, next: NextSchema, finale: FinaleSchema };
+/** What the model is asked to fill, for the test that keeps them within providers' limits: a full game's, and a streamlined game's. */
+export const DM_SCHEMAS = {
+  opening: FULL.opening, next: FULL.next, finale: FULL.finale,
+  streamlinedOpening: BRIEF.opening, streamlinedNext: BRIEF.next, streamlinedFinale: BRIEF.finale,
+};
+
+/**
+ * What a streamlined game's DM is told, last, so it stands over every length given before it. The engine
+ * holds the same limits where the words enter (lib/telling.ts), with a little room: a reply that runs long is cut.
+ */
+export const STREAMLINED_INSTRUCTIONS = `
+
+STREAMLINED GAME (this overrides every length given above)
+This table chose a streamlined game: much less to read, and all of it what happened and what to do next.
+The rules, the dice and the hooks are exactly the same. Only the telling is short.
+- outcome: ONE sentence, at most 25 words. What physically happened: who was hit, what opened, what was found
+  or lost. No atmosphere.
+- narration: at most TWO short sentences, 35 words in all. What stands before the party now: who or what is here
+  and what bars the way or is at stake. No scene-setting, weather, history or mood. Do not hand the moment back
+  with a question; the choices follow at once.
+- title: 2–4 words.
+- each choice: a label of 2–4 words. Leave detail "" unless the risk cannot be guessed from the label; then at
+  most 8 words.
+- quip: "" (empty). The epilogue is two sentences like any other scene.
+- imagePrompt is as always: the painter still needs the whole picture.
+Anything longer is cut by the engine, mid-thought if need be, so write to the limit.`;
 
 /** The model's choices with each flat hook turned into the hook the engine reads. */
 function withHooks<T>(result: T): T {
@@ -145,7 +187,7 @@ STYLE
 - In-character chat is the player speaking as their hero, the same as a line they sent with speak. Those
   words are listed under IN CHARACTER. Answer them. Do not rewrite them.
 ${PLAYER_VOICE}
-- Art direction for image prompts: ${a.artStyle}.${ctx.rules ? RULES_INSTRUCTIONS : ''}`;
+- Art direction for image prompts: ${a.artStyle}.${ctx.rules ? RULES_INSTRUCTIONS : ''}${isStreamlined(ctx.telling) ? STREAMLINED_INSTRUCTIONS : ''}`;
 }
 
 function partyBlock(ctx: DMContext): string {
@@ -224,7 +266,13 @@ async function write<T>(ctx: DMContext, schema: z.ZodType<T>, prompt: string, wa
 
 export const llmDungeonMaster: DungeonMaster = {
   async openingScene(ctx): Promise<OpeningScene> {
-    return write(ctx, OpeningSchema,
+    if (isStreamlined(ctx.telling)) {
+      return write(ctx, BRIEF.opening,
+        `${storyPrompt(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (${sceneLabel(ctx)}) ` +
+        `to the STREAMLINED GAME limits: what stands before the party, in two short sentences, with the party present ` +
+        `but not spoken for, then two or three choices that move the plot. ${openingNote(ctx.rules)}`, true);
+    }
+    return write(ctx, FULL.opening,
       `${storyPrompt(ctx)}\n\nBegin the adventure. Name it, then write the opening scene (${sceneLabel(ctx)}): ` +
       `a vivid place and an immediate hook, with the party present but not spoken for. End by handing the moment ` +
       `back to the players, then two or three choices that move the plot. ${openingNote(ctx.rules)}` +
@@ -232,7 +280,14 @@ export const llmDungeonMaster: DungeonMaster = {
   },
 
   async nextScene(ctx, resolution): Promise<NextScene> {
-    return write(ctx, NextSchema,
+    if (isStreamlined(ctx.telling)) {
+      return write(ctx, BRIEF.next,
+        `${storyPrompt(ctx, resolution)}\n\nResolve the vote (outcome + chosenChoiceId) as the physical result of the chosen ` +
+        `action, in one sentence. Then write the next scene (${sceneLabel(ctx)}) to the STREAMLINED GAME limits: what ` +
+        `stands before the party now, following directly from that outcome, and two or three new choices that move the plot.` +
+        (isClimax(ctx) ? ' This is the climax: the stakes are at their highest.' : ''), true);
+    }
+    return write(ctx, FULL.next,
       `${storyPrompt(ctx, resolution)}\n\nResolve the vote (outcome + chosenChoiceId) as the physical result of the chosen ` +
       `action and how the world reacts. If the turn has IN CHARACTER lines, answer them. Then write the next scene ` +
       `(${sceneLabel(ctx)}), which follows directly from that outcome, hands the moment back, and ends on two or three new choices that move the plot.` +
@@ -241,11 +296,13 @@ export const llmDungeonMaster: DungeonMaster = {
   },
 
   async finale(ctx, resolution): Promise<FinaleScene> {
-    return write(ctx, FinaleSchema,
+    return write(ctx, schemasOf(ctx).finale,
       `${storyPrompt(ctx, resolution)}\n\nResolve the final vote (outcome + chosenChoiceId), then write the epilogue ` +
       `(the tale’s last scene, no choices): how the adventure ends in the world, the ` +
       `consequences of the choices the party actually made, and a closing image. Do not invent what the heroes say, ` +
-      `feel or decide. Your quip bids the table farewell, in your own voice.`, false);
+      `feel or decide.` + (isStreamlined(ctx.telling)
+        ? ' Keep to the STREAMLINED GAME limits: one sentence of outcome, two of epilogue.'
+        : ' Your quip bids the table farewell, in your own voice.'), false);
   },
 
   async classifyAction(ctx, request) {

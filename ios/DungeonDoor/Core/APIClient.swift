@@ -168,10 +168,11 @@ struct APIClient: Sendable {
     }
 
     /// `dungeon` is a catalog dungeons id ("none", "fixed", "explore"); nil is left out of the body,
-    /// and the server tells a story.
-    func start(_ code: String, sceneCount: Int?, dungeon: String?) async throws -> GameState {
-        struct Body: Encodable { let sceneCount: Int?; let dungeon: String? }
-        return try await send("POST", "api/games/\(code)/start", body: Body(sceneCount: sceneCount, dungeon: dungeon))
+    /// and the server tells a story. `telling` is a catalog tellings id ("full", "streamlined"); nil
+    /// is left out too, and the game is told in full.
+    func start(_ code: String, sceneCount: Int?, dungeon: String?, telling: String? = nil) async throws -> GameState {
+        struct Body: Encodable { let sceneCount: Int?; let dungeon: String?; let telling: String? }
+        return try await send("POST", "api/games/\(code)/start", body: Body(sceneCount: sceneCount, dungeon: dungeon, telling: telling))
     }
 
     func vote(_ code: String, sceneIndex: Int, choiceId: String) async throws -> GameState {

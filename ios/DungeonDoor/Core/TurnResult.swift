@@ -343,3 +343,68 @@ extension TurnResult {
         return notes.filter { !told.contains($0) }
     }
 }
+
+// MARK: - The turn in a few lines (a streamlined game)
+
+/// One line of a turn told briefly: a d20 that counted, or what a hero did that had no die.
+struct TurnBriefLine: Hashable, Identifiable {
+    let id: String
+    let hero: String
+    /// "Stealth 14 + 2 = 16 vs DC 10", "casts Sacred Flame: the wasp takes 5 radiant.", "“I watch the trees”".
+    let text: String
+    /// "Succeeded", "Failed", "Hit" or "Missed". Nil where there was no die.
+    var verdict: String? = nil
+    var success: Bool? = nil
+    /// What a success did beyond passing ("critical hit for 19").
+    var detail: String? = nil
+
+    /// "Maud Ashdown: Stealth 14 plus 2 is 16 against DC 10, succeeded", for VoiceOver.
+    var spoken: String {
+        [hero.isEmpty ? text : "\(hero): \(text)", verdict?.lowercased() ?? "", detail ?? ""]
+            .filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
+extension TurnResult {
+    /// What a streamlined game's Story page puts over the turn just played: the choice the party
+    /// went with, or what kind of turn it was.
+    var briefTitle: String { choice.map(\.label).flatMap { $0.isEmpty ? nil : $0 } ?? headline }
+
+    /// The turn in as few lines as say it: one for each d20 that counted, in the order the result
+    /// screen lands them, and one for a hero whose deed had no die (a spell that asks a save, words
+    /// of their own, being down). A hero who only picked a choice has no line: the title is the choice.
+    var briefLines: [TurnBriefLine] {
+        inOrder.flatMap { hero -> [TurnBriefLine] in
+            if !hero.rolls.isEmpty {
+                return hero.rolls.enumerated().map { index, roll in
+                    TurnBriefLine(id: "\(hero.playerId)-\(index)", hero: hero.name,
+                                  text: "\(roll.name) \(roll.sum) vs \(roll.target)",
+                                  verdict: roll.verdict, success: roll.success, detail: roll.detail)
+                }
+            }
+            switch hero.deed {
+            case .action:
+                // The engine's own lines say what the action did; each begins with the hero's name.
+                let told = hero.lines.enumerated().map { index, line in
+                    TurnBriefLine(id: "\(hero.playerId)-line\(index)", hero: hero.name, text: Self.without(hero.name, in: line))
+                }
+                return told.isEmpty ? [TurnBriefLine(id: hero.playerId, hero: hero.name, text: hero.deedLine)] : told
+            case .own:
+                return [TurnBriefLine(id: hero.playerId, hero: hero.name, text: hero.deedLine)]
+            case .down:
+                return [TurnBriefLine(id: hero.playerId, hero: hero.name, text: "Down")]
+            case .choice, .nothing:
+                return []
+            }
+        }
+    }
+
+    /// What the turn changed, beyond the dice above: the engine's other lines.
+    var briefChanges: [String] { otherNotes }
+
+    /// "Maud moves to engage the wasp." under Maud's name reads "moves to engage the wasp."
+    private static func without(_ name: String, in line: String) -> String {
+        guard !name.isEmpty, line.hasPrefix(name + " ") else { return line }
+        return String(line.dropFirst(name.count + 1))
+    }
+}

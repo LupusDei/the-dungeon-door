@@ -8,6 +8,7 @@ import type { RulesHook } from '../play/hooks.ts';
 import type { SceneProgress } from '../play/progress.ts';
 import type { FightNews } from '../play/turn.ts';
 import type { RulesContext } from '../play/view.ts';
+import type { Telling } from '../telling.ts';
 import type { ChoiceId, RoleplayLine } from '../types.ts';
 
 export type { RulesContext } from '../play/view.ts';
@@ -114,6 +115,12 @@ export interface DMContext {
   recentChat: ChatLine[];
   /** The rules engine's state (after the resolved scene's dice); null for a game from before the engine. */
   rules: RulesContext | null;
+  /**
+   * How the game is told (lib/telling.ts). Absent or "full": write as always. "streamlined": the table asked
+   * for much less to read. One sentence of what happened, two at most of what stands before the party now,
+   * choices of a few words, and no quip. The engine cuts whatever runs longer.
+   */
+  telling?: Telling;
 }
 
 export interface SceneText {

@@ -23,6 +23,8 @@ struct PlayStoryPage: View {
 
     @State private var freeform = ""
     @State private var spoken = ""
+    /// A streamlined game folds the in-character box away; this is it opened.
+    @State private var speaking = false
     /// The quick-action wheel that is open, and where the button that opened it sits.
     @State private var wheel: WheelKind?
     @State private var wheelOrigin = CGPoint.zero
@@ -48,37 +50,7 @@ struct PlayStoryPage: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    header
-                    if state.rules?.time != nil || state.rules?.light != nil {
-                        TimeAndLight(clock: state.rules?.time, light: state.rules?.light,
-                                     mine: state.standing(session.playerId))
-                    }
-                    IllustrationView(url: scene?.imageURL, aspect: 16 / 10)
-                    if let scene {
-                        NarratorBar(scene: scene, session: session, narrator: narrator)
-                    }
-                    narration
-                    if !inCombat, let waiting = state.rules?.dungeon?.waiting {
-                        WaitingFoesNotice(waiting: waiting)
-                    }
-                    // Where the Act bar's Choose and Change bring the player: the die to throw when
-                    // one is waiting, the turn's choices, and under them the box to say it their way.
-                    if scene?.isFinale != true {
-                        VStack(alignment: .leading, spacing: 16) {
-                            declaredDie
-                            choicesList
-                            quickActions
-                            freeformBox
-                        }
-                        .id("offers")
-                        speakBox
-                    }
-                    if let scene {
-                        ChoiceWaitPanel(session: session, scene: scene)
-                    }
-                    if scene?.isFinale == true { finale }
-                    lastTurn
-                    dice
+                    if brief { streamlinedStory } else { fullStory }
                     ErrorLine(text: session.error)
                     Color.clear.frame(height: 28)
                 }
@@ -118,12 +90,144 @@ struct PlayStoryPage: View {
         }
     }
 
+    /// A streamlined game (docs/app-tabs.md, "A streamlined game"): the page is cut down to what
+    /// happened, what stands before the party, and the turn's choices.
+    private var brief: Bool { state.isStreamlined }
+
+    /// The full game's page, top to bottom.
+    @ViewBuilder private var fullStory: some View {
+        header
+        if state.rules?.time != nil || state.rules?.light != nil {
+            TimeAndLight(clock: state.rules?.time, light: state.rules?.light,
+                         mine: state.standing(session.playerId))
+        }
+        IllustrationView(url: scene?.imageURL, aspect: 16 / 10)
+        if let scene {
+            NarratorBar(scene: scene, session: session, narrator: narrator)
+        }
+        narration
+        if !inCombat, let waiting = state.rules?.dungeon?.waiting {
+            WaitingFoesNotice(waiting: waiting)
+        }
+        // Where the Act bar's Choose and Change bring the player: the die to throw when
+        // one is waiting, the turn's choices, and under them the box to say it their way.
+        if scene?.isFinale != true {
+            VStack(alignment: .leading, spacing: 16) {
+                declaredDie
+                choicesList
+                quickActions
+                freeformBox
+            }
+            .id("offers")
+            speakBox
+        }
+        if let scene {
+            ChoiceWaitPanel(session: session, scene: scene)
+        }
+        if scene?.isFinale == true { finale }
+        lastTurn
+        dice
+    }
+
+    /// A streamlined game's page. It leads with what just happened, says what stands before the
+    /// party in the scene's line or two, and goes straight to the choices. Nothing is explained
+    /// under a heading and the dice are not listed twice. The painting is a band over the choices
+    /// (a tap opens it whole). Under the turn come the narrator, who still reads on request, the
+    /// clock and the light, speaking in character (folded away) and the quest.
+    @ViewBuilder private var streamlinedStory: some View {
+        header
+        if let last = turnJustPlayed {
+            TurnBrief(turn: last.result, outcome: last.outcome, me: session.playerId, showAll: showLastTurn)
+        }
+        sceneLine
+        IllustrationView(url: scene?.imageURL, aspect: 3)
+        if !inCombat, let waiting = state.rules?.dungeon?.waiting {
+            WaitingFoesNotice(waiting: waiting)
+        }
+        if scene?.isFinale != true {
+            VStack(alignment: .leading, spacing: 14) {
+                declaredDie
+                choicesList
+                quickActions
+                freeformBox
+            }
+            .id("offers")
+        }
+        if let scene {
+            ChoiceWaitPanel(session: session, scene: scene)
+        }
+        if scene?.isFinale == true { finale }
+        // Under the turn: the narrator, the clock and the light, a word in character, the quest.
+        if let scene {
+            NarratorBar(scene: scene, session: session, narrator: narrator)
+        }
+        if state.rules?.time != nil || state.rules?.light != nil {
+            TimeAndLight(clock: state.rules?.time, light: state.rules?.light,
+                         mine: state.standing(session.playerId))
+        }
+        if scene?.isFinale != true { speakFolded }
+        questFoot
+    }
+
+    /// The turn before this scene, when the chronicle's last entry is it.
+    private var turnJustPlayed: ChronicleEntry? {
+        guard let scene, scene.index > 0, let last = state.chronicle?.last, last.index == scene.index - 1 else { return nil }
+        return last
+    }
+
+    /// What stands before the party now: the scene's line or two, and what the heroes have said.
+    private var sceneLine: some View {
+        let text = (scene?.narration ?? "").components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(text.isEmpty ? "The dungeon master is still writing…" : text)
+                .font(text.isEmpty ? .proseSmall.italic() : .system(size: 17, design: .serif))
+                .foregroundStyle(text.isEmpty ? Palette.muted : Palette.parchment)
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .accessibilityIdentifier("scene-line")
+            if let lines = scene?.roleplay, !lines.isEmpty {
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    Text("\(line.characterName): \(line.text)")
+                        .font(.proseSmall.italic())
+                        .foregroundStyle(Palette.gold)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// Speaking in character, folded away until wanted: a streamlined game is about the turn.
+    private var speakFolded: some View {
+        DisclosureGroup(isExpanded: $speaking) {
+            speakField.padding(.top, 8)
+        } label: {
+            SectionLabel("In character")
+        }
+        .tint(Palette.gold)
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             SectionLabel(eyebrow)
             Text(scene?.title ?? state.title ?? "The door")
-                .font(.display(26, weight: .bold))
+                .font(.display(brief ? 22 : 26, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
+            // A streamlined game keeps the quest and the count of scenes at the foot of the page.
+            if !brief {
+                if let quest = state.rules?.quest { questLine(quest) }
+                ScenesToGo(session: session)
+            }
+        }
+    }
+
+    /// The quest and how far there is to go, at the foot of a streamlined game's page: there every
+    /// turn, and out of the way of what happened.
+    private var questFoot: some View {
+        VStack(alignment: .leading, spacing: 4) {
             if let quest = state.rules?.quest { questLine(quest) }
             ScenesToGo(session: session)
         }
@@ -200,20 +304,25 @@ struct PlayStoryPage: View {
             Text("What your hero says or does, with no roll. The narrator answers it.")
                 .font(.serif(.caption))
                 .foregroundStyle(Palette.muted)
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("Say or do…", text: $spoken, axis: .vertical)
-                    .font(.prose)
-                    .lineLimit(1...3)
-                    .returnIsDone($spoken, label: .send, action: speak)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .card()
-                Button(action: speak) {
-                    Image(systemName: "quote.bubble.fill").font(.system(size: 28))
-                }
-                .disabled(!canSpeak)
-                .accessibilityLabel("Speak in character")
+            speakField
+        }
+    }
+
+    /// The field for a line in character, and its button.
+    private var speakField: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField("Say or do…", text: $spoken, axis: .vertical)
+                .font(.prose)
+                .lineLimit(1...3)
+                .returnIsDone($spoken, label: .send, action: speak)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .card()
+            Button(action: speak) {
+                Image(systemName: "quote.bubble.fill").font(.system(size: 28))
             }
+            .disabled(!canSpeak)
+            .accessibilityLabel("Speak in character")
         }
     }
 
@@ -231,12 +340,14 @@ struct PlayStoryPage: View {
         if !rows.isEmpty, scene?.canAct == true {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("What do you do?")
-                Text(inCombat
-                     ? "Your action this round. For a particular weapon, spell or item, use the wheels under these."
-                     : "Pick one. The party goes with the choice most heroes pick, and where it calls for a roll, those who picked it make it.")
-                    .font(.serif(.caption))
-                    .foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !brief {
+                    Text(inCombat
+                         ? "Your action this round. For a particular weapon, spell or item, use the wheels under these."
+                         : "Pick one. The party goes with the choice most heroes pick, and where it calls for a roll, those who picked it make it.")
+                        .font(.serif(.caption))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, offer in
                     choiceButton(offer, index: index)
                 }
@@ -406,12 +517,14 @@ struct PlayStoryPage: View {
     private var freeformBox: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(offers.isEmpty ? "What do you do?" : "Or in your own words")
-            Text(inCombat
-                 ? "Say what you do instead, and name a skill if you are using one. The dungeon master judges it and you roll for it."
-                 : "Say it your way: the dungeon master judges it and you roll for it. It is your own action beside the party's pick, unless it matches a choice above: then it counts as picking that choice, and an attack counts as picking the fight.")
-                .font(.serif(.caption))
-                .foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
+            if !brief {
+                Text(inCombat
+                     ? "Say what you do instead, and name a skill if you are using one. The dungeon master judges it and you roll for it."
+                     : "Say it your way: the dungeon master judges it and you roll for it. It is your own action beside the party's pick, unless it matches a choice above: then it counts as picking that choice, and an attack counts as picking the fight.")
+                    .font(.serif(.caption))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             TextField("Say what you do…", text: $freeform, axis: .vertical)
                 .font(.prose)
                 .lineLimit(2...4)

@@ -149,6 +149,10 @@ enum DemoData {
                 CatalogOption(id: "fixed", name: "Delve a dungeon", blurb: "A mapped dungeon of rooms and doors, with monsters, traps and treasure behind them.", symbol: "map.fill"),
                 CatalogOption(id: "explore", name: "Explore the deep", blurb: "A dungeon that grows where you go: each door opens on a room nobody has seen.", symbol: "flashlight.on.fill"),
             ],
+            tellings: [
+                CatalogOption(id: "full", name: "Full story", blurb: "The dungeon master tells each scene in full.", symbol: "text.book.closed.fill"),
+                CatalogOption(id: "streamlined", name: "Streamlined", blurb: "Much less to read: what happened, what stands before you, and the dice.", symbol: "bolt.fill"),
+            ],
             dungeonMasters: [
                 DungeonMasterInfo(id: "chronicler", name: "The Chronicler", tagline: "A classic tale of heroes, told true.", description: "An old keeper of histories who runs a fair, sweeping high-fantasy adventure.", symbol: "book.closed", accent: "#C9A227"),
                 DungeonMasterInfo(id: "trickster", name: "The Trickster", tagline: "Nothing is what it seems. Especially the door.", description: "A grinning fey spirit who thinks the rules are more of a suggestion.", symbol: "wand.and.rays", accent: "#7BC96F"),

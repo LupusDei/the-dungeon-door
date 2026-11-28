@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Gathering the party: share the code, see who's here, pick the dungeon master, the kind of game
-/// and its length, start.
+/// Gathering the party: share the code, see who's here, pick the dungeon master, the kind of game,
+/// how it is told and its length, start.
 struct LobbyView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: GameSession
@@ -9,6 +9,8 @@ struct LobbyView: View {
     @State private var pickingDM = false
     /// The host's pick. Empty until they tap, so the default can follow the catalog as it loads.
     @State private var dungeon = ""
+    /// The host's pick of how the game is told. Empty until they tap, as above.
+    @State private var telling = ""
     /// Players this one has adventured with, who can be invited by name.
     @State private var companions: [Companion] = []
     /// Companions invited from this lobby, by player id.
@@ -24,6 +26,18 @@ struct LobbyView: View {
         if dungeons.contains(where: { $0.id == dungeon }) { return dungeon }
         if let asked = AppConfig.lobbyAdventureArgument, dungeons.contains(where: { $0.id == asked }) { return asked }
         return dungeons.first?.id
+    }
+
+    /// The ways this server can tell a game. None on a server from before tellings: no picker, and
+    /// the start names none (the full story).
+    private var tellings: [CatalogOption] { model.catalog?.tellings ?? [] }
+
+    /// How the game will be told: the host's pick, else the `-lobbyTelling` argument, else the
+    /// first the catalog lists (the full story).
+    private var chosenTelling: String? {
+        if tellings.contains(where: { $0.id == telling }) { return telling }
+        if let asked = AppConfig.lobbyTellingArgument, tellings.contains(where: { $0.id == asked }) { return asked }
+        return tellings.first?.id
     }
 
     /// A fixed dungeon's map follows the length: up to 4 scenes is 5 rooms, 5 or 6 is 7, 7 or 8 is 9.
@@ -213,6 +227,7 @@ struct LobbyView: View {
         let kind = chosenDungeon
         return VStack(spacing: 14) {
             if !dungeons.isEmpty { dungeonPicker }
+            if tellings.count > 1 { tellingPicker }
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -245,7 +260,7 @@ struct LobbyView: View {
             .card()
             Button {
                 // 0 asks the server for no set length.
-                Task { await session.begin(sceneCount: noSetLength ? 0 : sceneCount, dungeon: kind) }
+                Task { await session.begin(sceneCount: noSetLength ? 0 : sceneCount, dungeon: kind, telling: chosenTelling) }
             } label: {
                 if session.busy { ProgressView().tint(Palette.ink) } else { Label("Open the door", systemImage: "door.left.hand.open") }
             }
@@ -311,6 +326,56 @@ struct LobbyView: View {
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
+        }
+    }
+
+    /// How the game is told: in full, or streamlined (the same game in a line or two). One row for
+    /// each, shorter than the kinds of game above: it is a setting of the game picked there.
+    private var tellingPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("How it is told")
+            VStack(spacing: 0) {
+                ForEach(Array(tellings.enumerated()), id: \.element.id) { index, option in
+                    let selected = option.id == chosenTelling
+                    if index > 0 {
+                        Rectangle().fill(Palette.gold.opacity(0.14)).frame(height: 1).padding(.leading, 14)
+                    }
+                    Button {
+                        withAnimation(.snappy) { telling = option.id }
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: option.symbol ?? "text.book.closed")
+                                .font(.system(size: 17))
+                                .foregroundStyle(Palette.gold)
+                                .frame(width: 26)
+                                .padding(.top, 2)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(option.name).font(.display(16)).multilineTextAlignment(.leading)
+                                if let blurb = option.blurb, !blurb.isEmpty {
+                                    Text(blurb)
+                                        .font(.footnote)
+                                        .foregroundStyle(Palette.muted)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(selected ? Palette.gold : Palette.muted)
+                                .padding(.top, 2)
+                                .accessibilityHidden(true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("telling-\(option.id)")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            .card()
         }
     }
 

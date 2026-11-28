@@ -1,5 +1,6 @@
 import type { CombatState, DungeonState, PartyState } from '../play/state.ts';
 import type { Move } from '../rules/bands.ts';
+import type { Telling } from '../telling.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
 
 export interface NewGame {
@@ -16,6 +17,7 @@ export interface GamePatch {
   title?: string | null;
   sceneIndex?: number;
   dungeonMaster?: string;
+  telling?: Telling;
   sceneCount?: number;
   hostId?: string;
   party?: PartyState | null;

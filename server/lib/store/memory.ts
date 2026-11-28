@@ -1,3 +1,4 @@
+import { DEFAULT_TELLING } from '../telling.ts';
 import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, ChoiceId, Game, GamePlayer, Message, Reaction, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
 import type { Companion, GameExpectation, GamePatch, Invite, InviteView, NewGame, NewMessage, SceneDraftRecord, Store } from './types.ts';
@@ -60,6 +61,7 @@ export class MemoryStore implements Store {
         hostId: game.hostId,
         status: 'lobby',
         dungeonMaster: game.dungeonMaster,
+        telling: DEFAULT_TELLING,
         title: null,
         sceneCount: game.sceneCount,
         sceneIndex: -1,

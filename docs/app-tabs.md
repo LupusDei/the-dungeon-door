@@ -90,6 +90,39 @@ character. Then, in this order:
 The scene's choices left this page for a while (players wrote every action instead). A game
 played that way showed the cost: nobody could tell what steered the scene, so they are back.
 
+## A streamlined game
+
+The host picks how the game is told in the lobby, under the kind of game: "Full story" or
+"Streamlined" (`catalog.tellings`, sent as `telling` with `POST /start`; the picker is hidden when
+the catalog lists fewer than two, and the start then names none). `GameState.telling` says which a
+game is, for every player. `-lobbyTelling <id>` preselects one.
+
+A streamlined game is the same game told in a line or two: the server cuts the dungeon master's
+words, not the rules (docs/api.md, "A streamlined game"). Its Story page is shorter to match
+(`PlayStoryPage.streamlinedStory`). Top to bottom:
+
+- The scene's place and title, smaller. No quest line or scene count here.
+- **What happened** (`Views/Game/TurnBrief.swift`), when a turn has been played: the choice the
+  party went with and whether its roll came good, who picked it (a party of more than one), then
+  one line for each d20 that counted, a mark first (a tick or a cross), the hero, the roll against
+  its number and the verdict in a word. A hero whose action had no die (a spell that asks a save,
+  words of their own, being down) has the engine's own line. Under those, what the turn changed
+  (five lines at most; "and N more" opens the rest), and the dungeon master's one sentence. "Every
+  roll" opens the full result card. It is drawn from `chronicle.last.result` (`TurnResult.briefLines`).
+- The scene's line: `scene.narration`, two sentences at most, and what the heroes said in character.
+- The painting as a band (3:1). A tap opens it whole.
+- **What do you do?** and **Or in your own words**: the same cards, box and rules as a full game,
+  with the explanatory paragraphs under both headings left out. A choice's detail shows only when
+  the server sent one.
+- The table (who has chosen), as in a full game.
+- Under the turn: Listen and the narrator's voice, the clock and the light, **In character** folded
+  shut until tapped, and the quest with the scenes to go.
+
+Left out of a streamlined page: the dice log (the dice are in What happened and on the result
+card) and the "How the last turn went" button ("Every roll" is the same way back). The result card
+between turns, the heads-up display, the Act chip and the Sheet, Map and Chat tabs are the same in
+both tellings. A full game's page is unchanged.
+
 ## Between turns: the result
 
 Once everyone has acted and `status` is `resolving`, a card covers every tab
@@ -206,6 +239,7 @@ one value empty. The rest of the game still loads, including against today's ser
 | `scene.actions[]` id `move:dash` | The Dash move: its `squares` are double speed, and a tap sends `dash: true`. |
 | vote `actionId`, `targets` | What a tap sends. |
 | vote `move: {x, y, dash?, disengage?}` | A square. `dash` and `disengage` are sent only when that move is one. The older band move `{to, engage, dash, disengage}` still decodes. |
+| `catalog.tellings[]`, `GameState.telling` | How the game is told: the lobby's picker, and the shorter Story page of a streamlined game. Absent: the full story. |
 | `POST /action` `{sceneIndex, text}` | In your own words. |
 | `POST /speak` `{text}` | In character. |
 | `scene.myAction`, `scene.myFreeform`, `scene.freeforms` | The Act chip and the written line. |

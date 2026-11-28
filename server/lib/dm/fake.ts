@@ -1,5 +1,6 @@
 import { fakeDelay } from '../models.ts';
 import { ROAD_EVENTS } from '../play/trek.ts';
+import { isStreamlined } from '../telling.ts';
 import { sceneHeading } from './pacing.ts';
 import type { ActionRequest, DMChoice, DMContext, RulesContext, DungeonMaster, FinaleScene, NextScene, OpeningScene, Resolution } from './types.ts';
 
@@ -50,10 +51,28 @@ function choicesFor(place: string, ctx: DMContext): DMChoice[] {
     { label: 'Find a quieter way', detail: `Take the side of ${place} that is not watched.` },
     { label: 'Parley first', detail: `Call out and see who — or what — answers from ${place}.` },
   ];
-  if (!ctx.rules) return choices;
+  const offered = isStreamlined(ctx.telling) ? choices.map((c) => ({ ...c, detail: '' })) : choices; // a streamlined choice is its label
+  if (!ctx.rules) return offered;
   const hooks = hooksFor(ctx.rules);
-  return choices.map((c, i) => ({ ...c, rules: hooks[i], reward: REWARDS[i] }));
+  return offered.map((c, i) => ({ ...c, rules: hooks[i], reward: REWARDS[i] }));
 }
+
+/**
+ * A streamlined game (lib/telling.ts): the same scene in one line, with no aside. The engine would cut a
+ * longer one; the fake writes it short, as a real DM is asked to.
+ */
+function told<T extends { narration: string; quip?: string }>(ctx: DMContext, scene: T, line: string): T {
+  if (!isStreamlined(ctx.telling)) return scene;
+  const { quip: _quip, ...rest } = scene;
+  return { ...rest, narration: line } as T;
+}
+
+/** The road in one line: "A forest road: a quiet stretch." */
+const roadLine = (ctx: DMContext): string | null => {
+  const t = ctx.rules?.trek;
+  return t ? `${t.terrain.replace(/^./, (c) => c.toUpperCase())}: ${ROAD_EVENTS[t.event]}.` : null;
+};
+const before = (place: string) => `${place.replace(/^./, (c) => c.toUpperCase())} lies before you.`;
 
 function resolve(r: Resolution) {
   const chosenChoiceId = r.leaders[0];
@@ -102,7 +121,7 @@ export const fakeDungeonMaster: DungeonMaster = {
   async openingScene(ctx): Promise<OpeningScene> {
     await fakeDelay();
     const place = PLACES[0];
-    return {
+    return told(ctx, {
       adventureTitle: `The Secret of ${ctx.archetype.name.replace(/^The /, '')}'s Door`,
       title: 'Behind the Dungeon Door',
       narration: road(ctx, 'A road leaves the tavern along') ??
@@ -111,13 +130,13 @@ export const fakeDungeonMaster: DungeonMaster = {
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: `Welcome, travellers. I am ${ctx.archetype.name}. Mind the door.`,
       choices: choicesFor(place, ctx),
-    };
+    }, roadLine(ctx) ?? `A rune-carved door stands shut before ${place}.`);
   },
 
   async nextScene(ctx, resolution): Promise<NextScene> {
     await fakeDelay();
     const place = PLACES[ctx.sceneIndex % PLACES.length];
-    return {
+    return told(ctx, {
       ...resolve(resolution),
       title: `${sceneHeading(ctx)}: ${place.replace(/^(a|the) /, '').replace(/^./, (c) => c.toUpperCase())}`,
       narration: road(ctx, 'The road goes on along') ??
@@ -126,19 +145,19 @@ export const fakeDungeonMaster: DungeonMaster = {
       featuredCharacters: ctx.party.slice(0, 2).map((p) => p.name),
       quip: resolution.votes.some((v) => v.roll === 20) ? 'A natural 20! The dice gods smile.' : 'Onward!',
       choices: choicesFor(place, ctx),
-    };
+    }, roadLine(ctx) ?? before(place));
   },
 
   async finale(ctx, resolution): Promise<FinaleScene> {
     await fakeDelay();
-    return {
+    return told(ctx, {
       ...resolve(resolution),
       title: 'Epilogue',
       narration: `The dungeon door stands open on the way home, the story richer than the gold.\n\nThe door closes softly. It will be waiting.`,
       imagePrompt: 'The party walking into a sunrise, the dungeon door closing behind them',
       featuredCharacters: ctx.party.map((p) => p.name),
       quip: 'Thank you for playing. Until the door opens again…',
-    };
+    }, 'The door closes behind the party, and the road leads home.');
   },
 
   async classifyAction(_ctx, request) {

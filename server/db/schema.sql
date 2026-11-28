@@ -31,6 +31,10 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS party jsonb;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS combat jsonb;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS dungeon jsonb;
 
+-- How the game is told (lib/telling.ts): 'full', or 'streamlined' (the same game in a line or two). Set as
+-- the door opens. Every game from before this column is told in full.
+ALTER TABLE games ADD COLUMN IF NOT EXISTS telling text NOT NULL DEFAULT 'full';
+
 CREATE TABLE IF NOT EXISTS game_players (
   game_code  text NOT NULL REFERENCES games (code) ON DELETE CASCADE,
   player_id  text NOT NULL,

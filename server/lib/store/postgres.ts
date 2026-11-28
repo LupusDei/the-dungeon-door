@@ -1,3 +1,4 @@
+import { storedTelling } from '../telling.ts';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import type { Move } from '../rules/bands.ts';
 import type { StoredCharacter, Choice, ChoiceId, Game, GamePlayer, GameStatus, Mention, Message, MessageKind, MessageQuote, MessageVoice, Reaction, RoleplayLine, StoredScene, TurnResult, TypingNotice, Vote } from '../types.ts';
@@ -29,6 +30,7 @@ const GAME_COLUMNS: Record<keyof GamePatch, string> = {
   title: 'title',
   sceneIndex: 'scene_index',
   dungeonMaster: 'dungeon_master',
+  telling: 'telling',
   sceneCount: 'scene_count',
   hostId: 'host_id',
   party: 'party',
@@ -60,6 +62,7 @@ export function gameRow(row: Row, players: GamePlayer[], scenes: StoredScene[]):
     hostId: row.host_id,
     status: row.status as GameStatus,
     dungeonMaster: row.dungeon_master,
+    telling: storedTelling(row.telling), // a row from before tellings has no such column: the full story
     title: row.title,
     sceneCount: row.scene_count,
     sceneIndex: row.scene_index,

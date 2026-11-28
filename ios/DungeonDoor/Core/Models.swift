@@ -76,6 +76,9 @@ struct Catalog: Codable, Hashable {
     /// The kinds of game a host can start ("none", "fixed", "explore"), in the order to show them.
     /// Empty on a server that only tells stories.
     var dungeons: [CatalogOption]
+    /// The ways a game can be told ("full", "streamlined"), in the order to show them; the first is
+    /// the default. Empty on a server from before tellings: every game is then told in full.
+    var tellings: [CatalogOption] = []
     var dungeonMasters: [DungeonMasterInfo]
     /// The voices a scene can be read aloud in, in the order to show them. Empty on a server
     /// without them: the narrator then reads in the server's one voice.
@@ -105,6 +108,7 @@ extension Catalog {
         alignments = try c.decode([CatalogOption].self, forKey: .alignments)
         backgrounds = try c.value(.backgrounds, or: [])
         dungeons = try c.value(.dungeons, or: [])
+        tellings = try c.value(.tellings, or: [])
         dungeonMasters = try c.decode([DungeonMasterInfo].self, forKey: .dungeonMasters)
         narrators = try c.value(.narrators, or: [])
         defaultNarrator = try c.decodeIfPresent(String.self, forKey: .defaultNarrator)
@@ -2111,6 +2115,9 @@ struct GameState: Codable, Hashable {
     let hostId: String
     let status: GameStatus
     let dungeonMaster: String
+    /// How the game is told (a catalog tellings id), fixed when the door opens. "full" on a server
+    /// from before tellings.
+    var telling = GameState.fullTelling
     let title: String?
     /// Scenes planned, finale included. Grows by one for each round of a fight. 0 with no set length.
     let sceneCount: Int
@@ -2138,9 +2145,15 @@ struct GameState: Codable, Hashable {
     let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
-        case code, hostId, status, dungeonMaster, title, sceneCount, openEnded, scenesLeft, progress, players, scene
+        case code, hostId, status, dungeonMaster, telling, title, sceneCount, openEnded, scenesLeft, progress, players, scene
         case chronicle, messages, messageUpdates, typing, rules, turn, updatedAt
     }
+
+    static let fullTelling = "full"
+    static let streamlinedTelling = "streamlined"
+    /// A streamlined game: the same game told in a line or two. The Story page leads with what
+    /// happened and keeps to the choices (docs/app-tabs.md, "A streamlined game").
+    var isStreamlined: Bool { telling == GameState.streamlinedTelling }
 
     func player(_ id: String?) -> GamePlayer? { players.first { $0.playerId == id } }
     /// How a hero stands in the rules engine's party.
@@ -2194,6 +2207,7 @@ extension GameState {
         hostId = try c.decode(String.self, forKey: .hostId)
         status = try c.decode(GameStatus.self, forKey: .status)
         dungeonMaster = try c.decode(String.self, forKey: .dungeonMaster)
+        telling = try c.value(.telling, or: GameState.fullTelling)
         title = try c.decodeIfPresent(String.self, forKey: .title)
         sceneCount = try c.whole(.sceneCount)
         openEnded = try c.value(.openEnded, or: false)

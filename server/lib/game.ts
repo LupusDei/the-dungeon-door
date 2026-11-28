@@ -6,6 +6,7 @@ import { homecoming, ownCharacter, storable, upgradeCharacter } from './characte
 import { deathIn, newlyFallen } from './fallen.ts';
 import { attackStartsFight, isPersonalCheck, knownActionIds, rulingForAbility, rulingForSkill, settleRuling, UNREADABLE } from './play/actions.ts';
 import { foesNamed, startsFight } from './play/hooks.ts';
+import { briefChoice, isStreamlined, storedTelling, streamlinedDraft, tellingOf } from './telling.ts';
 import { dieForAction, dieForCheck, rollPending, type PlayerDie } from './play/dice.ts';
 import { TURN_SECONDS, turnWindow } from './play/turn-clock.ts';
 import { COMBAT_CHOICES } from './play/fight.ts';
@@ -230,6 +231,7 @@ export function toState(game: Game, playerId: string, messages: Message[], messa
     hostId: game.hostId,
     status: game.status,
     dungeonMaster: game.dungeonMaster,
+    telling: storedTelling(game.telling),
     title: game.title,
     ...lengthOf(game, current),
     players: game.players.map((p) => playerView(game, p)),
@@ -530,7 +532,7 @@ export async function setDungeonMaster(code: string, playerId: string, dungeonMa
 // Play
 
 /** POST /api/games/{code}/start — lobby → preparing; the DM writes scene 0 in the background. */
-export async function startGame(code: string, playerId: string, sceneCount: unknown, origin: string, dungeon?: unknown): Promise<GameState> {
+export async function startGame(code: string, playerId: string, sceneCount: unknown, origin: string, dungeon?: unknown, telling?: unknown): Promise<GameState> {
   // 0 asks for no set length: the adventure goes on until its host calls the ending (lib/length.ts).
   const open = sceneCount === 0;
   const count = open ? MOST_SCENES : sceneCount === undefined || sceneCount === null ? DEFAULT_SCENE_COUNT : sceneCount;
@@ -538,6 +540,7 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
     throw badRequest(`sceneCount must be a whole number from ${FEWEST_SCENES} to ${MOST_SCENES}, or 0 for no set length`);
   }
   const mode = dungeonMode(dungeon);
+  const told = tellingOf(telling); // the full story unless the host asked for a streamlined game
   const game = await loadGame(code);
   const host = requireHost(game, playerId);
   if (game.status !== 'lobby') throw conflict(`can't start: the game is ${game.status}`);
@@ -545,7 +548,7 @@ export async function startGame(code: string, playerId: string, sceneCount: unkn
   const scenes = open ? NO_SET_LENGTH : count + TREK_SCENES; // every game opens with the road from the tavern
   const blocking = game.players.filter((p) => isOutdated(p.appVersion ?? null));
   if (blocking.length > 0) throw partyOutdated(blocking.map((p) => p.character.name));
-  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, ...rules }))) {
+  if (!(await getStore().updateGame(code, { status: 'lobby' }, { status: 'preparing', sceneCount: scenes, telling: told, ...rules }))) {
     throw conflict('the game is already starting');
   }
   await system(code, `${host.character.name} opened the dungeon door. ${archetype(game.dungeonMaster).name} is preparing the adventure…`);
@@ -969,6 +972,7 @@ async function contextFor(game: Game, sceneIndex: number, rules: RulesState | nu
     progress: sceneProgress(rules?.party ?? null, sceneIndex, sceneCount),
     recentChat: chatLines(messages),
     rules: rules && rulesContext(rules),
+    telling: storedTelling(game.telling),
   };
 }
 
@@ -992,11 +996,15 @@ export function resolutionOf(game: Game, scene: StoredScene): Resolution {
   };
 }
 
-/** The DM's two or three plot choices, clipped. In a rules game each keeps its hook if the hook holds up. */
-function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | null): StoredChoice[] {
+/**
+ * The DM's two or three plot choices, clipped. In a rules game each keeps its hook if the hook holds up.
+ * `brief`: a streamlined game, where a choice is a few words and a clause at most (lib/telling.ts).
+ */
+function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | null, brief = false): StoredChoice[] {
   if (choices.length < 2) throw new Error(`the DM wrote ${choices.length} choices, not 2 or 3`);
   return choices.slice(0, 3).map((c, i) => {
-    const choice = { id: CHOICE_IDS[i], label: clip(c.label.trim(), 80), detail: clip(c.detail.trim(), 300) };
+    const clipped = { id: CHOICE_IDS[i], label: clip(c.label.trim(), 80), detail: clip(c.detail.trim(), 300) };
+    const choice = brief ? briefChoice(clipped) : clipped;
     return rules ? storedChoice(choice, c.rules, rules.dungeon, c.reward) : choice;
   });
 }
@@ -1004,7 +1012,7 @@ function choicesOf(choices: DMChoice[], rules: Pick<RulesState, 'dungeon'> | nul
 /** The DM's choices, or Engage, Run and Parley when foes bar the road as the game starts. */
 function openingChoices(draft: OpeningScene, game: Game): StoredChoice[] {
   const rules = rulesStateOf(game);
-  return (rules && confrontationChoices(rules)) ?? choicesOf(draft.choices, rules);
+  return (rules && confrontationChoices(rules)) ?? choicesOf(draft.choices, rules, isStreamlined(game.telling));
 }
 
 const sceneTitle = (text: SceneText, fallback: string) => clip(text.title?.trim() || fallback, 120);
@@ -1104,11 +1112,11 @@ function planOf(game: Game, scene: StoredScene): Plan {
  * The next scene's choices: a fight's Attack, Cast and Dodge, Engage/Run/Parley when foes bar the way, or the
  * DM's, the first facing the quest's goal in a tale told past its plan (play/quest.ts).
  */
-function nextChoices(plan: Plan, draft: NextScene, sceneCount: number): StoredChoice[] {
+function nextChoices(plan: Plan, draft: NextScene, sceneCount: number, brief: boolean): StoredChoice[] {
   if (plan.rules?.combat) return COMBAT_CHOICES.map((c, i) => ({ id: CHOICE_IDS[i], ...c }));
   const face = plan.rules && confrontationChoices(plan.rules);
   if (face) return face;
-  const offered = choicesOf(draft.choices, plan.rules);
+  const offered = choicesOf(draft.choices, plan.rules, brief);
   return plan.rules ? towardTheGoal(offered, plan.rules, plan.next, sceneCount) : offered;
 }
 
@@ -1118,17 +1126,30 @@ async function spokenBy(game: Game): Promise<HeroLine[]> {
   return keptWords(fromPlay, messages).map((line) => ({ name: line.characterName, text: line.text }));
 }
 
-/** The heroes' own words. A draft that speaks for them is asked for once more, then the stolen sentences are cut. */
+/**
+ * The heroes' own words. A draft that speaks for them is asked for once more, then the stolen sentences are cut.
+ * This is where the DM's words enter the game, so a streamlined game is held to its length here too
+ * (lib/telling.ts): whatever the DM wrote, the table reads a line or two.
+ */
 async function inTheirOwnWords<T extends SceneText & { outcome?: string }>(game: Game, ask: () => Promise<T>): Promise<T> {
+  const told = await withoutStolenWords(game, ask);
+  return isStreamlined(game.telling) ? streamlinedDraft(told, { narration: NOTHING_TOLD, outcome: NOTHING_HAPPENED }) : told;
+}
+
+/** What the page says when the DM's narration, or its outcome, comes out empty. */
+const NOTHING_TOLD = 'What do you do?';
+const NOTHING_HAPPENED = 'The action plays out.';
+
+async function withoutStolenWords<T extends SceneText & { outcome?: string }>(game: Game, ask: () => Promise<T>): Promise<T> {
   const heroes = game.players.map((p) => p.character.name);
   const lines = await spokenBy(game);
   const steals = (draft: T) => [draft.narration, draft.outcome ?? '', draft.quip ?? ''].some((text) => hasStolenHeroSpeech(text, heroes, lines));
   let draft = await ask();
   if (steals(draft)) draft = await ask();
-  const narration = stripHeroSpeech(draft.narration, heroes, lines).trim() || 'What do you do?';
+  const narration = stripHeroSpeech(draft.narration, heroes, lines).trim() || NOTHING_TOLD;
   const quip = draft.quip ? stripHeroSpeech(draft.quip, heroes, lines).trim() : '';
   if (draft.outcome === undefined) return { ...draft, narration, quip: quip || undefined };
-  const outcome = stripHeroSpeech(draft.outcome, heroes, lines).trim() || 'The action plays out.';
+  const outcome = stripHeroSpeech(draft.outcome, heroes, lines).trim() || NOTHING_HAPPENED;
   return { ...draft, narration, outcome, quip: quip || undefined };
 }
 
@@ -1146,7 +1167,7 @@ async function writeNext(game: Game, scene: StoredScene, plan: Plan) {
     narration: draft.narration.trim(),
     imagePrompt: plan.sharesPicture ? SHARED_PICTURE : draft.imagePrompt,
     imageUrl: plan.sharesPicture ? scene.imageUrl : null,
-    choices: plan.isFinale ? [] : nextChoices(plan, draft as NextScene, plan.patch.sceneCount ?? game.sceneCount),
+    choices: plan.isFinale ? [] : nextChoices(plan, draft as NextScene, plan.patch.sceneCount ?? game.sceneCount, isStreamlined(game.telling)),
     isFinale: plan.isFinale,
   });
   return draft;
