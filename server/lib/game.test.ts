@@ -164,6 +164,39 @@ test('portrait: fake AI returns an appearance and a loadable PNG', async () => {
   assert.equal((await call(portraitApi.POST, '/api/portrait', { player: randomUUID(), body: { character: { ...character, race: 'robot' } } })).status, 400);
 });
 
+test('portrait: a remake changes nothing until it is saved, and a table keeps the hero as they joined', async () => {
+  const host = randomUUID();
+  const hero = await makeCharacter(host, 'Vex');
+  const first = (await call(portraitApi.POST, '/api/portrait', { player: host, body: { character: hero } })).body;
+  const sealed = (await call<Character>(charactersApi.PUT, '/api/characters', { player: host, method: 'PUT', body: { ...hero, ...first } })).body;
+  assert.equal(sealed.portraitUrl, first.portraitUrl);
+  const stored = async () => (await call<{ characters: Character[] }>(charactersApi.GET, '/api/characters', { player: host })).body.characters.find((c) => c.id === hero.id)!;
+
+  const created = await call<GameState>(gamesApi.POST, '/api/games', { player: host, body: { characterId: hero.id } });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  const code = created.body.code;
+  assert.equal((await call(startApi.POST, gamePath(code, 'start'), { player: host, body: {} })).status, 200);
+  await settle();
+
+  const remake = (await call(portraitApi.POST, '/api/portrait', {
+    player: host, body: { character: { ...sealed, description: 'a raven on the shoulder' }, previousAppearance: sealed.appearance, note: 'older face' },
+  })).body;
+  assert.notEqual(remake.portraitUrl, first.portraitUrl);
+  assert.match(remake.appearance, /older face/);
+  assert.equal((await stored()).portraitUrl, first.portraitUrl, 'painting is not saving');
+  const failed = await call(portraitApi.POST, '/api/portrait', { player: host, body: { character: sealed, note: 'x'.repeat(301) } });
+  assert.equal(failed.status, 400);
+  assert.equal((await stored()).portraitUrl, first.portraitUrl, 'a failed paint leaves the hero alone');
+
+  const saved = (await call<Character>(charactersApi.PUT, '/api/characters', {
+    player: host, method: 'PUT', body: { ...sealed, description: 'a raven on the shoulder', ...remake },
+  })).body;
+  assert.equal(saved.portraitUrl, remake.portraitUrl);
+  assert.equal(saved.appearance, remake.appearance);
+  assert.equal((await stored()).description, 'a raven on the shoulder');
+  assert.equal((await view(code, host)).players[0].character.portraitUrl, first.portraitUrl, 'the table keeps its join snapshot');
+});
+
 test('a full game: lobby, chat, start, votes, auto-resolve, host advance, finale', async () => {
   const { code, players, host } = await table(3);
   const [, p2, p3] = players;
